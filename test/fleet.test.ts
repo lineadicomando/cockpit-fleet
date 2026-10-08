@@ -1,7 +1,7 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { calls, setSpawnHandler } from "./mocks/cockpit.ts";
-import { AccessError, FleetError, call, resetAccess } from "../src/lib/fleet.ts";
+import { AccessError, FleetError, call, deleteSecret, resetAccess, setSecret } from "../src/lib/fleet.ts";
 
 const ok = (data: unknown) => JSON.stringify({ ok: true, data });
 const refused = { problem: null, exit_status: 1, message: "sudo: a password is required" };
@@ -71,4 +71,15 @@ test("output that is not JSON is a failure, not a crash", async () => {
     setSpawnHandler(() => "Traceback (most recent call last)");
     await assert.rejects(call("whoami"), (ex: unknown) =>
         ex instanceof AccessError && ex.problem === "failed");
+});
+
+test("a secret goes to the root helper on stdin, its name in argv", async () => {
+    setSpawnHandler(() => "");
+    await setSecret("c-abc-password", "hunter2");
+    assert.deepEqual(calls[0].args, ["sudo", "-n", "/usr/libexec/cockpit-fleet/fleet-secret", "set", "c-abc-password"]);
+    assert.equal(calls[0].input, "hunter2");
+    assert.ok(!calls[0].args.join(" ").includes("hunter2"));
+
+    await deleteSecret("c-abc-password");
+    assert.deepEqual(calls[1].args.slice(-2), ["delete", "c-abc-password"]);
 });

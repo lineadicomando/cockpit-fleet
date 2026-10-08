@@ -2,3 +2,29 @@
 // (18.125rem sidebar + 1fr main) and leaves the sidebar column empty.
 // sidebar={null} adds pf-m-no-sidebar, which makes the main area full width.
 // No additional CSS override is needed for the grid layout.
+
+// Output of a run: Ansible's colours, mapped to the theme's status colours so
+// that they stay readable in both the light and the dark theme.
+.fleet-log {
+    max-block-size: 60vh;
+    min-block-size: 8rem;
+    overflow: auto;
+    margin: 0;
+    padding: var(--pf-t--global--spacer--md);
+    border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+    border-radius: var(--pf-t--global--border--radius--small);
+    background: var(--pf-t--global--background--color--secondary--default);
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: var(--pf-t--global--font--size--sm);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.fleet-ansi-bold { font-weight: var(--pf-t--global--font--weight--body--bold); }
+.fleet-ansi-green, .fleet-ansi-bright-green { color: var(--pf-t--global--text--color--status--success--default); }
+.fleet-ansi-yellow, .fleet-ansi-bright-yellow { color: var(--pf-t--global--text--color--status--warning--default); }
+.fleet-ansi-red, .fleet-ansi-bright-red { color: var(--pf-t--global--text--color--status--danger--default); }
+.fleet-ansi-cyan, .fleet-ansi-bright-cyan,
+.fleet-ansi-blue, .fleet-ansi-bright-blue { color: var(--pf-t--global--text--color--status--info--default); }
+.fleet-ansi-magenta, .fleet-ansi-bright-magenta { color: var(--pf-t--global--text--color--status--custom--default); }
+.fleet-ansi-black, .fleet-ansi-bright-black { color: var(--pf-t--global--text--color--subtle); }

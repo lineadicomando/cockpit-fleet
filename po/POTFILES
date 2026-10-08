@@ -3,6 +3,14 @@
 src/app.tsx
 src/components/AccessProblemPage.tsx
 src/components/AuditPage.tsx
+src/components/CredentialsPage.tsx
+src/components/HostKeysPage.tsx
+src/components/InventoriesPage.tsx
 src/components/OverviewPage.tsx
+src/components/ProjectsPage.tsx
+src/components/RunsPage.tsx
 src/components/StatusLabel.tsx
 src/components/SystemPage.tsx
+src/components/TemplatesPage.tsx
+src/components/common.tsx
+src/lib/session.tsx

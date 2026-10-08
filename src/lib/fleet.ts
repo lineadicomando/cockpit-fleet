@@ -1,6 +1,7 @@
 import cockpit from "cockpit";
 
 const FLEETCTL = "/usr/libexec/cockpit-fleet/fleetctl";
+const FLEET_SECRET = "/usr/libexec/cockpit-fleet/fleet-secret";
 
 // The backend answered, and the answer is an error.
 export class FleetError extends Error {
@@ -44,20 +45,21 @@ function classify(ex: unknown): AccessError {
 // Set once a call only went through with Cockpit's administrative access.
 let elevated = false;
 
-function spawn(command: string, params: object, superuser: boolean): Promise<string> {
+function spawn(argv: string[], input: string, superuser: boolean): Promise<string> {
     return cockpit
-        .spawn(["sudo", "-n", "-u", "cockpit-fleet", FLEETCTL, command], {
+        .spawn(["sudo", "-n", ...argv], {
             err: "message",
             // English messages from sudo, so that classify() can read them.
             environ: ["LC_ALL=C"],
             ...(superuser ? { superuser: "try" as const } : {}),
         })
-        .input(JSON.stringify(params));
+        .input(input);
 }
 
-async function run(command: string, params: object): Promise<string> {
+// Runs one of the helpers through sudo, with its input on stdin.
+async function run(argv: string[], input: string): Promise<string> {
     try {
-        return await spawn(command, params, elevated);
+        return await spawn(argv, input, elevated);
     } catch (ex) {
         const error = classify(ex);
         if (error.problem !== "no-access" || elevated) throw error;
@@ -65,7 +67,7 @@ async function run(command: string, params: object): Promise<string> {
     // Not in a role group: an administrator of the machine still gets in, as
     // root, when administrative access is active in the Cockpit session.
     try {
-        const output = await spawn(command, params, true);
+        const output = await spawn(argv, input, true);
         elevated = true;
         return output;
     } catch (ex) {
@@ -75,7 +77,7 @@ async function run(command: string, params: object): Promise<string> {
 
 // Calls one backend command. Parameters travel as JSON on stdin, never in argv.
 export async function call<T>(command: string, params: object = {}): Promise<T> {
-    const output = await run(command, params);
+    const output = await run(["-u", "cockpit-fleet", FLEETCTL, command], JSON.stringify(params));
     let answer: { ok: boolean; data?: T; error?: { code: string; message: string } };
     try {
         answer = JSON.parse(output);
@@ -86,6 +88,16 @@ export async function call<T>(command: string, params: object = {}): Promise<T> 
         throw new FleetError(answer.error?.code ?? "internal", answer.error?.message ?? "");
     }
     return answer.data as T;
+}
+
+// Stores a secret. The value goes to the root helper on stdin and cannot be
+// read back afterwards, by this interface or by anything else.
+export async function setSecret(name: string, value: string): Promise<void> {
+    await run([FLEET_SECRET, "set", name], value);
+}
+
+export async function deleteSecret(name: string): Promise<void> {
+    await run([FLEET_SECRET, "delete", name], "");
 }
 
 // For tests: forget that a previous call needed administrative access.

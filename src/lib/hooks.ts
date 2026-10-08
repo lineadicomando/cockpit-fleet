@@ -51,3 +51,28 @@ export function useLoad<T>(load: () => Promise<T>): Loaded<T> {
     useEffect(reload, [reload]);
     return { data, error, loading, reload };
 }
+
+// Calls tick every `ms` while `active` is true. The next call waits for the
+// previous one to finish, so a slow backend is never asked twice at once.
+export function usePolling(tick: () => Promise<unknown> | void, ms: number, active: boolean): void {
+    const tickRef = useRef(tick);
+    tickRef.current = tick;
+    useEffect(() => {
+        if (!active) return;
+        let stopped = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const loop = async () => {
+            try {
+                await tickRef.current();
+            } catch {
+                // The caller shows its own errors; keep polling.
+            }
+            if (!stopped) timer = setTimeout(loop, ms);
+        };
+        timer = setTimeout(loop, ms);
+        return () => {
+            stopped = true;
+            clearTimeout(timer);
+        };
+    }, [ms, active]);
+}

@@ -148,7 +148,7 @@ def project_sync(ctx: Context, params: Params) -> dict:
     jobs.write_known_hosts(ctx.conn, directory)
     spec = {"kind": "sync", "url": project["url"], "ref": project["ref"],
             "user": credential["username"] if credential else "", "proxy": ctx.config.proxy}
-    jobs.enqueue(ctx, {"id": run_id, "kind": "sync", "title": f"Sync {project['name']}",
+    jobs.enqueue(ctx, {"id": run_id, "kind": "sync", "title": project["name"],
                        "project_id": project_id}, spec, directory)
     return {"run_id": run_id}
 
@@ -288,7 +288,7 @@ def inventory_parse(ctx: Context, params: Params) -> dict:
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
-    jobs.enqueue(ctx, {"id": run_id, "kind": "inventory", "title": f"Read {inventory['name']}",
+    jobs.enqueue(ctx, {"id": run_id, "kind": "inventory", "title": inventory["name"],
                        "inventory_id": inventory_id, "project_id": inventory["project_id"]},
                  spec, directory)
     return {"run_id": run_id}

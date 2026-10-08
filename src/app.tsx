@@ -18,6 +18,15 @@ import { AccessProblemPage } from "./components/AccessProblemPage.tsx";
 import { AuditPage } from "./components/AuditPage.tsx";
 import { OverviewPage } from "./components/OverviewPage.tsx";
 import { SystemPage } from "./components/SystemPage.tsx";
+import { CredentialsPage } from "./components/CredentialsPage.tsx";
+import { HostKeysPage } from "./components/HostKeysPage.tsx";
+import { InventoriesPage } from "./components/InventoriesPage.tsx";
+import { ProjectsPage } from "./components/ProjectsPage.tsx";
+import { RunDetailPage, RunsPage } from "./components/RunsPage.tsx";
+import { TemplatesPage } from "./components/TemplatesPage.tsx";
+import { SessionContext } from "./lib/session.tsx";
+
+const TABS = ["overview", "runs", "templates", "inventories", "projects", "credentials", "hostkeys", "system", "audit"];
 
 // A refusal by the backend itself means the same as one by sudo.
 function accessProblem(error: Error): AccessProblem {
@@ -52,28 +61,39 @@ export function App() {
         }
 
         const data = session.data;
-        // The backend decides; the tab is only hidden so as not to offer a dead end.
-        const tabs = ["overview", "system", ...(data.commands.includes("audit.list") ? ["audit"] : [])];
-        const active = tabs.includes(location.path[0]) ? location.path[0] : "overview";
+        const section = TABS.includes(location.path[0]) && (location.path[0] !== "audit" || data.commands.includes("audit.list"))
+            ? location.path[0]
+            : "overview";
         const go = (tab: string) => cockpit.location.go(tab === "overview" ? [] : [tab]);
+        const titles: Record<string, string> = {
+            overview: t("Overview"), runs: t("Runs"), templates: t("Job templates"), inventories: t("Inventories"),
+            projects: t("Projects"), credentials: t("Credentials"), hostkeys: t("Host keys"), system: t("System"),
+            audit: t("Audit log"),
+        };
 
         return (
-            <>
+            <SessionContext.Provider value={data}>
                 <PageSection type="tabs" padding={{ default: "noPadding" }}>
-                    <Tabs activeKey={active} onSelect={(_event, key) => go(String(key))}>
-                        <Tab eventKey="overview" title={<TabTitleText>{t("Overview")}</TabTitleText>} />
-                        <Tab eventKey="system" title={<TabTitleText>{t("System")}</TabTitleText>} />
-                        {tabs.includes("audit") && (
-                            <Tab eventKey="audit" title={<TabTitleText>{t("Audit log")}</TabTitleText>} />
-                        )}
+                    <Tabs activeKey={section} onSelect={(_event, key) => go(String(key))}>
+                        {TABS.filter(tab => tab !== "audit" || data.commands.includes("audit.list")).map(tab => (
+                            <Tab key={tab} eventKey={tab} title={<TabTitleText>{titles[tab]}</TabTitleText>} />
+                        ))}
                     </Tabs>
                 </PageSection>
                 <PageSection>
-                    {active === "overview" && <OverviewPage session={data} onOpenSystem={() => go("system")} />}
-                    {active === "system" && <SystemPage />}
-                    {active === "audit" && <AuditPage />}
+                    {section === "overview" && <OverviewPage session={data} onOpenSystem={() => go("system")} />}
+                    {section === "runs" && (location.path[1]
+                        ? <RunDetailPage key={location.path[1]} id={location.path[1]} />
+                        : <RunsPage />)}
+                    {section === "templates" && <TemplatesPage />}
+                    {section === "inventories" && <InventoriesPage />}
+                    {section === "projects" && <ProjectsPage />}
+                    {section === "credentials" && <CredentialsPage />}
+                    {section === "hostkeys" && <HostKeysPage />}
+                    {section === "system" && <SystemPage />}
+                    {section === "audit" && <AuditPage />}
                 </PageSection>
-            </>
+            </SessionContext.Provider>
         );
     }
 

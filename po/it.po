@@ -181,6 +181,480 @@ msgstr "sshpass, per gli accessi SSH con password"
 msgid "systemd"
 msgstr "systemd"
 
+msgid "A JSON object. Not for secrets: they would be stored in clear."
+msgstr "Un oggetto JSON. Non per i segreti: verrebbero salvati in chiaro."
+
+msgid "A credential holds what a run needs to log in to the nodes, to open an Ansible Vault or to fetch a git repository. Secrets are encrypted and can never be read back."
+msgstr "Una credenziale contiene ciò che serve a una run per accedere ai nodi, aprire un Ansible Vault o scaricare un repository git. I segreti sono cifrati e non possono più essere riletti."
+
+msgid "A job template puts together a playbook, an inventory and the credentials to run it. Once defined, it is launched with one click."
+msgstr "Un template mette insieme un playbook, un inventario e le credenziali per eseguirlo. Una volta definito, si lancia con un clic."
+
+msgid "A project is where playbooks, roles and inventory files come from: a git repository or a directory of this server."
+msgstr "Un progetto è la provenienza di playbook, ruoli e file di inventario: un repository git o una directory di questo server."
+
+msgid "Access token"
+msgstr "Token di accesso"
+
+msgid "Actions"
+msgstr "Azioni"
+
+msgid "Address"
+msgstr "Indirizzo"
+
+msgid "All runs"
+msgstr "Tutte le run"
+
+msgid "Already set. Leave empty to keep it."
+msgstr "Già impostato. Lascia vuoto per mantenerlo."
+
+msgid "An inventory lists the nodes Ansible works on and their groups. It can be written here or be a file of a project."
+msgstr "Un inventario elenca i nodi su cui lavora Ansible e i loro gruppi. Può essere scritto qui o essere un file di un progetto."
+
+msgid "Ansible Vault"
+msgstr "Ansible Vault"
+
+msgid "Ansible could not read this inventory"
+msgstr "Ansible non è riuscito a leggere questo inventario"
+
+msgid "Any status"
+msgstr "Qualsiasi stato"
+
+msgid "Branch, tag or commit"
+msgstr "Branch, tag o commit"
+
+msgid "Cancel"
+msgstr "Annulla"
+
+msgid "Cancel run"
+msgstr "Annulla la run"
+
+msgid "Canceled"
+msgstr "Annullata"
+
+msgid "Change secrets"
+msgstr "Cambia i segreti"
+
+msgid "Changed"
+msgstr "Modificati"
+
+msgid "Choose a project"
+msgstr "Scegli un progetto"
+
+msgid "Choose an inventory"
+msgstr "Scegli un inventario"
+
+msgid "Compare these fingerprints with the ones shown on the host itself (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Trust them only if they match."
+msgstr "Confronta queste impronte con quelle mostrate sull'host stesso (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Considerale attendibili solo se coincidono."
+
+msgid "Create"
+msgstr "Crea"
+
+msgid "Credential"
+msgstr "Credenziale"
+
+msgid "Credentials"
+msgstr "Credenziali"
+
+msgid "Default"
+msgstr "Predefinito"
+
+msgid "Delete"
+msgstr "Elimina"
+
+msgid "Delete {{name}}?"
+msgstr "Eliminare {{name}}?"
+
+msgid "Directory on this server"
+msgstr "Directory su questo server"
+
+msgid "Do not write passwords here: use a credential."
+msgstr "Non scrivere password qui: usa una credenziale."
+
+msgid "Dry run"
+msgstr "Prova a vuoto"
+
+msgid "Dry run: show what would change, change nothing"
+msgstr "Prova a vuoto: mostra cosa cambierebbe, senza cambiare nulla"
+
+msgid "Duration"
+msgstr "Durata"
+
+msgid "Edit"
+msgstr "Modifica"
+
+msgid "Edit inventory"
+msgstr "Modifica inventario"
+
+msgid "Edit job template"
+msgstr "Modifica template"
+
+msgid "Empty means every host the playbook targets."
+msgstr "Vuoto significa tutti gli host a cui il playbook si rivolge."
+
+msgid "Error"
+msgstr "Errore"
+
+msgid "Extra variables"
+msgstr "Variabili aggiuntive"
+
+msgid "Extra variables must be a JSON object, for example {\"version\": \"1.2\"}."
+msgstr "Le variabili aggiuntive devono essere un oggetto JSON, per esempio {\"version\": \"1.2\"}."
+
+msgid "File of a project"
+msgstr "File di un progetto"
+
+msgid "Filter by status"
+msgstr "Filtra per stato"
+
+msgid "Failures"
+msgstr "Falliti"
+
+msgid "Fingerprint"
+msgstr "Impronta"
+
+msgid "Format"
+msgstr "Formato"
+
+msgid "Git repository"
+msgstr "Repository git"
+
+msgid "Groups"
+msgstr "Gruppi"
+
+msgid "Host"
+msgstr "Host"
+
+msgid "Host keys"
+msgstr "Chiavi host"
+
+msgid "Host name or address"
+msgstr "Nome o indirizzo dell'host"
+
+msgid "Hosts"
+msgstr "Host"
+
+msgid "Hosts and groups"
+msgstr "Host e gruppi"
+
+msgid "Hosts in parallel (forks)"
+msgstr "Host in parallelo (fork)"
+
+msgid "Inventories"
+msgstr "Inventari"
+
+msgid "Inventory"
+msgstr "Inventario"
+
+msgid "Inventory file"
+msgstr "File di inventario"
+
+msgid "Inventory reading"
+msgstr "Lettura inventario"
+
+msgid "Job templates"
+msgstr "Template"
+
+msgid "Key type"
+msgstr "Tipo di chiave"
+
+msgid "Keys offered by the host"
+msgstr "Chiavi offerte dall'host"
+
+msgid "Last update failed"
+msgstr "Ultimo aggiornamento fallito"
+
+msgid "Launch"
+msgstr "Lancia"
+
+msgid "Launch a job template to see its run here."
+msgstr "Lancia un template per vederne qui la run."
+
+msgid "Launch dry run"
+msgstr "Lancia la prova a vuoto"
+
+msgid "Launch {{name}}"
+msgstr "Lancia {{name}}"
+
+msgid "Launched by"
+msgstr "Lanciata da"
+
+msgid "Limit to hosts"
+msgstr "Limita agli host"
+
+msgid "Machine (SSH login)"
+msgstr "Macchina (accesso SSH)"
+
+msgid "Machine credential"
+msgstr "Credenziale macchina"
+
+msgid "Must be under: {{roots}}"
+msgstr "Deve stare sotto: {{roots}}"
+
+msgid "Name"
+msgstr "Nome"
+
+msgid "Narrows the template's own limit ({{limit}}); it cannot widen it."
+msgstr "Restringe il limite del template ({{limit}}); non può allargarlo."
+
+msgid "Needed when the inventory's variables are encrypted with Ansible Vault."
+msgstr "Serve quando le variabili dell'inventario sono cifrate con Ansible Vault."
+
+msgid "New credential"
+msgstr "Nuova credenziale"
+
+msgid "New inventory"
+msgstr "Nuovo inventario"
+
+msgid "New job template"
+msgstr "Nuovo template"
+
+msgid "New project"
+msgstr "Nuovo progetto"
+
+msgid "No credentials"
+msgstr "Nessuna credenziale"
+
+msgid "No directory is allowed yet: add one to local_roots in /etc/cockpit-fleet/config.toml."
+msgstr "Nessuna directory è ancora ammessa: aggiungine una a local_roots in /etc/cockpit-fleet/config.toml."
+
+msgid "No inventories"
+msgstr "Nessun inventario"
+
+msgid "No job templates"
+msgstr "Nessun template"
+
+msgid "No projects"
+msgstr "Nessun progetto"
+
+msgid "No runs with this status"
+msgstr "Nessuna run con questo stato"
+
+msgid "No runs yet"
+msgstr "Ancora nessuna run"
+
+msgid "No task has started yet."
+msgstr "Nessun task è ancora partito."
+
+msgid "No trusted host keys"
+msgstr "Nessuna chiave host attendibile"
+
+msgid "None"
+msgstr "Nessuna"
+
+msgid "None (public repository)"
+msgstr "Nessuna (repository pubblico)"
+
+msgid "Normal"
+msgstr "Normale"
+
+msgid "Not fetched yet"
+msgstr "Non ancora scaricato"
+
+msgid "Not read yet"
+msgstr "Non ancora letto"
+
+msgid "Not readable"
+msgstr "Non leggibile"
+
+msgid "Only the last part of the output is shown."
+msgstr "È mostrata solo l'ultima parte dell'output."
+
+msgid "Output"
+msgstr "Output"
+
+msgid "Output detail"
+msgstr "Dettaglio dell'output"
+
+msgid "Password"
+msgstr "Password"
+
+msgid "Path"
+msgstr "Percorso"
+
+msgid "Path inside the project. Its group_vars and host_vars are used too."
+msgstr "Percorso dentro il progetto. Vengono usati anche i suoi group_vars e host_vars."
+
+msgid "Playbook"
+msgstr "Playbook"
+
+msgid "Port"
+msgstr "Porta"
+
+msgid "Privilege escalation password"
+msgstr "Password per l'elevazione dei privilegi"
+
+msgid "Problems"
+msgstr "Problemi"
+
+msgid "Project"
+msgstr "Progetto"
+
+msgid "Project update"
+msgstr "Aggiornamento progetto"
+
+msgid "Projects"
+msgstr "Progetti"
+
+msgid "Queued"
+msgstr "In coda"
+
+msgid "Read"
+msgstr "Letto"
+
+msgid "Read again"
+msgstr "Rileggi"
+
+msgid "Read at each run"
+msgstr "Letto a ogni run"
+
+msgid "Read the host's keys"
+msgstr "Leggi le chiavi dell'host"
+
+msgid "Repository URL"
+msgstr "URL del repository"
+
+msgid "Result per host"
+msgstr "Esito per host"
+
+msgid "Revision"
+msgstr "Revisione"
+
+msgid "Run"
+msgstr "Run"
+
+msgid "Run with privilege escalation (become)"
+msgstr "Esegui con elevazione dei privilegi (become)"
+
+msgid "Running"
+msgstr "In corso"
+
+msgid "Runs"
+msgstr "Run"
+
+msgid "Runs only connect over SSH to hosts whose key is listed here. A host with an unknown or changed key is refused."
+msgstr "Le run si collegano via SSH solo agli host la cui chiave è elencata qui. Un host con chiave sconosciuta o cambiata viene rifiutato."
+
+msgid "SSH private key"
+msgstr "Chiave privata SSH"
+
+msgid "Save"
+msgstr "Salva"
+
+msgid "Secrets of {{name}}"
+msgstr "Segreti di {{name}}"
+
+msgid "Secrets set"
+msgstr "Segreti impostati"
+
+msgid "Show hosts"
+msgstr "Mostra gli host"
+
+msgid "Show older runs"
+msgstr "Mostra le run precedenti"
+
+msgid "Skip tags"
+msgstr "Tag da saltare"
+
+msgid "Skipped"
+msgstr "Saltati"
+
+msgid "Source"
+msgstr "Sorgente"
+
+msgid "Source control (git)"
+msgstr "Controllo di versione (git)"
+
+msgid "Started"
+msgstr "Avviata"
+
+msgid "Stop trusting"
+msgstr "Non considerare più attendibile"
+
+msgid "Successful"
+msgstr "Riuscita"
+
+msgid "Tags"
+msgstr "Tag"
+
+msgid "Task"
+msgstr "Task"
+
+msgid "Tasks"
+msgstr "Task"
+
+msgid "The credential and its secrets are deleted. This cannot be undone."
+msgstr "La credenziale e i suoi segreti vengono eliminati. L'operazione non è reversibile."
+
+msgid "The inventory is deleted. Files of a project are not touched."
+msgstr "L'inventario viene eliminato. I file di un progetto non vengono toccati."
+
+msgid "The job template is deleted. Its past runs stay in the history."
+msgstr "Il template viene eliminato. Le sue run passate restano nella cronologia."
+
+msgid "The output of a run is shown to operators and administrators only, because it may contain sensitive data."
+msgstr "L'output di una run è mostrato solo a operatori e amministratori, perché può contenere dati sensibili."
+
+msgid "The project and the files fetched for it are deleted. The repository is not touched."
+msgstr "Il progetto e i file scaricati vengono eliminati. Il repository non viene toccato."
+
+msgid "The project is forgotten. The directory and its files are not touched."
+msgstr "Il progetto viene dimenticato. La directory e i suoi file non vengono toccati."
+
+msgid "Trust a host"
+msgstr "Rendi attendibile un host"
+
+msgid "Trust these keys"
+msgstr "Considera attendibili queste chiavi"
+
+msgid "Trusted by"
+msgstr "Resa attendibile da"
+
+msgid "Trusted host keys"
+msgstr "Chiavi host attendibili"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Unreachable"
+msgstr "Irraggiungibili"
+
+msgid "Update from git"
+msgstr "Aggiorna da git"
+
+msgid "Updated"
+msgstr "Aggiornato"
+
+msgid "User name"
+msgstr "Nome utente"
+
+msgid "Vault credential"
+msgstr "Credenziale vault"
+
+msgid "Vault password"
+msgstr "Password del vault"
+
+msgid "Written here"
+msgstr "Scritto qui"
+
+msgid "changed {{n}}"
+msgstr "modificati {{n}}"
+
+msgid "failed {{n}}"
+msgstr "falliti {{n}}"
+
+msgid "https:// or ssh. For ssh, trust the server's host key first."
+msgstr "https:// o ssh. Per ssh, rendi prima attendibile la chiave host del server."
+
+msgid "ok {{n}}"
+msgstr "ok {{n}}"
+
+msgid "skipped {{n}}"
+msgstr "saltati {{n}}"
+
+msgid "unreachable {{n}}"
+msgstr "irraggiungibili {{n}}"
+
 msgid "checks_failed_count"
 msgid_plural "checks_failed_count_plural"
 msgstr[0] "{{count}} problema"

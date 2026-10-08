@@ -8,11 +8,11 @@ before building on it. The plan and the open decisions are in
 
 ```
 Browser (React, PatternFly)
-   │ cockpit.spawn → sudo -u cockpit-fleet fleetctl …          (phase 1)
+   │ cockpit.spawn → sudo -u cockpit-fleet fleetctl COMMAND < params.json
    ▼
 service account cockpit-fleet (unprivileged, no login shell)
-   │ writes /var/lib/cockpit-fleet/runs/<id>/{spec.json, project/, creds/}
-   │ sudo fleet-unit start <id>
+   │ writes /var/lib/cockpit-fleet/runs/<id>/{spec.json, project/, creds/, known_hosts}
+   │ sudo fleet-unit start <id>          cockpit-fleet-finish@<id> records the outcome
    ▼
 cockpit-fleet-run@<id>.service        sandboxed, User=cockpit-fleet
    │ PID 1 decrypts creds/ into /run/credentials/<unit>/
@@ -82,6 +82,13 @@ secrets of another run or project.
 
 `system/cockpit-fleet-run@.service`. `systemd-analyze security` rates it 1.5.
 
+Every run executes as the same account, so the sandbox also separates runs
+from each other. A first version did not: one run could read the decrypted
+secrets of a concurrent one through `/proc/PID/root` of its processes. Each run
+now has its own PID namespace (`PrivatePIDs=yes`, systemd 257) and IPC
+namespace, and sees no process but its own. `test/integration/sandbox.sh`
+tries exactly that path.
+
 | A playbook can | A playbook cannot |
 |---|---|
 | read and write its own run directory | see the database, other projects, other runs |
@@ -141,6 +148,58 @@ and gets the admin role; the audit trail then shows `root`, not the person.
 To add a command: a function decorated with `@command(name, role=…,
 mutating=…, redact=…)` in a module imported by `cli.main`, parameters read
 through `Params` (which rejects unknown ones), and a test in `backend/tests`.
+
+## Jobs
+
+A run unit executes one job, of one of three kinds, described by `spec.json`
+in its directory: `playbook` (ansible-playbook), `inventory`
+(`ansible-inventory --list`, to learn hosts and groups) and `sync` (fetch a git
+project). All three need the sandbox, because all three can execute code from
+a project: inventory plugins and scripts, or git itself.
+
+When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
+
+| Entry | Content |
+|---|---|
+| `spec.json` | what to run; validated again by `fleet-run` |
+| `project/` | a copy of the project (symbolic links copied, never followed; `.git` left out) |
+| `creds/` | ciphertext of the secrets this job may use, named by purpose |
+| `known_hosts` | the host keys an administrator has trusted |
+| `inventory/` | the inventory, when it is written in the interface rather than a project file |
+
+The run then sees a self-contained directory and nothing else. `project/` and
+`creds/` are removed when the job ends; `stdout.log`, `events.jsonl` and
+`result.json` stay.
+
+There is no daemon tracking jobs. The `runs` table holds the state, and
+`reconcile` brings it up to date from what a unit left behind: it runs when a
+unit ends (`OnSuccess=`/`OnFailure=` start `cockpit-fleet-finish@ID.service`,
+which is the backend itself, unsandboxed, as the service account) and whenever
+runs are read. It also starts queued runs while fewer than
+`runs.max_concurrent` are running. A unit that is gone without a
+`result.json` is recorded as an error, or as canceled if that was asked.
+
+**Git projects.** A sync job makes a fresh shallow fetch of one reference into
+its own directory and drops `.git`; the result replaces the project's tree
+only if the fetch succeeded. Hooks are disabled, submodules are not followed,
+and `GIT_ALLOW_PROTOCOL` leaves only https and ssh. A token is handed to git by
+an askpass helper that reads it from the credentials directory, so it is in
+neither argv nor the environment.
+
+**A project's `ansible.cfg`** is not used as it is: a run gets a generated one
+with only the allowlisted keys of the project's file (`roles_path` and
+`collections_path` when they stay inside the project, `gathering`,
+`pipelining`, `become` settings and a few more). Anything that would load
+plugins from elsewhere, point to a vault password file or relax host key
+checking is dropped. The integration test ships a project that tries.
+
+**Host keys.** `hostkey.scan` returns the keys a host offers, with their
+fingerprints; nothing is trusted until an administrator confirms with
+`hostkey.add`. A run connects only to hosts listed there.
+
+**Limits a launcher can change.** Launching a template, an operator may add a
+host limit and ask for a dry run. The limit is combined with the template's
+own (`template:&caller`), so it can narrow the target but not widen it.
 
 ## Events
 
@@ -206,6 +265,7 @@ bundled collection.
 | Privilege boundaries | `test/integration/privileges.sh` | controller, as root |
 | Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
 | Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
+| A whole run through fleetctl | `test/integration/runs.sh` | controller, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root |
 

@@ -12,8 +12,9 @@ notifies on information from managed nodes using Ansible only (agentless).
 phased plan. Read it before starting any work, tick items as they are completed,
 and update it when a decision changes. Do not restate its content here.
 
-Status: Phases 0 and 1 done (package, run sandbox, secrets, `fleetctl` with roles,
-audit and database, first pages). `docs/architecture.md` describes what exists and what was measured.
+Status: Phases 0 and 1 done, Phase 2 done in its core (projects, inventories,
+credentials, host keys, templates, runs with live output). `TODO.md` lists what
+Phase 2 still lacks. `docs/architecture.md` describes what exists and what was measured.
 
 ## Non-negotiable rules
 
@@ -35,7 +36,11 @@ them needs the user's explicit agreement.
    use polkit rules that match unit names: they also authorise transient units
    with that name, which means arbitrary code as root.
 7. **Validate on the backend.** UI validation is a convenience, not a control.
-8. **Checks are OS agnostic.** A catalog check has one output schema and one
+8. **Runs share one Unix account, so they must stay isolated from each other.**
+   Anything a run can reach, a playbook of another project can reach. Do not
+   remove `PrivatePIDs`, the tmpfs over the state directory or over `/run`, and
+   test a change to the unit with `sandbox.sh`.
+9. **Checks are OS agnostic.** A catalog check has one output schema and one
    implementation per platform; Windows nodes are reached over SSH, not WinRM.
 
 ## Stack and conventions
@@ -67,9 +72,20 @@ them needs the user's explicit agreement.
   an entry that has been released.
 - **A frontend call**: `call<T>("area.verb", params)` from `src/lib/fleet.ts`.
   Hide what a role cannot do using `session.commands`, but never rely on it.
+- **A job kind**: `fleet-run` dispatches on `spec["kind"]`; build the command
+  line in `runner.py` (tested), prepare the run directory in the command that
+  queues it, and handle the result in `jobs._collect`.
+- **A page**: a component under `src/components/`, a tab in `TABS` in
+  `src/app.tsx`. Use `useLoad`, `ListState`, `FormModal` and `ConfirmDelete`
+  from `common.tsx`, and `useCan()` to decide which actions to offer.
 - **A string**: English in the source through `t()`, Italian in `po/it.po`, then
   `make pot && make po-compile`. Plurals use a symbolic key (`things_count`)
   whose English forms are edited by hand in `src/locales/en/translation.json`.
+
+To drive the interface from the browser tools, the page is an iframe named
+`cockpit1:localhost/fleet`; React inputs need the native value setter followed
+by an `input` event. After a redeploy, reload the page ignoring the cache: a
+change of the URL fragment does not reload the bundle.
 
 To look at a page as a given role, create a throwaway account on the VM in the
 matching group, log in to Cockpit with it, and delete it afterwards.
@@ -94,6 +110,7 @@ Integration tests run as root on the VM, with the package installed:
 test/integration/privileges.sh       # what the service account can reach
 test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD)
 test/integration/roles.sh            # roles, audit, sudoers (creates and removes test accounts)
+test/integration/runs.sh             # a whole run through fleetctl; WIPES the database (IT_WIPE=yes)
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY)
 ```

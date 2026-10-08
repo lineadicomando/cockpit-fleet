@@ -4,7 +4,8 @@ Plugin Cockpit per l'orchestrazione di Ansible (ispirato a Semaphore UI) e per l
 raccolta, la rappresentazione storica e la notifica di informazioni dai nodi
 gestiti, acquisite solo tramite Ansible.
 
-Stato: fasi 0 e 1 concluse l'8 ottobre 2026. Prossima: fase 2.
+Stato: fasi 0 e 1 concluse, fase 2 conclusa nella sua parte essenziale (8 ottobre 2026).
+Restano le voci aperte della fase 2, poi la fase 3.
 
 ---
 
@@ -53,13 +54,13 @@ indicata.
       unit derivati da input utente; a 200+ nodi servono comunque coda, limite di
       concorrenza e sharding che i timer singoli non danno. Le espressioni restano
       quelle di systemd (`OnCalendar`), validate con `systemd-analyze calendar`.
-- [ ] **`ansible.cfg` del progetto** (fase 2). Default: non viene usato direttamente;
+- [ ] **`ansible.cfg` del progetto**. Applicato il default, da confermare: non viene usato direttamente;
       la run parte con un `ANSIBLE_CONFIG` generato, in cui si importano dal file del
       progetto solo le chiavi in allowlist (`collections_path`, `roles_path`, opzioni
       di visualizzazione). `vault_password_file` diventa una credenziale.
 - [ ] **Chi approva** (fase 9). Default: un utente con ruolo admin diverso da chi ha
       lanciato la run. Alternativa: gruppo dedicato `cockpit-fleet-approver`.
-- [ ] **Cosa vede il viewer** (fase 1). Default: stato, storico e dati dei nodi sì;
+- [ ] **Cosa vede il viewer**. Applicato il default, da confermare: stato, storico e dati dei nodi sì;
       log completi delle run no, perché possono contenere dati sensibili.
 - [ ] **Retention predefinita** (fase 8). Default: dati grezzi 14 giorni, aggregati
       orari 90 giorni, giornalieri 2 anni, log delle run 90 giorni.
@@ -109,6 +110,10 @@ due girano come root:
 3. `fleet-unit start|stop <id>`, eseguito come root via sudoers dal solo utente
    `cockpit-fleet`. Costruisce da sé il nome della unit a partire da un
    identificativo validato.
+
+Unit `cockpit-fleet-finish@<id>.service`: parte quando una run termina, gira come
+`cockpit-fleet` fuori dalla sandbox ed esegue `fleetctl run.reconcile`, che registra
+l'esito e avvia la run successiva in coda.
 
 La decifratura dei segreti non richiede codice nostro: la unit carica con
 `LoadCredentialEncrypted=` i file cifrati copiati nella directory `creds/` della
@@ -233,33 +238,43 @@ con la fase 2.
 
 Obiettivo: lanciare un playbook da un progetto e seguirne il log.
 
-- [ ] **Progetti, directory locale**: percorso ammesso solo se sotto le radici in `config.toml`
-- [ ] **Progetti, git**: clone/fetch in `cockpit-fleet-prepare@`, ref fissabile, SHA
-      registrato in ogni run; hook disabilitati, submodule spenti di default,
-      protocollo `file` negato; deploy key o token come segreti
-- [ ] `ANSIBLE_CONFIG` generato per run, con import in allowlist dal progetto
-- [ ] **Inventari**: file del progetto o gestito dalla UI; `ansible-inventory --list`
-      per mettere in cache host e gruppi; errori di parsing mostrati in UI
-- [ ] **Credenziali**: chiave SSH, utente/password, become, vault; solo riferimenti
-      nel database, valori via `fleet-secret`
-- [ ] Passaggio dei segreti: copia dei file cifrati in `creds/` all'accodamento
-      della run (le opzioni `--private-key`, `--connection-password-file`,
-      `--become-password-file`, `--vault-password-file` sono già in `fleet-run`)
-- [ ] Istantanea del progetto in `runs/<id>/project`, così la run non vede altro
-- [ ] **known_hosts**: file gestito, `StrictHostKeyChecking=yes`; flusso "scansiona,
-      mostra impronta, conferma" riservato agli admin
-- [ ] **Template**: playbook, inventario, credenziali, limit, tag, extra-vars (file JSON), fork, verbosità
-- [ ] **`fleet-run`**: vault multipli (`--vault-id`). Tag e test unitari della
-      costruzione di argv sono fatti (`cockpit_fleet/runner.py`)
-- [ ] **Callback plugin** `lineadicomando.fleet.events`: aggiungere diff e risultati
-      per item; verificare `no_log`. La base esiste dalla fase 0
-- [ ] **Run**: stati `queued`, `running`, `successful`, `failed`, `canceled`; annullamento con `systemctl stop`
-- [ ] UI: elenco e dettaglio di progetti, inventari, credenziali, template
-- [ ] UI run: log live con colori ANSI, vista per host e per task, riepilogo `PLAY RECAP`, cronologia con filtri
-- [ ] Test di integrazione: run su container Linux e sui nodi Windows
+- [x] **Progetti, directory locale**: percorso ammesso solo se sotto le radici in `config.toml`
+- [x] **Progetti, git**: ogni aggiornamento è un fetch superficiale di un solo
+      riferimento (branch, tag o commit), eseguito nella unit sandbox; SHA registrato
+      in ogni run; hook disabilitati, submodule non seguiti, solo https e ssh; chiave
+      o token come segreti. Niente unit `prepare` separata: è un tipo di job della
+      stessa unit
+- [x] `ANSIBLE_CONFIG` generato per run, con import in allowlist dal progetto
+- [x] **Inventari**: file del progetto o scritto nella UI; host e gruppi letti con
+      `ansible-inventory --list` in un job sandbox; errori di lettura mostrati in UI
+- [x] **Credenziali**: macchina (chiave SSH, password, become), vault, git; nel
+      database solo i riferimenti, i valori via `fleet-secret`
+- [x] Passaggio dei segreti: copia dei file cifrati in `creds/` all'accodamento della run
+- [x] Istantanea del progetto in `runs/<id>/project`, rimossa a run conclusa
+- [x] **known_hosts**: chiavi nel database, `StrictHostKeyChecking=yes`; flusso
+      "leggi le chiavi, mostra le impronte, conferma" riservato agli admin
+- [x] **Template**: playbook, inventario, credenziali, limit, tag, extra-vars, fork, verbosità, become
+- [x] **Run**: stati `queued`, `running`, `successful`, `failed`, `canceled`, `error`;
+      annullamento; esito registrato da `cockpit-fleet-finish@` quando la unit termina
+- [x] Coda con limite di run concorrenti (anticipata dalla fase 4)
+- [x] UI: progetti, inventari, credenziali, chiavi host, template
+- [x] UI run: output live con colori, vista per task, esito per host, cronologia con filtro per stato
+- [x] Test di integrazione: `test/integration/runs.sh`, percorso completo via
+      `fleetctl` contro la VM stessa in SSH, compreso un progetto git
+- [ ] Run verso un nodo Windows lanciata da `fleetctl` o dalla UI (oggi provata solo
+      a livello di unit, con `windows.sh`)
+- [ ] Nodi Linux di test in container, per run su più host
+- [ ] **`fleet-run`**: vault multipli (`--vault-id`)
+- [ ] **Callback**: eventi per item dei cicli; il diff è già nei risultati
+- [ ] Scansione delle chiavi host di tutti gli host di un inventario in un colpo
+- [ ] Modifica di progetti e credenziali esistenti (oggi: nome e sorgente si
+      cambiano solo ricreandoli; i segreti si possono sostituire)
+- [ ] Chiavi SSH protette da passphrase (oggi non supportate)
 
 Fatto quando: un operator lancia un template dal browser, chiude la scheda, la
-riapre e ritrova la run completata con log ed esito per host.
+riapre e ritrova la run completata con log ed esito per host. Raggiunto: il lancio
+dal browser è provato come admin, quello da operator via `fleetctl`; l'esito viene
+registrato anche se nessuno guarda.
 
 ## Fase 3 — Runner completo
 
@@ -287,7 +302,8 @@ al repository, con il vault importato come credenziale.
       calcolata al salvataggio e dopo ogni scatto
 - [ ] Import da sintassi cron a 5 campi; costruttore con preset nella UI
 - [ ] Recupero delle esecuzioni perse a controller spento (configurabile per schedulazione)
-- [ ] Coda con priorità e limite globale di run concorrenti; alla fine di una run parte la successiva
+- [ ] Priorità nella coda (il limite di run concorrenti e l'avvio della successiva
+      esistono dalla fase 2)
 - [ ] Regola anti-sovrapposizione: salta, accoda o annulla la precedente
 - [ ] Ritardo casuale configurabile per distribuire il carico
 - [ ] UI: elenco schedulazioni, prossime esecuzioni, attiva/disattiva, "esegui ora"
