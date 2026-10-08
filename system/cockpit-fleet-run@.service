@@ -1,0 +1,62 @@
+[Unit]
+Description=Cockpit Fleet run %i
+Documentation=https://github.com/lineadicomando/cockpit-fleet
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=cockpit-fleet
+Group=cockpit-fleet
+ExecStart=/usr/libexec/cockpit-fleet/fleet-run %i
+WorkingDirectory=/var/lib/cockpit-fleet/runs/%i
+SyslogIdentifier=cockpit-fleet-run
+UMask=0077
+
+# Secrets of this run only: the files in creds/ are ciphertext copied there
+# when the run is queued; PID 1 decrypts them into a directory that no other
+# unit can see.
+LoadCredentialEncrypted=fleet:/var/lib/cockpit-fleet/runs/%i/creds
+
+# Scratch space on tmpfs, removed when the run ends.
+RuntimeDirectory=cockpit-fleet-run-%i
+RuntimeDirectoryMode=0700
+
+# The run sees its own directory and nothing else of the state: not the
+# database, not other projects, not other runs. The rest of the account's
+# home is a throwaway tmpfs, writable because Ansible keeps its temporary
+# files under ~ when it targets the controller itself.
+TemporaryFileSystem=/var/lib/cockpit-fleet:mode=1777
+BindPaths=/var/lib/cockpit-fleet/runs/%i
+InaccessiblePaths=/etc/cockpit-fleet
+
+# No D-Bus and no systemd sockets. Together with NoNewPrivileges (which
+# disables sudo) this keeps a playbook from starting another run unit.
+TemporaryFileSystem=/run:ro
+BindReadOnlyPaths=-/run/systemd/resolve
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# Refused calls fail with EPERM instead of killing the process: modules run on
+# the controller call chown() and friends even when there is nothing to change.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

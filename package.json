@@ -1,0 +1,33 @@
+{
+  "name": "cockpit-fleet",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --import ./test/cockpit-loader.mjs --test test/*.test.ts",
+    "build": "node build.js",
+    "watch": "node build.js --watch",
+    "pot": "i18next",
+    "po-compile": "node scripts/po2json.mjs"
+  },
+  "dependencies": {
+    "@patternfly/patternfly": "^6.1.0",
+    "@patternfly/react-core": "^6.1.0",
+    "@patternfly/react-icons": "^6.1.0",
+    "@patternfly/react-table": "^6.1.0",
+    "i18next": "^26.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.28.0",
+    "esbuild-sass-plugin": "^3.7.0",
+    "gettext-parser": "^9.0.2",
+    "i18next-parser": "^9.0.2",
+    "typescript": "^5.9.3"
+  }
+}

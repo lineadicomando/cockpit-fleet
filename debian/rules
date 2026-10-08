@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with installsysusers
+
+# The bundle is built beforehand with npm (make build): the package build has
+# no network access and only packs the result.
+override_dh_auto_clean:
+
+override_dh_auto_build:
+	test -f dist/index.js || { echo "dist/ is missing: run 'make build' first"; exit 1; }
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	$(MAKE) install-files DESTDIR=$(CURDIR)/debian/cockpit-fleet

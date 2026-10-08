@@ -1,0 +1,6 @@
+cockpit-fleet (0.0.1) unstable; urgency=medium
+
+  * Packaging skeleton: empty Cockpit page, service account, role groups,
+    run unit and the helper that starts it.
+
+ -- Alessandro Gagliano <alessandro.gagliano@gmail.com>  Thu, 08 Oct 2026 21:00:00 +0200

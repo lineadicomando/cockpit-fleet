@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+Makefile.local
+__pycache__/
+debian/cockpit-fleet/
+debian/.debhelper/
+debian/files
+debian/*.substvars
+debian/*.debhelper*
+debian/debhelper-build-stamp
+deb/

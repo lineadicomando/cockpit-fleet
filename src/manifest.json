@@ -1,0 +1,25 @@
+{
+  "version": 0,
+  "requires": {
+    "cockpit": "337"
+  },
+  "menu": {
+    "index": {
+      "label": "Fleet",
+      "order": 91,
+      "keywords": [
+        {
+          "matches": [
+            "fleet",
+            "ansible",
+            "playbook",
+            "inventory",
+            "automation",
+            "nodes",
+            "monitoring"
+          ]
+        }
+      ]
+    }
+  }
+}

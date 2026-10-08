@@ -1,0 +1,3 @@
+# The service account starts and stops run units through one fixed helper,
+# which validates its argument. No wildcard, no other command.
+cockpit-fleet ALL=(root) NOPASSWD: /usr/libexec/cockpit-fleet/fleet-unit

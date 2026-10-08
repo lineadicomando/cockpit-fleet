@@ -1,0 +1,7 @@
+# Service account that owns projects and history and runs Ansible.
+u cockpit-fleet - "Cockpit Fleet" /var/lib/cockpit-fleet /usr/sbin/nologin
+
+# Roles: membership decides what a Cockpit user may do.
+g cockpit-fleet-admin -
+g cockpit-fleet-operator -
+g cockpit-fleet-viewer -

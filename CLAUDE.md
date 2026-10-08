@@ -12,7 +12,8 @@ notifies on information from managed nodes using Ansible only (agentless).
 phased plan. Read it before starting any work, tick items as they are completed,
 and update it when a decision changes. Do not restate its content here.
 
-Status: analysis done, no code yet. Phase 0 (scaffold and spikes) comes first.
+Status: Phase 0 done (scaffold, package, run sandbox, secrets), except the Windows
+spike. `docs/architecture.md` describes what exists and what was measured.
 
 ## Non-negotiable rules
 
@@ -29,9 +30,10 @@ them needs the user's explicit agreement.
    the run's runtime directory.
 5. **Every `fleetctl` command declares its minimum role** and every mutating command
    writes an audit record. Roles come from Unix groups of the caller (`SUDO_UID`).
-6. **Privileged code stays tiny.** Only `fleet-secret` and `fleet-creds-prepare` run as
-   root. Do not add a third root entry point, a sudoers wildcard or a polkit rule
-   wider than the fixed unit-name pattern.
+6. **Privileged code stays tiny.** Only `fleet-unit` and `fleet-secret` run as
+   root. Do not add a third root entry point or a sudoers wildcard, and do not
+   use polkit rules that match unit names: they also authorise transient units
+   with that name, which means arbitrary code as root.
 7. **Validate on the backend.** UI validation is a convenience, not a control.
 8. **Checks are OS agnostic.** A catalog check has one output schema and one
    implementation per platform; Windows nodes are reached over SSH, not WinRM.
@@ -43,7 +45,9 @@ them needs the user's explicit agreement.
   setup and code style (4-space indent, `.ts` import extensions, comments only
   where the reason is not obvious).
 - Backend: Python 3.13, standard library only at runtime (it ships in a `.deb` that
-  depends on `ansible-core`). Dev tools: `pytest`, `ruff`.
+  depends on `ansible-core`). Tests use `unittest`, so they run with no extra
+  package. `ruff` is not installed on the host: run it in a container, as CI does
+  (`pip install ruff && ruff check backend collection`).
 - Controller target: Debian 13 only (systemd 257, Cockpit 337). The development
   host is Fedora with ansible-core 2.20, newer than Debian's: anything involving
   Ansible, systemd or packaging must be verified on the VM, not locally.
@@ -54,13 +58,27 @@ them needs the user's explicit agreement.
 
 ## Commands
 
-Not available until the Phase 0 scaffold exists; planned to match the sibling project:
+```
+make build | watch              # frontend bundle, watch mode
+make check                      # frontend (node --test) and backend (unittest) tests
+make deb                        # .deb built in a Debian 13 container (podman), into deb/
+make vm-deploy                  # frontend only, into ~maint/.local/share/cockpit
+make vm-deb-deploy              # full package on the VM; needs SSHPASS exported
+```
+
+`Makefile.local` holds the VM targets and is not tracked. Prefer
+`vm-deb-deploy`: a copy left by `vm-deploy` in `~/.local/share/cockpit` shadows
+the packaged one.
+
+Integration tests run as root on the VM, with the package installed:
 
 ```
-make build | watch | check      # bundle, watch mode, unit tests
-make vm-deploy                  # frontend only, into ~maint/.local/share/cockpit
-make vm-deb-deploy              # full package; needed for units, helpers, polkit, sudoers
+test/integration/privileges.sh       # what the service account can reach
+test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD)
+test/integration/measure-events.sh   # callback cost on N simulated hosts
 ```
+
+Run both test scripts after any change to the unit, the helpers or sudoers.
 
 ## Test environment
 
@@ -71,9 +89,21 @@ make vm-deb-deploy              # full package; needed for units, helpers, polki
 - Linux nodes: containers on the controller VM, or a clone of `debian13-base`.
 - VMs are usually shut off: `virsh -c qemu:///system list --all`, then start what
   is needed. Ask before creating, cloning or deleting a VM.
+- Before starting a VM, check that the running VMs plus the new one do not need
+  more than the host can give: compare the memory and vCPUs assigned to them
+  (`virsh dominfo <domain>`) with what is free on the host (`free -m`, `nproc`).
+  If they do not fit, start fewer VMs or shut down the ones not needed for the
+  test, and shut down what you started when the test is over.
 - After a deploy, a Cockpit tab keeps running the old bundle until reloaded, and a
   package in `/usr/share/cockpit` is shadowed by a copy in `~/.local/share/cockpit`.
 - The VM also hosts the Samba AD DC used by other projects: do not break it.
+- Cockpit there has a self-signed certificate, which the browser tools refuse.
+  Open an SSH tunnel (`ssh -L 9091:127.0.0.1:9090`) and use
+  `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
+- Do not `pkill -f` with a pattern that also appears in your own command line.
+- Windows nodes accept public keys only. `win11-pc00` is `teacher` (.10),
+  `win11-pc01` is `student01` (.11), `win11-pc02` is `student02` (.12); each has
+  8 GB assigned, so they do not all fit on the host together with the controller.
 
 ## Git hosting
 

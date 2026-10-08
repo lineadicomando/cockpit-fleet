@@ -1,0 +1,31 @@
+#!/usr/bin/python3 -I
+"""Start or stop one run unit. Runs as root, called by the service account.
+
+This is the only way the unprivileged cockpit-fleet account can act on
+systemd: the unit name is built here from a validated identifier, so nothing
+but an instance of the packaged template can be reached.
+"""
+
+import os
+import sys
+
+sys.path.insert(0, "/usr/lib/cockpit-fleet")
+
+from cockpit_fleet.names import check_id  # noqa: E402
+from cockpit_fleet.paths import RUN_UNIT  # noqa: E402
+
+
+def main(argv: list[str]) -> None:
+    if os.geteuid() != 0:
+        sys.exit("fleet-unit: must run as root")
+    if len(argv) != 3 or argv[1] not in ("start", "stop"):
+        sys.exit("usage: fleet-unit start|stop RUN_ID")
+    try:
+        unit = RUN_UNIT.format(check_id(argv[2], "run id"))
+    except ValueError as error:
+        sys.exit(f"fleet-unit: {error}")
+    os.execv("/usr/bin/systemctl", ["systemctl", argv[1], "--", unit])  # noqa: S606
+
+
+if __name__ == "__main__":
+    main(sys.argv)

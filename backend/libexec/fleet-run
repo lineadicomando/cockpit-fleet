@@ -1,0 +1,166 @@
+#!/usr/bin/python3 -I
+"""Execute one run inside cockpit-fleet-run@ID.service.
+
+Builds the ansible-playbook command line from the stored spec.json. Nothing
+from the frontend reaches argv without going through this file.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/cockpit-fleet")
+
+from cockpit_fleet.names import check_id  # noqa: E402
+from cockpit_fleet.paths import COLLECTIONS_DIR, RUNS_DIR  # noqa: E402
+
+# Host patterns: names, groups, wildcards, unions/intersections/exclusions.
+_LIMIT_RE = re.compile(r"[A-Za-z0-9_.*\[\]:,&!~-]{1,512}")
+_USER_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.@\\-]{0,63}")
+
+# Credential purpose -> ansible-playbook option taking a file.
+_CREDENTIAL_OPTIONS = {
+    "private_key": "--private-key",
+    "connection_password": "--connection-password-file",
+    "become_password": "--become-password-file",
+    "vault_password": "--vault-password-file",
+}
+
+
+class SpecError(Exception):
+    pass
+
+
+def inside(base: Path, relative: object, what: str) -> Path:
+    if not isinstance(relative, str) or not relative:
+        raise SpecError(f"missing {what}")
+    path = (base / relative).resolve()
+    if not path.is_relative_to(base.resolve()) or not path.is_file():
+        raise SpecError(f"{what} is not a file inside the project: {relative!r}")
+    return path
+
+
+def bounded_int(spec: dict, key: str, default: int, low: int, high: int) -> int:
+    value = spec.get(key, default)
+    if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high:
+        raise SpecError(f"{key} must be an integer between {low} and {high}")
+    return value
+
+
+def build_argv(spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None) -> list:
+    project = run_dir / "project"
+    argv = [
+        "/usr/bin/ansible-playbook",
+        "--inventory", str(inside(project, spec.get("inventory"), "inventory")),
+        "--forks", str(bounded_int(spec, "forks", 5, 1, 200)),
+    ]
+
+    limit = spec.get("limit")
+    if limit is not None:
+        if not isinstance(limit, str) or not _LIMIT_RE.fullmatch(limit) or limit.startswith("-"):
+            raise SpecError(f"invalid limit: {limit!r}")
+        argv += ["--limit", limit]
+
+    user = spec.get("user")
+    if user is not None:
+        if not isinstance(user, str) or not _USER_RE.fullmatch(user):
+            raise SpecError(f"invalid user: {user!r}")
+        argv += ["--user", user]
+
+    if spec.get("check") is True:
+        argv.append("--check")
+    if spec.get("diff") is True:
+        argv.append("--diff")
+    verbosity = bounded_int(spec, "verbosity", 0, 0, 4)
+    if verbosity:
+        argv.append("-" + "v" * verbosity)
+
+    extra_vars = spec.get("extra_vars")
+    if extra_vars is not None:
+        if not isinstance(extra_vars, dict):
+            raise SpecError("extra_vars must be an object")
+        vars_file = runtime_dir / "extra_vars.json"
+        vars_file.write_text(json.dumps(extra_vars))
+        argv += ["--extra-vars", f"@{vars_file}"]
+
+    if credentials_dir is not None:
+        for purpose, option in _CREDENTIAL_OPTIONS.items():
+            credential = credentials_dir / f"fleet_{purpose}"
+            if credential.is_file():
+                argv += [option, str(credential)]
+
+    argv.append(str(inside(project, spec.get("playbook"), "playbook")))
+    return argv
+
+
+def build_env(run_dir: Path, runtime_dir: Path) -> dict:
+    home = runtime_dir / "home"
+    home.mkdir(mode=0o700, exist_ok=True)
+    control = runtime_dir / "cp"
+    control.mkdir(mode=0o700, exist_ok=True)
+    known_hosts = run_dir / "known_hosts"
+    # Ansible only accepts a .cfg file here. Setting it also keeps an
+    # ansible.cfg shipped inside the project from being picked up.
+    config = runtime_dir / "ansible.cfg"
+    config.write_text("[defaults]\n")
+    ssh_args = (
+        "-o ControlMaster=auto -o ControlPersist=60s "
+        f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts} "
+        "-o GlobalKnownHostsFile=/dev/null"
+    )
+    # A clean environment: nothing is inherited from the unit beyond these.
+    return {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(home),
+        "LANG": "C.UTF-8",
+        "PYTHONUNBUFFERED": "1",
+        "ANSIBLE_HOME": str(home / ".ansible"),
+        "ANSIBLE_CONFIG": str(config),
+        "ANSIBLE_LOCAL_TEMP": str(runtime_dir / "tmp"),
+        "ANSIBLE_SSH_CONTROL_PATH_DIR": str(control),
+        "ANSIBLE_SSH_ARGS": ssh_args,
+        "ANSIBLE_HOST_KEY_CHECKING": "True",
+        "ANSIBLE_COLLECTIONS_PATH": f"{COLLECTIONS_DIR}:{run_dir / 'project'}",
+        "ANSIBLE_CALLBACKS_ENABLED": "lineadicomando.fleet.events",
+        "ANSIBLE_FORCE_COLOR": "1",
+        "FLEET_EVENTS_FILE": str(run_dir / "events.jsonl"),
+    }
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2:
+        print("usage: fleet-run RUN_ID", file=sys.stderr)
+        return 2
+    try:
+        run_id = check_id(argv[1], "run id")
+        run_dir = RUNS_DIR / run_id
+        runtime_dir = Path(os.environ["RUNTIME_DIRECTORY"])
+        credentials = os.environ.get("CREDENTIALS_DIRECTORY")
+        spec = json.loads((run_dir / "spec.json").read_text())
+        if not isinstance(spec, dict):
+            raise SpecError("spec.json must contain an object")
+        command = build_argv(spec, run_dir, runtime_dir, Path(credentials) if credentials else None)
+        env = build_env(run_dir, runtime_dir)
+    except (SpecError, ValueError, KeyError, OSError) as error:
+        print(f"fleet-run: {error}", file=sys.stderr)
+        return 2
+
+    # Tee the human-readable output to the run directory and to the journal.
+    with open(run_dir / "stdout.log", "ab") as log:
+        process = subprocess.Popen(
+            command, env=env, cwd=run_dir / "project",
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        for line in process.stdout:
+            log.write(line)
+            log.flush()
+            sys.stdout.buffer.write(line)
+            sys.stdout.buffer.flush()
+        return process.wait()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

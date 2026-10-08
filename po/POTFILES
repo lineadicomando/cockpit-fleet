@@ -1,0 +1,3 @@
+# Source files containing translatable strings.
+# Used as reference for i18next-parser (configured via i18next-parser.config.mjs).
+src/app.tsx

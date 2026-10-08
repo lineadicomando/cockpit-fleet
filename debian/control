@@ -1,0 +1,28 @@
+Source: cockpit-fleet
+Section: admin
+Priority: optional
+Maintainer: Alessandro Gagliano <alessandro.gagliano@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/lineadicomando/cockpit-fleet
+
+Package: cockpit-fleet
+Architecture: all
+Depends: ${misc:Depends},
+         cockpit-bridge (>= 337),
+         ansible-core (>= 2.19),
+         python3 (>= 3.13),
+         systemd (>= 257),
+         sudo,
+         git,
+         openssh-client
+Recommends: ansible, sshpass
+Description: Cockpit plugin to run Ansible and watch a fleet of nodes
+ Runs Ansible playbooks from the Cockpit web console, with projects,
+ inventories, credentials, schedules and notifications, and uses Ansible
+ to collect health, inventory and update information from the managed
+ nodes without installing an agent on them.
+ .
+ Runs execute in sandboxed systemd units under a dedicated unprivileged
+ account; no daemon is left running and no network port is opened.

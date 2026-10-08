@@ -1,0 +1,11 @@
+namespace: lineadicomando
+name: fleet
+version: 0.0.1
+readme: README.md
+authors:
+  - Alessandro Gagliano
+description: Plugins used by the cockpit-fleet Cockpit plugin on the controller
+license:
+  - LGPL-2.1-or-later
+tags: [cockpit]
+dependencies: {}

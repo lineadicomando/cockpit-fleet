@@ -1,0 +1,23 @@
+# Italian translations for cockpit-fleet.
+# Copyright (C) 2026 Alessandro Gagliano
+# This file is distributed under the same license as the cockpit-fleet package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: cockpit-fleet 0.0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-08 00:00+0000\n"
+"PO-Revision-Date: 2026-10-08 00:00+0200\n"
+"Last-Translator: Alessandro Gagliano <alessandro.gagliano@gmail.com>\n"
+"Language-Team: Italian <it@li.org>\n"
+"Language: it\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Nothing to show yet"
+msgstr "Ancora niente da mostrare"
+
+msgid "cockpit-fleet is installed. Its features will appear here as they are developed."
+msgstr "cockpit-fleet è installato. Le funzioni compariranno qui man mano che vengono sviluppate."

@@ -1,0 +1,17 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-include = ["backend/libexec/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "S", "UP"]
+# S603: subprocess calls are reviewed by hand; argv lists only, never a shell.
+ignore = ["S603"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/*" = ["S101"]
+# Ansible plugins put DOCUMENTATION before the imports.
+"collection/**/plugins/**" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cockpit_fleet"]

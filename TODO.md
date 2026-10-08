@@ -4,7 +4,7 @@ Plugin Cockpit per l'orchestrazione di Ansible (ispirato a Semaphore UI) e per l
 raccolta, la rappresentazione storica e la notifica di informazioni dai nodi
 gestiti, acquisite solo tramite Ansible.
 
-Stato: analisi conclusa l'8 ottobre 2026, nessun codice scritto.
+Stato: fase 0 conclusa l'8 ottobre 2026, salvo lo spike su Windows. Prossima: fase 1.
 
 ---
 
@@ -65,6 +65,11 @@ indicata.
       orari 90 giorni, giornalieri 2 anni, log delle run 90 giorni.
 - [ ] **Namespace della collection Ansible** (fase 2). Default: `lineadicomando.fleet`;
       `cockpit` non è un namespace nostro.
+- [ ] **Chiave SSH del controller sui nodi Windows** (subito, per chiudere S4).
+      Serve una coppia di chiavi dedicata, generata sul controller e autorizzata sui
+      nodi di test.
+- [ ] **Runner CI su Gitea** (prima della fase 1). Senza un runner il workflow in
+      `.github/workflows/` non gira finché il repository non è su GitHub.
 - [ ] **Nome dell'helper `fleetctl`** (fase 1). Sta in `/usr/libexec`, fuori dal
       `PATH`, ma è omonimo della CLI di FleetDM. Alternativa: `cockpit-fleetctl`.
 - [ ] **RAM della VM controller**. `deb13-samba-dc` ha 2 GB; per i test di carico con
@@ -80,10 +85,10 @@ Browser (React/PatternFly)
    ▼
 fleetctl  (Python, utente cockpit-fleet)      ← unica API: sottocomandi chiusi, JSON su stdin/stdout
    │  SQLite /var/lib/cockpit-fleet/fleet.db (WAL)
-   │  systemctl start cockpit-fleet-run@<id>.service   (consentito da regola polkit)
+   │  sudo fleet-unit start <id>          (root: avvia solo cockpit-fleet-run@<id>)
    ▼
 cockpit-fleet-run@.service  (sandbox systemd, utente cockpit-fleet)
-   │  ExecStartPre=+fleet-creds-prepare   (root: decifra solo i segreti della run)
+   │  LoadCredentialEncrypted=            (PID 1 decifra solo i segreti della run)
    │  ExecStart=fleet-run                 (compone ed esegue la CLI Ansible)
    ▼
 ansible-playbook / ansible-inventory / ansible-galaxy / ansible-vault
@@ -102,21 +107,25 @@ Unit statiche installate dal pacchetto, tutte di proprietà di root:
 
 ### 3.2 Superficie privilegiata
 
-Tre soli punti di ingresso, tutti con input validato e nessuna shell:
+Tre punti di ingresso, tutti con input validato e nessuna shell. Solo gli ultimi
+due girano come root:
 
 1. `fleetctl`, eseguito come `cockpit-fleet` via sudoers (`%cockpit-fleet-* ALL=(cockpit-fleet) NOPASSWD: …/fleetctl`).
    Ricava il chiamante da `SUDO_UID`, ne calcola il ruolo dai gruppi e registra
    ogni comando che modifica lo stato.
 2. `fleet-secret`, eseguito come root via sudoers dai soli admin. Fa solo `set`,
    `delete` e `list` dei nomi: il valore entra da stdin e non è mai rileggibile.
-3. `fleet-creds-prepare`, eseguito come root dalla unit della run (`ExecStartPre=+`).
-   Legge la specifica della run e decifra nella directory runtime solo i segreti
-   che quella run referenzia.
+3. `fleet-unit start|stop <id>`, eseguito come root via sudoers dal solo utente
+   `cockpit-fleet`. Costruisce da sé il nome della unit a partire da un
+   identificativo validato.
 
-Regola polkit: l'utente `cockpit-fleet` può fare `start`/`stop` solo delle unit il
-cui nome corrisponde a `cockpit-fleet-(run|prepare)@<id>.service`. Le unit
-transitorie (`StartTransientUnit`) devono restare negate: permetterebbero un
-`ExecStart` arbitrario come root.
+La decifratura dei segreti non richiede codice nostro: la unit carica con
+`LoadCredentialEncrypted=` i file cifrati copiati nella directory `creds/` della
+run, e PID 1 li espone solo a quella unit.
+
+Scartata la regola polkit prevista all'inizio: lo spike ha mostrato che una regola
+per nome di unit autorizza anche le unit transitorie con quel nome, cioè un
+`ExecStart` arbitrario come root. Dettagli in `docs/architecture.md`.
 
 ### 3.3 Modello di minaccia
 
@@ -131,14 +140,14 @@ transitorie (`StartTransientUnit`) devono restare negate: permetterebbero un
 
 ```
 /usr/share/cockpit/fleet/                 frontend
-/usr/libexec/cockpit-fleet/               fleetctl, fleet-run, fleet-secret, fleet-creds-prepare
-/usr/lib/python3/dist-packages/cockpit_fleet/
+/usr/libexec/cockpit-fleet/               fleetctl, fleet-run, fleet-secret, fleet-unit
+/usr/lib/cockpit-fleet/cockpit_fleet/     pacchetto Python (privato, non in dist-packages)
 /usr/share/cockpit-fleet/collections/     collection lineadicomando.fleet (callback, fleet_result, check)
 /etc/cockpit-fleet/config.toml            limiti, percorsi locali ammessi, proxy
-/etc/credstore.encrypted/cockpit-fleet/   segreti cifrati (root, 0700)
+/etc/cockpit-fleet/secrets/               segreti cifrati (scrive root, legge cockpit-fleet)
 /var/lib/cockpit-fleet/fleet.db            stato e storico
 /var/lib/cockpit-fleet/projects/<id>/     sorgenti e revisioni
-/var/lib/cockpit-fleet/runs/<id>/         spec.json, events.jsonl, stdout.log
+/var/lib/cockpit-fleet/runs/<id>/         spec.json, project/, creds/, known_hosts, events.jsonl, stdout.log
 ```
 
 ### 3.5 Struttura del repository
@@ -147,7 +156,7 @@ transitorie (`StartTransientUnit`) devono restare negate: permetterebbero un
 src/            frontend (app.tsx, components/, lib/, locales/)
 backend/        pacchetto Python cockpit_fleet + eseguibili
 collection/     ansible_collections/lineadicomando/fleet
-system/         unit systemd, sysusers.d, tmpfiles.d, polkit, sudoers.d
+system/         unit systemd, sysusers.d, tmpfiles.d, sudoers.d
 debian/         packaging
 test/           test TS (node --test) e mock di cockpit
 backend/tests/  test Python
@@ -166,36 +175,42 @@ po/ docs/ scripts/
   container, per provare scheduler, sharding e volume del database.
 - Deploy: `make vm-deploy` per il solo frontend, `make vm-deb-deploy` per tutto il
   resto (unit, helper e regole richiedono il pacchetto).
+- I nodi Windows accettano solo chiavi pubbliche (`PasswordAuthentication no`): per
+  raggiungerli dal controller serve una coppia di chiavi autorizzata su di essi.
 
 ---
 
 ## Fase 0 — Fondamenta e spike
 
-Obiettivo: repository avviato e le quattro incognite tecniche risolte prima di
-scrivere il backend.
+Obiettivo: repository avviato e le incognite tecniche risolte prima di scrivere il
+backend. Esiti e misure in `docs/architecture.md`.
 
-- [ ] `.gitignore`, `LICENSE` (`LGPL-2.1-or-later`), `README.md`, `SECURITY.md`
-- [ ] Scaffold frontend da `cockpit-samba-ad-dc`: `package.json`, `build.js`,
+- [x] `.gitignore`, `LICENSE` (`LGPL-2.1-or-later`), `README.md`, `SECURITY.md`
+- [x] Scaffold frontend da `cockpit-samba-ad-dc`: `package.json`, `build.js`,
       `tsconfig.json`, `manifest.json`, `index.html`, i18n, mock di `cockpit` per i test
-- [ ] `Makefile` e `Makefile.local` con `build`, `watch`, `check`, `vm-deploy`, `deb`, `vm-deb-deploy`
-- [ ] Scheletro `debian/` che installa una pagina vuota e crea utente e gruppi (`sysusers.d`)
-- [ ] CI GitHub Actions: `tsc --noEmit`, build, test TS, test Python, `ruff`, `lintian`
-- [ ] **Spike S1, polkit**: `cockpit-fleet` avvia e ferma `cockpit-fleet-run@x.service`;
-      verificare che `systemd-run` e ogni unit con altro nome vengano rifiutati
-- [ ] **Spike S2, segreti**: `fleet-secret set` cifra con `systemd-creds`;
-      `ExecStartPre=+` decifra nella directory runtime; dentro la sandbox lo store
-      cifrato e gli altri segreti non sono leggibili
-- [ ] **Spike S3, sandbox**: `ansible-playbook` funziona con `ProtectSystem=strict`,
-      `ProtectHome`, `PrivateTmp`, `NoNewPrivileges`, `ReadWritePaths` limitato alla
-      directory della run; SSH con ControlPersist e `sshpass` funzionano
-- [ ] **Spike S4, Windows**: dal controller, `ansible.windows.setup` e un comando
-      PowerShell sui tre nodi Windows via SSH; misurare il tempo per host
-- [ ] **Spike S5, eventi**: callback plugin che scrive JSONL; misurare dimensione e
-      costo con 200 host simulati
-- [ ] Documentare gli esiti in `docs/architecture.md`
+- [x] `Makefile` e `Makefile.local` con `build`, `watch`, `check`, `deb`, `vm-deploy`, `vm-deb-deploy`
+- [x] Scheletro `debian/` che installa una pagina vuota e crea utente e gruppi (`sysusers.d`).
+      Il `.deb` si costruisce in un container Debian 13 (`scripts/build-deb.sh`)
+- [x] CI: `tsc --noEmit`, build, test TS, test Python, `ruff`, pacchetto con `lintian`.
+      Scritta ma mai eseguita: su Gitea serve un runner per le Actions
+- [x] **Spike S1, privilegi**: regola polkit scartata perché insicura; sostituita da
+      `fleet-unit` dietro sudoers. Test: `test/integration/privileges.sh`
+- [x] **Spike S2, segreti**: `fleet-secret set` cifra con `systemd-creds`; la unit li
+      riceve con `LoadCredentialEncrypted=`, senza helper root; una run non legge né
+      lo store né i segreti di un'altra run. Test: `test/integration/sandbox.sh`
+- [x] **Spike S3, sandbox**: `ansible-playbook` funziona nella unit con hardening
+      completo (punteggio `systemd-analyze security` 1.5); SSH con password, host key
+      obbligatoria e ControlPersist funzionano. Stesso test di S2
+- [ ] **Spike S4, Windows**: collection `ansible.windows` installata nel progetto e
+      trovata dalla run; nodo raggiunto. Manca la run completa con i tempi: i nodi
+      accettano solo chiavi pubbliche e sul controller non ce n'è una autorizzata
+- [x] **Spike S5, eventi**: callback `lineadicomando.fleet.events`; con 200 host
+      simulati costa circa il 3% e produce 1,9 kB per host. Il limite vero è la CPU
+      del controller: circa 0,6 s per host su 2 vCPU
+- [x] Documentare gli esiti in `docs/architecture.md`
 
 Fatto quando: il `.deb` si installa sulla VM, la pagina vuota compare in Cockpit e i
-cinque spike hanno un esito scritto.
+cinque spike hanno un esito scritto. Raggiunto, salvo la parte di S4 indicata sopra.
 
 ## Fase 1 — Nucleo del backend
 
@@ -205,7 +220,7 @@ cinque spike hanno un esito scritto.
 - [ ] Schema SQLite con migrazioni versionate, WAL, `busy_timeout`
 - [ ] Audit: tabella + journal con campi strutturati (chi, cosa, quando, esito)
 - [ ] `config.toml`: concorrenza massima, fork, percorsi locali ammessi, proxy in uscita
-- [ ] `sudoers.d`, regola polkit, `tmpfiles.d`, unit statiche con hardening
+- [ ] `sudoers.d` per `fleetctl` (tre gruppi) e `fleet-secret` (solo admin)
 - [ ] Frontend: `lib/fleet.ts` (wrapper tipizzato di `fleetctl`), gestione errori,
       rilevamento del ruolo, navigazione, stato vuoto, pagina "Verifica installazione"
 - [ ] Test: unit Python su validatori, ruoli e migrazioni; unit TS sul wrapper
@@ -226,13 +241,17 @@ Obiettivo: lanciare un playbook da un progetto e seguirne il log.
       per mettere in cache host e gruppi; errori di parsing mostrati in UI
 - [ ] **Credenziali**: chiave SSH, utente/password, become, vault; solo riferimenti
       nel database, valori via `fleet-secret`
-- [ ] Passaggio dei segreti: `--private-key`, `--connection-password-file`,
-      `--become-password-file`, `--vault-id` su file nella directory runtime
+- [ ] Passaggio dei segreti: copia dei file cifrati in `creds/` all'accodamento
+      della run (le opzioni `--private-key`, `--connection-password-file`,
+      `--become-password-file`, `--vault-password-file` sono già in `fleet-run`)
+- [ ] Istantanea del progetto in `runs/<id>/project`, così la run non vede altro
 - [ ] **known_hosts**: file gestito, `StrictHostKeyChecking=yes`; flusso "scansiona,
       mostra impronta, conferma" riservato agli admin
 - [ ] **Template**: playbook, inventario, credenziali, limit, tag, extra-vars (file JSON), fork, verbosità
-- [ ] **`fleet-run`**: costruisce la riga di comando da `spec.json`, mai da input diretto
-- [ ] **Callback plugin** `lineadicomando.fleet.events`: eventi JSONL, risultati troncati, `no_log` rispettato
+- [ ] **`fleet-run`**: completare le opzioni (tag, vault multipli) e i test unitari
+      della costruzione di argv; la base esiste dalla fase 0
+- [ ] **Callback plugin** `lineadicomando.fleet.events`: aggiungere diff e risultati
+      per item; verificare `no_log`. La base esiste dalla fase 0
 - [ ] **Run**: stati `queued`, `running`, `successful`, `failed`, `canceled`; annullamento con `systemctl stop`
 - [ ] UI: elenco e dettaglio di progetti, inventari, credenziali, template
 - [ ] UI run: log live con colori ANSI, vista per host e per task, riepilogo `PLAY RECAP`, cronologia con filtri
