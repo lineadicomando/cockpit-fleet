@@ -84,6 +84,10 @@ make vm-deb-deploy              # full package; needed for units, helpers, polki
 - Remotes use HTTPS (credentials come from the git credential store). Gitea SSH
   listens on port 2221 and is not set up on this host (no known host key).
 - Repository: a private Gitea, remote `origin`.
+- The repository will be published on GitHub once the project is stable. Treat
+  every commit as future public history: no secrets, no passwords, no details of
+  real (non-test) environments, in files or in commit messages.
+- License: `LGPL-2.1-or-later`, same as `cockpit-samba-ad-dc` (provisional).
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material

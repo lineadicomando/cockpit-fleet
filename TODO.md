@@ -29,7 +29,8 @@ Stato: analisi conclusa l'8 ottobre 2026, nessun codice scritto.
 | Priorità | Prima il runner, poi la raccolta dati |
 | Funzioni di run | Survey, dry-run con diff, comandi ad-hoc, workflow, approvazioni |
 | Nome | `cockpit-fleet`: pacchetto `cockpit-fleet`, etichetta di menu "Fleet", directory `/usr/share/cockpit/fleet` |
-| Repository | un Gitea privato |
+| Licenza | La stessa di `cockpit-samba-ad-dc`: `LGPL-2.1-or-later`, come Cockpit. Scelta provvisoria, da riconfermare prima della pubblicazione |
+| Repository | un Gitea privato. Pubblicazione su GitHub quando il progetto sarà abbastanza stabile |
 | Trigger esterni | Fuori dal perimetro iniziale, tenuti come sviluppo futuro |
 
 Il monitoraggio non vuole rifare Icinga: niente tempo reale e niente nodi
@@ -38,7 +39,7 @@ alert ragionevolmente tempestivo.
 
 Stack frontend e convenzioni ripresi da `cockpit-samba-ad-dc`: TypeScript, React 18,
 PatternFly 6, esbuild, test con `node --test`, i18next con `po/it.po`, `Makefile` +
-`Makefile.local`, pacchetto `.deb`, licenza LGPL-2.1.
+`Makefile.local`, pacchetto `.deb`.
 
 ## 2. Punti aperti
 
@@ -173,7 +174,7 @@ po/ docs/ scripts/
 Obiettivo: repository avviato e le quattro incognite tecniche risolte prima di
 scrivere il backend.
 
-- [ ] `git init`, `.gitignore`, `LICENSE` (LGPL-2.1), `README.md`, `SECURITY.md`
+- [ ] `.gitignore`, `LICENSE` (`LGPL-2.1-or-later`), `README.md`, `SECURITY.md`
 - [ ] Scaffold frontend da `cockpit-samba-ad-dc`: `package.json`, `build.js`,
       `tsconfig.json`, `manifest.json`, `index.html`, i18n, mock di `cockpit` per i test
 - [ ] `Makefile` e `Makefile.local` con `build`, `watch`, `check`, `vm-deploy`, `deb`, `vm-deb-deploy`
@@ -370,6 +371,9 @@ approvato da un altro utente e termina.
 - [ ] Documentazione: installazione, modello di sicurezza, scrittura di un check, backup e ripristino
 - [ ] `lintian` pulito, upgrade e rimozione del pacchetto provati (`purge` compreso)
 - [ ] Screenshot, `CHANGELOG`, tag `v0.1.0`
+- [ ] Pubblicazione su GitHub: riconfermare la licenza, controllare che la cronologia
+      git non contenga segreti né dettagli di ambienti reali, aggiungere modelli
+      per issue e pull request
 
 ## Sviluppi futuri
 
