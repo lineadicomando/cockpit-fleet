@@ -8,16 +8,25 @@ Agent instructions for this project.
 from the browser, inspired by Semaphore UI, and that also collects, stores and
 notifies on information from managed nodes using Ansible only (agentless).
 
-`TODO.md` is the source of truth for decisions, architecture, open points and the
-phased plan. Read it before starting any work, tick items as they are completed,
-and update it when a decision changes. Do not restate its content here.
+Three documents, each with one job; do not repeat one in another:
 
-Status: Phases 0, 1 and 2 done (projects, inventories, credentials, host keys,
-templates, runs with live output, on Linux and Windows nodes). Phase 3 is next. `docs/architecture.md` describes what exists and what was measured.
+- `TODO.md` (Italian): status, decisions, open points and what is left to do.
+  Read it first. Tick items as they are completed, record a decision when it
+  changes, and keep it short: what is done moves out, to the place below.
+- `docs/architecture.md`: what exists, why it is built that way, and what was
+  measured. Update it with every change of design.
+- This file: how to work on the project.
+
+Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
+`backend/libexec/` the helpers installed in `/usr/libexec/cockpit-fleet`,
+`backend/tests/` unit tests, `collection/` the bundled Ansible collection,
+`system/` units, sudoers, sysusers, tmpfiles and the default config,
+`debian/` packaging, `test/` frontend tests, `test/integration/` scripts for
+the VM, `po/` translations.
 
 ## Non-negotiable rules
 
-These come from the security model in `TODO.md` §3; a change that breaks one of
+These come from the security model in `docs/architecture.md`; a change that breaks one of
 them needs the user's explicit agreement.
 
 1. **No daemon, no listening port.** Work happens in systemd units started on demand.
