@@ -52,6 +52,7 @@ install-files: ## Install the built bundle, backend and system files under DESTD
 		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-run@.service
 	install -D -m 0644 system/cockpit-fleet.sysusers $(DESTDIR)/usr/lib/sysusers.d/cockpit-fleet.conf
 	install -D -m 0644 system/cockpit-fleet.tmpfiles $(DESTDIR)/usr/lib/tmpfiles.d/cockpit-fleet.conf
+	install -D -m 0644 system/config.toml $(DESTDIR)/etc/cockpit-fleet/config.toml
 	install -D -m 0440 system/cockpit-fleet.sudoers $(DESTDIR)/etc/sudoers.d/cockpit-fleet
 
 uninstall: ## Remove the files installed by install-files (keeps data and secrets)

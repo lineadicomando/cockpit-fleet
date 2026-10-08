@@ -1,0 +1,145 @@
+"""Commands about the installation itself: identity, self-check, audit trail."""
+
+import os
+import re
+import shutil
+import subprocess
+
+from . import __version__, audit, db, paths
+from .auth import role_at_least
+from .cli import COMMANDS, Context, Params, command
+from .errors import FleetError
+
+_MIN_ANSIBLE = (2, 19)
+_MIN_SYSTEMD = 257
+
+
+@command("whoami", role="viewer")
+def whoami(ctx: Context, params: Params) -> dict:
+    params.done()
+    allowed = sorted(c.name for c in COMMANDS.values() if role_at_least(ctx.caller.role, c.role))
+    return {
+        "user": ctx.caller.user,
+        "role": ctx.caller.role,
+        "version": __version__,
+        "commands": allowed,
+    }
+
+
+@command("config.show", role="admin")
+def config_show(ctx: Context, params: Params) -> dict:
+    params.done()
+    return {"file": str(ctx.config_file), "values": ctx.config.as_dict()}
+
+
+@command("audit.list", role="admin")
+def audit_list(ctx: Context, params: Params) -> dict:
+    limit = params.integer("limit", 50, 1, 500)
+    before = params.integer("before", None, 1, 2**62)
+    params.done()
+    entries = audit.entries(ctx.conn, limit, before)
+    return {"entries": entries, "more": len(entries) == limit}
+
+
+def _output(argv: list[str]) -> str | None:
+    """First line a program prints, or None when it is missing or fails."""
+    try:
+        result = subprocess.run(
+            argv, capture_output=True, text=True, timeout=20, check=False,
+            stdin=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin", "LANG": "C"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0 or not result.stdout:
+        return None
+    return result.stdout.splitlines()[0]
+
+
+def _numbers(text: str) -> tuple[int, ...]:
+    match = re.search(r"\d+(\.\d+)*", text)
+    return tuple(int(part) for part in match.group().split(".")) if match else ()
+
+
+def _check_ansible() -> tuple[str, str]:
+    line = _output(["/usr/bin/ansible", "--version"])
+    if line is None:
+        return "fail", "not found"
+    return ("ok" if _numbers(line)[:2] >= _MIN_ANSIBLE else "fail"), line
+
+
+def _check_systemd() -> tuple[str, str]:
+    line = _output(["/usr/bin/systemctl", "--version"])
+    if line is None:
+        return "fail", "not found"
+    return ("ok" if _numbers(line)[:1] >= (_MIN_SYSTEMD,) else "fail"), line
+
+
+def _check_database(ctx: Context) -> tuple[str, str]:
+    try:
+        return "ok", f"schema {db.schema_version(ctx.conn)}"
+    except FleetError as error:
+        return "fail", str(error)
+
+
+def _check_config(ctx: Context) -> tuple[str, str]:
+    try:
+        ctx.config  # noqa: B018  (loading it is the check)
+    except FleetError as error:
+        return "fail", str(error)
+    return "ok", str(ctx.config_file) if ctx.config_file.exists() else "defaults"
+
+
+def _check_state_dir() -> tuple[str, str]:
+    for directory in (paths.STATE_DIR, paths.RUNS_DIR, paths.PROJECTS_DIR):
+        if not os.access(directory, os.R_OK | os.W_OK | os.X_OK):
+            return "fail", f"{directory} is not writable"
+    return "ok", str(paths.STATE_DIR)
+
+
+def _check_secrets_dir() -> tuple[str, str]:
+    if not os.access(paths.SECRETS_DIR, os.R_OK | os.X_OK):
+        return "fail", f"{paths.SECRETS_DIR} is not readable"
+    if os.access(paths.SECRETS_DIR, os.W_OK):
+        return "fail", f"{paths.SECRETS_DIR} is writable by the service account"
+    return "ok", str(paths.SECRETS_DIR)
+
+
+def _check_run_unit() -> tuple[str, str]:
+    if not paths.RUN_UNIT_FILE.is_file():
+        return "fail", f"{paths.RUN_UNIT_FILE} is missing"
+    helper = str(paths.LIBEXEC_DIR / "fleet-unit")
+    if _output(["/usr/bin/sudo", "-n", "-l", helper]) is None:
+        return "fail", "the service account may not run fleet-unit through sudo"
+    return "ok", paths.RUN_UNIT_FILE.name
+
+
+def _check_collection() -> tuple[str, str]:
+    plugin = (paths.COLLECTIONS_DIR / "ansible_collections" / "lineadicomando" / "fleet"
+              / "plugins" / "callback" / "events.py")
+    return ("ok", "lineadicomando.fleet") if plugin.is_file() else ("fail", f"{plugin} is missing")
+
+
+def _check_tool(name: str, missing: str) -> tuple[str, str]:
+    path = shutil.which(name, path="/usr/bin:/bin")
+    return ("ok", path) if path else (missing, "not installed")
+
+
+@command("selfcheck", role="viewer")
+def selfcheck(ctx: Context, params: Params) -> dict:
+    """Is everything a run needs in place? One entry per check, worst first in the UI."""
+    params.done()
+    checks = [
+        ("ansible", _check_ansible()),
+        ("systemd", _check_systemd()),
+        ("database", _check_database(ctx)),
+        ("config", _check_config(ctx)),
+        ("state_dir", _check_state_dir()),
+        ("secrets_dir", _check_secrets_dir()),
+        ("run_unit", _check_run_unit()),
+        ("collection", _check_collection()),
+        ("git", _check_tool("git", "fail")),
+        # Only needed for SSH logins with a password.
+        ("sshpass", _check_tool("sshpass", "warn")),
+    ]
+    return {"checks": [{"id": name, "status": status, "detail": detail}
+                       for name, (status, detail) in checks]}

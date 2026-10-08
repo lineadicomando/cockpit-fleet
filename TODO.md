@@ -4,7 +4,7 @@ Plugin Cockpit per l'orchestrazione di Ansible (ispirato a Semaphore UI) e per l
 raccolta, la rappresentazione storica e la notifica di informazioni dai nodi
 gestiti, acquisite solo tramite Ansible.
 
-Stato: fase 0 conclusa l'8 ottobre 2026. Prossima: fase 1.
+Stato: fasi 0 e 1 concluse l'8 ottobre 2026. Prossima: fase 2.
 
 ---
 
@@ -208,19 +208,26 @@ cinque spike hanno un esito scritto. Raggiunto.
 
 ## Fase 1 — Nucleo del backend
 
-- [ ] `fleetctl`: dispatcher di sottocomandi, input JSON da stdin, output JSON, codici di errore stabili
-- [ ] Validatori comuni: identificatori, percorsi (niente `..`, niente symlink in uscita), pattern host, tag
-- [ ] Ruoli: chiamante da `SUDO_UID`, gruppi con `getgrouplist`, ruolo minimo dichiarato per ogni comando
-- [ ] Schema SQLite con migrazioni versionate, WAL, `busy_timeout`
-- [ ] Audit: tabella + journal con campi strutturati (chi, cosa, quando, esito)
-- [ ] `config.toml`: concorrenza massima, fork, percorsi locali ammessi, proxy in uscita
-- [ ] `sudoers.d` per `fleetctl` (tre gruppi) e `fleet-secret` (solo admin)
-- [ ] Frontend: `lib/fleet.ts` (wrapper tipizzato di `fleetctl`), gestione errori,
-      rilevamento del ruolo, navigazione, stato vuoto, pagina "Verifica installazione"
-- [ ] Test: unit Python su validatori, ruoli e migrazioni; unit TS sul wrapper
+- [x] `fleetctl`: dispatcher di sottocomandi, input JSON da stdin, output JSON, codici di errore stabili
+- [x] Validatori comuni: identificatori, percorsi (niente `..`, niente symlink in uscita), pattern host, tag
+- [x] Ruoli: chiamante da `SUDO_UID`, gruppi con `getgrouplist`, ruolo minimo dichiarato per ogni comando
+- [x] Schema SQLite con migrazioni versionate, WAL, `busy_timeout`
+- [x] Audit: tabella + journal con campi strutturati (chi, cosa, quando, esito)
+- [x] `config.toml`: concorrenza massima, fork, percorsi locali ammessi, proxy in uscita
+- [x] `sudoers.d` per `fleetctl` (tre gruppi) e `fleet-secret` (solo admin)
+- [x] Frontend: `lib/fleet.ts` (wrapper tipizzato di `fleetctl`), gestione errori,
+      rilevamento del ruolo, navigazione a schede, pagine Panoramica, Sistema
+      (controlli dell'installazione) e Registro di audit
+- [x] Test: unit Python su validatori, ruoli, migrazioni, configurazione, dispatcher
+      e costruzione di argv; unit TS sul wrapper; integrazione in `test/integration/roles.sh`
+- [x] Chi amministra il server ma non è in nessun gruppo entra come root attivando
+      l'accesso amministrativo di Cockpit; nell'audit compare come `root`
 
 Fatto quando: un viewer, un operator e un admin vedono in Cockpit tre insiemi di
 azioni diversi e ogni tentativo fuori ruolo è rifiutato dal backend e registrato.
+Raggiunto per viewer e admin. L'operator è riconosciuto e limitato dal backend, ma
+non ha ancora un comando suo: i primi (lancio e annullamento delle run) arrivano
+con la fase 2.
 
 ## Fase 2 — Runner minimo
 
@@ -242,8 +249,8 @@ Obiettivo: lanciare un playbook da un progetto e seguirne il log.
 - [ ] **known_hosts**: file gestito, `StrictHostKeyChecking=yes`; flusso "scansiona,
       mostra impronta, conferma" riservato agli admin
 - [ ] **Template**: playbook, inventario, credenziali, limit, tag, extra-vars (file JSON), fork, verbosità
-- [ ] **`fleet-run`**: completare le opzioni (tag, vault multipli) e i test unitari
-      della costruzione di argv; la base esiste dalla fase 0
+- [ ] **`fleet-run`**: vault multipli (`--vault-id`). Tag e test unitari della
+      costruzione di argv sono fatti (`cockpit_fleet/runner.py`)
 - [ ] **Callback plugin** `lineadicomando.fleet.events`: aggiungere diff e risultati
       per item; verificare `no_log`. La base esiste dalla fase 0
 - [ ] **Run**: stati `queued`, `running`, `successful`, `failed`, `canceled`; annullamento con `systemctl stop`

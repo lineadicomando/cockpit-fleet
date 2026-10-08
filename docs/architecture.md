@@ -108,6 +108,40 @@ directory and no global file. A host with an unknown key is refused, including
 when a password is used. `ControlPersist` works inside the sandbox: several
 tasks produce one login.
 
+## The backend interface
+
+`fleetctl COMMAND < params.json` is the only way the web console talks to the
+backend. The command is a name from a registry; parameters are a JSON object
+on stdin; the answer is one JSON object, `{"ok": true, "data": …}` or
+`{"ok": false, "error": {"code", "message"}}`. The exit status is 0 whenever an
+answer was written, so a failed exit always means the backend was not reached.
+
+- **Who is calling.** fleetctl refuses to run as anything but the service
+  account, so it is always reached through sudo, which sets `SUDO_UID` and does
+  not let the caller override it.
+- **Roles.** `cockpit-fleet-viewer`, `-operator`, `-admin`; the highest group
+  wins. Root is an administrator. Every command declares the least role that
+  may call it, and the check happens in one place, before the handler runs.
+- **Audit.** Commands that change something, and every refusal, are written to
+  the `audit` table and to the journal (`journalctl -t cockpit-fleet`, with
+  `FLEET_USER`, `FLEET_COMMAND`, `FLEET_OUTCOME` fields). Parameters marked as
+  secret are replaced before being stored. `fleet-secret` runs as root and
+  cannot write to the database, so it logs to the journal only.
+- **Database.** SQLite in WAL mode at `/var/lib/cockpit-fleet/fleet.db`, mode
+  0600. Migrations are an append-only list applied under a lock on connect; a
+  database from a newer version is refused.
+- **Configuration.** `/etc/cockpit-fleet/config.toml`, root-owned. A missing
+  file means defaults; an unknown key is an error, so a typo cannot silently
+  leave a limit at its default.
+
+An administrator of the machine who is in no role group is refused by sudo.
+With Cockpit's administrative access turned on, the frontend retries as root
+and gets the admin role; the audit trail then shows `root`, not the person.
+
+To add a command: a function decorated with `@command(name, role=…,
+mutating=…, redact=…)` in a module imported by `cli.main`, parameters read
+through `Params` (which rejects unknown ones), and a test in `backend/tests`.
+
 ## Events
 
 The callback `lineadicomando.fleet.events` appends one JSON object per line:
@@ -171,6 +205,7 @@ bundled collection.
 | Backend unit tests | `backend/tests/` | development host, CI |
 | Privilege boundaries | `test/integration/privileges.sh` | controller, as root |
 | Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
+| Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root |
 

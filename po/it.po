@@ -16,8 +16,182 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Nothing to show yet"
-msgstr "Ancora niente da mostrare"
+msgid "Access is granted through three groups of this server: cockpit-fleet-viewer, cockpit-fleet-operator and cockpit-fleet-admin. Ask an administrator to add your account to one of them, then log in again."
+msgstr "L'accesso si ottiene tramite tre gruppi di questo server: cockpit-fleet-viewer, cockpit-fleet-operator e cockpit-fleet-admin. Chiedi a un amministratore di aggiungere il tuo account a uno di essi, poi accedi di nuovo."
 
-msgid "cockpit-fleet is installed. Its features will appear here as they are developed."
-msgstr "cockpit-fleet è installato. Le funzioni compariranno qui man mano che vengono sviluppate."
+msgid "Action"
+msgstr "Azione"
+
+msgid "Administrator"
+msgstr "Amministratore"
+
+msgid "Allows"
+msgstr "Consente"
+
+msgid "An administrator can do it with:"
+msgstr "Un amministratore può farlo con:"
+
+msgid "Ansible"
+msgstr "Ansible"
+
+msgid "Audit log"
+msgstr "Registro di audit"
+
+msgid "Bundled Ansible collection"
+msgstr "Collection Ansible inclusa"
+
+msgid "Changes made through Fleet and refused attempts are listed here."
+msgstr "Qui compaiono le modifiche fatte tramite Fleet e i tentativi rifiutati."
+
+msgid "Check"
+msgstr "Controllo"
+
+msgid "Check again"
+msgstr "Ricontrolla"
+
+msgid "Configuration file"
+msgstr "File di configurazione"
+
+msgid "Copied"
+msgstr "Copiato"
+
+msgid "Copy"
+msgstr "Copia"
+
+msgid "Database"
+msgstr "Database"
+
+msgid "Details"
+msgstr "Dettagli"
+
+msgid "Done"
+msgstr "Eseguita"
+
+msgid "Everything a viewer can do, plus launching the existing job templates and acknowledging alerts."
+msgstr "Tutto ciò che può fare un osservatore, più il lancio dei template esistenti e la presa in carico degli avvisi."
+
+msgid "Everything an operator can do, plus configuring projects, inventories, credentials, schedules and notifications."
+msgstr "Tutto ciò che può fare un operatore, più la configurazione di progetti, inventari, credenziali, schedulazioni e notifiche."
+
+msgid "Failed"
+msgstr "Fallita"
+
+msgid "Git"
+msgstr "Git"
+
+msgid "If you administer this server, turn on administrative access at the top of the page."
+msgstr "Se amministri questo server, attiva l'accesso amministrativo in alto nella pagina."
+
+msgid "Install the cockpit-fleet package on this server."
+msgstr "Installa il pacchetto cockpit-fleet su questo server."
+
+msgid "Installation"
+msgstr "Installazione"
+
+msgid "Installation checks"
+msgstr "Controlli dell'installazione"
+
+msgid "Loading"
+msgstr "Caricamento"
+
+msgid "Nothing recorded yet"
+msgstr "Ancora nessuna registrazione"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Operator"
+msgstr "Operatore"
+
+msgid "Outcome"
+msgstr "Esito"
+
+msgid "Overview"
+msgstr "Panoramica"
+
+msgid "Problem"
+msgstr "Problema"
+
+msgid "Refresh"
+msgstr "Aggiorna"
+
+msgid "Refused"
+msgstr "Rifiutata"
+
+msgid "Role"
+msgstr "Ruolo"
+
+msgid "Run unit"
+msgstr "Unit delle run"
+
+msgid "Secret store"
+msgstr "Archivio dei segreti"
+
+msgid "See the state of the fleet, the history of runs and the collected data."
+msgstr "Vedere lo stato della flotta, la cronologia delle run e i dati raccolti."
+
+msgid "Show older entries"
+msgstr "Mostra le voci precedenti"
+
+msgid "Show the checks"
+msgstr "Mostra i controlli"
+
+msgid "State directory"
+msgstr "Directory di stato"
+
+msgid "Status"
+msgstr "Stato"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "The Fleet backend cannot be reached"
+msgstr "Il backend di Fleet non è raggiungibile"
+
+msgid "The Fleet backend is not installed"
+msgstr "Il backend di Fleet non è installato"
+
+msgid "Try again"
+msgstr "Riprova"
+
+msgid "User"
+msgstr "Utente"
+
+msgid "Version"
+msgstr "Versione"
+
+msgid "Viewer"
+msgstr "Osservatore"
+
+msgid "Warning"
+msgstr "Avviso"
+
+msgid "When"
+msgstr "Quando"
+
+msgid "You have no role in Fleet"
+msgstr "Non hai un ruolo in Fleet"
+
+msgid "Your access"
+msgstr "Il tuo accesso"
+
+msgid "sshpass, for SSH logins with a password"
+msgstr "sshpass, per gli accessi SSH con password"
+
+msgid "systemd"
+msgstr "systemd"
+
+msgid "checks_failed_count"
+msgid_plural "checks_failed_count_plural"
+msgstr[0] "{{count}} problema"
+msgstr[1] "{{count}} problemi"
+
+msgid "checks_warning_count"
+msgid_plural "checks_warning_count_plural"
+msgstr[0] "{{count}} avviso"
+msgstr[1] "{{count}} avvisi"
+
+msgid "checks_passed_count"
+msgid_plural "checks_passed_count_plural"
+msgstr[0] "{{count}} controllo superato"
+msgstr[1] "{{count}} controlli superati"

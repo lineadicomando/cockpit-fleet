@@ -9,7 +9,8 @@ select = ["E", "F", "W", "I", "B", "S", "UP"]
 ignore = ["S603"]
 
 [tool.ruff.lint.per-file-ignores]
-"backend/tests/*" = ["S101"]
+# Long literals and assertions read better on one line in tests.
+"backend/tests/*" = ["S101", "E501"]
 # Ansible plugins put DOCUMENTATION before the imports.
 "collection/**/plugins/**" = ["E402"]
 

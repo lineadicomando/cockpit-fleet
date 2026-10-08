@@ -11,4 +11,10 @@ SECRETS_DIR = Path("/etc/cockpit-fleet/secrets")
 
 COLLECTIONS_DIR = Path("/usr/share/cockpit-fleet/collections")
 
+DATABASE = STATE_DIR / "fleet.db"
+CONFIG_FILE = Path("/etc/cockpit-fleet/config.toml")
+LIBEXEC_DIR = Path("/usr/libexec/cockpit-fleet")
+
+SERVICE_USER = "cockpit-fleet"
 RUN_UNIT = "cockpit-fleet-run@{}.service"
+RUN_UNIT_FILE = Path("/usr/lib/systemd/system/cockpit-fleet-run@.service")

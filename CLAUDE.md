@@ -12,7 +12,8 @@ notifies on information from managed nodes using Ansible only (agentless).
 phased plan. Read it before starting any work, tick items as they are completed,
 and update it when a decision changes. Do not restate its content here.
 
-Status: Phase 0 done (scaffold, package, run sandbox, secrets, Windows over SSH). `docs/architecture.md` describes what exists and what was measured.
+Status: Phases 0 and 1 done (package, run sandbox, secrets, `fleetctl` with roles,
+audit and database, first pages). `docs/architecture.md` describes what exists and what was measured.
 
 ## Non-negotiable rules
 
@@ -55,6 +56,24 @@ them needs the user's explicit agreement.
   in Italian.
 - Commits: short imperative subject, as in the sibling project's history.
 
+## Adding things
+
+- **A backend command**: a function with `@command("area.verb", role=...,
+  mutating=..., redact=(...))` in `backend/cockpit_fleet/`, in a module that
+  `cli.main` imports. Read parameters through `Params` and end with
+  `params.done()`. Raise the errors in `errors.py`; their codes are part of the
+  interface, so add but never rename. Test it in `backend/tests/test_cli.py` style.
+- **A schema change**: append an entry to `MIGRATIONS` in `db.py`. Never edit
+  an entry that has been released.
+- **A frontend call**: `call<T>("area.verb", params)` from `src/lib/fleet.ts`.
+  Hide what a role cannot do using `session.commands`, but never rely on it.
+- **A string**: English in the source through `t()`, Italian in `po/it.po`, then
+  `make pot && make po-compile`. Plurals use a symbolic key (`things_count`)
+  whose English forms are edited by hand in `src/locales/en/translation.json`.
+
+To look at a page as a given role, create a throwaway account on the VM in the
+matching group, log in to Cockpit with it, and delete it afterwards.
+
 ## Commands
 
 ```
@@ -74,11 +93,12 @@ Integration tests run as root on the VM, with the package installed:
 ```
 test/integration/privileges.sh       # what the service account can reach
 test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD)
+test/integration/roles.sh            # roles, audit, sudoers (creates and removes test accounts)
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY)
 ```
 
-Run both test scripts after any change to the unit, the helpers or sudoers.
+Run these after any change to the unit, the helpers, `fleetctl` or sudoers.
 
 ## Test environment
 

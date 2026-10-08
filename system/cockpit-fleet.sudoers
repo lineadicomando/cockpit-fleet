@@ -1,3 +1,10 @@
+# Members of a role group reach the backend through fleetctl, which runs as
+# the unprivileged service account and decides what each role may do.
+%cockpit-fleet-admin, %cockpit-fleet-operator, %cockpit-fleet-viewer ALL=(cockpit-fleet) NOPASSWD: /usr/libexec/cockpit-fleet/fleetctl
+
+# Administrators store and delete secrets. Values can never be read back.
+%cockpit-fleet-admin ALL=(root) NOPASSWD: /usr/libexec/cockpit-fleet/fleet-secret
+
 # The service account starts and stops run units through one fixed helper,
 # which validates its argument. No wildcard, no other command.
 cockpit-fleet ALL=(root) NOPASSWD: /usr/libexec/cockpit-fleet/fleet-unit

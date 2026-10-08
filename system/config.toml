@@ -1,0 +1,19 @@
+# cockpit-fleet: limits set by the administrator of this machine.
+# Every value shown is the default. An unknown key is an error.
+
+[runs]
+# Runs executing at the same time; further runs wait in the queue.
+#max_concurrent = 4
+# Hosts Ansible works on in parallel within one run.
+#default_forks = 5
+# Upper bound a job template may ask for.
+#max_forks = 50
+
+[projects]
+# Directories of this machine that may be used as a project as they are.
+# Empty means that local-directory projects are disabled.
+#local_roots = ["/srv/ansible"]
+
+[network]
+# Proxy for outgoing connections (git, ansible-galaxy, notifications).
+#proxy = "http://proxy.example.org:3128"

@@ -1,0 +1,11 @@
+#!/usr/bin/python3 -I
+"""Entry point of fleetctl; see cockpit_fleet/cli.py."""
+
+import sys
+
+sys.path.insert(0, "/usr/lib/cockpit-fleet")
+
+from cockpit_fleet.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
