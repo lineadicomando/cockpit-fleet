@@ -156,7 +156,8 @@ per check.
 ## Packaging
 
 The `.deb` is built in a Debian 13 container (`make deb`, output in `deb/`),
-which also runs lintian. The frontend bundle is built beforehand with npm,
+which also runs lintian; on a Debian 13 system `scripts/build-deb.sh --native`
+does the same without a container. The frontend bundle is built beforehand with npm,
 because the package build has no network. The package creates the account and
 the role groups (`sysusers.d`), the state and secret directories
 (`tmpfiles.d`), and installs the unit, the helpers, the sudoers line and the
@@ -173,4 +174,7 @@ bundled collection.
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root |
 
-The integration scripts need the package installed and are not part of CI yet.
+CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
+suites, ruff, and a native package build with lintian, which fails on errors
+and warnings. The integration scripts need the package installed on a
+controller and are not part of CI yet.

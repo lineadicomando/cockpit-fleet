@@ -65,12 +65,6 @@ indicata.
       orari 90 giorni, giornalieri 2 anni, log delle run 90 giorni.
 - [ ] **Namespace della collection Ansible** (fase 2). Default: `lineadicomando.fleet`;
       `cockpit` non è un namespace nostro.
-- [ ] **Runner CI su Gitea** (prima della fase 1). Senza un runner il workflow in
-      `.github/workflows/` non gira finché il repository non è su GitHub.
-- [ ] **Nome dell'helper `fleetctl`** (fase 1). Sta in `/usr/libexec`, fuori dal
-      `PATH`, ma è omonimo della CLI di FleetDM. Alternativa: `cockpit-fleetctl`.
-- [ ] **RAM della VM controller**. `deb13-samba-dc` ha 2 GB; per i test di carico con
-      molti fork Ansible conviene portarla a 4 GB.
 
 ## 3. Architettura
 
@@ -189,8 +183,10 @@ backend. Esiti e misure in `docs/architecture.md`.
 - [x] `Makefile` e `Makefile.local` con `build`, `watch`, `check`, `deb`, `vm-deploy`, `vm-deb-deploy`
 - [x] Scheletro `debian/` che installa una pagina vuota e crea utente e gruppi (`sysusers.d`).
       Il `.deb` si costruisce in un container Debian 13 (`scripts/build-deb.sh`)
-- [x] CI: `tsc --noEmit`, build, test TS, test Python, `ruff`, pacchetto con `lintian`.
-      Scritta ma mai eseguita: su Gitea serve un runner per le Actions
+- [x] CI su Gitea (`.gitea/workflows/ci.yml`): `tsc --noEmit`, build, test TS e
+      Python, `ruff`, pacchetto con `lintian`. Runner dedicato Debian 13 su
+      the CI host, senza mount di deploy. Passi provati a mano nel runner; il
+      workflow girerà al primo push
 - [x] **Spike S1, privilegi**: regola polkit scartata perché insicura; sostituita da
       `fleet-unit` dietro sudoers. Test: `test/integration/privileges.sh`
 - [x] **Spike S2, segreti**: `fleet-secret set` cifra con `systemd-creds`; la unit li
@@ -390,6 +386,7 @@ approvato da un altro utente e termina.
 - [ ] Documentazione: installazione, modello di sicurezza, scrittura di un check, backup e ripristino
 - [ ] `lintian` pulito, upgrade e rimozione del pacchetto provati (`purge` compreso)
 - [ ] Screenshot, `CHANGELOG`, tag `v0.1.0`
+- [ ] Workflow per GitHub Actions (quello attuale è solo per Gitea)
 - [ ] Pubblicazione su GitHub: riconfermare la licenza, controllare che la cronologia
       git non contenga segreti né dettagli di ambienti reali, aggiungere modelli
       per issue e pull request

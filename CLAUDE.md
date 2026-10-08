@@ -124,6 +124,13 @@ Run both test scripts after any change to the unit, the helpers or sudoers.
   every commit as future public history: no secrets, no passwords, no details of
   real (non-test) environments, in files or in commit messages.
 - License: `LGPL-2.1-or-later`, same as `cockpit-samba-ad-dc` (provisional).
+- CI: `.gitea/workflows/ci.yml`, on the runner labelled `cockpit-fleet`
+  (container `gitea-runner` on the CI host, defined in
+  `/srv/gitea/compose.yaml` and `/srv/gitea/runner-ci/`). It is a
+  Debian 13 arm64 container where jobs run directly, as a non-root user. Tools
+  with a version (Node.js, ruff) are pinned in the workflow and cached in
+  `/data/tools`. That host runs production services: change nothing there
+  beyond `runner-ci` without asking.
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material
