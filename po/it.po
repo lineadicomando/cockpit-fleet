@@ -232,9 +232,6 @@ msgstr "Annulla la run"
 msgid "Canceled"
 msgstr "Annullata"
 
-msgid "Change secrets"
-msgstr "Cambia i segreti"
-
 msgid "Changed"
 msgstr "Modificati"
 
@@ -357,9 +354,6 @@ msgstr "Template"
 
 msgid "Key type"
 msgstr "Tipo di chiave"
-
-msgid "Keys offered by the host"
-msgstr "Chiavi offerte dall'host"
 
 msgid "Last update failed"
 msgstr "Ultimo aggiornamento fallito"
@@ -508,9 +502,6 @@ msgstr "Rileggi"
 msgid "Read at each run"
 msgstr "Letto a ogni run"
 
-msgid "Read the host's keys"
-msgstr "Leggi le chiavi dell'host"
-
 msgid "Repository URL"
 msgstr "URL del repository"
 
@@ -540,9 +531,6 @@ msgstr "Chiave privata SSH"
 
 msgid "Save"
 msgstr "Salva"
-
-msgid "Secrets of {{name}}"
-msgstr "Segreti di {{name}}"
 
 msgid "Secrets set"
 msgstr "Segreti impostati"
@@ -601,12 +589,6 @@ msgstr "Il progetto e i file scaricati vengono eliminati. Il repository non vien
 msgid "The project is forgotten. The directory and its files are not touched."
 msgstr "Il progetto viene dimenticato. La directory e i suoi file non vengono toccati."
 
-msgid "Trust a host"
-msgstr "Rendi attendibile un host"
-
-msgid "Trust these keys"
-msgstr "Considera attendibili queste chiavi"
-
 msgid "Trusted by"
 msgstr "Resa attendibile da"
 
@@ -655,6 +637,60 @@ msgstr "saltati {{n}}"
 msgid "unreachable {{n}}"
 msgstr "irraggiungibili {{n}}"
 
+msgid "All hosts of an inventory"
+msgstr "Tutti gli host di un inventario"
+
+msgid "Already trusted"
+msgstr "Già attendibile"
+
+msgid "Edit credential"
+msgstr "Modifica credenziale"
+
+msgid "Edit project"
+msgstr "Modifica progetto"
+
+msgid "Keys offered by the hosts"
+msgstr "Chiavi offerte dagli host"
+
+msgid "New"
+msgstr "Nuova"
+
+msgid "No answer from: {{hosts}}"
+msgstr "Nessuna risposta da: {{hosts}}"
+
+msgid "None defined"
+msgstr "Nessuna definita"
+
+msgid "One host"
+msgstr "Un host"
+
+msgid "Passphrase of the private key"
+msgstr "Passphrase della chiave privata"
+
+msgid "Read the keys"
+msgstr "Leggi le chiavi"
+
+msgid "Replace the trusted keys of: {{hosts}}"
+msgstr "Sostituisci le chiavi attendibili di: {{hosts}}"
+
+msgid "The key of a host already trusted has changed"
+msgstr "La chiave di un host già attendibile è cambiata"
+
+msgid "The label the data was encrypted with (ansible-vault --vault-id). Needed only when a template uses several vaults."
+msgstr "L'etichetta con cui i dati sono stati cifrati (ansible-vault --vault-id). Serve solo quando un template usa più vault."
+
+msgid "This happens when a host is reinstalled, and also when something is impersonating it. Replace the trusted key only if you know why it changed."
+msgstr "Succede quando un host viene reinstallato, e anche quando qualcosa si spaccia per lui. Sostituisci la chiave attendibile solo se sai perché è cambiata."
+
+msgid "Trust hosts"
+msgstr "Rendi attendibili degli host"
+
+msgid "Vault credentials"
+msgstr "Credenziali vault"
+
+msgid "Vault identifier"
+msgstr "Identificatore del vault"
+
 msgid "checks_failed_count"
 msgid_plural "checks_failed_count_plural"
 msgstr[0] "{{count}} problema"
@@ -669,3 +705,8 @@ msgid "checks_passed_count"
 msgid_plural "checks_passed_count_plural"
 msgstr[0] "{{count}} controllo superato"
 msgstr[1] "{{count}} controlli superati"
+
+msgid "trust_keys_count"
+msgid_plural "trust_keys_count_plural"
+msgstr[0] "Considera attendibile {{count}} chiave"
+msgstr[1] "Considera attendibili {{count}} chiavi"

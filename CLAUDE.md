@@ -12,9 +12,8 @@ notifies on information from managed nodes using Ansible only (agentless).
 phased plan. Read it before starting any work, tick items as they are completed,
 and update it when a decision changes. Do not restate its content here.
 
-Status: Phases 0 and 1 done, Phase 2 done in its core (projects, inventories,
-credentials, host keys, templates, runs with live output). `TODO.md` lists what
-Phase 2 still lacks. `docs/architecture.md` describes what exists and what was measured.
+Status: Phases 0, 1 and 2 done (projects, inventories, credentials, host keys,
+templates, runs with live output, on Linux and Windows nodes). Phase 3 is next. `docs/architecture.md` describes what exists and what was measured.
 
 ## Non-negotiable rules
 
@@ -40,7 +39,10 @@ them needs the user's explicit agreement.
    Anything a run can reach, a playbook of another project can reach. Do not
    remove `PrivatePIDs`, the tmpfs over the state directory or over `/run`, and
    test a change to the unit with `sandbox.sh`.
-9. **Checks are OS agnostic.** A catalog check has one output schema and one
+9. **Nothing executable in a run's scratch directory.** It is mounted `noexec`.
+   A helper a run must execute is a packaged file in `/usr/libexec/cockpit-fleet`
+   that takes paths from its environment, like `fleet-askpass`.
+10. **Checks are OS agnostic.** A catalog check has one output schema and one
    implementation per platform; Windows nodes are reached over SSH, not WinRM.
 
 ## Stack and conventions
@@ -112,10 +114,16 @@ test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, I
 test/integration/roles.sh            # roles, audit, sudoers (creates and removes test accounts)
 test/integration/runs.sh             # a whole run through fleetctl; WIPES the database (IT_WIPE=yes)
 test/integration/measure-events.sh   # callback cost on N simulated hosts
-test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY)
+test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
+test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
+test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
 ```
 
-Run these after any change to the unit, the helpers, `fleetctl` or sudoers.
+Run these after any change to the unit, the helpers, `fleetctl` or sudoers. The
+tests that go through `fleetctl` share helpers in `lib.sh` (`admin`, `get`,
+`expect_run`, `wipe`, `prepare`). A failed `expect_run` prints the end of the
+run's output. With `IT_KEEP=yes`, `windows.sh` leaves its data in place so the
+same run can be launched from the interface.
 
 ## Test environment
 
@@ -123,7 +131,9 @@ Run these after any change to the unit, the helpers, `fleetctl` or sudoers.
   `https://VM:9090`. Password-only SSH (`sshpass -e`).
 - Windows nodes over SSH: `teacher` .10, `student01` .11, `student02` .12, from
   `../ansible-win_edulab/inventories/school`.
-- Linux nodes: containers on the controller VM, or a clone of `debian13-base`.
+- Linux nodes: containers on the controller VM (podman is installed there;
+  `test/integration/nodes.sh` starts them on 10.88.0.101 onwards), or a clone of
+  `debian13-base`.
 - VMs are usually shut off: `virsh -c qemu:///system list --all`, then start what
   is needed. Ask before creating, cloning or deleting a VM.
 - Before starting a VM, check that the running VMs plus the new one do not need

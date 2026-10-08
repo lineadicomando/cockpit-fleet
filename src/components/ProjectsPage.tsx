@@ -15,38 +15,46 @@ interface ProjectList {
     local_roots: string[];
 }
 
-function CreateModal({ roots, onClose, onDone }: { roots: string[]; onClose: () => void; onDone: () => void }) {
+// Creates a project, or edits one. Whether it is git or local cannot change.
+function ProjectModal({ project, roots, onClose, onDone }: { project?: Project; roots: string[]; onClose: () => void; onDone: () => void }) {
     const { t } = useTranslation();
     const credentials = useLoad(() => call<{ credentials: Credential[] }>("credential.list"));
-    const [name, setName] = useState("");
-    const [kind, setKind] = useState<"git" | "local">("git");
-    const [url, setUrl] = useState("");
-    const [ref, setRef] = useState("main");
-    const [credentialId, setCredentialId] = useState("");
-    const [path, setPath] = useState("");
+    const [name, setName] = useState(project?.name ?? "");
+    const [kind, setKind] = useState<"git" | "local">(project?.kind ?? "git");
+    const [url, setUrl] = useState(project?.url ?? "");
+    const [ref, setRef] = useState(project?.ref || "main");
+    const [credentialId, setCredentialId] = useState(project?.credential_id ?? "");
+    const [path, setPath] = useState(project?.path ?? "");
 
     async function submit() {
         const params = kind === "git"
-            ? { name, kind, url: url.trim(), ref: ref.trim() || "main", credential_id: credentialId }
-            : { name, kind, path: path.trim() };
-        const project = await call<Project>("project.create", params);
-        // A git project is of no use until its files are here.
-        if (kind === "git") await call("project.sync", { id: project.id });
+            ? { name, url: url.trim(), ref: ref.trim() || "main", credential_id: credentialId }
+            : { name, path: path.trim() };
+        const saved = project
+            ? await call<Project>("project.update", { id: project.id, ...params })
+            : await call<Project>("project.create", { kind, ...params });
+        // A git project is of no use until its files are here, and a changed
+        // URL or reference means different files.
+        if (kind === "git" && (!project || project.url !== saved.url || project.ref !== saved.ref)) {
+            await call("project.sync", { id: saved.id });
+        }
         onDone();
         onClose();
     }
 
     const source = (credentials.data?.credentials ?? []).filter(credential => credential.kind === "source");
     return (
-        <FormModal title={t("New project")} submitLabel={t("Create")} onSubmit={submit} onClose={onClose}
+        <FormModal title={project ? t("Edit project") : t("New project")} submitLabel={project ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose}
             isDisabled={!name.trim() || (kind === "git" ? !url.trim() : !path.trim())}>
             <FormGroup label={t("Name")} isRequired fieldId="proj-name">
                 <TextInput id="proj-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
-            <FormGroup label={t("Source")} role="radiogroup" isInline fieldId="proj-kind">
-                <Radio id="proj-kind-git" name="proj-kind" label={t("Git repository")} isChecked={kind === "git"} onChange={() => setKind("git")} />
-                <Radio id="proj-kind-local" name="proj-kind" label={t("Directory on this server")} isChecked={kind === "local"} onChange={() => setKind("local")} />
-            </FormGroup>
+            {!project && (
+                <FormGroup label={t("Source")} role="radiogroup" isInline fieldId="proj-kind">
+                    <Radio id="proj-kind-git" name="proj-kind" label={t("Git repository")} isChecked={kind === "git"} onChange={() => setKind("git")} />
+                    <Radio id="proj-kind-local" name="proj-kind" label={t("Directory on this server")} isChecked={kind === "local"} onChange={() => setKind("local")} />
+                </FormGroup>
+            )}
             {kind === "git" ? (
                 <>
                     <FormGroup label={t("Repository URL")} isRequired fieldId="proj-url">
@@ -86,6 +94,7 @@ export function ProjectsPage() {
     const can = useCan();
     const list = useLoad(() => call<ProjectList>("project.list"));
     const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState<Project | null>(null);
     const [deleting, setDeleting] = useState<Project | null>(null);
     const [error, setError] = useState<string | null>(null);
     // A new git project is fetched by a job: poll for a while to show its revision.
@@ -135,6 +144,7 @@ export function ProjectsPage() {
                                         {can("project.delete") && (
                                             <ActionsColumn items={[
                                                 ...(project.kind === "git" ? [{ title: t("Update from git"), onClick: () => sync(project) }] : []),
+                                                { title: t("Edit"), onClick: () => setEditing(project) },
                                                 { title: t("Delete"), onClick: () => setDeleting(project) },
                                             ]} />
                                         )}
@@ -145,7 +155,8 @@ export function ProjectsPage() {
                     </Table>
                 )}
             </ListState>
-            {creating && <CreateModal roots={list.data?.local_roots ?? []} onClose={() => setCreating(false)} onDone={() => { list.reload(); setWaiting(15); }} />}
+            {creating && <ProjectModal roots={list.data?.local_roots ?? []} onClose={() => setCreating(false)} onDone={() => { list.reload(); setWaiting(15); }} />}
+            {editing && <ProjectModal project={editing} roots={list.data?.local_roots ?? []} onClose={() => setEditing(null)} onDone={() => { list.reload(); setWaiting(15); }} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name}
                     what={deleting.kind === "git"

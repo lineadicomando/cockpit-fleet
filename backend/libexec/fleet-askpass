@@ -1,0 +1,8 @@
+#!/bin/sh
+# Answers ssh-add and git when they ask for a passphrase, a password or a user
+# name, from the files named in the environment. It exists because a run's
+# scratch directory is mounted noexec: a helper written there cannot be run.
+case "$1" in
+    Username*) printf '%s\n' "$FLEET_ASKPASS_USER" ;;
+    *) cat "$FLEET_ASKPASS_FILE" ;;
+esac

@@ -121,8 +121,8 @@ class ResourceTest(Base):
     def test_credential_reports_which_secrets_exist_never_their_value(self):
         credential = self.ok("credential.create", {"name": "ssh", "kind": "machine",
                                                    "username": "maint"})
-        self.assertEqual(credential["secrets"],
-                         {"private_key": False, "password": False, "become_password": False})
+        self.assertEqual(credential["secrets"], {"private_key": False, "key_passphrase": False,
+                                                 "password": False, "become_password": False})
         name = credential["secret_names"]["password"]
         (paths.SECRETS_DIR / f"{name}.cred").write_bytes(b"ciphertext")
         listed = self.ok("credential.list", role="viewer")["credentials"][0]
@@ -293,7 +293,8 @@ class RunTest(Base):
         inventory = self.ok("inventory.create", {"name": "inv", "kind": "managed", "content": "x"})
         run_id = self.ok("inventory.parse", {"id": inventory["id"]}, role="operator")["run_id"]
         listing = {
-            "_meta": {"hostvars": {"web01": {"ansible_host": "10.0.0.1", "ansible_password": "hunter2"},
+            "_meta": {"hostvars": {"web01": {"ansible_host": "10.0.0.1", "ansible_password": "hunter2",
+                                             "ansible_port": 2222, "ansible_connection": "ssh"},
                                    "db01": {}}},
             "all": {"children": ["ungrouped", "prod"]},
             "prod": {"children": ["web"], "hosts": ["db01"]},
@@ -303,8 +304,9 @@ class RunTest(Base):
         self.finish(run_id)
         got = self.ok("inventory.get", {"id": inventory["id"]}, role="viewer")
         self.assertEqual(got["hosts"], [
-            {"name": "db01", "address": "", "groups": ["prod"]},
-            {"name": "web01", "address": "10.0.0.1", "groups": ["prod", "web"]},
+            {"name": "db01", "address": "", "port": None, "connection": "", "groups": ["prod"]},
+            {"name": "web01", "address": "10.0.0.1", "port": 2222, "connection": "ssh",
+             "groups": ["prod", "web"]},
         ])
         self.assertNotIn("hunter2", json.dumps(got))
         self.assertEqual(self.ok("inventory.list")["inventories"][0]["host_count"], 2)
@@ -333,6 +335,166 @@ class RunTest(Base):
             self.assertEqual(listed["revision"], revision)
             self.assertEqual((paths.PROJECTS_DIR / project["id"] / "tree" / "site.yml").read_text(), content)
         self.assertEqual(self.ok("project.files", {"id": project["id"]})["files"], ["site.yml"])
+
+
+class ClosingPhase2Test(Base):
+    def test_credential_and_project_can_be_edited(self):
+        credential = self.ok("credential.create", {"name": "ssh", "kind": "machine", "username": "a"})
+        updated = self.ok("credential.update", {"id": credential["id"], "name": "ssh2", "username": "b"})
+        self.assertEqual((updated["name"], updated["username"], updated["kind"]), ("ssh2", "b", "machine"))
+        self.assertEqual(self.code("credential.update", {"id": credential["id"], "name": "x",
+                                                         "username": "-oProxy"}), "bad_request")
+
+        project = self.ok("project.create", {"name": "g", "kind": "git",
+                                             "url": "https://example.org/a.git"})
+        changed = self.ok("project.update", {"id": project["id"], "name": "g2",
+                                             "url": "https://example.org/b.git", "ref": "v2"})
+        self.assertEqual((changed["name"], changed["url"], changed["ref"]),
+                         ("g2", "https://example.org/b.git", "v2"))
+        # A git project cannot be turned into a local one: path is not a git parameter.
+        self.assertEqual(self.code("project.update", {"id": project["id"], "name": "g",
+                                                      "path": "/etc"}), "bad_request")
+        self.assertEqual(self.code("project.update", {"id": project["id"], "name": "g",
+                                                      "url": "file:///etc"}), "bad_request")
+
+    def test_several_vaults_reach_the_command_line_with_their_identifiers(self):
+        dev = self.ok("credential.create", {"name": "dev", "kind": "vault", "vault_id": "dev"})
+        prod = self.ok("credential.create", {"name": "prod", "kind": "vault", "vault_id": "prod"})
+        for credential in (dev, prod):
+            (paths.SECRETS_DIR / f"c-{credential['id']}-vault_password.cred").write_bytes(b"x")
+        template = self.template(vault_credential_ids=[prod["id"], dev["id"]])
+        self.assertEqual(template["vault_credential_ids"], [prod["id"], dev["id"]])
+        run = self.ok("run.start", {"template_id": template["id"]})
+        directory = paths.RUNS_DIR / run["id"]
+        spec = json.loads((directory / "spec.json").read_text())
+        self.assertEqual(spec["vaults"], [{"file": "vault_password_0", "id": "prod"},
+                                          {"file": "vault_password_1", "id": "dev"}])
+        # What the unit sees once systemd has decrypted creds/ into fleet_* files.
+        creds = self.root / "decrypted"
+        creds.mkdir()
+        for name in ("vault_password_0", "vault_password_1"):
+            self.assertTrue((directory / "creds" / name).is_file())
+            (creds / f"fleet_{name}").write_text("x")
+        (directory / "runtime").mkdir()
+        argv = runner.build_argv(spec, directory, directory / "runtime", creds)
+        ids = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--vault-id"]
+        self.assertEqual(ids, [f"prod@{creds / 'fleet_vault_password_0'}",
+                               f"dev@{creds / 'fleet_vault_password_1'}"])
+
+    def test_vaults_used_together_need_distinct_identifiers(self):
+        one = self.ok("credential.create", {"name": "one", "kind": "vault"})
+        two = self.ok("credential.create", {"name": "two", "kind": "vault"})
+        machine = self.ok("credential.create", {"name": "m", "kind": "machine"})
+        template = self.template(vault_credential_ids=[one["id"]])
+        base = {"id": template["id"], "name": "deploy", "project_id": template["project_id"],
+                "playbook": "site.yml", "inventory_id": template["inventory_id"]}
+        for bad in ([one["id"], two["id"]], [one["id"], one["id"]], [machine["id"]], ["../x"]):
+            self.assertEqual(self.code("template.update", {**base, "vault_credential_ids": bad}),
+                             "bad_request", bad)
+        self.assertEqual(self.code("credential.delete", {"id": one["id"]}), "conflict")
+        cleared = self.ok("template.update", base)
+        self.assertEqual(cleared["vault_credential_ids"], [])
+        self.ok("credential.delete", {"id": one["id"]})
+
+    def test_inventory_scan_marks_new_trusted_and_changed_keys(self):
+        inventory = self.ok("inventory.create", {"name": "inv", "kind": "managed", "content": "x"})
+        hosts = [
+            {"name": "a", "address": "10.0.0.1", "port": None, "connection": "", "groups": []},
+            {"name": "b", "address": "10.0.0.2", "port": None, "connection": "ssh", "groups": []},
+            {"name": "c", "address": "10.0.0.3", "port": 2222, "connection": "", "groups": []},
+            {"name": "win", "address": "10.0.0.9", "port": None, "connection": "winrm", "groups": []},
+            {"name": "self", "address": "", "port": None, "connection": "local", "groups": []},
+            {"name": "named.example.org", "address": "", "port": None, "connection": "", "groups": []},
+        ]
+        self.ctx().conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                                (json.dumps(hosts), inventory["id"]))
+        self.ok("hostkey.add", {"host": "10.0.0.1", "key_type": "ssh-ed25519", "key": "AAAA"})
+        self.ok("hostkey.add", {"host": "10.0.0.2", "key_type": "ssh-ed25519", "key": "AAAA"})
+        asked = []
+
+        def keyscan(names, port):
+            asked.append((sorted(names), port))
+            if port == 2222:
+                return [("[10.0.0.3]:2222", "ssh-ed25519", "CCCC")]
+            return [("10.0.0.1", "ssh-ed25519", "AAAA"), ("10.0.0.2", "ssh-ed25519", "BBBB")]
+
+        with mock.patch.object(resources, "_keyscan", keyscan):
+            result = self.ok("hostkey.scan", {"inventory_id": inventory["id"]})
+        self.assertEqual(asked, [(["10.0.0.1", "10.0.0.2", "named.example.org"], 22),
+                                 (["10.0.0.3"], 2222)])
+        self.assertEqual({key["host"]: key["state"] for key in result["keys"]},
+                         {"10.0.0.1": "trusted", "10.0.0.2": "changed", "[10.0.0.3]:2222": "new"})
+        self.assertEqual(result["unanswered"], ["named.example.org"])
+
+    def test_a_changed_host_key_needs_an_explicit_replacement(self):
+        key = {"host": "10.0.0.2", "key_type": "ssh-ed25519"}
+        self.ok("hostkey.add", {**key, "key": "AAAA"})
+        self.ok("hostkey.add", {**key, "key": "AAAA"})
+        self.assertEqual(self.code("hostkey.add", {**key, "key": "BBBB"}), "conflict")
+        self.ok("hostkey.add", {**key, "key": "BBBB", "replace": True})
+        self.assertEqual(len(self.ok("hostkey.list")["keys"]), 1)
+
+    def test_passphrase_protected_key_goes_through_an_agent(self):
+        creds = self.root / "decrypted"
+        runtime = self.root / "runtime"
+        creds.mkdir()
+        runtime.mkdir()
+        (creds / "fleet_private_key").write_text("KEY")
+        self.assertFalse(runner.needs_agent(creds))
+        (creds / "fleet_key_passphrase").write_text("s3cret-phrase")
+        self.assertTrue(runner.needs_agent(creds))
+        agent, add, env, socket = runner.agent_plan(creds, runtime)
+        self.assertEqual(agent, ["/usr/bin/ssh-agent", "-D", "-a", socket])
+        self.assertEqual(add[-1], str(creds / "fleet_private_key"))
+        self.assertEqual(env["SSH_ASKPASS_REQUIRE"], "force")
+        self.assertNotIn("s3cret-phrase", json.dumps([agent, add, env]))
+        self.assertEqual(env["SSH_ASKPASS"], "/usr/libexec/cockpit-fleet/fleet-askpass")
+        self.assertEqual(env["FLEET_ASKPASS_FILE"], str(creds / "fleet_key_passphrase"))
+        # The key is offered by the agent, so it is not passed as a file too.
+        template = self.template()
+        run = self.ok("run.start", {"template_id": template["id"]})
+        directory = paths.RUNS_DIR / run["id"]
+        spec = json.loads((directory / "spec.json").read_text())
+        argv = runner.build_argv(spec, directory, runtime, creds)
+        self.assertNotIn("--private-key", argv)
+
+    def test_migration_moves_the_single_vault_into_the_list(self):
+        import sqlite3
+
+        from cockpit_fleet import db
+        path = self.root / "old.db"
+        with mock.patch.object(db, "MIGRATIONS", db.MIGRATIONS[:2]):
+            conn = db.connect(path)
+        conn.execute("INSERT INTO credentials (id, name, kind, created_at) VALUES ('c1', 'v', 'vault', 1)")
+        conn.execute("INSERT INTO projects (id, name, kind, created_at) VALUES ('p1', 'p', 'git', 1)")
+        conn.execute("INSERT INTO inventories (id, name, kind, created_at) VALUES ('i1', 'i', 'managed', 1)")
+        conn.execute("INSERT INTO templates (id, name, project_id, playbook, inventory_id,"
+                     " vault_credential_id, created_at, updated_at)"
+                     " VALUES ('t1', 't', 'p1', 'site.yml', 'i1', 'c1', 1, 1)")
+        conn.close()
+        conn = db.connect(path)
+        self.assertEqual(db.schema_version(conn), len(db.MIGRATIONS))
+        rows = conn.execute("SELECT template_id, credential_id, position FROM template_vaults")
+        self.assertEqual([tuple(row) for row in rows], [("t1", "c1", 0)])
+        self.assertIsInstance(conn, sqlite3.Connection)
+
+
+class AskpassTest(unittest.TestCase):
+    HELPER = Path(__file__).resolve().parents[1] / "libexec" / "fleet-askpass"
+
+    def ask(self, prompt, **env):
+        import subprocess
+        return subprocess.run([str(self.HELPER), prompt], env={"PATH": "/usr/bin:/bin", **env},
+                              capture_output=True, text=True, check=True).stdout
+
+    def test_prints_the_secret_or_the_user_name_depending_on_the_question(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            secret = Path(tmp) / "secret"
+            secret.write_text("s3cret")
+            env = {"FLEET_ASKPASS_FILE": str(secret), "FLEET_ASKPASS_USER": "deploy"}
+            self.assertEqual(self.ask("Enter passphrase for key '/x':", **env), "s3cret")
+            self.assertEqual(self.ask("Password for 'https://deploy@example.org':", **env), "s3cret")
+            self.assertEqual(self.ask("Username for 'https://example.org':", **env), "deploy\n")
 
 
 class SnapshotTest(unittest.TestCase):
@@ -425,10 +587,11 @@ class RunnerPhase2Test(unittest.TestCase):
         spec = {"kind": "sync", "url": "https://example.org/a.git", "ref": "main", "user": "deploy"}
         commands, env = runner.build_sync(spec, self.run, self.runtime, creds)
         self.assertNotIn("s3cret-token", json.dumps([commands, env]))
-        helper = Path(env["GIT_ASKPASS"])
-        self.assertEqual(oct(helper.stat().st_mode & 0o777), "0o700")
-        self.assertNotIn("s3cret-token", helper.read_text())
-        self.assertEqual((self.runtime / "git-user").read_text(), "deploy")
+        self.assertEqual(env["GIT_ASKPASS"], "/usr/libexec/cockpit-fleet/fleet-askpass")
+        self.assertEqual(env["FLEET_ASKPASS_USER"], "deploy")
+        self.assertEqual(env["FLEET_ASKPASS_FILE"], str(creds / "fleet_git_token"))
+        # Nothing executable is written to the scratch directory: it is noexec.
+        self.assertEqual([p.name for p in self.runtime.iterdir() if p.is_file()], [])
 
     def test_inventory_listing_command(self):
         (self.run / "inventory").mkdir()

@@ -193,9 +193,27 @@ with only the allowlisted keys of the project's file (`roles_path` and
 plugins from elsewhere, point to a vault password file or relax host key
 checking is dropped. The integration test ships a project that tries.
 
-**Host keys.** `hostkey.scan` returns the keys a host offers, with their
-fingerprints; nothing is trusted until an administrator confirms with
-`hostkey.add`. A run connects only to hosts listed there.
+**Host keys.** `hostkey.scan` returns the keys offered by one host, or by every
+SSH host of an inventory, with their fingerprints; nothing is trusted until an
+administrator confirms with `hostkey.add`. A run connects only to hosts listed
+there. Each scanned key is marked new, already trusted, or changed: a key that
+differs from the trusted one is refused unless the replacement is asked for
+explicitly, because that is also what an impersonated host looks like.
+
+**SSH keys with a passphrase.** Ansible has no option to read a passphrase from
+a file, so `fleet-run` starts an `ssh-agent` inside the unit and loads the key
+with `ssh-add`, which gets the passphrase from `fleet-askpass`. The agent lives
+in the run's PID namespace and ends with it. The same helper answers git when
+a token is used.
+
+`fleet-askpass` is a packaged file because a run's scratch directory is
+mounted `noexec`: a helper script written there, as a first version did, cannot
+be executed. It prints the file named in its environment, so the secret itself
+is still in no command line and no environment.
+
+**Several vaults.** A template lists any number of vault credentials; each has
+an identifier, and each reaches Ansible as `--vault-id IDENTIFIER@FILE`, in the
+template's order. Credentials used together must have different identifiers.
 
 **Limits a launcher can change.** Launching a template, an operator may add a
 host limit and ask for a dry run. The limit is combined with the template's
@@ -241,6 +259,9 @@ against a Windows 11 VM (4 vCPU, 8 GB), `test/integration/windows.sh`:
 | `win_shell` (one CIM query) | 5 s |
 | whole run | 20 s |
 
+The same run launched through `fleetctl` and from the interface takes 21 to 24
+seconds.
+
 Every task on Windows costs 4 to 5 seconds whatever it does, against a fraction
 of a second on Linux. A collection cycle must therefore gather everything a
 Windows node has to report in one task, with one script, and not run one task
@@ -266,8 +287,9 @@ bundled collection.
 | Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
 | Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
 | A whole run through fleetctl | `test/integration/runs.sh` | controller, as root; wipes the database |
+| Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
-| Windows node over SSH | `test/integration/windows.sh` | controller, as root |
+| Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |
 
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors

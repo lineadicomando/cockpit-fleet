@@ -6,7 +6,7 @@ import shutil
 from . import jobs, store
 from .cli import Context, Params, command
 from .errors import BadRequest
-from .resources import place_inventory
+from .resources import place_inventory, template_vaults
 from .validators import check_limit
 
 _CHUNK = 256 * 1024
@@ -63,10 +63,13 @@ def run_start(ctx: Context, params: Params) -> dict:
         spec.update(place_inventory(ctx, inventory, directory, project["id"]))
         if machine:
             jobs.add_secret(directory, machine["id"], "private_key", "private_key")
+            jobs.add_secret(directory, machine["id"], "key_passphrase", "key_passphrase")
             jobs.add_secret(directory, machine["id"], "password", "connection_password")
             jobs.add_secret(directory, machine["id"], "become_password", "become_password")
-        jobs.add_secret(directory, template["vault_credential_id"],
-                        "vault_password", "vault_password")
+        spec["vaults"] = []
+        for index, vault in enumerate(template_vaults(ctx, template_id)):
+            jobs.add_secret(directory, vault["id"], "vault_password", f"vault_password_{index}")
+            spec["vaults"].append({"file": f"vault_password_{index}", "id": vault["vault_id"]})
         jobs.write_known_hosts(ctx.conn, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)

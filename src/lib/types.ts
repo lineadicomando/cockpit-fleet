@@ -36,6 +36,8 @@ export interface Credential {
     name: string;
     kind: CredentialKind;
     username: string;
+    // For a vault credential: the label Ansible matches encrypted data against.
+    vault_id: string;
     // Which secret fields are set; values are never sent to the browser.
     secrets: Record<string, boolean>;
     secret_names: Record<string, string>;
@@ -57,6 +59,8 @@ export interface Project {
 export interface InventoryHost {
     name: string;
     address: string;
+    port: number | null;
+    connection: string;
     groups: string[];
 }
 
@@ -89,6 +93,8 @@ export interface ScannedKey {
     key_type: string;
     key: string;
     fingerprint: string;
+    // "changed": a different key of this type is trusted for this host.
+    state: "new" | "trusted" | "changed";
 }
 
 export interface Template {
@@ -98,7 +104,7 @@ export interface Template {
     playbook: string;
     inventory_id: string;
     machine_credential_id: string | null;
-    vault_credential_id: string | null;
+    vault_credential_ids: string[];
     limit_hosts: string;
     tags: string[];
     skip_tags: string[];

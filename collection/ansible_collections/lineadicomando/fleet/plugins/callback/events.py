@@ -142,6 +142,30 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_unreachable(self, result):
         self._result("unreachable", result)
 
+    def _item(self, status, result, **extra):
+        # One event per element of a loop; the task's own event still follows.
+        task = _part(result, "task")
+        data = _part(result, "result")
+        label = data.get("_ansible_item_label", data.get("item", ""))
+        self._emit(
+            "item_" + status,
+            host=_part(result, "host").get_name(),
+            task_uuid=str(task._uuid),
+            item=self._trim(label if isinstance(label, str) else json.dumps(label, default=str)),
+            changed=bool(data.get("changed", False)),
+            msg=self._trim(str(data.get("msg", ""))) if status == "failed" else "",
+            **extra,
+        )
+
+    def v2_runner_item_on_ok(self, result):
+        self._item("ok", result)
+
+    def v2_runner_item_on_failed(self, result):
+        self._item("failed", result)
+
+    def v2_runner_item_on_skipped(self, result):
+        self._item("skipped", result)
+
     def v2_playbook_on_stats(self, stats):
         hosts = {host: stats.summarize(host) for host in sorted(stats.processed)}
         self._emit("stats", hosts=hosts)

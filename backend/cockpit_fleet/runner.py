@@ -8,10 +8,11 @@ through the functions here.
 
 import configparser
 import json
+import re
 from pathlib import Path
 
 from .errors import BadRequest
-from .paths import COLLECTIONS_DIR
+from .paths import COLLECTIONS_DIR, LIBEXEC_DIR
 from .validators import (
     check_git_ref,
     check_git_url,
@@ -19,6 +20,7 @@ from .validators import (
     check_limit,
     check_tag,
     check_user,
+    check_vault_id,
     resolve_inside,
 )
 
@@ -31,6 +33,12 @@ CREDENTIAL_OPTIONS = {
     "become_password": "--become-password-file",
     "vault_password": "--vault-password-file",
 }
+
+_VAULT_FILE_RE = re.compile(r"vault_password_[0-9]{1,3}")
+
+# Packaged helper that prints a secret from the file named in its environment.
+# The run's scratch directory is mounted noexec, so it cannot be written there.
+ASKPASS = str(LIBEXEC_DIR / "fleet-askpass")
 
 # What a project's own ansible.cfg may set. Anything that points Ansible at
 # files, plugins or commands outside the project, or that weakens host key
@@ -115,13 +123,68 @@ def _inventory(spec: dict, run_dir: Path) -> Path:
     return resolve_inside(run_dir / "project", spec.get("inventory"), "inventory")
 
 
+def needs_agent(credentials_dir: Path | None, prefix: str = "") -> bool:
+    """A private key with a passphrase: it has to be loaded into an ssh-agent."""
+    return (
+        credentials_dir is not None
+        and (credentials_dir / f"fleet_{prefix}private_key").is_file()
+        and (credentials_dir / f"fleet_{prefix}key_passphrase").is_file()
+    )
+
+
+def agent_plan(
+    credentials_dir: Path, runtime_dir: Path, prefix: str = ""
+) -> tuple[list[str], list[str], dict[str, str], str]:
+    """How to load a passphrase-protected key: the agent command, the ssh-add
+    command, the environment for ssh-add, and the agent socket.
+
+    ssh-add gets the passphrase from a helper that reads it from its file, so
+    it is in no command line and in no environment.
+    """
+    socket = str(runtime_dir / "agent.sock")
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "SSH_AUTH_SOCK": socket,
+        "SSH_ASKPASS": ASKPASS,
+        "SSH_ASKPASS_REQUIRE": "force",
+        "FLEET_ASKPASS_FILE": str(credentials_dir / f"fleet_{prefix}key_passphrase"),
+    }
+    return (
+        ["/usr/bin/ssh-agent", "-D", "-a", socket],
+        ["/usr/bin/ssh-add", "-q", str(credentials_dir / f"fleet_{prefix}private_key")],
+        env,
+        socket,
+    )
+
+
 def _credential_args(credentials_dir: Path | None, purposes: tuple[str, ...]) -> list[str]:
     argv = []
     if credentials_dir is not None:
         for purpose in purposes:
+            if purpose == "private_key" and needs_agent(credentials_dir):
+                continue  # offered by the agent instead
             credential = credentials_dir / f"fleet_{purpose}"
             if credential.is_file():
                 argv += [CREDENTIAL_OPTIONS[purpose], str(credential)]
+    return argv
+
+
+def _vault_args(spec: dict, credentials_dir: Path | None) -> list[str]:
+    """One --vault-id per vault credential of the template, in its order."""
+    vaults = spec.get("vaults") or []
+    if not isinstance(vaults, list) or len(vaults) > 20:
+        raise BadRequest("vaults must be a list")
+    argv = []
+    for vault in vaults:
+        if not isinstance(vault, dict) or not _VAULT_FILE_RE.fullmatch(str(vault.get("file", ""))):
+            raise BadRequest("invalid vault entry")
+        if credentials_dir is None:
+            continue
+        secret = credentials_dir / f"fleet_{vault['file']}"
+        if not secret.is_file():
+            continue
+        label = vault.get("id") or ""
+        argv += ["--vault-id", f"{check_vault_id(label)}@{secret}" if label else str(secret)]
     return argv
 
 
@@ -160,7 +223,9 @@ def build_argv(
         vars_file.write_text(json.dumps(extra_vars))
         argv += ["--extra-vars", f"@{vars_file}"]
 
-    argv += _credential_args(credentials_dir, tuple(CREDENTIAL_OPTIONS))
+    argv += _credential_args(
+        credentials_dir, ("private_key", "connection_password", "become_password"))
+    argv += _vault_args(spec, credentials_dir)
     argv.append(str(resolve_inside(project, spec.get("playbook"), "playbook")))
     return argv
 
@@ -241,20 +306,14 @@ def build_sync(
     if credentials_dir is not None:
         key = credentials_dir / "fleet_git_private_key"
         token = credentials_dir / "fleet_git_token"
-        if key.is_file():
+        if key.is_file() and not needs_agent(credentials_dir, "git_"):
             ssh += f" -o IdentitiesOnly=yes -i {key}"
         if token.is_file():
-            # git asks this program for the user name and the password: the
-            # token is read from its file and never appears in argv or env.
-            user = runtime_dir / "git-user"
-            user.write_text(check_user(spec.get("user") or "git"))
-            askpass = runtime_dir / "git-askpass"
-            askpass.write_text(
-                "#!/bin/sh\n"
-                f'case "$1" in Username*) cat "{user}" ;; *) cat "{token}" ;; esac\n'
-            )
-            askpass.chmod(0o700)
-            env["GIT_ASKPASS"] = str(askpass)
+            # git asks the helper for the user name and the password: the token
+            # is read from its file and never appears in argv or env.
+            env["GIT_ASKPASS"] = ASKPASS
+            env["FLEET_ASKPASS_USER"] = check_user(spec.get("user") or "git")
+            env["FLEET_ASKPASS_FILE"] = str(token)
     env["GIT_SSH_COMMAND"] = ssh
     if spec.get("proxy"):
         env["https_proxy"] = str(spec["proxy"])

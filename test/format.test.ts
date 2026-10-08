@@ -59,6 +59,17 @@ test("addEvents groups host results under their task", () => {
     assert.deepEqual(countOutcomes(tasks[0]), { ok: 1, changed: 1, failed: 1, unreachable: 1, skipped: 1 });
 });
 
+test("addEvents reports which element of a loop failed", () => {
+    const text =
+        line({ event: "task_start", task: "Install", task_uuid: "t1" }) +
+        line({ event: "item_ok", host: "a", task_uuid: "t1", item: "vim" }) +
+        line({ event: "item_failed", host: "a", task_uuid: "t1", item: "nope", msg: "no package" }) +
+        line({ event: "host_failed", host: "a", task_uuid: "t1", result: { msg: "One or more items failed" } });
+    const { tasks } = addEvents([], text);
+    assert.deepEqual(tasks[0].hosts, { a: "failed" });
+    assert.deepEqual(tasks[0].messages, { "a [nope]": "no package", a: "One or more items failed" });
+});
+
 test("addEvents continues across chunks and ignores what it cannot read", () => {
     const first = addEvents([], line({ event: "play_start", play: "P" }) + line({ event: "task_start", task: "A", task_uuid: "t1" }));
     const second = addEvents(first.tasks, `not json\n${line({ event: "host_ok", host: "a", task_uuid: "t1" })}${line({ event: "host_ok", host: "x", task_uuid: "unknown" })}${line({ event: "task_start", task: "B", task_uuid: "t2" })}`, first.play);

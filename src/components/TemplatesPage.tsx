@@ -33,7 +33,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [playbook, setPlaybook] = useState(template?.playbook ?? "");
     const [inventoryId, setInventoryId] = useState(template?.inventory_id ?? "");
     const [machineId, setMachineId] = useState(template?.machine_credential_id ?? "");
-    const [vaultId, setVaultId] = useState(template?.vault_credential_id ?? "");
+    const [vaultIds, setVaultIds] = useState<string[]>(template?.vault_credential_ids ?? []);
     const [limit, setLimit] = useState(template?.limit_hosts ?? "");
     const [tags, setTags] = useState((template?.tags ?? []).join(", "));
     const [skipTags, setSkipTags] = useState((template?.skip_tags ?? []).join(", "));
@@ -59,7 +59,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
         }
         const params = {
             name, project_id: projectId, playbook: playbook.trim(), inventory_id: inventoryId,
-            machine_credential_id: machineId, vault_credential_id: vaultId,
+            machine_credential_id: machineId, vault_credential_ids: vaultIds,
             limit_hosts: limit.trim(), tags: words(tags), skip_tags: words(skipTags), extra_vars: vars,
             ...(forks ? { forks: Number(forks) } : {}), verbosity: Number(verbosity), become,
         };
@@ -117,11 +117,16 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                     </FormGroup>
                 </GridItem>
                 <GridItem>
-                    <FormGroup label={t("Vault credential")} fieldId="tpl-vault">
-                        <FormSelect id="tpl-vault" value={vaultId} onChange={(_e, value) => setVaultId(value)}>
-                            <FormSelectOption value="" label={t("None")} />
-                            {ofKind("vault").map(credential => <FormSelectOption key={credential.id} value={credential.id} label={credential.name} />)}
-                        </FormSelect>
+                    <FormGroup label={t("Vault credentials")} role="group" fieldId="tpl-vault">
+                        {ofKind("vault").length === 0 && <span>{t("None defined")}</span>}
+                        {ofKind("vault").map(credential => (
+                            <Checkbox key={credential.id} id={`tpl-vault-${credential.id}`}
+                                label={credential.vault_id ? `${credential.name} (${credential.vault_id})` : credential.name}
+                                isChecked={vaultIds.includes(credential.id)}
+                                onChange={(_e, checked) => setVaultIds(current => checked
+                                    ? [...current, credential.id]
+                                    : current.filter(id => id !== credential.id))} />
+                        ))}
                     </FormGroup>
                 </GridItem>
                 <GridItem>

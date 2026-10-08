@@ -59,13 +59,21 @@ class BuildArgvTest(unittest.TestCase):
 
     def test_credentials_present_become_file_options(self):
         (self.creds / "fleet_private_key").write_text("k")
-        (self.creds / "fleet_vault_password").write_text("v")
+        (self.creds / "fleet_connection_password").write_text("v")
         (self.creds / "unrelated").write_text("x")
         argv = self.argv()
         self.assertEqual(argv[argv.index("--private-key") + 1], str(self.creds / "fleet_private_key"))
-        self.assertIn("--vault-password-file", argv)
+        self.assertIn("--connection-password-file", argv)
         self.assertNotIn("--become-password-file", argv)
         self.assertNotIn(str(self.creds / "unrelated"), argv)
+
+    def test_vault_identifier_cannot_smuggle_a_path(self):
+        (self.creds / "fleet_vault_password_0").write_text("v")
+        good = self.argv(vaults=[{"file": "vault_password_0", "id": "prod"}])
+        self.assertEqual(good[good.index("--vault-id") + 1],
+                         f"prod@{self.creds / 'fleet_vault_password_0'}")
+        with self.assertRaises(BadRequest):
+            self.argv(vaults=[{"file": "vault_password_0", "id": "x@/etc/shadow"}])
 
     def test_no_credentials_directory(self):
         self.assertNotIn("--private-key", self.argv(creds=False))
@@ -83,6 +91,9 @@ class BuildArgvTest(unittest.TestCase):
             {"tags": ["ok", "--bad"]},
             {"skip_tags": "a"},
             {"extra_vars": ["a=b"]},
+            {"vaults": [{"file": "../../etc/shadow", "id": "x"}]},
+
+            {"vaults": "vault_password_0"},
         ]
         for extra in bad:
             with self.assertRaises(BadRequest, msg=extra):

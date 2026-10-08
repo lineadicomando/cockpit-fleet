@@ -8,51 +8,13 @@ set -u
 . "$(dirname "$0")/lib.sh"
 require_root
 : "${IT_SSH_USER:?}" "${IT_SSH_PASSWORD:?}"
-# This test starts from an empty database and leaves one: never on real data.
-[ "${IT_WIPE:-}" = yes ] || { echo "set IT_WIPE=yes: this test deletes the database, runs and projects" >&2; exit 2; }
-
-FLEETCTL=/usr/libexec/cockpit-fleet/fleetctl
-SECRET=/usr/libexec/cockpit-fleet/fleet-secret
-CONFIG=/etc/cockpit-fleet/config.toml
 SRC=/srv/fleet-it
-DB=/var/lib/cockpit-fleet/fleet.db
+require_wipe
 
-ctl() {  # ctl USER COMMAND [JSON]
-    printf '%s' "${3:-}" | sudo -u "$1" sudo -n -u cockpit-fleet "$FLEETCTL" "$2" 2>&1
-}
-get() {  # get JSON-TEXT PYTHON-EXPRESSION on the parsed answer "a"
-    printf '%s' "$1" | python3 -c "import json,sys; a=json.load(sys.stdin); print($2)" 2>/dev/null
-}
-admin() { ctl itadmin "$@"; }
-expect_eq() { if [ "$2" = "$3" ]; then pass "$1"; else fail "$1 (got: '$2', wanted: '$3')"; fi; }
-db() { python3 -c "import sqlite3,sys; print(sqlite3.connect('file:$DB?mode=ro', uri=True).execute(sys.argv[1]).fetchone()[0])" "$1"; }
-wait_status() {  # wait_status RUN_ID SECONDS: poll the database only, never fleetctl
-    n=0
-    while [ "$n" -lt "$2" ]; do
-        s=$(db "SELECT status FROM runs WHERE id = '$1'")
-        case "$s" in queued|running) sleep 1; n=$((n + 1)) ;; *) break ;; esac
-    done
-    echo "$s"
-}
-
-cleanup() {
-    for id in $(db "SELECT group_concat(id, ' ') FROM runs WHERE status IN ('queued','running')" 2>/dev/null); do
-        [ "$id" = None ] || systemctl stop "cockpit-fleet-run@$id.service" 2>/dev/null
-    done
-    for name in $("$SECRET" list | grep '^c-'); do "$SECRET" delete "$name"; done
-    for user in itadmin itoperator; do userdel -r "$user" 2>/dev/null; done
-    [ -f "$CONFIG.it-backup" ] && mv "$CONFIG.it-backup" "$CONFIG"
-    rm -rf "$SRC" /var/lib/cockpit-fleet/runs/* /var/lib/cockpit-fleet/projects/*
-    rm -f "$DB" "$DB-wal" "$DB-shm" /tmp/fleet-it-marker
-    systemctl reset-failed 'cockpit-fleet-run@*' 'cockpit-fleet-finish@*' 2>/dev/null
-}
+cleanup() { wipe; rm -f /tmp/fleet-it-marker; }
 trap cleanup EXIT
 cleanup
-
-useradd -m -G cockpit-fleet-admin itadmin
-useradd -m -G cockpit-fleet-operator itoperator
-cp -p "$CONFIG" "$CONFIG.it-backup"
-printf '[runs]\nmax_concurrent = 1\n[projects]\nlocal_roots = ["%s"]\n' "$SRC" > "$CONFIG"
+prepare 1
 
 mkdir -p "$SRC/demo"
 cat > "$SRC/demo/ansible.cfg" <<'CFG'
@@ -90,7 +52,7 @@ chmod -R a+rX "$SRC"
 # --- credential, host key, project, inventory -----------------------------------
 cred=$(admin credential.create "{\"name\": \"local ssh\", \"kind\": \"machine\", \"username\": \"$IT_SSH_USER\"}")
 cred_id=$(get "$cred" 'a["data"]["id"]')
-printf '%s' "$IT_SSH_PASSWORD" | sudo -u itadmin sudo -n "$SECRET" set "$(get "$cred" 'a["data"]["secret_names"]["password"]')"
+printf '%s' "$IT_SSH_PASSWORD" | set_secret "$cred" password
 expect_eq "credential shows that its password is set" \
     "$(get "$(admin credential.list)" 'a["data"]["credentials"][0]["secrets"]["password"]')" True
 expect_eq "operator cannot create credentials" \
@@ -112,7 +74,7 @@ parse=$(ctl itoperator inventory.parse "{\"id\": \"$inventory_id\"}")
 expect_eq "inventory job finishes on its own" "$(wait_status "$(get "$parse" 'a["data"]["run_id"]')" 60)" successful
 expect_eq "inventory hosts and groups are stored" \
     "$(get "$(ctl itoperator inventory.get "{\"id\": \"$inventory_id\"}")" 'a["data"]["hosts"]')" \
-    "[{'name': 'self', 'address': '127.0.0.1', 'groups': ['local']}]"
+    "[{'name': 'self', 'address': '127.0.0.1', 'port': None, 'connection': '', 'groups': ['local']}]"
 
 template=$(admin template.create "{\"name\": \"demo\", \"project_id\": \"$project_id\", \"playbook\": \"site.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"extra_vars\": {\"greeting\": \"hello\"}}")
 template_id=$(get "$template" 'a["data"]["id"]')

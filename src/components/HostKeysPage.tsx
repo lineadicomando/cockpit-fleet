@@ -1,81 +1,138 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Content, FormGroup, Split, SplitItem, TextInput } from "@patternfly/react-core";
+import { Alert, Button, Checkbox, Content, FormGroup, FormSelect, FormSelectOption, Label, Radio, Split, SplitItem, TextInput } from "@patternfly/react-core";
 import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { HostKey, ScannedKey } from "../lib/types.ts";
+import type { HostKey, Inventory, ScannedKey } from "../lib/types.ts";
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
 
-// Two steps on purpose: the keys a host offers are shown, and nothing is
-// trusted until a person has confirmed the fingerprints.
+interface Scan {
+    keys: ScannedKey[];
+    unanswered: string[];
+}
+
+// Two steps on purpose: the keys the hosts offer are shown, and nothing is
+// trusted until a person has confirmed the fingerprints. A key that differs
+// from the one trusted so far needs a separate, explicit consent.
 function TrustModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
     const { t } = useTranslation();
+    const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
+    const [source, setSource] = useState<"host" | "inventory">("host");
     const [host, setHost] = useState("");
     const [port, setPort] = useState("22");
-    const [keys, setKeys] = useState<ScannedKey[] | null>(null);
+    const [inventoryId, setInventoryId] = useState("");
+    const [scan, setScan] = useState<Scan | null>(null);
     const [scanning, setScanning] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
+    const [replace, setReplace] = useState(false);
 
-    async function scan() {
+    const reset = () => { setScan(null); setReplace(false); };
+
+    async function read() {
         setScanning(true);
         setScanError(null);
-        setKeys(null);
+        reset();
         try {
-            const result = await call<{ keys: ScannedKey[] }>("hostkey.scan", { host: host.trim(), port: Number(port) || 22 });
-            setKeys(result.keys);
+            setScan(await call<Scan>("hostkey.scan", source === "host"
+                ? { host: host.trim(), port: Number(port) || 22 }
+                : { inventory_id: inventoryId }));
         } catch (ex) {
             setScanError(message(ex));
         }
         setScanning(false);
     }
 
+    const keys = scan?.keys ?? [];
+    const changed = keys.filter(key => key.state === "changed");
+    const wanted = keys.filter(key => key.state === "new" || (key.state === "changed" && replace));
+
     async function trust() {
-        for (const key of keys ?? []) {
-            await call("hostkey.add", { host: key.host, key_type: key.key_type, key: key.key });
+        for (const key of wanted) {
+            await call("hostkey.add", { host: key.host, key_type: key.key_type, key: key.key, replace: key.state === "changed" });
         }
         onDone();
         onClose();
     }
 
+    const stateLabel = (key: ScannedKey) => {
+        if (key.state === "trusted") return <Label isCompact color="green">{t("Already trusted")}</Label>;
+        if (key.state === "changed") return <Label isCompact color="red">{t("Changed")}</Label>;
+        return <Label isCompact color="blue">{t("New")}</Label>;
+    };
+
     return (
-        <FormModal title={t("Trust a host")} submitLabel={t("Trust these keys")} onSubmit={trust} onClose={onClose} isDisabled={!keys}>
-            <Split hasGutter>
-                <SplitItem isFilled>
-                    <FormGroup label={t("Host name or address")} isRequired fieldId="hk-host">
-                        <TextInput id="hk-host" value={host} onChange={(_e, value) => { setHost(value); setKeys(null); }} />
-                    </FormGroup>
-                </SplitItem>
-                <SplitItem>
-                    <FormGroup label={t("Port")} fieldId="hk-port">
-                        <TextInput id="hk-port" type="number" value={port} onChange={(_e, value) => { setPort(value); setKeys(null); }} style={{ width: "6rem" }} />
-                    </FormGroup>
-                </SplitItem>
-            </Split>
+        <FormModal title={t("Trust hosts")} submitLabel={t("trust_keys_count", { count: wanted.length })}
+            onSubmit={trust} onClose={onClose} isDisabled={wanted.length === 0}>
+            <FormGroup role="radiogroup" isInline fieldId="hk-source" label={t("Hosts")}>
+                <Radio id="hk-source-host" name="hk-source" label={t("One host")} isChecked={source === "host"} onChange={() => { setSource("host"); reset(); }} />
+                <Radio id="hk-source-inventory" name="hk-source" label={t("All hosts of an inventory")} isChecked={source === "inventory"} onChange={() => { setSource("inventory"); reset(); }} />
+            </FormGroup>
+            {source === "host" ? (
+                <Split hasGutter>
+                    <SplitItem isFilled>
+                        <FormGroup label={t("Host name or address")} isRequired fieldId="hk-host">
+                            <TextInput id="hk-host" value={host} onChange={(_e, value) => { setHost(value); reset(); }} />
+                        </FormGroup>
+                    </SplitItem>
+                    <SplitItem>
+                        <FormGroup label={t("Port")} fieldId="hk-port">
+                            <TextInput id="hk-port" type="number" value={port} onChange={(_e, value) => { setPort(value); reset(); }} style={{ width: "6rem" }} />
+                        </FormGroup>
+                    </SplitItem>
+                </Split>
+            ) : (
+                <FormGroup label={t("Inventory")} isRequired fieldId="hk-inventory">
+                    <FormSelect id="hk-inventory" value={inventoryId} onChange={(_e, value) => { setInventoryId(value); reset(); }}>
+                        <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
+                        {(inventories.data?.inventories ?? []).map(inventory => (
+                            <FormSelectOption key={inventory.id} value={inventory.id} label={`${inventory.name} (${inventory.host_count})`} />
+                        ))}
+                    </FormSelect>
+                </FormGroup>
+            )}
             <div>
-                <Button variant="secondary" onClick={scan} isLoading={scanning} isDisabled={!host.trim() || scanning}>
-                    {t("Read the host's keys")}
+                <Button variant="secondary" onClick={read} isLoading={scanning}
+                    isDisabled={scanning || (source === "host" ? !host.trim() : !inventoryId)}>
+                    {t("Read the keys")}
                 </Button>
             </div>
             {scanError && <Alert variant="danger" isInline title={scanError} />}
-            {keys && (
+            {scan && scan.unanswered.length > 0 && (
+                <Alert variant="warning" isInline title={t("No answer from: {{hosts}}", { hosts: scan.unanswered.join(", ") })} />
+            )}
+            {scan && keys.length > 0 && (
                 <>
                     <Content component="p">
                         {t("Compare these fingerprints with the ones shown on the host itself (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Trust them only if they match.")}
                     </Content>
-                    <Table variant="compact" aria-label={t("Keys offered by the host")}>
-                        <Tbody>
-                            {keys.map(key => (
-                                <Tr key={key.key_type}>
-                                    <Td>{key.key_type}</Td>
-                                    <Td><code>{key.fingerprint}</code></Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
+                    <div style={{ maxBlockSize: "22rem", overflow: "auto" }}>
+                        <Table variant="compact" aria-label={t("Keys offered by the hosts")}>
+                            <Thead><Tr><Th>{t("Host")}</Th><Th>{t("Key type")}</Th><Th>{t("Fingerprint")}</Th><Th>{t("Status")}</Th></Tr></Thead>
+                            <Tbody>
+                                {keys.map(key => (
+                                    <Tr key={`${key.host} ${key.key_type}`}>
+                                        <Td>{key.host}</Td>
+                                        <Td>{key.key_type}</Td>
+                                        <Td><code>{key.fingerprint}</code></Td>
+                                        <Td>{stateLabel(key)}</Td>
+                                    </Tr>
+                                ))}
+                            </Tbody>
+                        </Table>
+                    </div>
                 </>
+            )}
+            {changed.length > 0 && (
+                <Alert variant="danger" isInline title={t("The key of a host already trusted has changed")}>
+                    <Content component="p">
+                        {t("This happens when a host is reinstalled, and also when something is impersonating it. Replace the trusted key only if you know why it changed.")}
+                    </Content>
+                    <Checkbox id="hk-replace" label={t("Replace the trusted keys of: {{hosts}}", { hosts: [...new Set(changed.map(key => key.host))].join(", ") })}
+                        isChecked={replace} onChange={(_e, value) => setReplace(value)} />
+                </Alert>
             )}
         </FormModal>
     );
@@ -101,7 +158,7 @@ export function HostKeysPage() {
     return (
         <>
             <SectionHeader title={t("Trusted host keys")}>
-                {can("hostkey.add") && <Button variant="primary" onClick={() => setAdding(true)}>{t("Trust a host")}</Button>}
+                {can("hostkey.add") && <Button variant="primary" onClick={() => setAdding(true)}>{t("Trust hosts")}</Button>}
             </SectionHeader>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             <ListState loaded={list} isEmpty={data => data.keys.length === 0}

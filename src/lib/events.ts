@@ -18,6 +18,8 @@ interface RawEvent {
     task?: string;
     task_uuid?: string;
     host?: string;
+    item?: string;
+    msg?: string;
     changed?: boolean;
     ignored?: boolean;
     result?: { msg?: unknown; stderr?: unknown };
@@ -43,6 +45,10 @@ export function addEvents(tasks: TaskView[], text: string, play = ""): { tasks: 
             const task = { uuid: event.task_uuid, name: event.task ?? "", play: current, hosts: {}, messages: {} };
             byUuid.set(task.uuid, task);
             result.push(task);
+        } else if (event.event === "item_failed" && event.task_uuid && event.host) {
+            // One element of a loop failed: say which, the task's own message is generic.
+            const task = byUuid.get(event.task_uuid);
+            if (task) task.messages = { ...task.messages, [`${event.host} [${event.item ?? ""}]`]: event.msg ?? "" };
         } else if (event.event.startsWith("host_") && event.task_uuid && event.host) {
             const task = byUuid.get(event.task_uuid);
             if (!task) continue;

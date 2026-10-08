@@ -121,6 +121,25 @@ MIGRATIONS: list[list[str]] = [
         "CREATE INDEX runs_created ON runs (created_at)",
         "CREATE INDEX runs_status ON runs (status)",
     ],
+    [
+        # Several vaults per template, each with the identifier Ansible matches
+        # against the label of the encrypted data.
+        "ALTER TABLE credentials ADD COLUMN vault_id TEXT NOT NULL DEFAULT ''",
+        """
+        CREATE TABLE template_vaults (
+            template_id    TEXT NOT NULL REFERENCES templates (id) ON DELETE CASCADE,
+            credential_id  TEXT NOT NULL REFERENCES credentials (id),
+            position       INTEGER NOT NULL,
+            PRIMARY KEY (template_id, credential_id)
+        )
+        """,
+        """
+        INSERT INTO template_vaults (template_id, credential_id, position)
+        SELECT id, vault_credential_id, 0 FROM templates WHERE vault_credential_id IS NOT NULL
+        """,
+        # The column cannot be dropped (it carries a foreign key); it is no longer used.
+        "UPDATE templates SET vault_credential_id = NULL",
+    ],
 ]
 
 

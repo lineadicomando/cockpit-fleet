@@ -4,8 +4,7 @@ Plugin Cockpit per l'orchestrazione di Ansible (ispirato a Semaphore UI) e per l
 raccolta, la rappresentazione storica e la notifica di informazioni dai nodi
 gestiti, acquisite solo tramite Ansible.
 
-Stato: fasi 0 e 1 concluse, fase 2 conclusa nella sua parte essenziale (8 ottobre 2026).
-Restano le voci aperte della fase 2, poi la fase 3.
+Stato: fasi 0, 1 e 2 concluse (8 ottobre 2026). Prossima: fase 3.
 
 ---
 
@@ -32,6 +31,9 @@ Restano le voci aperte della fase 2, poi la fase 3.
 | Nome | `cockpit-fleet`: pacchetto `cockpit-fleet`, etichetta di menu "Fleet", directory `/usr/share/cockpit/fleet` |
 | Licenza | La stessa di `cockpit-samba-ad-dc`: `LGPL-2.1-or-later`, come Cockpit. Scelta provvisoria, da riconfermare prima della pubblicazione |
 | Repository | un Gitea privato. Pubblicazione su GitHub quando il progetto sarà abbastanza stabile |
+| `ansible.cfg` del progetto | Non usato direttamente: passano solo le chiavi in allowlist |
+| Viewer | Vede stato ed esito per host delle run, non l'output |
+| Operator | Lanciando un template può restringere gli host e chiedere la prova a vuoto; non può allargare il limite né cambiare le variabili |
 | Trigger esterni | Fuori dal perimetro iniziale, tenuti come sviluppo futuro |
 
 Il monitoraggio non vuole rifare Icinga: niente tempo reale e niente nodi
@@ -54,14 +56,8 @@ indicata.
       unit derivati da input utente; a 200+ nodi servono comunque coda, limite di
       concorrenza e sharding che i timer singoli non danno. Le espressioni restano
       quelle di systemd (`OnCalendar`), validate con `systemd-analyze calendar`.
-- [ ] **`ansible.cfg` del progetto**. Applicato il default, da confermare: non viene usato direttamente;
-      la run parte con un `ANSIBLE_CONFIG` generato, in cui si importano dal file del
-      progetto solo le chiavi in allowlist (`collections_path`, `roles_path`, opzioni
-      di visualizzazione). `vault_password_file` diventa una credenziale.
 - [ ] **Chi approva** (fase 9). Default: un utente con ruolo admin diverso da chi ha
       lanciato la run. Alternativa: gruppo dedicato `cockpit-fleet-approver`.
-- [ ] **Cosa vede il viewer**. Applicato il default, da confermare: stato, storico e dati dei nodi sì;
-      log completi delle run no, perché possono contenere dati sensibili.
 - [ ] **Retention predefinita** (fase 8). Default: dati grezzi 14 giorni, aggregati
       orari 90 giorni, giornalieri 2 anni, log delle run 90 giorni.
 - [ ] **Namespace della collection Ansible** (fase 2). Default: `lineadicomando.fleet`;
@@ -166,7 +162,8 @@ po/ docs/ scripts/
 - Nodi Windows via SSH (`ansible_shell_type: powershell`): `teacher` .10,
   `student01` .11, `student02` .12, dall'inventario
   `ansible-win_edulab/inventories/school`.
-- Nodi Linux: container con sshd sulla VM controller e un clone di `debian13-base`.
+- Nodi Linux: container con sshd sulla VM controller (`test/integration/nodes.sh`,
+  podman installato sulla VM) e, se servirà, un clone di `debian13-base`.
 - Carico: 200+ host simulati con alias di inventario che puntano agli stessi pochi
   container, per provare scheduler, sharding e volume del database.
 - Deploy: `make vm-deploy` per il solo frontend, `make vm-deb-deploy` per tutto il
@@ -261,15 +258,19 @@ Obiettivo: lanciare un playbook da un progetto e seguirne il log.
 - [x] UI run: output live con colori, vista per task, esito per host, cronologia con filtro per stato
 - [x] Test di integrazione: `test/integration/runs.sh`, percorso completo via
       `fleetctl` contro la VM stessa in SSH, compreso un progetto git
-- [ ] Run verso un nodo Windows lanciata da `fleetctl` o dalla UI (oggi provata solo
-      a livello di unit, con `windows.sh`)
-- [ ] Nodi Linux di test in container, per run su più host
-- [ ] **`fleet-run`**: vault multipli (`--vault-id`)
-- [ ] **Callback**: eventi per item dei cicli; il diff è già nei risultati
-- [ ] Scansione delle chiavi host di tutti gli host di un inventario in un colpo
-- [ ] Modifica di progetti e credenziali esistenti (oggi: nome e sorgente si
-      cambiano solo ricreandoli; i segreti si possono sostituire)
-- [ ] Chiavi SSH protette da passphrase (oggi non supportate)
+- [x] Run verso un nodo Windows lanciata da `fleetctl` (`test/integration/windows.sh`)
+      e dalla UI (provata nel browser)
+- [x] Nodi Linux di test in container (`test/integration/nodes.sh`, podman sulla VM) e
+      test su più host: `test/integration/multihost.sh`
+- [x] **`fleet-run`**: più vault per template, ognuno con il suo identificatore (`--vault-id`)
+- [x] **Callback**: eventi per elemento dei cicli; nella vista per task compare quale elemento è fallito
+- [x] Scansione delle chiavi host di tutti gli host di un inventario; ogni chiave è
+      marcata nuova, già attendibile o cambiata, e una chiave cambiata va sostituita
+      con un consenso esplicito
+- [x] Modifica di progetti e credenziali esistenti (il tipo non si può cambiare)
+- [x] Chiavi SSH protette da passphrase, caricate in un `ssh-agent` interno alla run
+- [ ] Token git su https provato contro un repository privato reale (oggi provati:
+      https pubblico e ssh con chiave; il passaggio del token ha solo test unitari)
 
 Fatto quando: un operator lancia un template dal browser, chiude la scheda, la
 riapre e ritrova la run completata con log ed esito per host. Raggiunto: il lancio

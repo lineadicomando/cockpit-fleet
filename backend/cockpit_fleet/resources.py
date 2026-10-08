@@ -12,6 +12,7 @@ from pathlib import Path
 from . import jobs, paths, store
 from .cli import Context, Params, command
 from .errors import BadRequest, Conflict, NotFound, Unavailable
+from .names import check_id
 from .validators import (
     check_git_ref,
     check_git_url,
@@ -21,13 +22,14 @@ from .validators import (
     check_relative_path,
     check_tag,
     check_user,
+    check_vault_id,
 )
 
 # Secret fields a credential of each kind may have.
 CREDENTIAL_FIELDS = {
-    "machine": ("private_key", "password", "become_password"),
+    "machine": ("private_key", "key_passphrase", "password", "become_password"),
     "vault": ("vault_password",),
-    "source": ("private_key", "token"),
+    "source": ("private_key", "key_passphrase", "token"),
 }
 
 
@@ -37,6 +39,7 @@ def _credential(row) -> dict:
     fields = CREDENTIAL_FIELDS[row["kind"]]
     return {
         "id": row["id"], "name": row["name"], "kind": row["kind"], "username": row["username"],
+        "vault_id": row["vault_id"],
         # Which secrets exist; their values are never available here.
         "secrets": {field: jobs.secret_file(row["id"], field).is_file() for field in fields},
         "secret_names": {field: jobs.secret_name(row["id"], field) for field in fields},
@@ -59,18 +62,37 @@ def credential_list(ctx: Context, params: Params) -> dict:
     return {"credentials": [_credential(row) for row in rows]}
 
 
-@command("credential.create", role="admin", mutating=True)
-def credential_create(ctx: Context, params: Params) -> dict:
+def _credential_values(params: Params, kind: str) -> dict:
     name = store.check_name(params.string("name", max_length=200))
-    kind = params.choice("kind", tuple(CREDENTIAL_FIELDS))
     username = params.string("username", "", 64)
-    params.done()
+    vault_id = params.string("vault_id", "", 64)
     if username:
         check_user(username)
+    if vault_id:
+        check_vault_id(vault_id)
+    return {"name": name, "username": "" if kind == "vault" else username,
+            "vault_id": vault_id if kind == "vault" else ""}
+
+
+@command("credential.create", role="admin", mutating=True)
+def credential_create(ctx: Context, params: Params) -> dict:
+    kind = params.choice("kind", tuple(CREDENTIAL_FIELDS))
+    values = _credential_values(params, kind)
+    params.done()
     credential_id = store.new_id("c")
-    store.insert(ctx.conn, "credentials", {"id": credential_id, "name": name, "kind": kind,
-                                           "username": username, "created_at": store.now()},
-                 "credential")
+    store.insert(ctx.conn, "credentials", {"id": credential_id, "kind": kind,
+                                           "created_at": store.now(), **values}, "credential")
+    return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
+
+
+@command("credential.update", role="admin", mutating=True)
+def credential_update(ctx: Context, params: Params) -> dict:
+    """Change the name and the non-secret fields; secrets go through fleet-secret."""
+    credential_id = params.ident("id")
+    row = store.fetch(ctx.conn, "credentials", credential_id, "credential")
+    values = _credential_values(params, row["kind"])
+    params.done()
+    store.update(ctx.conn, "credentials", credential_id, values, "credential")
     return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
 
 
@@ -101,25 +123,41 @@ def project_list(ctx: Context, params: Params) -> dict:
             "local_roots": list(ctx.config.local_project_roots)}
 
 
-@command("project.create", role="admin", mutating=True)
-def project_create(ctx: Context, params: Params) -> dict:
-    name = store.check_name(params.string("name", max_length=200))
-    kind = params.choice("kind", ("local", "git"))
-    values = {"id": store.new_id("p"), "name": name, "kind": kind, "created_at": store.now()}
+def _project_values(ctx: Context, params: Params, kind: str) -> dict:
+    values: dict = {"name": store.check_name(params.string("name", max_length=200))}
     if kind == "local":
         values["path"] = params.string("path", max_length=1024)
-        params.done()
         if not values["path"].startswith("/"):
             raise BadRequest("path must be absolute")
-        jobs.project_tree(values, ctx.config)
+        jobs.project_tree({"kind": "local", **values}, ctx.config)
     else:
         values["url"] = check_git_url(params.string("url", max_length=500))
         values["ref"] = check_git_ref(params.string("ref", "main", 200))
         credential_id = params.optional_id("credential_id")
         values["credential_id"] = _credential_of_kind(ctx, credential_id, "source")
-        params.done()
-    store.insert(ctx.conn, "projects", values, "project")
-    return _project(store.fetch(ctx.conn, "projects", values["id"], "project"))
+    return values
+
+
+@command("project.create", role="admin", mutating=True)
+def project_create(ctx: Context, params: Params) -> dict:
+    kind = params.choice("kind", ("local", "git"))
+    values = _project_values(ctx, params, kind)
+    params.done()
+    project_id = store.new_id("p")
+    store.insert(ctx.conn, "projects", {"id": project_id, "kind": kind,
+                                        "created_at": store.now(), **values}, "project")
+    return _project(store.fetch(ctx.conn, "projects", project_id, "project"))
+
+
+@command("project.update", role="admin", mutating=True)
+def project_update(ctx: Context, params: Params) -> dict:
+    """Change a project; whether it is git or local cannot change."""
+    project_id = params.ident("id")
+    row = store.fetch(ctx.conn, "projects", project_id, "project")
+    values = _project_values(ctx, params, row["kind"])
+    params.done()
+    store.update(ctx.conn, "projects", project_id, values, "project")
+    return _project(store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
 @command("project.delete", role="admin", mutating=True)
@@ -144,6 +182,7 @@ def project_sync(ctx: Context, params: Params) -> dict:
     if project["credential_id"]:
         credential = store.fetch(ctx.conn, "credentials", project["credential_id"], "credential")
         jobs.add_secret(directory, credential["id"], "private_key", "git_private_key")
+        jobs.add_secret(directory, credential["id"], "key_passphrase", "git_key_passphrase")
         jobs.add_secret(directory, credential["id"], "token", "git_token")
     jobs.write_known_hosts(ctx.conn, directory)
     spec = {"kind": "sync", "url": project["url"], "ref": project["ref"],
@@ -317,28 +356,78 @@ def hostkey_list(ctx: Context, params: Params) -> dict:
                       "added_at": row["added_at"]} for row in rows]}
 
 
-@command("hostkey.scan", role="admin")
-def hostkey_scan(ctx: Context, params: Params) -> dict:
-    """Ask a host for its keys. Nothing is trusted until hostkey.add."""
-    host = check_host(params.string("host", max_length=253))
-    port = params.integer("port", 22, 1, 65535)
-    params.done()
+_SSH_CONNECTIONS = ("", "ssh", "smart", "paramiko", "ansible.builtin.ssh")
+MAX_SCAN_HOSTS = 1000
+
+
+def _keyscan(hosts: list[str], port: int) -> list[tuple[str, str, str]]:
+    """(known_hosts name, key type, key) for every key the hosts offer on a port."""
     try:
         result = subprocess.run(
-            ["/usr/bin/ssh-keyscan", "-T", "5", "-p", str(port), "--", host],
-            capture_output=True, text=True, timeout=30, check=False, stdin=subprocess.DEVNULL,
+            ["/usr/bin/ssh-keyscan", "-T", "5", "-p", str(port), "--", *hosts],
+            capture_output=True, text=True, timeout=60 + len(hosts), check=False,
+            stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
-        raise Unavailable(f"cannot scan {host}: {error}") from error
-    keys = []
+        raise Unavailable(f"cannot scan: {error}") from error
+    found = []
     for line in result.stdout.splitlines():
         parts = line.split()
         if len(parts) == 3 and not line.startswith("#"):
-            keys.append({"host": _known_host(host, port), "key_type": parts[1], "key": parts[2],
-                         "fingerprint": _fingerprint(parts[2])})
-    if not keys:
-        raise NotFound(f"{host} did not offer any SSH host key on port {port}")
-    return {"keys": keys}
+            found.append((parts[0], parts[1], parts[2]))
+    return found
+
+
+def _key_state(ctx: Context, host: str, key_type: str, key: str) -> str:
+    """new, trusted (the same key is already trusted) or changed (a different one is)."""
+    row = ctx.conn.execute("SELECT key FROM host_keys WHERE host = ? AND key_type = ?",
+                           (host, key_type)).fetchone()
+    if row is None:
+        return "new"
+    return "trusted" if row["key"] == key else "changed"
+
+
+@command("hostkey.scan", role="admin")
+def hostkey_scan(ctx: Context, params: Params) -> dict:
+    """Ask one host, or every SSH host of an inventory, for its keys.
+
+    Nothing is trusted until hostkey.add. Each key says whether it is new,
+    already trusted, or different from the one trusted so far.
+    """
+    inventory_id = params.optional_id("inventory_id")
+    if inventory_id is not None:
+        params.done()
+        jobs.reconcile(ctx)
+        inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+        targets: dict[int, list[str]] = {}
+        for host in store.loads(inventory["hosts"], []):
+            if host.get("connection", "") not in _SSH_CONNECTIONS:
+                continue
+            try:
+                address = check_host(host.get("address") or host["name"])
+            except BadRequest:
+                continue
+            targets.setdefault(host.get("port") or 22, []).append(address)
+        if sum(len(hosts) for hosts in targets.values()) > MAX_SCAN_HOSTS:
+            raise BadRequest(f"more than {MAX_SCAN_HOSTS} hosts: scan a smaller inventory")
+    else:
+        host = check_host(params.string("host", max_length=253))
+        targets = {params.integer("port", 22, 1, 65535): [host]}
+        params.done()
+
+    keys, unanswered = [], []
+    for port, hosts in sorted(targets.items()):
+        unique = sorted(set(hosts))
+        answered = set()
+        for name, key_type, key in _keyscan(unique, port):
+            answered.add(name)
+            keys.append({"host": name, "key_type": key_type, "key": key,
+                         "fingerprint": _fingerprint(key),
+                         "state": _key_state(ctx, name, key_type, key)})
+        unanswered += [host for host in unique if _known_host(host, port) not in answered]
+    if not keys and inventory_id is None:
+        raise NotFound(f"{unanswered[0]} did not offer any SSH host key")
+    return {"keys": keys, "unanswered": unanswered}
 
 
 @command("hostkey.add", role="admin", mutating=True)
@@ -346,12 +435,17 @@ def hostkey_add(ctx: Context, params: Params) -> dict:
     host = params.string("host", max_length=300)
     key_type = params.string("key_type", max_length=64)
     key = params.string("key", max_length=8192)
+    replace = params.boolean("replace")
     params.done()
     bare = host[1:].split("]:")[0] if host.startswith("[") else host
     check_host(bare)
     if not key_type.replace("-", "").replace("@", "").replace(".", "").isalnum():
         raise BadRequest("invalid key type")
     _fingerprint(key)
+    # A different key for a host already trusted is what an attack looks like:
+    # it is only accepted when asked for explicitly.
+    if _key_state(ctx, host, key_type, key) == "changed" and not replace:
+        raise Conflict(f"{host} is trusted with a different {key_type} key")
     ctx.conn.execute(
         "INSERT INTO host_keys (host, key_type, key, added_by, added_at) VALUES (?, ?, ?, ?, ?)"
         " ON CONFLICT (host, key_type) DO UPDATE SET key = excluded.key,"
@@ -372,10 +466,19 @@ def hostkey_remove(ctx: Context, params: Params) -> dict:
 
 # --- job templates -----------------------------------------------------------------
 
-def _template(row) -> dict:
+def template_vaults(ctx: Context, template_id: str) -> list:
+    """The vault credentials of a template, in the order they are offered to Ansible."""
+    return ctx.conn.execute(
+        "SELECT c.id, c.vault_id FROM template_vaults v"
+        " JOIN credentials c ON c.id = v.credential_id"
+        " WHERE v.template_id = ? ORDER BY v.position", (template_id,)).fetchall()
+
+
+def _template(ctx: Context, row) -> dict:
     data = {key: row[key] for key in ("id", "name", "project_id", "playbook", "inventory_id",
-                                      "machine_credential_id", "vault_credential_id",
-                                      "limit_hosts", "forks", "verbosity")}
+                                      "machine_credential_id", "limit_hosts", "forks",
+                                      "verbosity")}
+    data["vault_credential_ids"] = [vault["id"] for vault in template_vaults(ctx, row["id"])]
     data["become"] = bool(row["become"])
     data["tags"] = store.loads(row["tags"], [])
     data["skip_tags"] = store.loads(row["skip_tags"], [])
@@ -406,8 +509,6 @@ def _template_values(ctx: Context, params: Params) -> dict:
         "inventory_id": inventory_id,
         "machine_credential_id":
             _credential_of_kind(ctx, params.optional_id("machine_credential_id"), "machine"),
-        "vault_credential_id":
-            _credential_of_kind(ctx, params.optional_id("vault_credential_id"), "vault"),
         "limit_hosts": check_limit(limit) if limit else "",
         "tags": json.dumps([check_tag(tag) for tag in params.strings("tags")]),
         "skip_tags": json.dumps([check_tag(tag) for tag in params.strings("skip_tags")]),
@@ -419,21 +520,57 @@ def _template_values(ctx: Context, params: Params) -> dict:
     }
 
 
+def _vault_ids(ctx: Context, params: Params) -> list[str]:
+    ids = params.strings("vault_credential_ids", 20)
+    if len(set(ids)) != len(ids):
+        raise BadRequest("a vault credential is listed twice")
+    labels = []
+    for credential_id in ids:
+        try:
+            check_id(credential_id, "credential id")
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        _credential_of_kind(ctx, credential_id, "vault")
+        labels.append(store.fetch(ctx.conn, "credentials", credential_id, "credential")["vault_id"])
+    if len(ids) > 1 and len(set(labels)) != len(labels):
+        raise BadRequest("vault credentials used together need different vault identifiers")
+    return ids
+
+
+def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[str],
+                   create: bool) -> dict:
+    conn = ctx.conn
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if create:
+            store.insert(conn, "templates", {"id": template_id, "created_at": store.now(),
+                                             **values}, "template")
+        else:
+            store.update(conn, "templates", template_id, values, "template")
+            conn.execute("DELETE FROM template_vaults WHERE template_id = ?", (template_id,))
+        for position, credential_id in enumerate(vaults):
+            conn.execute("INSERT INTO template_vaults (template_id, credential_id, position)"
+                         " VALUES (?, ?, ?)", (template_id, credential_id, position))
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    return _template(ctx, store.fetch(conn, "templates", template_id, "template"))
+
+
 @command("template.list", role="viewer")
 def template_list(ctx: Context, params: Params) -> dict:
     params.done()
-    rows = ctx.conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE")
-    return {"templates": [_template(row) for row in rows]}
+    rows = ctx.conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE").fetchall()
+    return {"templates": [_template(ctx, row) for row in rows]}
 
 
 @command("template.create", role="admin", mutating=True)
 def template_create(ctx: Context, params: Params) -> dict:
     values = _template_values(ctx, params)
+    vaults = _vault_ids(ctx, params)
     params.done()
-    template_id = store.new_id("t")
-    store.insert(ctx.conn, "templates", {"id": template_id, "created_at": store.now(), **values},
-                 "template")
-    return _template(store.fetch(ctx.conn, "templates", template_id, "template"))
+    return _save_template(ctx, store.new_id("t"), values, vaults, create=True)
 
 
 @command("template.update", role="admin", mutating=True)
@@ -441,9 +578,9 @@ def template_update(ctx: Context, params: Params) -> dict:
     template_id = params.ident("id")
     store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
+    vaults = _vault_ids(ctx, params)
     params.done()
-    store.update(ctx.conn, "templates", template_id, values, "template")
-    return _template(store.fetch(ctx.conn, "templates", template_id, "template"))
+    return _save_template(ctx, template_id, values, vaults, create=False)
 
 
 @command("template.delete", role="admin", mutating=True)

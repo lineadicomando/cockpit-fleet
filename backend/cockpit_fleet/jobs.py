@@ -249,10 +249,16 @@ def parse_inventory(listing: dict) -> list[dict]:
             groups.setdefault(host, []).append(group)
 
     names = set(hostvars) | set(groups) | members("all")
+    def port(name: str) -> int | None:
+        value = hostvars.get(name, {}).get("ansible_port")
+        return value if isinstance(value, int) and 0 < value < 65536 else None
+
     return [
         {
             "name": name,
             "address": str(hostvars.get(name, {}).get("ansible_host", "")),
+            "port": port(name),
+            "connection": str(hostvars.get(name, {}).get("ansible_connection", "")),
             "groups": sorted(group for group in groups.get(name, []) if group != "ungrouped"),
         }
         for name in sorted(names)

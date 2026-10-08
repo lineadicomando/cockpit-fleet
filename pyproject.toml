@@ -2,6 +2,8 @@
 target-version = "py313"
 line-length = 100
 extend-include = ["backend/libexec/*"]
+# The one helper that is a shell script.
+extend-exclude = ["backend/libexec/fleet-askpass"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "S", "UP"]

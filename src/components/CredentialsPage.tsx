@@ -9,9 +9,9 @@ import type { Credential, CredentialKind } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
 
 const FIELDS: Record<CredentialKind, string[]> = {
-    machine: ["private_key", "password", "become_password"],
+    machine: ["private_key", "key_passphrase", "password", "become_password"],
     vault: ["vault_password"],
-    source: ["private_key", "token"],
+    source: ["private_key", "key_passphrase", "token"],
 };
 
 function useLabels() {
@@ -24,6 +24,7 @@ function useLabels() {
         } as Record<CredentialKind, string>,
         fields: {
             private_key: t("SSH private key"),
+            key_passphrase: t("Passphrase of the private key"),
             password: t("Password"),
             become_password: t("Privilege escalation password"),
             vault_password: t("Vault password"),
@@ -71,18 +72,24 @@ async function storeSecrets(credential: Credential, values: Record<string, strin
     }
 }
 
-function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+// Creates a credential, or edits one: its name and plain fields, and any
+// secret typed in. The type of an existing credential cannot change.
+function CredentialModal({ credential, onClose, onDone }: { credential?: Credential; onClose: () => void; onDone: () => void }) {
     const { t } = useTranslation();
     const { kinds } = useLabels();
-    const [name, setName] = useState("");
-    const [kind, setKind] = useState<CredentialKind>("machine");
-    const [username, setUsername] = useState("");
+    const [name, setName] = useState(credential?.name ?? "");
+    const [kind, setKind] = useState<CredentialKind>(credential?.kind ?? "machine");
+    const [username, setUsername] = useState(credential?.username ?? "");
+    const [vaultId, setVaultId] = useState(credential?.vault_id ?? "");
     const [secrets, setSecrets] = useState<Record<string, string>>({});
 
     async function submit() {
-        const credential = await call<Credential>("credential.create", { name, kind, username });
+        const params = { name, username, vault_id: vaultId };
+        const saved = credential
+            ? await call<Credential>("credential.update", { id: credential.id, ...params })
+            : await call<Credential>("credential.create", { kind, ...params });
         try {
-            await storeSecrets(credential, secrets);
+            await storeSecrets(saved, secrets);
         } finally {
             onDone();
         }
@@ -90,42 +97,28 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     }
 
     return (
-        <FormModal title={t("New credential")} submitLabel={t("Create")} onSubmit={submit} onClose={onClose} isDisabled={!name.trim()}>
+        <FormModal title={credential ? t("Edit credential") : t("New credential")} submitLabel={credential ? t("Save") : t("Create")}
+            onSubmit={submit} onClose={onClose} isDisabled={!name.trim()}>
             <FormGroup label={t("Name")} isRequired fieldId="cred-name">
                 <TextInput id="cred-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
             <FormGroup label={t("Type")} fieldId="cred-kind">
-                <FormSelect id="cred-kind" value={kind} onChange={(_e, value) => { setKind(value as CredentialKind); setSecrets({}); }}>
+                <FormSelect id="cred-kind" value={kind} isDisabled={!!credential}
+                    onChange={(_e, value) => { setKind(value as CredentialKind); setSecrets({}); }}>
                     {(Object.keys(kinds) as CredentialKind[]).map(key => <FormSelectOption key={key} value={key} label={kinds[key]} />)}
                 </FormSelect>
             </FormGroup>
-            {kind !== "vault" && (
+            {kind === "vault" ? (
+                <FormGroup label={t("Vault identifier")} fieldId="cred-vault-id">
+                    <TextInput id="cred-vault-id" value={vaultId} onChange={(_e, value) => setVaultId(value)} autoComplete="off" />
+                    <FormHelperText><HelperText><HelperTextItem>{t("The label the data was encrypted with (ansible-vault --vault-id). Needed only when a template uses several vaults.")}</HelperTextItem></HelperText></FormHelperText>
+                </FormGroup>
+            ) : (
                 <FormGroup label={t("User name")} fieldId="cred-user">
                     <TextInput id="cred-user" value={username} onChange={(_e, value) => setUsername(value)} autoComplete="off" />
                 </FormGroup>
             )}
-            <SecretFields kind={kind} values={secrets} onChange={(field, value) => setSecrets(current => ({ ...current, [field]: value }))} />
-        </FormModal>
-    );
-}
-
-function SecretsModal({ credential, onClose, onDone }: { credential: Credential; onClose: () => void; onDone: () => void }) {
-    const { t } = useTranslation();
-    const [secrets, setSecrets] = useState<Record<string, string>>({});
-
-    async function submit() {
-        try {
-            await storeSecrets(credential, secrets);
-        } finally {
-            onDone();
-        }
-        onClose();
-    }
-
-    return (
-        <FormModal title={t("Secrets of {{name}}", { name: credential.name })} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
-            isDisabled={!Object.values(secrets).some(Boolean)}>
-            <SecretFields kind={credential.kind} values={secrets} existing={credential.secrets}
+            <SecretFields kind={kind} values={secrets} existing={credential?.secrets}
                 onChange={(field, value) => setSecrets(current => ({ ...current, [field]: value }))} />
         </FormModal>
     );
@@ -169,7 +162,10 @@ export function CredentialsPage() {
                             {data.credentials.map(credential => (
                                 <Tr key={credential.id}>
                                     <Td dataLabel={t("Name")}>{credential.name}</Td>
-                                    <Td dataLabel={t("Type")}>{labels.kinds[credential.kind]}</Td>
+                                    <Td dataLabel={t("Type")}>
+                                        {labels.kinds[credential.kind]}
+                                        {credential.vault_id && <> <code>{credential.vault_id}</code></>}
+                                    </Td>
                                     <Td dataLabel={t("User name")}>{credential.username}</Td>
                                     <Td dataLabel={t("Secrets set")}>
                                         {Object.entries(credential.secrets).filter(([, isSet]) => isSet).map(([field]) => (
@@ -177,9 +173,9 @@ export function CredentialsPage() {
                                         ))}
                                     </Td>
                                     <Td isActionCell>
-                                        {can("credential.delete") && (
+                                        {can("credential.update") && (
                                             <ActionsColumn items={[
-                                                { title: t("Change secrets"), onClick: () => setEditing(credential) },
+                                                { title: t("Edit"), onClick: () => setEditing(credential) },
                                                 { title: t("Delete"), onClick: () => setDeleting(credential) },
                                             ]} />
                                         )}
@@ -190,8 +186,8 @@ export function CredentialsPage() {
                     </Table>
                 )}
             </ListState>
-            {creating && <CreateModal onClose={() => setCreating(false)} onDone={list.reload} />}
-            {editing && <SecretsModal credential={editing} onClose={() => setEditing(null)} onDone={list.reload} />}
+            {creating && <CredentialModal onClose={() => setCreating(false)} onDone={list.reload} />}
+            {editing && <CredentialModal credential={editing} onClose={() => setEditing(null)} onDone={list.reload} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The credential and its secrets are deleted. This cannot be undone.")}
                     onDelete={() => remove(deleting)} onClose={() => setDeleting(null)} />

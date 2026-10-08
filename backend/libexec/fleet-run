@@ -47,10 +47,32 @@ def execute(command: list[str], env: dict, cwd: Path, log) -> int:
     return current.wait()
 
 
+def start_agent(credentials: Path | None, runtime_dir: Path, prefix: str, log) -> str | None:
+    """Load a passphrase-protected key into an agent; returns the agent socket.
+
+    The agent lives in the unit's own PID namespace and dies with it.
+    """
+    if not runner.needs_agent(credentials, prefix):
+        return None
+    agent, add, env, socket = runner.agent_plan(credentials, runtime_dir, prefix)
+    subprocess.Popen(agent, env={"PATH": "/usr/bin:/bin"}, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(50):
+        if os.path.exists(socket):
+            break
+        time.sleep(0.1)
+    if execute(add, env, runtime_dir, log) != 0:
+        raise ValueError("the SSH key could not be unlocked: wrong passphrase?")
+    return socket
+
+
 def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | None, log) -> dict:
     kind = spec.get("kind", "playbook")
     if kind == "sync":
         commands, env = runner.build_sync(spec, run_dir, runtime_dir, credentials)
+        socket = start_agent(credentials, runtime_dir, "git_", log)
+        if socket:
+            env["SSH_AUTH_SOCK"] = socket
         for command in commands:
             rc = execute(command, env, run_dir, log)
             if rc != 0:
@@ -65,6 +87,9 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
         return {"rc": 0, "revision": revision}
 
     env = runner.build_env(run_dir, runtime_dir)
+    socket = start_agent(credentials, runtime_dir, "", log)
+    if socket:
+        env["SSH_AUTH_SOCK"] = socket
     if kind == "inventory":
         command = runner.build_inventory_argv(spec, run_dir, credentials)
     elif kind == "playbook":

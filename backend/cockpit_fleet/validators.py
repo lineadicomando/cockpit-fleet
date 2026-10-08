@@ -60,6 +60,13 @@ def check_host(value: object) -> str:
     return _match(_HOST_RE, value, "host name or address")
 
 
+_VAULT_ID_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}")
+
+
+def check_vault_id(value: object) -> str:
+    return _match(_VAULT_ID_RE, value, "vault identifier")
+
+
 def check_int(value: object, what: str, low: int, high: int) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high:
         raise BadRequest(f"{what} must be an integer between {low} and {high}")
