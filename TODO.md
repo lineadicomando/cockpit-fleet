@@ -4,7 +4,7 @@ Plugin Cockpit per l'orchestrazione di Ansible (ispirato a Semaphore UI) e per l
 raccolta, la rappresentazione storica e la notifica di informazioni dai nodi
 gestiti, acquisite solo tramite Ansible.
 
-Stato: fase 0 conclusa l'8 ottobre 2026, salvo lo spike su Windows. Prossima: fase 1.
+Stato: fase 0 conclusa l'8 ottobre 2026. Prossima: fase 1.
 
 ---
 
@@ -65,9 +65,6 @@ indicata.
       orari 90 giorni, giornalieri 2 anni, log delle run 90 giorni.
 - [ ] **Namespace della collection Ansible** (fase 2). Default: `lineadicomando.fleet`;
       `cockpit` non è un namespace nostro.
-- [ ] **Chiave SSH del controller sui nodi Windows** (subito, per chiudere S4).
-      Serve una coppia di chiavi dedicata, generata sul controller e autorizzata sui
-      nodi di test.
 - [ ] **Runner CI su Gitea** (prima della fase 1). Senza un runner il workflow in
       `.github/workflows/` non gira finché il repository non è su GitHub.
 - [ ] **Nome dell'helper `fleetctl`** (fase 1). Sta in `/usr/libexec`, fuori dal
@@ -175,8 +172,9 @@ po/ docs/ scripts/
   container, per provare scheduler, sharding e volume del database.
 - Deploy: `make vm-deploy` per il solo frontend, `make vm-deb-deploy` per tutto il
   resto (unit, helper e regole richiedono il pacchetto).
-- I nodi Windows accettano solo chiavi pubbliche (`PasswordAuthentication no`): per
-  raggiungerli dal controller serve una coppia di chiavi autorizzata su di essi.
+- I nodi Windows accettano solo chiavi pubbliche. Il controller ha una coppia
+  dedicata: la privata è il segreto `it-win-key`, la pubblica è autorizzata su
+  `win11-pc00` tramite `ansible-win_edulab/local/cockpit_fleet_ssh_key.yaml`.
 
 ---
 
@@ -201,16 +199,16 @@ backend. Esiti e misure in `docs/architecture.md`.
 - [x] **Spike S3, sandbox**: `ansible-playbook` funziona nella unit con hardening
       completo (punteggio `systemd-analyze security` 1.5); SSH con password, host key
       obbligatoria e ControlPersist funzionano. Stesso test di S2
-- [ ] **Spike S4, Windows**: collection `ansible.windows` installata nel progetto e
-      trovata dalla run; nodo raggiunto. Manca la run completa con i tempi: i nodi
-      accettano solo chiavi pubbliche e sul controller non ce n'è una autorizzata
+- [x] **Spike S4, Windows**: run completa dalla unit sandbox verso un nodo Windows
+      con chiave privata come segreto. Circa 20 s in tutto: 10 s per i facts, 4-5 s
+      per ogni task. Test: `test/integration/windows.sh`
 - [x] **Spike S5, eventi**: callback `lineadicomando.fleet.events`; con 200 host
       simulati costa circa il 3% e produce 1,9 kB per host. Il limite vero è la CPU
       del controller: circa 0,6 s per host su 2 vCPU
 - [x] Documentare gli esiti in `docs/architecture.md`
 
 Fatto quando: il `.deb` si installa sulla VM, la pagina vuota compare in Cockpit e i
-cinque spike hanno un esito scritto. Raggiunto, salvo la parte di S4 indicata sopra.
+cinque spike hanno un esito scritto. Raggiunto.
 
 ## Fase 1 — Nucleo del backend
 
@@ -325,6 +323,8 @@ Obiettivo: stato di salute della flotta, indipendente dal sistema operativo.
   - [ ] uptime e riavvio richiesto
   - [ ] scadenza certificati
   - [ ] sincronizzazione dell'orologio
+- [ ] Su Windows ogni task costa 4-5 s: tutti i check di un nodo vanno raccolti in
+      un solo task con un solo script, non un task per check
 - [ ] Soglie valutate sul controller in fase di ingest, modificabili senza nuova raccolta
 - [ ] Assegnazione dei check a gruppi di inventario, con intervallo e parametri
 - [ ] **Pianificazione**: check in scadenza raggruppati per host, host divisi in

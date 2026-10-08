@@ -137,9 +137,21 @@ collection is not part of `ansible-core`: it comes from the `ansible` package
 or from `ansible-galaxy` into the project. Installing it into the run's project
 directory works, and the collection is found from there.
 
-The test nodes accept public keys only (`PasswordAuthentication no`), so an
-end-to-end run from the controller needs a key pair authorised on them. That
-run, and its timing, are still to be done.
+The test nodes accept public keys only, so the run uses a private key stored
+as a secret and passed with `--private-key`. Measured from the sandboxed unit
+against a Windows 11 VM (4 vCPU, 8 GB), `test/integration/windows.sh`:
+
+| Task | Time |
+|---|---|
+| fact gathering | 10 to 11 s |
+| `win_command` | 4 s |
+| `win_shell` (one CIM query) | 5 s |
+| whole run | 20 s |
+
+Every task on Windows costs 4 to 5 seconds whatever it does, against a fraction
+of a second on Linux. A collection cycle must therefore gather everything a
+Windows node has to report in one task, with one script, and not run one task
+per check.
 
 ## Packaging
 
@@ -159,5 +171,6 @@ bundled collection.
 | Privilege boundaries | `test/integration/privileges.sh` | controller, as root |
 | Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
+| Windows node over SSH | `test/integration/windows.sh` | controller, as root |
 
 The integration scripts need the package installed and are not part of CI yet.

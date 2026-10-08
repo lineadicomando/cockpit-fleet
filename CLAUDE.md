@@ -12,8 +12,7 @@ notifies on information from managed nodes using Ansible only (agentless).
 phased plan. Read it before starting any work, tick items as they are completed,
 and update it when a decision changes. Do not restate its content here.
 
-Status: Phase 0 done (scaffold, package, run sandbox, secrets), except the Windows
-spike. `docs/architecture.md` describes what exists and what was measured.
+Status: Phase 0 done (scaffold, package, run sandbox, secrets, Windows over SSH). `docs/architecture.md` describes what exists and what was measured.
 
 ## Non-negotiable rules
 
@@ -76,6 +75,7 @@ Integration tests run as root on the VM, with the package installed:
 test/integration/privileges.sh       # what the service account can reach
 test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD)
 test/integration/measure-events.sh   # callback cost on N simulated hosts
+test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY)
 ```
 
 Run both test scripts after any change to the unit, the helpers or sudoers.
@@ -101,7 +101,13 @@ Run both test scripts after any change to the unit, the helpers or sudoers.
   Open an SSH tunnel (`ssh -L 9091:127.0.0.1:9090`) and use
   `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
 - Do not `pkill -f` with a pattern that also appears in your own command line.
-- Windows nodes accept public keys only. `win11-pc00` is `teacher` (.10),
+- Windows nodes accept public keys only. The controller's own test key is the
+  secret `it-win-key`; its public half is authorised on `win11-pc00` only. To
+  authorise it on another node (or remove it), run
+  `local/cockpit_fleet_ssh_key.yaml` in `ansible-win_edulab` from the host.
+- `ansible-win_edulab` is meant to be used from inside this plugin: read it
+  freely and use it to act on the test VMs. Its own `CLAUDE.md` applies there
+  (one-off playbooks go in its `local/`, which is not tracked). `win11-pc00` is `teacher` (.10),
   `win11-pc01` is `student01` (.11), `win11-pc02` is `student02` (.12); each has
   8 GB assigned, so they do not all fit on the host together with the controller.
 
