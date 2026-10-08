@@ -81,7 +81,6 @@ class BuildArgvTest(unittest.TestCase):
             {"forks": "5"},
             {"verbosity": 9},
             {"tags": ["ok", "--bad"]},
-            {"tags": []},
             {"skip_tags": "a"},
             {"extra_vars": ["a=b"]},
         ]

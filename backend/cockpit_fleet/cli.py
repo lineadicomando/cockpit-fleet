@@ -23,6 +23,7 @@ from .auth import Caller, resolve_caller, role_at_least
 from .config import Config
 from .config import load as load_config
 from .errors import BadRequest, FleetError, Forbidden
+from .names import check_id
 
 MAX_INPUT = 1024 * 1024
 
@@ -93,6 +94,52 @@ class Params:
             raise BadRequest(f"{name} must be an integer between {low} and {high}")
         return value
 
+    def string(self, name: str, default: str | None = None, max_length: int = 4096) -> str:
+        value = self._take(name, default)
+        if not isinstance(value, str) or len(value) > max_length or "\x00" in value:
+            raise BadRequest(f"{name} must be a string of at most {max_length} characters")
+        return value
+
+    def boolean(self, name: str, default: bool = False) -> bool:
+        value = self._take(name, default)
+        if not isinstance(value, bool):
+            raise BadRequest(f"{name} must be true or false")
+        return value
+
+    def optional_id(self, name: str) -> str | None:
+        value = self._take(name, None)
+        if value is None or value == "":
+            return None
+        try:
+            return check_id(value, name)
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+
+    def ident(self, name: str) -> str:
+        value = self.optional_id(name)
+        if value is None:
+            raise BadRequest(f"{name} is required")
+        return value
+
+    def strings(self, name: str, max_items: int = 50) -> list[str]:
+        value = self._take(name, [])
+        if (not isinstance(value, list) or len(value) > max_items
+                or not all(isinstance(item, str) for item in value)):
+            raise BadRequest(f"{name} must be a list of at most {max_items} strings")
+        return value
+
+    def mapping(self, name: str) -> dict:
+        value = self._take(name, {})
+        if not isinstance(value, dict):
+            raise BadRequest(f"{name} must be an object")
+        return value
+
+    def choice(self, name: str, choices: tuple[str, ...], default: str | None = None) -> str:
+        value = self._take(name, default)
+        if value not in choices:
+            raise BadRequest(f"{name} must be one of: {', '.join(choices)}")
+        return value
+
     def done(self) -> None:
         if self._data:
             raise BadRequest(f"unknown parameter: {', '.join(sorted(self._data))}")
@@ -142,7 +189,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
 
 
 def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
-    from . import system  # noqa: F401  (registers the commands)
+    from . import resources, runs, system  # noqa: F401  (register the commands)
 
     if len(argv) != 2:
         print("usage: fleetctl COMMAND < params.json", file=sys.stderr)

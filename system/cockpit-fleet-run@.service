@@ -3,6 +3,9 @@ Description=Cockpit Fleet run %i
 Documentation=https://github.com/lineadicomando/cockpit-fleet
 After=network-online.target
 Wants=network-online.target
+# Whatever the outcome, record it and start the next queued run.
+OnSuccess=cockpit-fleet-finish@%i.service
+OnFailure=cockpit-fleet-finish@%i.service
 
 [Service]
 Type=exec
@@ -34,6 +37,13 @@ InaccessiblePaths=/etc/cockpit-fleet
 # disables sudo) this keeps a playbook from starting another run unit.
 TemporaryFileSystem=/run:ro
 BindReadOnlyPaths=-/run/systemd/resolve
+
+# Its own PID namespace. Every run uses the same account, so without this a
+# playbook could reach a concurrent run's decrypted secrets through
+# /proc/PID/root of that run's processes.
+PrivatePIDs=yes
+PrivateIPC=yes
+TemporaryFileSystem=/dev/shm:mode=1777
 
 NoNewPrivileges=yes
 CapabilityBoundingSet=

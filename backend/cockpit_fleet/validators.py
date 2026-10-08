@@ -15,6 +15,16 @@ _USER_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.@\\-]{0,63}")
 _TAG_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,63}")
 
 
+_REF_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}")
+# Only transports that cannot run a local program: no file paths, no ext::.
+_GIT_URL_RE = re.compile(
+    r"(https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/[A-Za-z0-9._~/%+-]+"
+    r"|ssh://([A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(:[0-9]{1,5})?/[A-Za-z0-9._~/%+-]+"
+    r"|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~/%+-]+)"
+)
+_HOST_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?|[0-9A-Fa-f:]{2,45}")
+
+
 def _match(pattern: re.Pattern, value: object, what: str) -> str:
     if not isinstance(value, str) or not pattern.fullmatch(value) or value.startswith("-"):
         raise BadRequest(f"invalid {what}: {value!r}")
@@ -31,6 +41,23 @@ def check_user(value: object) -> str:
 
 def check_tag(value: object) -> str:
     return _match(_TAG_RE, value, "tag")
+
+
+def check_git_ref(value: object) -> str:
+    ref = _match(_REF_RE, value, "git reference")
+    if ".." in ref or ref.endswith(("/", ".lock")):
+        raise BadRequest(f"invalid git reference: {value!r}")
+    return ref
+
+
+def check_git_url(value: object) -> str:
+    if not isinstance(value, str) or len(value) > 500:
+        raise BadRequest(f"invalid repository URL: {value!r}")
+    return _match(_GIT_URL_RE, value, "repository URL (use https:// or ssh)")
+
+
+def check_host(value: object) -> str:
+    return _match(_HOST_RE, value, "host name or address")
 
 
 def check_int(value: object, what: str, low: int, high: int) -> int:

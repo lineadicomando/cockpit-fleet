@@ -1,14 +1,28 @@
-"""Turn a stored run specification into an ansible-playbook invocation.
+"""Turn a stored job specification into the commands a run unit executes.
 
-Nothing from the frontend reaches argv without going through build_argv.
+A job is one of three kinds: "playbook" (ansible-playbook), "inventory"
+(ansible-inventory, to list hosts and groups) and "sync" (fetch a git
+project). Nothing from the frontend reaches a command line without going
+through the functions here.
 """
 
+import configparser
 import json
 from pathlib import Path
 
 from .errors import BadRequest
 from .paths import COLLECTIONS_DIR
-from .validators import check_int, check_limit, check_tag, check_user, resolve_inside
+from .validators import (
+    check_git_ref,
+    check_git_url,
+    check_int,
+    check_limit,
+    check_tag,
+    check_user,
+    resolve_inside,
+)
+
+KINDS = ("playbook", "inventory", "sync")
 
 # Credential purpose -> ansible-playbook option that takes a file.
 CREDENTIAL_OPTIONS = {
@@ -18,76 +32,162 @@ CREDENTIAL_OPTIONS = {
     "vault_password": "--vault-password-file",
 }
 
+# What a project's own ansible.cfg may set. Anything that points Ansible at
+# files, plugins or commands outside the project, or that weakens host key
+# checking, is left out; forks, inventory and credentials come from the job.
+_CONFIG_ALLOWED = {
+    "defaults": {
+        "roles_path", "collections_path", "gathering", "timeout", "remote_user",
+        "interpreter_python", "display_skipped_hosts", "deprecation_warnings",
+        "any_errors_fatal", "error_on_undefined_vars", "jinja2_native",
+    },
+    "ssh_connection": {"pipelining"},
+    "privilege_escalation": {"become", "become_method", "become_user"},
+}
+_CONFIG_PATHS = {"roles_path", "collections_path"}
+
+
+def _project_paths(project: Path, value: str) -> list[str]:
+    """Colon-separated paths, kept only when they stay inside the project."""
+    root = project.resolve()
+    kept = []
+    for part in value.split(":"):
+        part = part.strip()
+        if not part:
+            continue
+        path = (root / part).resolve()
+        if path.is_relative_to(root):
+            kept.append(str(path))
+    return kept
+
+
+def generate_config(project: Path) -> tuple[str, list[str]]:
+    """The ansible.cfg of a run, and the collection paths the project asks for."""
+    source = configparser.ConfigParser(interpolation=None, strict=False)
+    try:
+        source.read_string((project / "ansible.cfg").read_text())
+    except (OSError, configparser.Error, UnicodeDecodeError):
+        source = configparser.ConfigParser(interpolation=None)
+
+    output = configparser.ConfigParser(interpolation=None)
+    output.add_section("defaults")
+    collections: list[str] = []
+    for section, allowed in _CONFIG_ALLOWED.items():
+        if not source.has_section(section):
+            continue
+        for key, value in source.items(section):
+            if key not in allowed:
+                continue
+            if key in _CONFIG_PATHS:
+                paths = _project_paths(project, value)
+                if key == "collections_path":
+                    # The environment variable wins over the file: returned instead.
+                    collections = paths
+                    continue
+                value = ":".join(paths)
+                if not value:
+                    continue
+            if not output.has_section(section):
+                output.add_section(section)
+            output.set(section, key, value)
+
+    lines = []
+    for section in output.sections():
+        lines.append(f"[{section}]")
+        lines += [f"{key} = {value}" for key, value in output.items(section)]
+        lines.append("")
+    return "\n".join(lines), collections
+
 
 def _tags(spec: dict, key: str) -> str | None:
     tags = spec.get(key)
-    if tags is None:
+    if tags is None or tags == []:
         return None
-    if not isinstance(tags, list) or not tags or len(tags) > 50:
-        raise BadRequest(f"{key} must be a non-empty list")
+    if not isinstance(tags, list) or len(tags) > 50:
+        raise BadRequest(f"{key} must be a list")
     return ",".join(check_tag(tag) for tag in tags)
+
+
+def _inventory(spec: dict, run_dir: Path) -> Path:
+    """An inventory file of the project, or the one written for this run."""
+    if spec.get("inventory_source") == "managed":
+        return resolve_inside(run_dir / "inventory", spec.get("inventory"), "inventory")
+    return resolve_inside(run_dir / "project", spec.get("inventory"), "inventory")
+
+
+def _credential_args(credentials_dir: Path | None, purposes: tuple[str, ...]) -> list[str]:
+    argv = []
+    if credentials_dir is not None:
+        for purpose in purposes:
+            credential = credentials_dir / f"fleet_{purpose}"
+            if credential.is_file():
+                argv += [CREDENTIAL_OPTIONS[purpose], str(credential)]
+    return argv
 
 
 def build_argv(
     spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
 ) -> list[str]:
+    """ansible-playbook for a "playbook" job."""
     project = run_dir / "project"
     argv = [
         "/usr/bin/ansible-playbook",
-        "--inventory", str(resolve_inside(project, spec.get("inventory"), "inventory")),
+        "--inventory", str(_inventory(spec, run_dir)),
         "--forks", str(check_int(spec.get("forks", 5), "forks", 1, 200)),
     ]
 
-    if spec.get("limit") is not None:
+    if spec.get("limit"):
         argv += ["--limit", check_limit(spec["limit"])]
-    if spec.get("user") is not None:
+    if spec.get("user"):
         argv += ["--user", check_user(spec["user"])]
     for key, option in (("tags", "--tags"), ("skip_tags", "--skip-tags")):
         value = _tags(spec, key)
         if value:
             argv += [option, value]
 
-    if spec.get("check") is True:
-        argv.append("--check")
-    if spec.get("diff") is True:
-        argv.append("--diff")
+    for key in ("check", "diff", "become"):
+        if spec.get(key) is True:
+            argv.append(f"--{key}")
     verbosity = check_int(spec.get("verbosity", 0), "verbosity", 0, 4)
     if verbosity:
         argv.append("-" + "v" * verbosity)
 
     extra_vars = spec.get("extra_vars")
-    if extra_vars is not None:
+    if extra_vars:
         if not isinstance(extra_vars, dict):
             raise BadRequest("extra_vars must be an object")
         vars_file = runtime_dir / "extra_vars.json"
         vars_file.write_text(json.dumps(extra_vars))
         argv += ["--extra-vars", f"@{vars_file}"]
 
-    if credentials_dir is not None:
-        for purpose, option in CREDENTIAL_OPTIONS.items():
-            credential = credentials_dir / f"fleet_{purpose}"
-            if credential.is_file():
-                argv += [option, str(credential)]
-
+    argv += _credential_args(credentials_dir, tuple(CREDENTIAL_OPTIONS))
     argv.append(str(resolve_inside(project, spec.get("playbook"), "playbook")))
     return argv
 
 
+def build_inventory_argv(spec: dict, run_dir: Path, credentials_dir: Path | None) -> list[str]:
+    """ansible-inventory for an "inventory" job; the listing goes to inventory.json."""
+    return [
+        "/usr/bin/ansible-inventory",
+        "--inventory", str(_inventory(spec, run_dir)),
+        "--list", "--export",
+        "--output", str(run_dir / "inventory.json"),
+        *_credential_args(credentials_dir, ("vault_password",)),
+    ]
+
+
 def build_env(run_dir: Path, runtime_dir: Path) -> dict[str, str]:
+    """Environment of ansible-playbook and ansible-inventory."""
+    project = run_dir / "project"
     home = runtime_dir / "home"
     home.mkdir(mode=0o700, exist_ok=True)
     control = runtime_dir / "cp"
     control.mkdir(mode=0o700, exist_ok=True)
-    known_hosts = run_dir / "known_hosts"
-    # Ansible only accepts a .cfg file here. Setting it also keeps an
-    # ansible.cfg shipped inside the project from being picked up.
+    # Ansible only accepts a .cfg file here. Setting it also keeps the project's
+    # own ansible.cfg from being loaded as it is.
+    text, collections = generate_config(project)
     config = runtime_dir / "ansible.cfg"
-    config.write_text("[defaults]\n")
-    ssh_args = (
-        "-o ControlMaster=auto -o ControlPersist=60s "
-        f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts} "
-        "-o GlobalKnownHostsFile=/dev/null"
-    )
+    config.write_text(text)
     # A clean environment: nothing is inherited from the unit beyond these.
     return {
         "PATH": "/usr/bin:/bin",
@@ -98,10 +198,72 @@ def build_env(run_dir: Path, runtime_dir: Path) -> dict[str, str]:
         "ANSIBLE_CONFIG": str(config),
         "ANSIBLE_LOCAL_TEMP": str(runtime_dir / "tmp"),
         "ANSIBLE_SSH_CONTROL_PATH_DIR": str(control),
-        "ANSIBLE_SSH_ARGS": ssh_args,
+        "ANSIBLE_SSH_ARGS": "-o ControlMaster=auto -o ControlPersist=60s " + _ssh_options(run_dir),
         "ANSIBLE_HOST_KEY_CHECKING": "True",
-        "ANSIBLE_COLLECTIONS_PATH": f"{COLLECTIONS_DIR}:{run_dir / 'project'}",
+        "ANSIBLE_COLLECTIONS_PATH": ":".join([str(COLLECTIONS_DIR), str(project), *collections]),
         "ANSIBLE_CALLBACKS_ENABLED": "lineadicomando.fleet.events",
         "ANSIBLE_FORCE_COLOR": "1",
         "FLEET_EVENTS_FILE": str(run_dir / "events.jsonl"),
     }
+
+
+def _ssh_options(run_dir: Path) -> str:
+    return (
+        f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={run_dir / 'known_hosts'} "
+        "-o GlobalKnownHostsFile=/dev/null"
+    )
+
+
+def build_sync(
+    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
+) -> tuple[list[list[str]], dict[str, str]]:
+    """The git commands of a "sync" job and their environment.
+
+    A fresh shallow fetch of one reference into run_dir/checkout. Hooks are
+    off, submodules are not followed, and only https and ssh are allowed.
+    """
+    url = check_git_url(spec.get("url"))
+    ref = check_git_ref(spec.get("ref"))
+    checkout = str(run_dir / "checkout")
+    home = runtime_dir / "home"
+    home.mkdir(mode=0o700, exist_ok=True)
+
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(home),
+        "LANG": "C.UTF-8",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_ALLOW_PROTOCOL": "https:ssh",
+    }
+    ssh = f"ssh -o BatchMode=yes {_ssh_options(run_dir)}"
+    if credentials_dir is not None:
+        key = credentials_dir / "fleet_git_private_key"
+        token = credentials_dir / "fleet_git_token"
+        if key.is_file():
+            ssh += f" -o IdentitiesOnly=yes -i {key}"
+        if token.is_file():
+            # git asks this program for the user name and the password: the
+            # token is read from its file and never appears in argv or env.
+            user = runtime_dir / "git-user"
+            user.write_text(check_user(spec.get("user") or "git"))
+            askpass = runtime_dir / "git-askpass"
+            askpass.write_text(
+                "#!/bin/sh\n"
+                f'case "$1" in Username*) cat "{user}" ;; *) cat "{token}" ;; esac\n'
+            )
+            askpass.chmod(0o700)
+            env["GIT_ASKPASS"] = str(askpass)
+    env["GIT_SSH_COMMAND"] = ssh
+    if spec.get("proxy"):
+        env["https_proxy"] = str(spec["proxy"])
+
+    git = ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "-c", "protocol.file.allow=never"]
+    commands = [
+        [*git, "init", "--quiet", checkout],
+        [*git, "-C", checkout, "fetch", "--quiet", "--depth", "1", "--no-tags",
+         "--no-recurse-submodules", "--", url, ref],
+        [*git, "-C", checkout, "checkout", "--quiet", "--detach", "FETCH_HEAD"],
+    ]
+    return commands, env

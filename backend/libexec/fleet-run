@@ -1,24 +1,84 @@
 #!/usr/bin/python3 -I
-"""Execute one run inside cockpit-fleet-run@ID.service."""
+"""Execute one job inside cockpit-fleet-run@ID.service.
+
+Writes the human-readable output to stdout.log and to the journal, and the
+outcome to result.json, which is what the backend reads once the unit is gone.
+"""
 
 import json
 import os
+import shutil
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/cockpit-fleet")
 
+from cockpit_fleet import runner  # noqa: E402
 from cockpit_fleet.errors import FleetError  # noqa: E402
 from cockpit_fleet.names import check_id  # noqa: E402
 from cockpit_fleet.paths import RUNS_DIR  # noqa: E402
-from cockpit_fleet.runner import build_argv, build_env  # noqa: E402
+
+current: subprocess.Popen | None = None
+terminated = False
+
+
+def on_term(signum, frame):
+    global terminated
+    terminated = True
+    if current is not None and current.poll() is None:
+        current.terminate()
+
+
+def execute(command: list[str], env: dict, cwd: Path, log) -> int:
+    """Run one command, copying its output to the log and to the journal."""
+    global current
+    current = subprocess.Popen(
+        command, env=env, cwd=cwd,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    for line in current.stdout:
+        log.write(line)
+        log.flush()
+        sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
+    return current.wait()
+
+
+def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | None, log) -> dict:
+    kind = spec.get("kind", "playbook")
+    if kind == "sync":
+        commands, env = runner.build_sync(spec, run_dir, runtime_dir, credentials)
+        for command in commands:
+            rc = execute(command, env, run_dir, log)
+            if rc != 0:
+                return {"rc": rc}
+        checkout = run_dir / "checkout"
+        revision = subprocess.run(
+            ["/usr/bin/git", "-C", str(checkout), "rev-parse", "HEAD"],
+            env=env, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        # Only the files are kept: nothing outside the sandbox runs git on them.
+        shutil.rmtree(checkout / ".git")
+        return {"rc": 0, "revision": revision}
+
+    env = runner.build_env(run_dir, runtime_dir)
+    if kind == "inventory":
+        command = runner.build_inventory_argv(spec, run_dir, credentials)
+    elif kind == "playbook":
+        command = runner.build_argv(spec, run_dir, runtime_dir, credentials)
+    else:
+        raise ValueError(f"unknown job kind: {kind!r}")
+    return {"rc": execute(command, env, run_dir / "project", log)}
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print("usage: fleet-run RUN_ID", file=sys.stderr)
         return 2
+    signal.signal(signal.SIGTERM, on_term)
     try:
         run_id = check_id(argv[1], "run id")
         run_dir = RUNS_DIR / run_id
@@ -27,24 +87,26 @@ def main(argv: list[str]) -> int:
         spec = json.loads((run_dir / "spec.json").read_text())
         if not isinstance(spec, dict):
             raise ValueError("spec.json must contain an object")
-        command = build_argv(spec, run_dir, runtime_dir, Path(credentials) if credentials else None)
-        env = build_env(run_dir, runtime_dir)
-    except (FleetError, ValueError, KeyError, OSError) as error:
+    except (ValueError, KeyError, OSError) as error:
         print(f"fleet-run: {error}", file=sys.stderr)
         return 2
 
-    # Tee the human-readable output to the run directory and to the journal.
     with open(run_dir / "stdout.log", "ab") as log:
-        process = subprocess.Popen(
-            command, env=env, cwd=run_dir / "project",
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        )
-        for line in process.stdout:
-            log.write(line)
-            log.flush()
-            sys.stdout.buffer.write(line)
-            sys.stdout.buffer.flush()
-        return process.wait()
+        try:
+            credentials_dir = Path(credentials) if credentials else None
+            result = run_job(spec, run_dir, runtime_dir, credentials_dir, log)
+        except (FleetError, ValueError, OSError, subprocess.SubprocessError) as error:
+            message = f"fleet-run: {error}\n".encode()
+            log.write(message)
+            sys.stdout.buffer.write(message)
+            result = {"rc": 2, "error": str(error)}
+
+    result["finished_at"] = time.time()
+    result["terminated"] = terminated
+    temporary = run_dir / "result.json.tmp"
+    temporary.write_text(json.dumps(result))
+    temporary.replace(run_dir / "result.json")
+    return 0 if result["rc"] == 0 else (result["rc"] if 0 < result["rc"] < 256 else 1)
 
 
 if __name__ == "__main__":

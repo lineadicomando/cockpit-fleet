@@ -78,6 +78,14 @@ echo "user=\$(id -un)"
 echo "own_secret=\$(cat \$own/fleet_connection_password 2>&1)"
 try other_secret      cat \$other/fleet_connection_password
 try list_other_creds  ls \$other
+# Every run uses the same account: without a PID namespace of its own, the
+# other run's files are reachable through /proc/PID/root.
+stolen=no
+for p in /proc/[0-9]*; do
+    cat "\$p/root\$other/fleet_connection_password" >/dev/null 2>&1 && stolen=yes
+done
+echo "proc_steal=\$stolen"
+echo "foreign_procs=\$(ps -eo args= 2>/dev/null | grep -c '[w]ait_for')"
 try read_store        ls $SECRETS
 try decrypt_copy      systemd-creds decrypt --name= $RUNS/$A/creds/connection_password -
 echo "state_dir=\$(ls /var/lib/cockpit-fleet | tr '\n' ' ')"
@@ -119,6 +127,8 @@ check user             cockpit-fleet  "playbook runs as the service account"
 check own_secret       alpha-value    "run receives its own secret, decrypted"
 check other_secret     no             "cannot read the secret of a concurrent run"
 check list_other_creds no             "cannot list the credentials of a concurrent run"
+check proc_steal       no             "cannot reach a concurrent run's secrets through /proc"
+check foreign_procs    0              "does not see the processes of a concurrent run"
 check read_store       no             "cannot read the secret store"
 check decrypt_copy     no             "cannot decrypt ciphertext by itself"
 check state_dir        "runs "        "state directory shows only runs/"

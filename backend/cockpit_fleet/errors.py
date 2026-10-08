@@ -20,6 +20,12 @@ class NotFound(FleetError):
     code = "not_found"
 
 
+class Conflict(FleetError):
+    """The request is valid but clashes with the current state."""
+
+    code = "conflict"
+
+
 class Unavailable(FleetError):
     """Something the command needs is missing or broken on this machine."""
 

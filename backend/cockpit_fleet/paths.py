@@ -17,4 +17,5 @@ LIBEXEC_DIR = Path("/usr/libexec/cockpit-fleet")
 
 SERVICE_USER = "cockpit-fleet"
 RUN_UNIT = "cockpit-fleet-run@{}.service"
+FINISH_UNIT_FILE = Path("/usr/lib/systemd/system/cockpit-fleet-finish@.service")
 RUN_UNIT_FILE = Path("/usr/lib/systemd/system/cockpit-fleet-run@.service")
