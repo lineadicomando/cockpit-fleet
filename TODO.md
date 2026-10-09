@@ -18,18 +18,20 @@ annullamento, output live, vista per task ed esito per host; ruoli da gruppi Uni
 e audit.
 Provato su nodi Linux (container) e Windows via SSH.
 
-Stato della VM di test `deb13-samba-dc`: il 9 ottobre è stata trovata due volte
-senza `cockpit-fleet` (come dopo un ritorno allo snapshot `baseline`); l'ultima
-reinstallazione ha `cockpit-fleet`, `ansible` e `sshpass`, non `podman` (serve a
-`multihost.sh`). Il segreto `it-win-key` non c'è più: va ricreato prima di
-`windows.sh`. Nessun dato o account di prova.
+Stato della VM di test `deb13-samba-dc`: lo snapshot `baseline_fleet` (9 ottobre,
+figlio di `baseline`) è il punto di partenza dei test: Debian 13 con `cockpit`,
+`cockpit-fleet` al commit `124f131`, `ansible`, `sshpass`, `podman` e l'immagine
+`fleet-node` già costruita; nessun dato o account di prova. Tutti i test di
+integrazione Linux vi passano. Non contiene il Samba AD DC (`baseline` è un
+Debian senza Cockpit né Samba) né il segreto `it-win-key`, da ricreare prima di
+`windows.sh`.
 
 ## Decisioni
 
 | Tema | Decisione |
 |---|---|
 | Nome | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet` |
-| Licenza | `LGPL-2.1-or-later` (come `cockpit-samba-ad-dc`), da riconfermare alla pubblicazione |
+| Licenza | `LGPL-2.1-or-later` (come `cockpit-samba-dc`), da riconfermare alla pubblicazione |
 | Repository | un Gitea privato; GitHub quando sarà stabile |
 | Backend | Nessun demone né porta: unit systemd avviate a richiesta |
 | Identità | Account di sistema `cockpit-fleet`; root solo in `fleet-unit` e `fleet-secret` |

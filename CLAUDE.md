@@ -57,7 +57,7 @@ them needs the user's explicit agreement.
 ## Stack and conventions
 
 - Frontend: TypeScript, React 18, PatternFly 6, esbuild. Mirror
-  `../cockpit-samba-ad-dc` for layout, build, i18n, test
+  `../cockpit-samba-dc` for layout, build, i18n, test
   setup and code style (4-space indent, `.ts` import extensions, comments only
   where the reason is not obvious).
 - Backend: Python 3.13, standard library only at runtime (it ships in a `.deb` that
@@ -138,6 +138,11 @@ same run can be launched from the interface.
 
 - Controller VM: libvirt `deb13-samba-dc`, `maint@VM`, Cockpit on
   `https://VM:9090`. Password-only SSH (`sshpass -e`).
+- Its snapshot `baseline_fleet` is where a test starts from: the package and
+  what the integration tests need, no data. Go back to it with
+  `virsh -c qemu:///system snapshot-revert deb13-samba-dc baseline_fleet`, then
+  `make vm-deb-deploy` to install the current code. The snapshots are external:
+  reverting deletes whatever was on the VM since, with no way back.
 - Windows nodes over SSH: `teacher` .10, `student01` .11, `student02` .12, from
   `../ansible-win_edulab/inventories/school`.
 - Linux nodes: containers on the controller VM (podman is installed there;
@@ -152,7 +157,7 @@ same run can be launched from the interface.
   test, and shut down what you started when the test is over.
 - After a deploy, a Cockpit tab keeps running the old bundle until reloaded, and a
   package in `/usr/share/cockpit` is shadowed by a copy in `~/.local/share/cockpit`.
-- The VM also hosts the Samba AD DC used by other projects: do not break it.
+- Despite its name the VM has no Samba AD DC for now: tests run without it.
 - Cockpit there has a self-signed certificate, which the browser tools refuse.
   Open an SSH tunnel (`ssh -L 9091:127.0.0.1:9090`) and use
   `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
@@ -179,7 +184,7 @@ same run can be launched from the interface.
 - The repository will be published on GitHub once the project is stable. Treat
   every commit as future public history: no secrets, no passwords, no details of
   real (non-test) environments, in files or in commit messages.
-- License: `LGPL-2.1-or-later`, same as `cockpit-samba-ad-dc` (provisional).
+- License: `LGPL-2.1-or-later`, same as `cockpit-samba-dc` (provisional).
 - CI: `.gitea/workflows/ci.yml`, on the runner labelled `cockpit-fleet`
   (container `gitea-runner` on the CI host, defined in
   `/srv/gitea/compose.yaml` and `/srv/gitea/runner-ci/`). It is a
@@ -191,7 +196,7 @@ same run can be launched from the interface.
 
 ## Reference material
 
-- `cockpit-samba-ad-dc`: frontend patterns (`src/lib/exec.ts` for spawn wrappers,
+- `cockpit-samba-dc`: frontend patterns (`src/lib/exec.ts` for spawn wrappers,
   `test/mocks/cockpit.ts` for the cockpit mock, `Makefile.local` for VM targets).
 - `ansible-win_edulab`: a real project that must run unmodified from this plugin
   (acceptance test of Phase 3); its `.claude/skills/ansible-jinja2` is useful when
