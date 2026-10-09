@@ -628,6 +628,24 @@ msgstr "falliti {{n}}"
 msgid "https:// or ssh. For ssh, trust the server's host key first."
 msgstr "https:// o ssh. Per ssh, rendi prima attendibile la chiave host del server."
 
+msgid "Differences"
+msgstr "Differenze"
+
+msgid "This is only the beginning of the differences: the output has all of them."
+msgstr "Questo è solo l'inizio delle differenze: l'output le contiene tutte."
+
+msgid "This run was not asked to show differences. Launch it as a dry run to see them."
+msgstr "A questa run non sono state chieste le differenze. Lanciala come prova a vuoto per vederle."
+
+msgid "No differences so far."
+msgstr "Nessuna differenza finora."
+
+msgid "No task reported a difference."
+msgstr "Nessun task ha riportato differenze."
+
+msgid "Dry run: this is what would change, nothing was changed."
+msgstr "Prova a vuoto: questo è ciò che cambierebbe, nulla è stato modificato."
+
 msgid "ok {{n}}"
 msgstr "ok {{n}}"
 

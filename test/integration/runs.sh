@@ -31,6 +31,7 @@ cat > "$SRC/demo/site.yml" <<'YAML'
     - ansible.builtin.command: id -un
       register: who
       changed_when: false
+      check_mode: false
     - ansible.builtin.copy:
         content: "{{ who.stdout }} {{ greeting | default('none') }}"
         dest: /tmp/fleet-it-marker
@@ -122,6 +123,18 @@ if grep -rq 'TopSecretValue' "/var/lib/cockpit-fleet/runs/$run_id/"; then fail "
 if grep -rq "$IT_SSH_PASSWORD" "/var/lib/cockpit-fleet/runs/$run_id/"; then fail "the password was stored in the run directory"; else pass "the password is nowhere in the run directory"; fi
 expect_ok "project copy and ciphertext are removed after the run" sh -c "! test -e /var/lib/cockpit-fleet/runs/$run_id/project && ! test -e /var/lib/cockpit-fleet/runs/$run_id/creds"
 expect_eq "launch is in the audit log" "$(get "$(admin audit.list)" 'any(e["command"]=="run.start" and e["user"]=="itoperator" and e["outcome"]=="ok" for e in a["data"]["entries"])')" True
+
+# --- dry run: the events say what would change, and nothing does ----------------
+rm -f /tmp/fleet-it-marker
+run=$(ctl itoperator run.start "{\"template_id\": \"$template_id\", \"check\": true}")
+run_id=$(get "$run" 'a["data"]["id"]')
+expect_run "operator asks for a dry run" "$run_id" 120 successful
+expect_denied "a dry run changes nothing" test -e /tmp/fleet-it-marker
+events=$(ctl itoperator run.events "{\"id\": \"$run_id\"}")
+expect_eq "the events hold the difference as text" \
+    "$(get "$events" 'sorted(d for d in (json.loads(l).get("diff", "") for l in a["data"]["text"].splitlines()) if d)[0].split("\n")[1]')" \
+    "+++ after: /tmp/fleet-it-marker"
+if grep -q 'TopSecretValue' "/var/lib/cockpit-fleet/runs/$run_id/events.jsonl"; then fail "a no_log value is in a difference"; else pass "no_log values are in no difference"; fi
 
 # --- survey: an answer is a variable of the run, never a template ---------------
 survey=$(admin template.update "{\"id\": \"$template_id\", \"name\": \"demo\", \"project_id\": \"$project_id\", \"playbook\": \"site.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"extra_vars\": {\"greeting\": \"hello\"}, \"survey\": [{\"name\": \"greeting\", \"type\": \"text\", \"required\": true}]}")

@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Alert, Button, Card, CardBody, Content, DescriptionList, DescriptionListDescription, DescriptionListGroup,
-    DescriptionListTerm, Flex, FlexItem, FormSelect, FormSelectOption, Label, Tab, Tabs, TabTitleText,
+    DescriptionListTerm, ExpandableSection, Flex, FlexItem, FormSelect, FormSelectOption, Label, Tab, Tabs, TabTitleText,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { parseAnsi } from "../lib/ansi.ts";
-import { addEvents, countOutcomes, type TaskView } from "../lib/events.ts";
+import { addEvents, changesByHost, countOutcomes, diffLines, type HostChanges, type TaskView } from "../lib/events.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime, runDuration } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
@@ -149,6 +149,53 @@ function Tasks({ tasks }: { tasks: TaskView[] }) {
                 })}
             </Tbody>
         </Table>
+    );
+}
+
+function Diff({ text }: { text: string }) {
+    const lines = useMemo(() => diffLines(text), [text]);
+    return (
+        <pre className="fleet-log fleet-diff">
+            {lines.map((line, index) => <span key={index} className={`fleet-diff-${line.kind}`}>{line.text}{"\n"}</span>)}
+        </pre>
+    );
+}
+
+function HostDiffs({ entry }: { entry: HostChanges }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    return (
+        <ExpandableSection
+            isExpanded={open}
+            onToggle={(_event, expanded) => setOpen(expanded)}
+            toggleContent={<>{entry.host} <Label isCompact color="orange">{entry.changes.length}</Label></>}
+        >
+            {/* Drawn only when open: on a large fleet most hosts are never looked at. */}
+            {open && entry.changes.map((change, index) => (
+                <div key={index} className="fleet-change">
+                    <strong>{change.task}</strong>
+                    {change.item && <> <code>{change.item}</code></>}
+                    {change.play && <Content component="small" style={{ display: "block" }}>{change.play}</Content>}
+                    <Diff text={change.text} />
+                    {change.cut && <Content component="small">{t("This is only the beginning of the differences: the output has all of them.")}</Content>}
+                </div>
+            ))}
+        </ExpandableSection>
+    );
+}
+
+function Changes({ tasks, run }: { tasks: TaskView[]; run: Run }) {
+    const { t } = useTranslation();
+    const hosts = useMemo(() => changesByHost(tasks), [tasks]);
+    if (hosts.length === 0) {
+        if (!run.options.diff) return <Content component="p">{t("This run was not asked to show differences. Launch it as a dry run to see them.")}</Content>;
+        return <Content component="p">{isActive(run.status) ? t("No differences so far.") : t("No task reported a difference.")}</Content>;
+    }
+    return (
+        <>
+            {run.options.check && <Content component="p">{t("Dry run: this is what would change, nothing was changed.")}</Content>}
+            {hosts.map(entry => <HostDiffs key={entry.host} entry={entry} />)}
+        </>
     );
 }
 
@@ -315,9 +362,12 @@ export function RunDetailPage({ id }: { id: string }) {
                             <Tabs activeKey={tab} onSelect={(_event, key) => setTab(String(key))}>
                                 <Tab eventKey="output" title={<TabTitleText>{t("Output")}</TabTitleText>} />
                                 {data.kind === "playbook" && <Tab eventKey="tasks" title={<TabTitleText>{t("Tasks")}</TabTitleText>} />}
+                                {data.kind === "playbook" && <Tab eventKey="changes" title={<TabTitleText>{t("Differences")}</TabTitleText>} />}
                             </Tabs>
                             <CardBody style={{ paddingInline: 0 }}>
-                                {tab === "output" ? <Output text={log} /> : <Tasks tasks={tasks} />}
+                                {tab === "output" && <Output text={log} />}
+                                {tab === "tasks" && <Tasks tasks={tasks} />}
+                                {tab === "changes" && <Changes tasks={tasks} run={data} />}
                             </CardBody>
                         </Card>
                     ) : (

@@ -38,7 +38,7 @@ test("runDuration uses the current time for a run still going", () => {
     assert.equal(runDuration({ started_at: 100, finished_at: 110 }, 999), "10 s");
 });
 
-import { addEvents, countOutcomes } from "../src/lib/events.ts";
+import { addEvents, changesByHost, countOutcomes, diffLines } from "../src/lib/events.ts";
 
 const line = (event: object) => `${JSON.stringify(event)}\n`;
 
@@ -76,4 +76,34 @@ test("addEvents continues across chunks and ignores what it cannot read", () => 
     assert.deepEqual(second.tasks.map(task => [task.name, task.play, Object.keys(task.hosts)]), [["A", "P", ["a"]], ["B", "P", []]]);
     // The earlier result is not modified in place.
     assert.deepEqual(first.tasks[0].hosts, {});
+});
+
+test("changesByHost collects the diffs of every task under their host", () => {
+    const text =
+        line({ event: "play_start", play: "Web" }) +
+        line({ event: "task_start", task: "Config", task_uuid: "t1" }) +
+        line({ event: "host_ok", host: "b", task_uuid: "t1", changed: true, diff: "--- before\n+++ after\n" }) +
+        line({ event: "host_ok", host: "a", task_uuid: "t1", changed: false }) +
+        line({ event: "task_start", task: "Lines", task_uuid: "t2" }) +
+        line({ event: "item_ok", host: "a", task_uuid: "t2", item: "one", changed: true, diff: "-x\n+y\n", diff_cut: true }) +
+        line({ event: "item_ok", host: "a", task_uuid: "t2", item: "two", changed: false }) +
+        line({ event: "host_ok", host: "a", task_uuid: "t2", changed: true }) +
+        line({ event: "host_failed", host: "b", task_uuid: "t2", diff: "-p\n+q\n", result: { msg: "no" } });
+    const { tasks } = addEvents([], text);
+    assert.deepEqual(changesByHost(tasks), [
+        { host: "a", changes: [{ host: "a", item: "one", text: "-x\n+y\n", cut: true, task: "Lines", play: "Web" }] },
+        { host: "b", changes: [
+            { host: "b", item: "", text: "--- before\n+++ after\n", cut: false, task: "Config", play: "Web" },
+            { host: "b", item: "", text: "-p\n+q\n", cut: false, task: "Lines", play: "Web" },
+        ] },
+    ]);
+    assert.deepEqual(tasks[1].messages, { b: "no" });
+    assert.deepEqual(changesByHost([]), []);
+});
+
+test("diffLines tells the kinds of line of a unified diff", () => {
+    const text = "--- before: /etc/motd\n+++ after: /etc/motd\n@@ -1,2 +1,2 @@\n same\n-old\n+new\n\\ No newline at end of file\n";
+    assert.deepEqual(diffLines(text).map(entry => entry.kind),
+        ["header", "header", "hunk", "context", "removed", "added", "context"]);
+    assert.equal(diffLines("-- not a header\n")[0].kind, "removed");
 });

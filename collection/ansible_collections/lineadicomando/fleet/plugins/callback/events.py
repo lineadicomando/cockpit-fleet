@@ -11,6 +11,7 @@ description:
     and host result, so that cockpit-fleet can show and store a run without
     parsing the human-readable output.
   - Result values are trimmed, so the file stays small on large fleets.
+  - What a task changed, when Ansible reports it, is written as a unified diff.
 requirements:
   - Must be enabled, for example with C(ANSIBLE_CALLBACKS_ENABLED).
 options:
@@ -32,6 +33,15 @@ options:
     ini:
       - section: callback_fleet_events
         key: max_string
+  max_diff:
+    description: A longer diff of one result is cut to this many characters.
+    type: int
+    default: 16384
+    env:
+      - name: FLEET_EVENTS_MAX_DIFF
+    ini:
+      - section: callback_fleet_events
+        key: max_diff
   keep_facts:
     description: Keep C(ansible_facts) in results instead of dropping them.
     type: bool
@@ -43,6 +53,7 @@ options:
         key: keep_facts
 """
 
+import difflib
 import json
 import time
 
@@ -50,7 +61,53 @@ from ansible.plugins.callback import CallbackBase
 
 _MAX_ITEMS = 200
 _MAX_DEPTH = 8
-_DROPPED_KEYS = frozenset({"invocation", "ansible_facts"})
+# "diff" is dropped because it is written apart, as text: see unified_diff.
+_DROPPED_KEYS = frozenset({"invocation", "ansible_facts", "diff"})
+_DIFF_NOTES = {
+    "dst_binary": "diff skipped: destination file appears to be binary",
+    "src_binary": "diff skipped: source file appears to be binary",
+    "dst_larger": "diff skipped: destination file size is greater than {}",
+    "src_larger": "diff skipped: source file size is greater than {}",
+}
+
+
+def _diff_side(value):
+    if value is None:
+        return []
+    if not isinstance(value, str):
+        value = json.dumps(value, indent=4, sort_keys=True, ensure_ascii=False, default=str) + "\n"
+    lines = value.splitlines(True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n\\ No newline at end of file\n"
+    return lines
+
+
+def unified_diff(diff, context=3):
+    """The "diff" of a result as text, the way "ansible-playbook --diff" prints it.
+
+    Done here, and not by whoever reads the events, because it needs the whole
+    of "before" and "after": in the event they would be cut like any string.
+    """
+    parts = []
+    for entry in diff if isinstance(diff, (list, tuple)) else [diff]:
+        if not isinstance(entry, dict):
+            continue
+        for key, note in _DIFF_NOTES.items():
+            if key in entry:
+                parts.append(note.format(entry[key]) + "\n")
+        if "before" in entry and "after" in entry:
+            before = entry.get("before_header")
+            after = entry.get("after_header")
+            parts.extend(difflib.unified_diff(
+                _diff_side(entry["before"]), _diff_side(entry["after"]),
+                fromfile=f"before: {before}" if before else "before",
+                tofile=f"after: {after}" if after else "after",
+                n=context,
+            ))
+        prepared = entry.get("prepared")
+        if isinstance(prepared, str) and prepared:
+            parts.append(prepared if prepared.endswith("\n") else prepared + "\n")
+    return "".join(parts)
 
 
 def _part(result, name):
@@ -69,11 +126,13 @@ class CallbackModule(CallbackBase):
         super().__init__()
         self._out = None
         self._max_string = 2048
+        self._max_diff = 16384
         self._keep_facts = False
 
     def set_options(self, task_keys=None, var_options=None, direct=None):
         super().set_options(task_keys=task_keys, var_options=var_options, direct=direct)
         self._max_string = self.get_option("max_string")
+        self._max_diff = self.get_option("max_diff")
         self._keep_facts = self.get_option("keep_facts")
         self._out = open(self.get_option("path"), "a", encoding="utf-8")  # noqa: SIM115
 
@@ -100,9 +159,24 @@ class CallbackModule(CallbackBase):
             return [self._trim(item, depth + 1) for item in value[:_MAX_ITEMS]]
         return value
 
+    def _diff(self, data):
+        """The fields of an event that say what the result changed, if it says so."""
+        if not data.get("diff"):
+            return {}
+        try:
+            text = unified_diff(data["diff"])
+        except Exception:  # noqa: BLE001 - a module may return anything; the run goes on
+            return {}
+        if not text:
+            return {}
+        if len(text) > self._max_diff:
+            return {"diff": text[: self._max_diff], "diff_cut": True}
+        return {"diff": text}
+
     def _result(self, status, result, **extra):
         task = _part(result, "task")
         data = _part(result, "result")
+        extra.update(self._diff(data))
         self._emit(
             "host_" + status,
             host=_part(result, "host").get_name(),
@@ -147,6 +221,7 @@ class CallbackModule(CallbackBase):
         task = _part(result, "task")
         data = _part(result, "result")
         label = data.get("_ansible_item_label", data.get("item", ""))
+        extra.update(self._diff(data))
         self._emit(
             "item_" + status,
             host=_part(result, "host").get_name(),

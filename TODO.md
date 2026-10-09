@@ -6,8 +6,8 @@ Icinga: niente tempo reale, alert "ragionevolmente tempestivi".
 
 ## Stato
 
-Fasi 0, 1, 2 concluse l'8 ottobre 2026. **In corso: fase 3** (survey fatto il 9
-ottobre). `main` è allineato con `origin`.
+Fasi 0, 1, 2 concluse l'8 ottobre 2026. **In corso: fase 3** (survey e vista delle
+differenze fatti il 9 ottobre). `main` è allineato con `origin`.
 
 Per riprendere: leggere `CLAUDE.md` (regole, comandi, ambiente di test), poi
 `docs/architecture.md` (cosa esiste e perché). Questo file dice solo cosa manca.
@@ -18,9 +18,10 @@ annullamento, output live, vista per task ed esito per host; ruoli da gruppi Uni
 e audit.
 Provato su nodi Linux (container) e Windows via SSH.
 
-Stato della VM di test `deb13-samba-dc`: il 9 ottobre era senza `cockpit-fleet`
-(come dopo un ritorno allo snapshot `baseline`); reinstallato con `ansible`,
-`sshpass`, `podman`. Il segreto `it-win-key` non c'è più: va ricreato prima di
+Stato della VM di test `deb13-samba-dc`: il 9 ottobre è stata trovata due volte
+senza `cockpit-fleet` (come dopo un ritorno allo snapshot `baseline`); l'ultima
+reinstallazione ha `cockpit-fleet`, `ansible` e `sshpass`, non `podman` (serve a
+`multihost.sh`). Il segreto `it-win-key` non c'è più: va ricreato prima di
 `windows.sh`. Nessun dato o account di prova.
 
 ## Decisioni
@@ -76,8 +77,8 @@ Stato della VM di test `deb13-samba-dc`: il 9 ottobre era senza `cockpit-fleet`
 
 - [x] **Survey**: testo, numero, scelta, booleano, segreto; provato sulla VM
       (`privileges.sh`, `roles.sh`, `runs.sh`, `sandbox.sh`) e dalla UI
-- [ ] **Vista delle differenze** per host nella prova a vuoto (`--check --diff` e il
-      diff negli eventi esistono già)
+- [x] **Vista delle differenze** per host: scheda "Differenze" della run; provata
+      sulla VM (`runs.sh` e dalla UI)
 - [ ] **Editor nella UI**: progetto come repo git locale, commit automatico con
       l'utente Cockpit come autore, `--syntax-check` al salvataggio, `ansible-lint` se c'è
 - [ ] **Upload archivio**: estrazione sicura (path traversal, symlink, device, limiti),

@@ -29,6 +29,14 @@
 .fleet-ansi-magenta, .fleet-ansi-bright-magenta { color: var(--pf-t--global--text--color--status--custom--default); }
 .fleet-ansi-black, .fleet-ansi-bright-black { color: var(--pf-t--global--text--color--subtle); }
 
+// What a task changed on a host, as a unified diff.
+.fleet-diff { white-space: pre; word-break: normal; }
+.fleet-diff-added { color: var(--pf-t--global--text--color--status--success--default); }
+.fleet-diff-removed { color: var(--pf-t--global--text--color--status--danger--default); }
+.fleet-diff-hunk { color: var(--pf-t--global--text--color--status--info--default); }
+.fleet-diff-header { font-weight: var(--pf-t--global--font--weight--body--bold); }
+.fleet-change { margin-block-end: var(--pf-t--global--spacer--md); }
+
 // One question of a template's survey, in the form that edits them.
 .fleet-survey-field {
     margin-block: var(--pf-t--global--spacer--sm);

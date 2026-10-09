@@ -276,8 +276,22 @@ run's output. Use `no_log`; masking known secrets in stored logs is planned.
 
 The callback `lineadicomando.fleet.events` appends one JSON object per line:
 `playbook_start`, `play_start`, `task_start`, `host_ok`, `host_failed`,
-`host_skipped`, `host_unreachable`, `stats`. Results are trimmed (long strings
-cut, `invocation` and, by default, `ansible_facts` dropped).
+`host_skipped`, `host_unreachable`, `item_ok`, `item_failed`, `item_skipped`
+(one per element of a loop), `stats`. Results are trimmed (long strings cut,
+`invocation`, `diff` and, by default, `ansible_facts` dropped).
+
+What a task changed, or would change in a dry run, is the field `diff` of the
+host's event, or of the element's for a loop: a unified diff as text, the same
+`ansible-playbook --diff` prints. The callback renders it, not the browser,
+because it takes the whole of `before` and `after`, which in the event would be
+cut like any other string. One result's diff is cut at 16 kB (`diff_cut`); the
+run's output has all of it. Ansible gives no diff for a task with `no_log` or
+`diff: false`, so neither does the event. The "Differences" tab of a run groups
+them by host and draws a host's only when it is opened. Like the output, they
+are for operators and administrators: a diff shows the content of files.
+
+Checked with Debian's ansible-core 2.19.11: six tasks in a dry run on two hosts,
+one of them rewriting a file of 4000 lines, give 41 kB of events.
 
 Measured on the test controller (2 vCPU, 2 GB), 200 hosts simulated with the
 local connection, 10 forks, fact gathering plus three tasks:
