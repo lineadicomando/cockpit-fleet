@@ -28,3 +28,11 @@
 .fleet-ansi-blue, .fleet-ansi-bright-blue { color: var(--pf-t--global--text--color--status--info--default); }
 .fleet-ansi-magenta, .fleet-ansi-bright-magenta { color: var(--pf-t--global--text--color--status--custom--default); }
 .fleet-ansi-black, .fleet-ansi-bright-black { color: var(--pf-t--global--text--color--subtle); }
+
+// One question of a template's survey, in the form that edits them.
+.fleet-survey-field {
+    margin-block: var(--pf-t--global--spacer--sm);
+    padding: var(--pf-t--global--spacer--md);
+    border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
+    border-radius: var(--pf-t--global--border--radius--small);
+}

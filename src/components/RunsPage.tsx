@@ -14,6 +14,7 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Chunk, HostStats, Run, RunStatus } from "../lib/types.ts";
 import { ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { Answered } from "./SurveyEditor.tsx";
 
 const isActive = (status: RunStatus) => status === "queued" || status === "running";
 // Past this, only the end of the output is drawn; the whole log stays on the server.
@@ -291,6 +292,12 @@ export function RunDetailPage({ id }: { id: string }) {
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{t("Limit to hosts")}</DescriptionListTerm>
                                 <DescriptionListDescription><code>{data.options.limit}</code></DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
+                        {Object.keys(data.options.answers ?? {}).length + (data.options.secret_answers ?? []).length > 0 && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Answers")}</DescriptionListTerm>
+                                <DescriptionListDescription><Answered answers={data.options.answers ?? {}} secrets={data.options.secret_answers} /></DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
                         {data.revision && (

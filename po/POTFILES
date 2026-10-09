@@ -11,6 +11,7 @@ src/components/ProjectsPage.tsx
 src/components/RunsPage.tsx
 src/components/StatusLabel.tsx
 src/components/SystemPage.tsx
+src/components/SurveyEditor.tsx
 src/components/TemplatesPage.tsx
 src/components/common.tsx
 src/lib/session.tsx

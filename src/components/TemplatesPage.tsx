@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import { Button, Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextArea, TextInput } from "@patternfly/react-core";
 import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
-import { call } from "../lib/fleet.ts";
+import { answerSecret, call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
+import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers, secretAnswers, toDraft } from "../lib/survey.ts";
 import type { Credential, Inventory, Project, Run, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
+import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 
 const MONO = { fontFamily: "var(--pf-t--global--font--family--mono)" };
 const words = (text: string) => text.split(/[\s,]+/).filter(Boolean);
@@ -41,6 +43,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [forks, setForks] = useState(template?.forks ? String(template.forks) : "");
     const [verbosity, setVerbosity] = useState(String(template?.verbosity ?? 0));
     const [become, setBecome] = useState(template?.become ?? false);
+    const [survey, setSurvey] = useState(() => (template?.survey ?? []).map(toDraft));
     const files = useLoad(() => projectId
         ? call<{ files: string[] }>("project.files", { id: projectId }).catch(() => ({ files: [] }))
         : Promise.resolve({ files: [] as string[] }));
@@ -61,6 +64,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
             name, project_id: projectId, playbook: playbook.trim(), inventory_id: inventoryId,
             machine_credential_id: machineId, vault_credential_ids: vaultIds,
             limit_hosts: limit.trim(), tags: words(tags), skip_tags: words(skipTags), extra_vars: vars,
+            survey: survey.map(fromDraft),
             ...(forks ? { forks: Number(forks) } : {}), verbosity: Number(verbosity), become,
         };
         await call(template ? "template.update" : "template.create", template ? { id: template.id, ...params } : params);
@@ -74,7 +78,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
 
     return (
         <FormModal title={template ? t("Edit job template") : t("New job template")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
-            isDisabled={!name.trim() || !projectId || !playbook.trim() || !inventoryId}>
+            isDisabled={!name.trim() || !projectId || !playbook.trim() || !inventoryId || survey.some(draft => draftProblem(draft, survey))}>
             <FormGroup label={t("Name")} isRequired fieldId="tpl-name">
                 <TextInput id="tpl-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
@@ -162,6 +166,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <TextArea id="tpl-vars" value={extraVars} onChange={(_e, value) => setExtraVars(value)} rows={4} resizeOrientation="vertical" spellCheck={false} style={MONO} placeholder={'{\n  "version": "1.2"\n}'} />
                 <FormHelperText><HelperText><HelperTextItem>{t("A JSON object. Not for secrets: they would be stored in clear.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
+            <SurveyEditor drafts={survey} onChange={setSurvey} />
         </FormModal>
     );
 }
@@ -170,14 +175,21 @@ function LaunchModal({ template, onClose }: { template: Template; onClose: () =>
     const { t } = useTranslation();
     const [limit, setLimit] = useState("");
     const [check, setCheck] = useState(false);
+    const [answers, setAnswers] = useState(() => initialAnswers(template.survey));
 
     async function submit() {
-        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check });
+        const given: Record<string, unknown> = collectAnswers(template.survey, answers);
+        // A secret goes to the helper that encrypts it; the launch carries a ticket.
+        for (const [name, value] of Object.entries(secretAnswers(template.survey, answers)))
+            given[name] = await answerSecret(value);
+        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given });
         cockpit.location.go(["runs", run.id]);
     }
 
     return (
-        <FormModal title={t("Launch {{name}}", { name: template.name })} submitLabel={check ? t("Launch dry run") : t("Launch")} onSubmit={submit} onClose={onClose}>
+        <FormModal title={t("Launch {{name}}", { name: template.name })} submitLabel={check ? t("Launch dry run") : t("Launch")} onSubmit={submit} onClose={onClose}
+            isDisabled={template.survey.some(field => answerProblem(field, answers[field.name]))}>
+            <SurveyAnswers survey={template.survey} answers={answers} onChange={setAnswers} />
             <FormGroup label={t("Limit to hosts")} fieldId="launch-limit">
                 <TextInput id="launch-limit" value={limit} onChange={(_e, value) => setLimit(value)} placeholder={template.limit_hosts || "web01,web02"} />
                 <FormHelperText>

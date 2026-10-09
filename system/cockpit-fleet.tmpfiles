@@ -6,3 +6,9 @@ d /var/lib/cockpit-fleet/projects 0750 cockpit-fleet cockpit-fleet -
 # ciphertext, which nothing but PID 1 can decrypt.
 d /etc/cockpit-fleet              0755 root root -
 d /etc/cockpit-fleet/secrets      0750 root cockpit-fleet -
+
+# Secret answers to a survey, encrypted, until the run they belong to is
+# launched. Root writes them; the service user moves them into the run, which
+# is why it may write here. One that no run took is removed after an hour.
+d /run/cockpit-fleet              0755 root root -
+d /run/cockpit-fleet/answers      0770 root cockpit-fleet 1h

@@ -34,7 +34,8 @@ Two programs run as root. Both validate their single argument against
 | Helper | Called by | Does |
 |---|---|---|
 | `fleet-unit start\|stop ID` | `cockpit-fleet`, through one sudoers line | `systemctl start\|stop cockpit-fleet-run@ID.service` |
-| `fleet-secret set\|delete NAME`, `list` | administrators (sudoers rule comes with phase 1) | encrypts stdin with `systemd-creds` into `/etc/cockpit-fleet/secrets/NAME.cred` |
+| `fleet-secret set\|delete NAME`, `list` | administrators | encrypts stdin with `systemd-creds` into `/etc/cockpit-fleet/secrets/NAME.cred` |
+| `fleet-secret answer` | operators and administrators | encrypts stdin into `/run/cockpit-fleet/answers/`, under a name it chooses and prints |
 
 ### Why not a polkit rule
 
@@ -218,6 +219,58 @@ template's order. Credentials used together must have different identifiers.
 **Limits a launcher can change.** Launching a template, an operator may add a
 host limit and ask for a dry run. The limit is combined with the template's
 own (`template:&caller`), so it can narrow the target but not widen it.
+
+**Surveys.** A template may ask questions at launch: typed fields (text,
+number, choice, yes or no) with a default and bounds, defined by an
+administrator. Each answer becomes a variable of the run, and this is the only
+way an operator gives variables. `run.start` checks the answers against the
+definition and refuses a variable that was not asked for.
+
+Answers reach Ansible in a second variables file, after the template's own, so
+an answer wins over a fixed value of the same name. The two files differ in
+one thing. Ansible renders any variable holding `{{ ... }}` as a template
+wherever it is used, lookups included: `{{ lookup('pipe', ...) }}` in a
+variable is a command executed on the controller, inside the sandbox but next
+to the run's decrypted secrets. The template's variables are written by an
+administrator and stay templates. The answers are written as YAML with every
+string tagged `!unsafe`, which Ansible uses as it is written; checked on
+ansible-core 2.19 (Debian 13) and 2.20.
+
+A survey cannot set a variable whose name starts with `ansible_`: those change
+how a run connects (`ansible_ssh_common_args`, `ansible_python_interpreter`),
+and belong in the template's variables. The answers are stored with the run
+and in the audit record, in clear.
+
+**Secret answers.** A secret field is the exception: its answer must not pass
+through `fleetctl`, which would have it in memory, in the audit record and in
+`spec.json`. Only root can encrypt, and operators could not reach
+`fleet-secret`; letting them call `set` would let them replace any stored
+secret. So the helper has one more form, `fleet-secret answer`, with no
+argument: sudoers allows operators exactly that command line, and since the
+caller chooses no name it can overwrite nothing.
+
+```
+browser ── value on stdin ──▶ fleet-secret answer        (root)
+                                 │ /run/cockpit-fleet/answers/a-<random>.cred
+browser ◀── ticket a-<random> ───┘
+browser ── run.start {answers: {token: "a-<random>"}} ──▶ fleetctl
+                                 │ moves the file to runs/<id>/creds/survey_0
+PID 1 decrypts it for the unit; fleet-run writes it, tagged !unsafe, into the
+variables file in the run's runtime directory
+```
+
+The ticket is not a secret and serves one launch: `run.start` moves the
+ciphertext into the run, and a second use is refused. The waiting directory is
+on tmpfs, writable by the service account so that it can take a file away, and
+tmpfiles removes what no run took within an hour. The helper refuses to store
+more than 500 waiting answers. The value is in clear in two places only, both
+private to the unit and gone with it: the credentials directory and the
+variables file. The run records which variables were given as secrets, never
+their values. A secret field has no default and no bounds: a default would be
+stored in clear, and nothing that could check a length ever sees the value.
+
+What this does not cover: a playbook that prints the variable puts it in the
+run's output. Use `no_log`; masking known secrets in stored logs is planned.
 
 ## Events
 

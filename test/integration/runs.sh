@@ -11,7 +11,7 @@ require_root
 SRC=/srv/fleet-it
 require_wipe
 
-cleanup() { wipe; rm -f /tmp/fleet-it-marker; }
+cleanup() { wipe; rm -f /tmp/fleet-it-marker /run/cockpit-fleet/answers/a-*.cred; }
 trap cleanup EXIT
 cleanup
 prepare 1
@@ -37,6 +37,16 @@ cat > "$SRC/demo/site.yml" <<'YAML'
         mode: "0644"
     - ansible.builtin.debug:
         msg: "the password is TopSecretValue"
+      no_log: true
+YAML
+cat > "$SRC/demo/secret.yml" <<'YAML'
+- hosts: all
+  gather_facts: false
+  tasks:
+    - ansible.builtin.copy:
+        content: "{{ token }}"
+        dest: /tmp/fleet-it-marker
+        mode: "0600"
       no_log: true
 YAML
 cat > "$SRC/demo/wait.yml" <<'YAML'
@@ -66,7 +76,7 @@ project_id=$(get "$project" 'a["data"]["id"]')
 expect_eq "local project is accepted under an allowed root" "$(get "$project" 'a["ok"]')" True
 expect_eq "local project is refused elsewhere" \
     "$(get "$(admin project.create '{"name": "etc", "kind": "local", "path": "/etc"}')" 'a["error"]["code"]')" conflict
-expect_eq "project files are listed" "$(get "$(admin project.files "{\"id\": \"$project_id\"}")" 'sorted(a["data"]["files"])')" "['site.yml', 'wait.yml']"
+expect_eq "project files are listed" "$(get "$(admin project.files "{\"id\": \"$project_id\"}")" 'sorted(a["data"]["files"])')" "['secret.yml', 'site.yml', 'wait.yml']"
 
 inventory=$(admin inventory.create '{"name": "self", "kind": "managed", "format": "ini", "content": "[local]\nself ansible_host=127.0.0.1\n"}')
 inventory_id=$(get "$inventory" 'a["data"]["id"]')
@@ -112,6 +122,40 @@ if grep -rq 'TopSecretValue' "/var/lib/cockpit-fleet/runs/$run_id/"; then fail "
 if grep -rq "$IT_SSH_PASSWORD" "/var/lib/cockpit-fleet/runs/$run_id/"; then fail "the password was stored in the run directory"; else pass "the password is nowhere in the run directory"; fi
 expect_ok "project copy and ciphertext are removed after the run" sh -c "! test -e /var/lib/cockpit-fleet/runs/$run_id/project && ! test -e /var/lib/cockpit-fleet/runs/$run_id/creds"
 expect_eq "launch is in the audit log" "$(get "$(admin audit.list)" 'any(e["command"]=="run.start" and e["user"]=="itoperator" and e["outcome"]=="ok" for e in a["data"]["entries"])')" True
+
+# --- survey: an answer is a variable of the run, never a template ---------------
+survey=$(admin template.update "{\"id\": \"$template_id\", \"name\": \"demo\", \"project_id\": \"$project_id\", \"playbook\": \"site.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"extra_vars\": {\"greeting\": \"hello\"}, \"survey\": [{\"name\": \"greeting\", \"type\": \"text\", \"required\": true}]}")
+expect_eq "template takes a survey" "$(get "$survey" 'a["data"]["survey"][0]["name"]')" greeting
+expect_eq "operator cannot define a survey" \
+    "$(get "$(ctl itoperator template.update "{\"id\": \"$template_id\"}")" 'a["error"]["code"]')" forbidden
+expect_eq "a required answer cannot be skipped" \
+    "$(get "$(ctl itoperator run.start "{\"template_id\": \"$template_id\"}")" 'a["error"]["code"]')" bad_request
+expect_eq "a variable that was not asked for is refused" \
+    "$(get "$(ctl itoperator run.start "{\"template_id\": \"$template_id\", \"answers\": {\"greeting\": \"x\", \"ansible_connection\": \"local\"}}")" 'a["error"]["code"]')" bad_request
+run=$(ctl itoperator run.start "{\"template_id\": \"$template_id\", \"answers\": {\"greeting\": \"{{ lookup('pipe', 'id -un') }}\"}}")
+run_id=$(get "$run" 'a["data"]["id"]')
+expect_run "operator launches with an answer" "$run_id" 120 successful
+expect_eq "the answer wins over the template's variable and is not rendered" \
+    "$(cat /tmp/fleet-it-marker 2>/dev/null)" "$IT_SSH_USER {{ lookup('pipe', 'id -un') }}"
+expect_eq "the answer is kept with the run" \
+    "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["options"]["answers"]["greeting"][:9]')" "{{ lookup"
+
+# --- survey: a secret answer reaches its run and is kept nowhere --------------------
+secret_tpl=$(admin template.create "{\"name\": \"secret\", \"project_id\": \"$project_id\", \"playbook\": \"secret.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"survey\": [{\"name\": \"token\", \"type\": \"secret\", \"required\": true}]}")
+secret_id=$(get "$secret_tpl" 'a["data"]["id"]')
+expect_eq "a secret answer cannot travel in clear" \
+    "$(get "$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"typed-in-clear\"}}")" 'a["error"]["code"]')" bad_request
+ticket=$(printf '%s' 'S3cretAnswer {{ 1 + 1 }}' | sudo -u itoperator sudo -n "$SECRET" answer)
+run=$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")
+run_id=$(get "$run" 'a["data"]["id"]')
+expect_run "operator launches with a secret answer" "$run_id" 120 successful
+expect_eq "the playbook got the secret, as it was typed" "$(cat /tmp/fleet-it-marker 2>/dev/null)" 'S3cretAnswer {{ 1 + 1 }}'
+expect_eq "the run records that a secret was given, not its value" \
+    "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["options"]["secret_answers"], a["data"]["options"]["answers"]')" "['token'] {}"
+if grep -rqa 'S3cretAnswer' /var/lib/cockpit-fleet /run/cockpit-fleet /etc/cockpit-fleet; then fail "the secret answer was stored somewhere"; else pass "the secret answer is in no file, database or log of the backend"; fi
+expect_denied "the ticket is gone once used" test -e "/run/cockpit-fleet/answers/$ticket.cred"
+expect_eq "a ticket serves one launch" \
+    "$(get "$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")" 'a["error"]["code"]')" bad_request
 
 # --- queue and cancel ----------------------------------------------------------
 admin template.create "{\"name\": \"wait\", \"project_id\": \"$project_id\", \"playbook\": \"wait.yml\", \"inventory_id\": \"$inventory_id\"}" > /tmp/fleet-it-wait.json

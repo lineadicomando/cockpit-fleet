@@ -51,6 +51,17 @@ def add_secret(directory: Path, credential_id: str | None, field: str, purpose: 
         shutil.copyfile(source, directory / "creds" / purpose)
 
 
+def take_answer(directory: Path, ticket: str, purpose: str) -> None:
+    """Move the ciphertext of a secret answer into the run. It serves one run."""
+    source = paths.ANSWERS_DIR / f"{ticket}.cred"
+    try:
+        shutil.copyfile(source, directory / "creds" / purpose)
+        source.unlink()
+    except FileNotFoundError:
+        raise BadRequest(
+            "a secret answer has expired or was already used: enter it again") from None
+
+
 def project_tree(project, config) -> Path:
     """Where the files of a project are on this machine."""
     if project["kind"] == "git":

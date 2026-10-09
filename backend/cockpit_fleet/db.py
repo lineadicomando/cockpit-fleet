@@ -140,6 +140,10 @@ MIGRATIONS: list[list[str]] = [
         # The column cannot be dropped (it carries a foreign key); it is no longer used.
         "UPDATE templates SET vault_credential_id = NULL",
     ],
+    [
+        # The questions a template asks at launch; the answers become variables.
+        "ALTER TABLE templates ADD COLUMN survey TEXT NOT NULL DEFAULT '[]'",
+    ],
 ]
 
 

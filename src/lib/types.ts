@@ -97,6 +97,25 @@ export interface ScannedKey {
     state: "new" | "trusted" | "changed";
 }
 
+export type SurveyType = "text" | "number" | "choice" | "boolean" | "secret";
+export type SurveyValue = string | number | boolean;
+
+// One question a template asks at launch; the answer becomes a variable.
+export interface SurveyField {
+    name: string;
+    label?: string;
+    help?: string;
+    type: SurveyType;
+    required?: boolean;
+    default?: SurveyValue;
+    // Text: bounds of its length. Number: bounds of its value.
+    min_length?: number;
+    max_length?: number;
+    min?: number;
+    max?: number;
+    choices?: string[];
+}
+
 export interface Template {
     id: string;
     name: string;
@@ -109,6 +128,7 @@ export interface Template {
     tags: string[];
     skip_tags: string[];
     extra_vars: Record<string, unknown>;
+    survey: SurveyField[];
     forks: number | null;
     verbosity: number;
     become: boolean;
@@ -141,7 +161,7 @@ export interface Run {
     rc: number | null;
     revision: string;
     error: string;
-    options: { limit?: string; check?: boolean; diff?: boolean };
+    options: { limit?: string; check?: boolean; diff?: boolean; answers?: Record<string, SurveyValue>; secret_answers?: string[] };
     stats: Record<string, HostStats>;
     cursor?: number;
 }

@@ -96,6 +96,12 @@ export async function setSecret(name: string, value: string): Promise<void> {
     await run([FLEET_SECRET, "set", name], value);
 }
 
+// Hands over the secret answer to a survey question and returns the ticket
+// that run.start takes in its place. The ticket serves one launch.
+export async function answerSecret(value: string): Promise<string> {
+    return (await run([FLEET_SECRET, "answer"], value)).trim();
+}
+
 export async function deleteSecret(name: string): Promise<void> {
     await run([FLEET_SECRET, "delete", name], "");
 }

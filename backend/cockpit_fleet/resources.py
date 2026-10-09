@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import jobs, paths, store
+from . import jobs, paths, store, survey
 from .cli import Context, Params, command
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
@@ -483,6 +483,7 @@ def _template(ctx: Context, row) -> dict:
     data["tags"] = store.loads(row["tags"], [])
     data["skip_tags"] = store.loads(row["skip_tags"], [])
     data["extra_vars"] = store.loads(row["extra_vars"], {})
+    data["survey"] = store.loads(row["survey"], [])
     return data
 
 
@@ -513,6 +514,7 @@ def _template_values(ctx: Context, params: Params) -> dict:
         "tags": json.dumps([check_tag(tag) for tag in params.strings("tags")]),
         "skip_tags": json.dumps([check_tag(tag) for tag in params.strings("skip_tags")]),
         "extra_vars": json.dumps(extra_vars),
+        "survey": json.dumps(survey.check_survey(params.objects("survey", survey.MAX_FIELDS))),
         "forks": forks,
         "verbosity": check_int(params.integer("verbosity", 0, 0, 4), "verbosity", 0, 4),
         "become": int(params.boolean("become")),

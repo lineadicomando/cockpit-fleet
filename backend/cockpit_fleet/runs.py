@@ -3,7 +3,7 @@
 import json
 import shutil
 
-from . import jobs, store
+from . import jobs, store, survey
 from .cli import Context, Params, command
 from .errors import BadRequest
 from .resources import place_inventory, template_vaults
@@ -29,12 +29,14 @@ def run_start(ctx: Context, params: Params) -> dict:
     limit = params.string("limit", "", 512)
     check = params.boolean("check")
     diff = params.boolean("diff")
+    answers = params.mapping("answers")
     params.done()
 
     template = store.fetch(ctx.conn, "templates", template_id, "template")
     project = store.fetch(ctx.conn, "projects", template["project_id"], "project")
     inventory = store.fetch(ctx.conn, "inventories", template["inventory_id"], "inventory")
     limits = [template["limit_hosts"], check_limit(limit) if limit else ""]
+    variables, tickets = survey.answer(store.loads(template["survey"], []), answers)
 
     spec = {
         "kind": "playbook",
@@ -49,6 +51,8 @@ def run_start(ctx: Context, params: Params) -> dict:
         "tags": store.loads(template["tags"], []),
         "skip_tags": store.loads(template["skip_tags"], []),
         "extra_vars": store.loads(template["extra_vars"], {}),
+        "survey_vars": variables,
+        "survey_secrets": {},
     }
     machine = None
     if template["machine_credential_id"]:
@@ -70,12 +74,17 @@ def run_start(ctx: Context, params: Params) -> dict:
         for index, vault in enumerate(template_vaults(ctx, template_id)):
             jobs.add_secret(directory, vault["id"], "vault_password", f"vault_password_{index}")
             spec["vaults"].append({"file": f"vault_password_{index}", "id": vault["vault_id"]})
+        for index, (name, ticket) in enumerate(tickets.items()):
+            jobs.take_answer(directory, ticket, f"survey_{index}")
+            spec["survey_secrets"][name] = f"survey_{index}"
         jobs.write_known_hosts(ctx.conn, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
 
-    options = {"limit": limit, "check": check, "diff": spec["diff"]}
+    options = {"limit": limit, "check": check, "diff": spec["diff"], "answers": variables,
+               # Which secrets were given; their values are in no record.
+               "secret_answers": sorted(tickets)}
     jobs.enqueue(ctx, {"id": run_id, "kind": "playbook", "title": template["name"],
                        "template_id": template_id, "project_id": project["id"],
                        "inventory_id": inventory["id"], "revision": project["revision"],

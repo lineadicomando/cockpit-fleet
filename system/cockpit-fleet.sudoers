@@ -5,6 +5,10 @@
 # Administrators store and delete secrets. Values can never be read back.
 %cockpit-fleet-admin ALL=(root) NOPASSWD: /usr/libexec/cockpit-fleet/fleet-secret
 
+# Operators hand over the secret answers of a survey, and nothing else: this
+# form of the command takes no name, so it cannot replace a stored secret.
+%cockpit-fleet-operator ALL=(root) NOPASSWD: /usr/libexec/cockpit-fleet/fleet-secret answer
+
 # The service account starts and stops run units through one fixed helper,
 # which validates its argument. No wildcard, no other command.
 cockpit-fleet ALL=(root) NOPASSWD: /usr/libexec/cockpit-fleet/fleet-unit

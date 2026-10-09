@@ -12,6 +12,7 @@ USERS="itviewer itoperator itadmin itnobody"
 cleanup() {
     for user in $USERS; do userdel -r "$user" 2>/dev/null; done
     "$SECRET" delete it-role 2>/dev/null
+    rm -f /run/cockpit-fleet/answers/a-*.cred
 }
 trap cleanup EXIT
 cleanup
@@ -63,6 +64,19 @@ expect_ok     "storing a secret is in the journal, without the value" \
     sh -c "journalctl -t cockpit-fleet --since=-2min -o cat --no-pager | grep -q 'itadmin secret.set: it-role'"
 expect_denied "operator cannot store a secret" sh -c "printf value | sudo -u itoperator sudo -n $SECRET set it-role2"
 expect_denied "viewer cannot list secrets"     sudo -u itviewer sudo -n "$SECRET" list
+
+# A secret answer to a survey: the one thing an operator may store, under a
+# name the helper chooses.
+ticket=$(printf 'AnswerValue' | sudo -u itoperator sudo -n "$SECRET" answer 2>&1)
+expect_ok     "operator hands over a secret answer and gets a ticket" sh -c "printf '%s' '$ticket' | grep -Eq '^a-[0-9a-f]{32}\$'"
+expect_eq     "the answer waits as a file of root, readable by the service account" \
+    "$(stat -c '%U %G %a' "/run/cockpit-fleet/answers/$ticket.cred" 2>&1)" "root cockpit-fleet 640"
+expect_denied "the waiting answer is not in clear" grep -q AnswerValue "/run/cockpit-fleet/answers/$ticket.cred"
+expect_denied "operator cannot choose the name of an answer" sh -c "printf value | sudo -u itoperator sudo -n $SECRET answer it-role2"
+expect_denied "operator still cannot replace a stored secret" sh -c "printf value | sudo -u itoperator sudo -n $SECRET set it-role"
+expect_denied "operator cannot delete a secret" sudo -u itoperator sudo -n "$SECRET" delete it-role
+expect_denied "viewer cannot hand over an answer" sh -c "printf value | sudo -u itviewer sudo -n $SECRET answer"
+expect_denied "operator cannot read the waiting answers" sudo -u itoperator ls /run/cockpit-fleet/answers
 
 expect_eq "database is private to the service account" "$(stat -c '%U %a' /var/lib/cockpit-fleet/fleet.db)" "cockpit-fleet 600"
 expect_eq "self-check finds no problem" "$(field "$(ctl itviewer selfcheck)" 'sorted(c["id"] for c in a["data"]["checks"] if c["status"]=="fail")')" "[]"

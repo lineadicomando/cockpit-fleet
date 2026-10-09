@@ -1,7 +1,7 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { calls, setSpawnHandler } from "./mocks/cockpit.ts";
-import { AccessError, FleetError, call, deleteSecret, resetAccess, setSecret } from "../src/lib/fleet.ts";
+import { AccessError, FleetError, answerSecret, call, deleteSecret, resetAccess, setSecret } from "../src/lib/fleet.ts";
 
 const ok = (data: unknown) => JSON.stringify({ ok: true, data });
 const refused = { problem: null, exit_status: 1, message: "sudo: a password is required" };
@@ -82,4 +82,11 @@ test("a secret goes to the root helper on stdin, its name in argv", async () => 
 
     await deleteSecret("c-abc-password");
     assert.deepEqual(calls[1].args.slice(-2), ["delete", "c-abc-password"]);
+});
+
+test("a secret answer goes to the helper on stdin and comes back as a ticket", async () => {
+    setSpawnHandler(() => "a-0123456789abcdef0123456789abcdef\n");
+    assert.equal(await answerSecret("hunter2"), "a-0123456789abcdef0123456789abcdef");
+    assert.deepEqual(calls[0].args, ["sudo", "-n", "/usr/libexec/cockpit-fleet/fleet-secret", "answer"]);
+    assert.equal(calls[0].input, "hunter2");
 });

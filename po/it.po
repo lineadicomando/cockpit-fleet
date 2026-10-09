@@ -691,6 +691,114 @@ msgstr "Credenziali vault"
 msgid "Vault identifier"
 msgstr "Identificatore del vault"
 
+msgid "Add a question"
+msgstr "Aggiungi una domanda"
+
+msgid "An answer is required"
+msgstr "La risposta è obbligatoria"
+
+msgid "Another question sets this variable."
+msgstr "Un'altra domanda imposta già questa variabile."
+
+msgid "Answers"
+msgstr "Risposte"
+
+msgid "At least {{length}} characters."
+msgstr "Almeno {{length}} caratteri."
+
+msgid "At least {{value}}."
+msgstr "Almeno {{value}}."
+
+msgid "At most {{length}} characters."
+msgstr "Al massimo {{length}} caratteri."
+
+msgid "At most {{value}}."
+msgstr "Al massimo {{value}}."
+
+msgid "Choice"
+msgstr "Scelta"
+
+msgid "Choices, one per line"
+msgstr "Scelte, una per riga"
+
+msgid "Choose"
+msgstr "Scegli"
+
+msgid "Each answer becomes a variable of the run. This is how an operator gives variables to a playbook."
+msgstr "Ogni risposta diventa una variabile dell'esecuzione. È il modo in cui un operatore passa variabili a un playbook."
+
+msgid "Enter a number."
+msgstr "Inserisci un numero."
+
+msgid "Help text"
+msgstr "Testo di aiuto"
+
+msgid "List at least one choice, each one once."
+msgstr "Indica almeno una scelta, ciascuna una volta sola."
+
+msgid "Maximum"
+msgstr "Massimo"
+
+msgid "Maximum length"
+msgstr "Lunghezza massima"
+
+msgid "Minimum"
+msgstr "Minimo"
+
+msgid "Minimum and maximum must be numbers."
+msgstr "Minimo e massimo devono essere numeri."
+
+msgid "Minimum length"
+msgstr "Lunghezza minima"
+
+msgid "Move down"
+msgstr "Sposta giù"
+
+msgid "Move up"
+msgstr "Sposta su"
+
+msgid "No"
+msgstr "No"
+
+msgid "Number"
+msgstr "Numero"
+
+msgid "Question"
+msgstr "Domanda"
+
+msgid "Questions at launch"
+msgstr "Domande al lancio"
+
+msgid "Remove"
+msgstr "Rimuovi"
+
+msgid "Text"
+msgstr "Testo"
+
+msgid "The default is not a valid answer."
+msgstr "Il valore predefinito non è una risposta valida."
+
+msgid "The variable name takes letters, digits and underscores, and does not start with a digit."
+msgstr "Il nome della variabile ammette lettere, cifre e trattini bassi, e non inizia con una cifra."
+
+msgid "Variable"
+msgstr "Variabile"
+
+msgid "Variables starting with ansible_ change how a run connects: set them in the template's extra variables."
+msgstr "Le variabili che iniziano con ansible_ cambiano il modo in cui un'esecuzione si collega: impostale nelle variabili aggiuntive del template."
+
+msgid "Yes"
+msgstr "Sì"
+
+msgid "Yes or no"
+msgstr "Sì o no"
+
+msgid "Secret"
+msgstr "Segreto"
+
+msgid "Encrypted as soon as it is typed and given to that run only. It is not kept and cannot be read back, but a playbook that prints it puts it in the output."
+msgstr "Viene cifrato appena digitato e consegnato solo a quell'esecuzione. Non viene conservato e non si può rileggere, ma un playbook che lo stampa lo mette nell'output."
+
 msgid "checks_failed_count"
 msgid_plural "checks_failed_count_plural"
 msgstr[0] "{{count}} problema"

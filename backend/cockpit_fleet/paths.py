@@ -9,6 +9,11 @@ PROJECTS_DIR = STATE_DIR / "projects"
 # Encrypted credentials: written by root only, readable by the service user.
 SECRETS_DIR = Path("/etc/cockpit-fleet/secrets")
 
+# Secret answers to a survey, encrypted, between the moment they are typed and
+# the launch of the run that takes them. On tmpfs: what is never used is gone
+# at the next boot, and tmpfiles removes it after an hour.
+ANSWERS_DIR = Path("/run/cockpit-fleet/answers")
+
 COLLECTIONS_DIR = Path("/usr/share/cockpit-fleet/collections")
 
 DATABASE = STATE_DIR / "fleet.db"

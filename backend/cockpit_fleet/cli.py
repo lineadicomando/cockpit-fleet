@@ -128,6 +128,13 @@ class Params:
             raise BadRequest(f"{name} must be a list of at most {max_items} strings")
         return value
 
+    def objects(self, name: str, max_items: int = 50) -> list[dict]:
+        value = self._take(name, [])
+        if (not isinstance(value, list) or len(value) > max_items
+                or not all(isinstance(item, dict) for item in value)):
+            raise BadRequest(f"{name} must be a list of at most {max_items} objects")
+        return value
+
     def mapping(self, name: str) -> dict:
         value = self._take(name, {})
         if not isinstance(value, dict):

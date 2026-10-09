@@ -8,11 +8,13 @@ through the functions here.
 
 import configparser
 import json
+import math
 import re
 from pathlib import Path
 
 from .errors import BadRequest
 from .paths import COLLECTIONS_DIR, LIBEXEC_DIR
+from .survey import check_variable
 from .validators import (
     check_git_ref,
     check_git_url,
@@ -35,6 +37,7 @@ CREDENTIAL_OPTIONS = {
 }
 
 _VAULT_FILE_RE = re.compile(r"vault_password_[0-9]{1,3}")
+_SURVEY_FILE_RE = re.compile(r"survey_[0-9]{1,2}")
 
 # Packaged helper that prints a secret from the file named in its environment.
 # The run's scratch directory is mounted noexec, so it cannot be written there.
@@ -188,6 +191,72 @@ def _vault_args(spec: dict, credentials_dir: Path | None) -> list[str]:
     return argv
 
 
+def _yaml_string(value: str) -> str:
+    """A double-quoted YAML scalar, with everything but plain ASCII escaped."""
+    out = []
+    for ch in value:
+        code = ord(ch)
+        if ch in '"\\':
+            out.append("\\" + ch)
+        elif 0x20 <= code < 0x7F:
+            out.append(ch)
+        elif code <= 0xFF:
+            out.append(f"\\x{code:02X}")
+        elif code <= 0xFFFF:
+            out.append(f"\\u{code:04X}")
+        else:
+            out.append(f"\\U{code:08X}")
+    return '"' + "".join(out) + '"'
+
+
+def survey_vars_file(variables: object) -> str:
+    """The answers to a survey, as a YAML file of variables.
+
+    Ansible renders a variable that holds "{{ ... }}" as a template wherever
+    it is used, lookups included. These values come from whoever launched the
+    run, so every string is tagged !unsafe: it is used as it is written.
+    """
+    if not isinstance(variables, dict) or len(variables) > 100:
+        raise BadRequest("survey_vars must be an object")
+    lines = []
+    for name, value in variables.items():
+        check_variable(name)
+        if isinstance(value, str):
+            text = f"!unsafe {_yaml_string(value)}"
+        elif isinstance(value, bool):
+            text = "true" if value else "false"
+        elif isinstance(value, (int, float)) and math.isfinite(value):
+            text = repr(value)
+            if "e" in text and "." not in text:
+                # YAML 1.1 reads "1e+16" as a string: a float needs its dot.
+                text = text.replace("e", ".0e")
+        else:
+            raise BadRequest(f"survey_vars: invalid value for {name}")
+        lines.append(f"{name}: {text}\n")
+    return "".join(lines)
+
+
+def survey_secrets(secrets: object, credentials_dir: Path | None) -> dict[str, str]:
+    """The secret answers of a run, by variable, read from its credentials.
+
+    A missing one stops the run: a playbook must not go on without a variable
+    it was promised, or with the fixed value the answer was meant to replace.
+    """
+    if not isinstance(secrets, dict) or len(secrets) > 30:
+        raise BadRequest("survey_secrets must be an object")
+    values = {}
+    for name, file in secrets.items():
+        if not isinstance(file, str) or not _SURVEY_FILE_RE.fullmatch(file):
+            raise BadRequest("invalid survey secret entry")
+        try:
+            if credentials_dir is None:
+                raise FileNotFoundError
+            values[name] = (credentials_dir / f"fleet_{file}").read_text()
+        except (OSError, UnicodeDecodeError):
+            raise BadRequest(f"the secret answer for {name} is missing or unreadable") from None
+    return values
+
+
 def build_argv(
     spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
 ) -> list[str]:
@@ -222,6 +291,18 @@ def build_argv(
         vars_file = runtime_dir / "extra_vars.json"
         vars_file.write_text(json.dumps(extra_vars))
         argv += ["--extra-vars", f"@{vars_file}"]
+    answers = spec.get("survey_vars", {})
+    secrets = survey_secrets(spec.get("survey_secrets", {}), credentials_dir)
+    if answers or secrets:
+        if not isinstance(answers, dict):
+            raise BadRequest("survey_vars must be an object")
+        # After the template's variables: an answer wins over a fixed value.
+        # Secret answers are in clear in this file: it is in the run's runtime
+        # directory, on tmpfs, private to the unit and removed with it.
+        survey_file = runtime_dir / "survey_vars.yml"
+        survey_file.touch(mode=0o600)
+        survey_file.write_text(survey_vars_file({**answers, **secrets}))
+        argv += ["--extra-vars", f"@{survey_file}"]
 
     argv += _credential_args(
         credentials_dir, ("private_key", "connection_password", "become_password"))

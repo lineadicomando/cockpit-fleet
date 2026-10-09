@@ -6,20 +6,22 @@ Icinga: niente tempo reale, alert "ragionevolmente tempestivi".
 
 ## Stato
 
-Fasi 0, 1, 2 concluse l'8 ottobre 2026. **Prossima: fase 3.**
-`main` è allineato con `origin`; la CI su Gitea è verde.
+Fasi 0, 1, 2 concluse l'8 ottobre 2026. **In corso: fase 3** (survey fatto il 9
+ottobre). `main` è allineato con `origin`.
 
 Per riprendere: leggere `CLAUDE.md` (regole, comandi, ambiente di test), poi
 `docs/architecture.md` (cosa esiste e perché). Questo file dice solo cosa manca.
 
 Cosa funziona oggi: progetti (git o directory locale), inventari, credenziali con
-segreti cifrati, chiavi host attendibili, template, run con coda, annullamento,
-output live, vista per task ed esito per host; ruoli da gruppi Unix e audit.
+segreti cifrati, chiavi host attendibili, template con survey, run con coda,
+annullamento, output live, vista per task ed esito per host; ruoli da gruppi Unix
+e audit.
 Provato su nodi Linux (container) e Windows via SSH.
 
-Stato della VM di test `deb13-samba-dc`: pacchetto `cockpit-fleet` installato, con
-`ansible-core`, `sshpass`, `podman`. Resta il segreto `it-win-key` (chiave del
-controller, autorizzata su `win11-pc00`). Nessun dato o account di prova.
+Stato della VM di test `deb13-samba-dc`: il 9 ottobre era senza `cockpit-fleet`
+(come dopo un ritorno allo snapshot `baseline`); reinstallato con `ansible`,
+`sshpass`, `podman`. Il segreto `it-win-key` non c'è più: va ricreato prima di
+`windows.sh`. Nessun dato o account di prova.
 
 ## Decisioni
 
@@ -32,8 +34,9 @@ controller, autorizzata su `win11-pc00`). Nessun dato o account di prova.
 | Identità | Account di sistema `cockpit-fleet`; root solo in `fleet-unit` e `fleet-secret` |
 | Ruoli | Gruppi `cockpit-fleet-admin`, `-operator`, `-viewer` |
 | Viewer | Vede stato ed esito per host delle run, non l'output |
-| Operator | Lancia template; può restringere gli host e chiedere la prova a vuoto, non allargare il limite né cambiare le variabili |
+| Operator | Lancia template; può restringere gli host e chiedere la prova a vuoto, non allargare il limite; dà variabili solo rispondendo al survey |
 | Segreti | `systemd-creds`; solo PID 1 li decifra, per la singola run |
+| Segreti nel survey | L'operator li consegna a `fleet-secret answer`, che sceglie il nome e restituisce un biglietto usa e getta; la run lo consuma |
 | Ansible | Pacchetto Debian `ansible-core`; collection extra nel progetto |
 | `ansible.cfg` del progetto | Non usato direttamente: passano solo le chiavi in allowlist |
 | Sorgenti dei progetti | Git, directory locale (fatte); editor nella UI, upload (fase 3) |
@@ -71,8 +74,8 @@ controller, autorizzata su `win11-pc00`). Nessun dato o account di prova.
 
 ## Fase 3 — Runner completo
 
-- [ ] **Survey**: campi tipizzati (testo, numero, scelta, booleano, segreto), default,
-      validazione nel backend; è il modo in cui un operator potrà dare variabili
+- [x] **Survey**: testo, numero, scelta, booleano, segreto; provato sulla VM
+      (`privileges.sh`, `roles.sh`, `runs.sh`, `sandbox.sh`) e dalla UI
 - [ ] **Vista delle differenze** per host nella prova a vuoto (`--check --diff` e il
       diff negli eventi esistono già)
 - [ ] **Editor nella UI**: progetto come repo git locale, commit automatico con
