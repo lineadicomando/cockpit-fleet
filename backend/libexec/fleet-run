@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/cockpit-fleet")
 
-from cockpit_fleet import runner  # noqa: E402
+from cockpit_fleet import archive, runner  # noqa: E402
 from cockpit_fleet.errors import FleetError  # noqa: E402
 from cockpit_fleet.names import check_id  # noqa: E402
 from cockpit_fleet.paths import RUNS_DIR  # noqa: E402
@@ -85,6 +85,18 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
         # Only the files are kept: nothing outside the sandbox runs git on them.
         shutil.rmtree(checkout / ".git")
         return {"rc": 0, "revision": revision}
+
+    if kind == "unpack":
+        done = archive.extract(run_dir / "archive", run_dir / "checkout")
+        lines = [f"{done['files']} files, {done['links']} links, {done['bytes']} bytes"]
+        if done["stripped"]:
+            lines.append(f"the content of {done['stripped']}/ is the project")
+        if done["skipped"]:
+            lines.append(f"{done['skipped']} members left out (git's own)")
+        text = "".join(line + "\n" for line in lines).encode()
+        log.write(text)
+        sys.stdout.buffer.write(text)
+        return {"rc": 0, **done}
 
     if kind == "syntax":
         env = runner.build_env(run_dir, runtime_dir, events=False)

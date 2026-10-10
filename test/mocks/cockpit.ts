@@ -25,7 +25,7 @@ export function setSpawnHandler(h: SpawnHandler): void {
 }
 
 interface SpawnProcess extends Promise<string> {
-    input(data: string): SpawnProcess;
+    input(data: string, stream?: boolean): SpawnProcess;
 }
 
 const cockpit = {
@@ -34,7 +34,8 @@ const cockpit = {
         calls.push(call);
         // Deferred by a microtask so a chained .input() is recorded first.
         const p = Promise.resolve().then(() => handler(call)) as SpawnProcess;
-        p.input = (data: string) => { call.input = data; return p; };
+        // Sent in pieces, with stream set on all but the last: joined here.
+        p.input = (data: string) => { call.input = (call.input ?? "") + data; return p; };
         return p;
     },
     location: { path: [] as string[], options: {}, go() { /* no-op */ } },

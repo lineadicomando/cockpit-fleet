@@ -45,19 +45,23 @@ function classify(ex: unknown): AccessError {
 // Set once a call only went through with Cockpit's administrative access.
 let elevated = false;
 
-function spawn(argv: string[], input: string, superuser: boolean): Promise<string> {
-    return cockpit
-        .spawn(["sudo", "-n", ...argv], {
-            err: "message",
-            // English messages from sudo, so that classify() can read them.
-            environ: ["LC_ALL=C"],
-            ...(superuser ? { superuser: "try" as const } : {}),
-        })
-        .input(input);
+// An input in pieces is one too large to be sent, or even built, as a whole.
+type Input = string | string[];
+
+function spawn(argv: string[], input: Input, superuser: boolean): Promise<string> {
+    const process = cockpit.spawn(["sudo", "-n", ...argv], {
+        err: "message",
+        // English messages from sudo, so that classify() can read them.
+        environ: ["LC_ALL=C"],
+        ...(superuser ? { superuser: "try" as const } : {}),
+    });
+    if (typeof input === "string") return process.input(input);
+    for (const piece of input.slice(0, -1)) process.input(piece, true);
+    return process.input(input[input.length - 1] ?? "");
 }
 
 // Runs one of the helpers through sudo, with its input on stdin.
-async function run(argv: string[], input: string): Promise<string> {
+async function run(argv: string[], input: Input): Promise<string> {
     try {
         return await spawn(argv, input, elevated);
     } catch (ex) {
@@ -76,8 +80,13 @@ async function run(argv: string[], input: string): Promise<string> {
 }
 
 // Calls one backend command. Parameters travel as JSON on stdin, never in argv.
-export async function call<T>(command: string, params: object = {}): Promise<T> {
-    const output = await run(["-u", "cockpit-fleet", FLEETCTL, command], JSON.stringify(params));
+export function call<T>(command: string, params: object = {}): Promise<T> {
+    return callWith<T>(command, JSON.stringify(params));
+}
+
+// The same, for parameters already written as JSON, whole or in pieces.
+export async function callWith<T>(command: string, json: string | string[]): Promise<T> {
+    const output = await run(["-u", "cockpit-fleet", FLEETCTL, command], json);
     let answer: { ok: boolean; data?: T; error?: { code: string; message: string } };
     try {
         answer = JSON.parse(output);

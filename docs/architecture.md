@@ -123,6 +123,8 @@ backend. The command is a name from a registry; parameters are a JSON object
 on stdin; the answer is one JSON object, `{"ok": true, "data": …}` or
 `{"ok": false, "error": {"code", "message"}}`. The exit status is 0 whenever an
 answer was written, so a failed exit always means the backend was not reached.
+The input is at most 1 MB, for every command but `project.upload`, which
+declares its own limit.
 
 - **Who is calling.** fleetctl refuses to run as anything but the service
   account, so it is always reached through sudo, which sets `SUDO_UID` and does
@@ -154,12 +156,13 @@ through `Params` (which rejects unknown ones), and a test in `backend/tests`.
 
 ## Jobs
 
-A run unit executes one job, of one of four kinds, described by `spec.json`
+A run unit executes one job, of one of five kinds, described by `spec.json`
 in its directory: `playbook` (ansible-playbook), `inventory`
 (`ansible-inventory --list`, to learn hosts and groups), `sync` (fetch a git
-project) and `syntax` (check a playbook without running it). All of them need
-the sandbox, because all of them can execute code from a project: inventory
-plugins and scripts, git itself, or the rules a project gives to ansible-lint.
+project), `syntax` (check a playbook without running it) and `unpack` (extract
+an uploaded archive). All of them need the sandbox, because all of them work
+on what a project brings: inventory plugins and scripts, git itself, the rules
+a project gives to ansible-lint, or an archive made by anyone.
 
 When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 
@@ -171,8 +174,8 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 | `known_hosts` | the host keys an administrator has trusted |
 | `inventory/` | the inventory, when it is written in the interface rather than a project file |
 
-The run then sees a self-contained directory and nothing else. `project/` and
-`creds/` are removed when the job ends; `stdout.log`, `events.jsonl` and
+The run then sees a self-contained directory and nothing else. `project/`,
+`creds/` and an uploaded `archive` are removed when the job ends; `stdout.log`, `events.jsonl` and
 `result.json` stay.
 
 There is no daemon tracking jobs. The `runs` table holds the state, and
@@ -214,8 +217,52 @@ never patterns.
 A write quotes the SHA-256 of the content it started from, empty for a new
 file: one that someone else changed meanwhile is refused instead of
 overwritten. The content is not copied into the audit record. Files are text,
-UTF-8, up to 512 kB. The same page shows the files of git and local projects,
-read-only.
+UTF-8, up to 512 kB. The same page shows the files of the other kinds of
+project, read-only.
+
+**Uploaded projects.** A fourth kind of project, `archive`, gets its files
+from a tar (plain, gzip, bzip2 or xz) or a zip chosen in the browser. They are
+not edited afterwards: another archive replaces the whole tree.
+
+```
+browser ── {"id", "filename", "data": base64} on stdin ──▶ fleetctl project.upload
+                 │ counts and digests the bytes, writes runs/<id>/archive
+                 ▼
+cockpit-fleet-run@<id>   unpack: archive → checkout.unpack/ → checkout/
+                 ▼
+reconcile        checkout/ replaces projects/<id>/tree; revision = SHA-256 of the archive
+```
+
+The archive travels like every other parameter, so there is still one way
+into the backend. The browser sends the JSON in pieces of 256 kB on the same
+standard input, and `fleetctl` holds it in memory whole: that is what bounds
+the size, 20 MB by default (`projects.max_upload_mb`, at most 50). `fleetctl`
+does nothing with the archive but count and digest its bytes; the format is
+read from the content, in the sandbox, never from the name.
+
+The job does not call `extract` of `tarfile` or `zipfile`: `archive.py` reads
+the members and writes each one itself.
+
+| In the archive | What happens |
+|---|---|
+| a regular file, a directory | written, private to the account; only the executable bit is kept |
+| a path that is absolute, has `..`, a backslash or a control character, or is deeper than 32 levels | the archive is refused |
+| a hard link, a device, a fifo; an encrypted zip | refused |
+| a symbolic link | made last, when no file is left to be written through one; refused unless it stays inside the tree, both as written and as the kernel follows it |
+| the same path twice; a file where a directory is | refused |
+| anything under `.git`, in any case | left out |
+| more than 20 000 files, or more than 500 MB once unpacked | refused; the size is counted as it is written, not as declared |
+
+A refused archive leaves nothing: the project keeps the tree and the revision
+it had, and shows the reason. A single directory that holds everything else,
+as `project-1.0/` in most archives, is not kept: its content is the project.
+The revision is the digest `fleetctl` took of what it received, not something
+the job reports; and what the job leaves is taken as the tree only if it is a
+directory, not a link (the same now holds for a git fetch).
+
+Measured on the test controller, from the browser through Cockpit: an archive
+of 19 MB is answered in 1.7 s and unpacked in under a second; 600 MB of zeros
+in a gzip of 600 kB are refused at the limit.
 
 **Syntax checks.** Saving a file that looks like a playbook (a YAML list with
 a play at its top level) queues a `syntax` job on a copy of the project:
@@ -420,6 +467,7 @@ bundled collection.
 | Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
 | A whole run through fleetctl | `test/integration/runs.sh` | controller, as root; wipes the database |
 | Projects written in the interface | `test/integration/files.sh` | controller, as root; wipes the database |
+| Projects uploaded as an archive | `test/integration/upload.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

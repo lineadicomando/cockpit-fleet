@@ -11,6 +11,9 @@ from pathlib import Path, PurePosixPath
 
 from .errors import Unavailable
 
+# An archive reaches fleetctl whole, on its input: this bounds its memory.
+MAX_UPLOAD_MB = 50
+
 _PROXY_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?")
 
 
@@ -20,6 +23,7 @@ class Config:
     default_forks: int = 5
     max_forks: int = 50
     local_project_roots: tuple[str, ...] = ()
+    max_upload_mb: int = 20
     proxy: str = ""
 
     def as_dict(self) -> dict:
@@ -72,7 +76,7 @@ def parse(text: str) -> Config:
     if default_forks > max_forks:
         raise ConfigError("runs.default_forks cannot exceed runs.max_forks")
 
-    projects = _section(data, "projects", {"local_roots"})
+    projects = _section(data, "projects", {"local_roots", "max_upload_mb"})
     roots = projects.get("local_roots", [])
     if not isinstance(roots, list):
         raise ConfigError("projects.local_roots must be a list")
@@ -87,6 +91,8 @@ def parse(text: str) -> Config:
         default_forks=default_forks,
         max_forks=max_forks,
         local_project_roots=tuple(_root(root) for root in roots),
+        max_upload_mb=_int(projects, "projects", "max_upload_mb", Config.max_upload_mb,
+                           1, MAX_UPLOAD_MB),
         proxy=proxy,
     )
 

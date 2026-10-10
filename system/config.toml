@@ -13,6 +13,8 @@
 # Directories of this machine that may be used as a project as they are.
 # Empty means that local-directory projects are disabled.
 #local_roots = ["/srv/ansible"]
+# Largest archive that can be uploaded as a project, in MB (at most 50).
+#max_upload_mb = 20
 
 [network]
 # Proxy for outgoing connections (git, ansible-galaxy, notifications).

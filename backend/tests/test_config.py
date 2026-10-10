@@ -43,6 +43,8 @@ class ConfigTest(unittest.TestCase):
             "[projects]\nlocal_roots = [\"srv\"]": "absolute paths",
             "[projects]\nlocal_roots = [\"/srv/../etc\"]": "not usable",
             "[projects]\nlocal_roots = [\"/\"]": "not usable",
+            "[projects]\nmax_upload_mb = 51": "projects.max_upload_mb",
+            "[projects]\nmax_upload_mb = 0": "projects.max_upload_mb",
             "[network]\nproxy = \"proxy:3128\"": "network.proxy",
             "[network]\nproxy = \"http://u:p@proxy\"": "network.proxy",
             "runs = 3": "\\[runs\\] must be a table",

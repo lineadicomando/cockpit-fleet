@@ -298,9 +298,6 @@ msgstr "Una credenziale contiene ciò che serve a una run per accedere ai nodi, 
 msgid "A job template puts together a playbook, an inventory and the credentials to run it. Once defined, it is launched with one click."
 msgstr "Un template mette insieme un playbook, un inventario e le credenziali per eseguirlo. Una volta definito, si lancia con un clic."
 
-msgid "A project is where playbooks, roles and inventory files come from: a git repository or a directory of this server."
-msgstr "Un progetto è la provenienza di playbook, ruoli e file di inventario: un repository git o una directory di questo server."
-
 msgid "Access token"
 msgstr "Token di accesso"
 
@@ -980,3 +977,54 @@ msgid "trust_keys_count"
 msgid_plural "trust_keys_count_plural"
 msgstr[0] "Considera attendibile {{count}} chiave"
 msgstr[1] "Considera attendibili {{count}} chiavi"
+
+msgid "A project is where playbooks, roles and inventory files come from: a git repository, a directory of this server, files written here or an uploaded archive."
+msgstr "Un progetto è il luogo da cui provengono playbook, ruoli e file di inventario: un repository git, una directory di questo server, file scritti qui o un archivio caricato."
+
+msgid "A tar archive, compressed or not, or a zip, of at most {{size}} MB."
+msgstr "Un archivio tar, compresso o no, oppure uno zip, di {{size}} MB al massimo."
+
+msgid "Archive"
+msgstr "Archivio"
+
+msgid "Archive upload"
+msgstr "Caricamento archivio"
+
+msgid "Browse…"
+msgstr "Sfoglia…"
+
+msgid "Choose a file"
+msgstr "Scegli un file"
+
+msgid "Clear"
+msgstr "Svuota"
+
+msgid "No archive yet"
+msgstr "Nessun archivio ancora"
+
+msgid "The files come from an archive chosen in the next step. They are not changed here: a new archive replaces them all."
+msgstr "I file provengono da un archivio scelto al passo successivo. Qui non si modificano: un nuovo archivio li sostituisce tutti."
+
+msgid "The files of the archive become the files of this project."
+msgstr "I file dell'archivio diventano i file di questo progetto."
+
+msgid "The files of the archive replace the ones this project has now, all of them."
+msgstr "I file dell'archivio sostituiscono tutti quelli che il progetto ha ora."
+
+msgid "The project and the files unpacked for it are deleted."
+msgstr "Il progetto e i file estratti per esso vengono eliminati."
+
+msgid "These files come from an uploaded archive: to change them, upload another one."
+msgstr "Questi file provengono da un archivio caricato: per modificarli, caricane un altro."
+
+msgid "Upload"
+msgstr "Carica"
+
+msgid "Upload an archive"
+msgstr "Carica un archivio"
+
+msgid "Upload an archive for {{name}}"
+msgstr "Carica un archivio per {{name}}"
+
+msgid "Uploaded archive"
+msgstr "Archivio caricato"

@@ -240,7 +240,9 @@ export function FilesPage({ id }: { id: string }) {
                 <Alert variant="info" isInline isPlain style={{ marginBottom: "1rem" }}
                     title={project.kind === "git"
                         ? t("These files come from a git repository: they are changed there, and fetched again with “Update from git”.")
-                        : t("These files are a directory of this server: they are changed there.")} />
+                        : project.kind === "archive"
+                            ? t("These files come from an uploaded archive: to change them, upload another one.")
+                            : t("These files are a directory of this server: they are changed there.")} />
             )}
             <ListState loaded={list} isEmpty={data => data.files.length === 0}
                 emptyTitle={t("No files")}

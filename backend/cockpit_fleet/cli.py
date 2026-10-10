@@ -35,16 +35,22 @@ class Command:
     handler: Callable
     mutating: bool
     redact: tuple[str, ...]
+    max_input: int
 
 
 COMMANDS: dict[str, Command] = {}
 
 
-def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...] = ()):
-    """Register a handler. Every command states the least role that may call it."""
+def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...] = (),
+            max_input: int = MAX_INPUT):
+    """Register a handler. Every command states the least role that may call it.
+
+    max_input is for the one command that takes a file: the others never need
+    more than the default.
+    """
 
     def register(handler: Callable) -> Callable:
-        COMMANDS[name] = Command(name, role, handler, mutating, redact)
+        COMMANDS[name] = Command(name, role, handler, mutating, redact, max_input)
         return handler
 
     return register
@@ -152,8 +158,8 @@ class Params:
             raise BadRequest(f"unknown parameter: {', '.join(sorted(self._data))}")
 
 
-def _parse_input(raw: bytes) -> dict:
-    if len(raw) > MAX_INPUT:
+def _parse_input(raw: bytes, limit: int = MAX_INPUT) -> dict:
+    if len(raw) > limit:
         raise BadRequest("input too large")
     if not raw.strip():
         return {}
@@ -173,7 +179,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
     try:
         if spec is None:
             raise BadRequest(f"unknown command: {name}")
-        params = _parse_input(raw)
+        params = _parse_input(raw, spec.max_input)
         if not role_at_least(ctx.caller.role, spec.role):
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
                          f"requires {spec.role}", spec.redact)
@@ -211,7 +217,8 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
 
     os.umask(0o077)
     ctx = Context(resolve_caller(env, service_uid))
-    answer = dispatch(argv[1], sys.stdin.buffer.read(MAX_INPUT + 1), ctx)
+    limit = COMMANDS[argv[1]].max_input if argv[1] in COMMANDS else MAX_INPUT
+    answer = dispatch(argv[1], sys.stdin.buffer.read(limit + 1), ctx)
     json.dump(answer, sys.stdout, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0

@@ -8,6 +8,7 @@ ends (cockpit-fleet-finish@.service) and whenever runs are read.
 import json
 import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -64,10 +65,12 @@ def take_answer(directory: Path, ticket: str, purpose: str) -> None:
 
 def project_tree(project, config) -> Path:
     """Where the files of a project are on this machine."""
-    if project["kind"] in ("git", "managed"):
+    if project["kind"] in ("git", "managed", "archive"):
         tree = paths.PROJECTS_DIR / project["id"] / "tree"
         if not tree.is_dir():
-            raise Conflict("this project has not been synchronised yet")
+            raise Conflict("this project has no files yet: upload an archive"
+                           if project["kind"] == "archive"
+                           else "this project has not been synchronised yet")
         return tree
     tree = Path(project["path"]).resolve()
     roots = [Path(root).resolve() for root in config.local_project_roots]
@@ -215,7 +218,11 @@ def _collect(ctx, run) -> None:
         if status == "successful" and run["kind"] == "sync":
             revision = str(result.get("revision", ""))
             extra["revision"] = _store_checkout(ctx, run, directory, revision)
-        elif run["kind"] == "sync":
+        elif run["kind"] == "unpack" and status == "successful":
+            # The digest fleetctl took of what it received, not a claim of the job.
+            revision = str(store.loads(run["options"], {}).get("sha256", ""))
+            extra["revision"] = _store_checkout(ctx, run, directory, revision)
+        elif run["kind"] in ("sync", "unpack") and run["project_id"]:
             store.update(ctx.conn, "projects", run["project_id"],
                          {"sync_error": _log_tail(directory)}, "project")
     except (FleetError, OSError) as failure:
@@ -223,8 +230,9 @@ def _collect(ctx, run) -> None:
 
     _finish(ctx, run_id, status, rc, error, extra)
     # The copy of the project and the ciphertext are only needed while it runs.
-    for leftover in ("project", "creds", "checkout", "inventory"):
+    for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory"):
         shutil.rmtree(directory / leftover, ignore_errors=True)
+    (directory / "archive").unlink(missing_ok=True)
 
 
 def _log_tail(directory: Path, limit: int = 2000) -> str:
@@ -281,7 +289,12 @@ def parse_inventory(listing: dict) -> list[dict]:
 
 
 def _store_checkout(ctx, run, directory: Path, revision: str) -> str:
-    """Replace the project's files with the tree a sync job fetched."""
+    """Replace the project's files with the tree a sync or unpack job left."""
+    if not run["project_id"]:
+        raise Conflict("the project was deleted meanwhile")
+    # What a job left is not trusted: a link here would become the tree.
+    if not stat.S_ISDIR(os.lstat(directory / "checkout").st_mode):
+        raise Conflict("the job did not leave a directory")
     home = paths.PROJECTS_DIR / check_id(run["project_id"], "project id")
     home.mkdir(mode=0o700, exist_ok=True)
     old = home / "tree.old"

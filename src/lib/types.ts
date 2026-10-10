@@ -47,7 +47,8 @@ export interface Project {
     id: string;
     name: string;
     // "managed": written in the interface, each change a commit.
-    kind: "local" | "git" | "managed";
+    // "archive": uploaded as a whole, its revision the digest of the archive.
+    kind: "local" | "git" | "managed" | "archive";
     path: string;
     url: string;
     ref: string;
@@ -169,7 +170,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "inventory" | "sync" | "syntax";
+    kind: "playbook" | "inventory" | "sync" | "syntax" | "unpack";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -186,6 +187,8 @@ export interface Run {
         limit?: string; check?: boolean; diff?: boolean; answers?: Record<string, SurveyValue>; secret_answers?: string[];
         // A syntax check: the playbook, and what ansible-lint said if it is installed.
         path?: string; lint?: "clean" | "findings";
+        // An uploaded archive.
+        filename?: string; size?: number; sha256?: string;
     };
     stats: Record<string, HostStats>;
     cursor?: number;

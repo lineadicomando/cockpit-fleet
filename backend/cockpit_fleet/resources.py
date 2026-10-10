@@ -7,10 +7,12 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
+import unicodedata
+from pathlib import Path, PurePosixPath
 
 from . import files, jobs, paths, store, survey
 from .cli import Context, Params, command
+from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
 from .validators import (
@@ -120,7 +122,8 @@ def project_list(ctx: Context, params: Params) -> dict:
     jobs.reconcile(ctx)  # a finished sync job may have a new revision to show
     rows = ctx.conn.execute("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
     return {"projects": [_project(row) for row in rows],
-            "local_roots": list(ctx.config.local_project_roots)}
+            "local_roots": list(ctx.config.local_project_roots),
+            "max_upload_mb": ctx.config.max_upload_mb}
 
 
 def _project_values(ctx: Context, params: Params, kind: str) -> dict:
@@ -140,7 +143,7 @@ def _project_values(ctx: Context, params: Params, kind: str) -> dict:
 
 @command("project.create", role="admin", mutating=True)
 def project_create(ctx: Context, params: Params) -> dict:
-    kind = params.choice("kind", ("local", "git", "managed"))
+    kind = params.choice("kind", ("local", "git", "managed", "archive"))
     values = _project_values(ctx, params, kind)
     params.done()
     project_id = store.new_id("p")
@@ -198,6 +201,53 @@ def project_sync(ctx: Context, params: Params) -> dict:
     jobs.enqueue(ctx, {"id": run_id, "kind": "sync", "title": project["name"],
                        "project_id": project_id}, spec, directory)
     return {"run_id": run_id}
+
+
+# The archive travels as base64 in the JSON on stdin, like every parameter.
+_MAX_UPLOAD_TEXT = MAX_UPLOAD_MB * 1024 * 1024 * 4 // 3 + 4
+
+
+@command("project.upload", role="admin", mutating=True, redact=("data",),
+         max_input=_MAX_UPLOAD_TEXT + 64 * 1024)
+def project_upload(ctx: Context, params: Params) -> dict:
+    """Take an archive as the new files of a project; a job unpacks it.
+
+    Nothing of the archive is read here but its bytes, to count and to digest
+    them: the digest is the revision the project gets if the job succeeds.
+    """
+    project_id = params.ident("id")
+    filename = params.string("filename", "", 1024)
+    data = params.string("data", max_length=_MAX_UPLOAD_TEXT)
+    params.done()
+    project = store.fetch(ctx.conn, "projects", project_id, "project")
+    if project["kind"] != "archive":
+        raise BadRequest("only a project made of an archive takes an upload")
+    try:
+        content = base64.b64decode(data, validate=True)
+    except ValueError as error:
+        raise BadRequest("data is not valid base64") from error
+    if not content:
+        raise BadRequest("the archive is empty")
+    if len(content) > ctx.config.max_upload_mb * 1024 * 1024:
+        raise BadRequest(f"the archive is larger than {ctx.config.max_upload_mb} MB"
+                         " (projects.max_upload_mb in config.toml)")
+    digest = hashlib.sha256(content).hexdigest()
+    # Shown with the run, nothing else: the format is read from the content.
+    shown = "".join(ch for ch in PurePosixPath(filename.replace("\\", "/")).name
+                    if unicodedata.category(ch)[0] != "C")[:200]
+
+    run_id = store.new_id("r")
+    directory = jobs.create_dir(run_id)
+    try:
+        (directory / "archive").write_bytes(content)
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+    options = {"filename": shown, "size": len(content), "sha256": digest}
+    jobs.enqueue(ctx, {"id": run_id, "kind": "unpack", "title": project["name"],
+                       "project_id": project_id, "options": json.dumps(options)},
+                 {"kind": "unpack"}, directory)
+    return {"run_id": run_id, **options}
 
 
 @command("project.files", role="admin")

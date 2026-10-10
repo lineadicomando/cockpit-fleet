@@ -22,7 +22,7 @@ const MAX_SHOWN = 400_000;
 
 function useKinds() {
     const { t } = useTranslation();
-    return { playbook: t("Playbook"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check") } as Record<Run["kind"], string>;
+    return { playbook: t("Playbook"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload") } as Record<Run["kind"], string>;
 }
 
 export function RunsPage() {
@@ -335,6 +335,12 @@ export function RunDetailPage({ id }: { id: string }) {
                             <DescriptionListTerm>{t("Duration")}</DescriptionListTerm>
                             <DescriptionListDescription>{runDuration(data, Date.now() / 1000)}</DescriptionListDescription>
                         </DescriptionListGroup>
+                        {data.options.filename && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Archive")}</DescriptionListTerm>
+                                <DescriptionListDescription>{data.options.filename}</DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
                         {data.options.limit && (
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{t("Limit to hosts")}</DescriptionListTerm>

@@ -1,9 +1,10 @@
 """Turn a stored job specification into the commands a run unit executes.
 
-A job is one of four kinds: "playbook" (ansible-playbook), "inventory"
-(ansible-inventory, to list hosts and groups), "sync" (fetch a git project)
-and "syntax" (check a playbook without running it). Nothing from the frontend
-reaches a command line without going through the functions here.
+A job is one of five kinds: "playbook" (ansible-playbook), "inventory"
+(ansible-inventory, to list hosts and groups), "sync" (fetch a git project),
+"syntax" (check a playbook without running it) and "unpack" (extract an
+uploaded archive, which runs no command: see archive.py). Nothing from the
+frontend reaches a command line without going through the functions here.
 """
 
 import configparser
@@ -26,7 +27,7 @@ from .validators import (
     resolve_inside,
 )
 
-KINDS = ("playbook", "inventory", "sync", "syntax")
+KINDS = ("playbook", "inventory", "sync", "syntax", "unpack")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"
