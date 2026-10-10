@@ -928,6 +928,39 @@ msgstr "Viene cifrato appena digitato e consegnato solo a quell'esecuzione. Non 
 msgid "{{path}} has changes that were not saved."
 msgstr "{{path}} ha modifiche non salvate."
 
+msgid "Find"
+msgstr "Trova"
+
+msgid "Replace"
+msgstr "Sostituisci"
+
+msgid "next"
+msgstr "successivo"
+
+msgid "previous"
+msgstr "precedente"
+
+msgid "all"
+msgstr "tutti"
+
+msgid "match case"
+msgstr "maiuscole/minuscole"
+
+msgid "regexp"
+msgstr "espressione regolare"
+
+msgid "by word"
+msgstr "parola intera"
+
+msgid "replace"
+msgstr "sostituisci"
+
+msgid "replace all"
+msgstr "sostituisci tutti"
+
+msgid "close"
+msgstr "chiudi"
+
 msgid "checks_failed_count"
 msgid_plural "checks_failed_count_plural"
 msgstr[0] "{{count}} problema"

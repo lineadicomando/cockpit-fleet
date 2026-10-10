@@ -1,15 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, Radio, TextArea, TextInput } from "@patternfly/react-core";
+import { Alert, Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, Radio, TextInput } from "@patternfly/react-core";
 import { ActionsColumn, ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Credential, Inventory, Project } from "../lib/types.ts";
+import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
-
-const MONO = { fontFamily: "var(--pf-t--global--font--family--mono)" };
 
 function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory; onClose: () => void; onDone: () => void }) {
     const { t } = useTranslation();
@@ -63,8 +62,8 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                         <Radio id="inv-format-ini" name="inv-format" label="INI" isChecked={format === "ini"} onChange={() => setFormat("ini")} />
                     </FormGroup>
                     <FormGroup label={t("Hosts and groups")} fieldId="inv-content">
-                        <TextArea id="inv-content" value={content} onChange={(_e, value) => setContent(value)} rows={12}
-                            resizeOrientation="vertical" spellCheck={false} style={MONO}
+                        <CodeEditor key={format} className="fleet-code-field" label={t("Hosts and groups")} path={format === "yaml" ? "hosts.yml" : "hosts"}
+                            value={content} onChange={setContent}
                             placeholder={format === "yaml" ? "all:\n  hosts:\n    web01:\n      ansible_host: 192.0.2.10" : "[web]\nweb01 ansible_host=192.0.2.10"} />
                         <FormHelperText><HelperText><HelperTextItem>{t("Do not write passwords here: use a credential.")}</HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>

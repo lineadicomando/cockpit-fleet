@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextArea, TextInput } from "@patternfly/react-core";
+import { Button, Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextInput } from "@patternfly/react-core";
 import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { answerSecret, call } from "../lib/fleet.ts";
@@ -8,10 +8,10 @@ import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers, secretAnswers, toDraft } from "../lib/survey.ts";
 import type { Credential, Inventory, Project, Run, Template } from "../lib/types.ts";
+import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 
-const MONO = { fontFamily: "var(--pf-t--global--font--family--mono)" };
 const words = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
 interface Choices {
@@ -163,7 +163,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <Checkbox id="tpl-become" label={t("Run with privilege escalation (become)")} isChecked={become} onChange={(_e, value) => setBecome(value)} />
             </FormGroup>
             <FormGroup label={t("Extra variables")} fieldId="tpl-vars">
-                <TextArea id="tpl-vars" value={extraVars} onChange={(_e, value) => setExtraVars(value)} rows={4} resizeOrientation="vertical" spellCheck={false} style={MONO} placeholder={'{\n  "version": "1.2"\n}'} />
+                <CodeEditor className="fleet-code-field fleet-code-short" label={t("Extra variables")} path="vars.json" value={extraVars} onChange={setExtraVars} placeholder={'{\n  "version": "1.2"\n}'} />
                 <FormHelperText><HelperText><HelperTextItem>{t("A JSON object. Not for secrets: they would be stored in clear.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
             <SurveyEditor drafts={survey} onChange={setSurvey} />

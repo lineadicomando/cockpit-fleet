@@ -231,6 +231,27 @@ No vault password is given to a check.
 Checked on Debian 13 with ansible-core 2.19.11 and ansible-lint 25.2.1, which
 works inside the unit as it is.
 
+**The editor.** Files, the text of an inventory and a template's variables
+are edited with CodeMirror 6: highlighting (YAML with Jinja in it, INI, JSON,
+Python), indentation, search. It costs about 650 kB of bundle, which goes from
+0.65 to 1.3 MB. CodeMirror writes its styles into the page as a `<style>`
+element, which Cockpit's content security policy refuses; the editor is
+therefore mounted in a shadow root, where it uses constructed style sheets,
+which the policy allows. The policy is not relaxed.
+
+Completion for Ansible files has three sources. Keywords of plays, tasks and
+roles are a list in the frontend, and where the cursor is (a play, a task, the
+parameters of a module) is read from indentation, not from a parser: enough
+for a suggestion, and silent when in doubt. The names of the modules come from
+`module.list` and the parameters of one from `module.doc`, which run
+`ansible-doc` in `fleetctl`. That is outside the sandbox, so it only looks at
+what root installed: a closed environment, a throwaway home, `/` as working
+directory, no project. Modules that a project brings in its own collections
+are therefore not suggested. Listing the modules takes seconds (9201 of them
+with the `ansible` package, 0.9 MB), so the list is kept in
+`/var/lib/cockpit-fleet/cache` until a package or a system collection changes;
+the documentation of one module takes 0.4 s and is not kept.
+
 **A project's `ansible.cfg`** is not used as it is: a run gets a generated one
 with only the allowlisted keys of the project's file (`roles_path` and
 `collections_path` when they stay inside the project, `gathering`,

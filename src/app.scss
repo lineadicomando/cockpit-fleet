@@ -55,4 +55,9 @@
     @media (max-width: 48rem) { grid-template-columns: minmax(0, 1fr); }
 }
 .fleet-files-tree { max-block-size: 75vh; overflow: auto; }
-.fleet-editor textarea { min-block-size: 55vh; }
+
+// The box of an editor: it fills it and scrolls inside.
+.fleet-code { display: block; }
+.fleet-editor { block-size: 60vh; min-block-size: 16rem; }
+.fleet-code-field { block-size: 18rem; }
+.fleet-code-short { block-size: 8rem; }

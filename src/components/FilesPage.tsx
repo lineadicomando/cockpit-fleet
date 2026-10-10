@@ -2,19 +2,20 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Alert, AlertActionLink, Button, Content, ExpandableSection, Flex, FlexItem, FormGroup, FormHelperText, HelperText, HelperTextItem,
-    Label, Modal, ModalBody, ModalHeader, ModalVariant, Spinner, TextArea, TextInput, TreeView, type TreeViewDataItem,
+    Label, Modal, ModalBody, ModalHeader, ModalVariant, Spinner, TextInput, TreeView, type TreeViewDataItem,
 } from "@patternfly/react-core";
 import { FileIcon, FolderIcon, FolderOpenIcon } from "@patternfly/react-icons";
 import cockpit from "cockpit";
+import { ansibleSource } from "../lib/ansible-source.ts";
 import { ancestors, buildTree, isUsablePath, isYaml, type FileNode } from "../lib/files.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import type { Chunk, Commit, FileContent, Project, ProjectFiles, Run } from "../lib/types.ts";
+import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
 
-const MONO = { fontFamily: "var(--pf-t--global--font--family--mono)", fontSize: "var(--pf-t--global--font--size--sm)", whiteSpace: "pre" as const };
 // Up to this many files the tree starts open: there is nothing to look for.
 const OPEN_ALL = 40;
 
@@ -213,16 +214,8 @@ export function FilesPage({ id }: { id: string }) {
         }
     }
 
-    function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-        if ((event.ctrlKey || event.metaKey) && event.key === "s") {
-            event.preventDefault();
-            if (editable && dirty && !saving) save();
-        } else if (event.key === "Tab" && editable && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
-            // YAML is indented with spaces. Shift+Tab still leaves the field.
-            event.preventDefault();
-            document.execCommand("insertText", false, "  ");
-        }
-    }
+    // Ansible's keywords, and the modules installed on the controller.
+    const complete = useMemo(() => (path && editable && isYaml(path) ? ansibleSource(path) : undefined), [path, editable]);
 
     const tree = useMemo(() => {
         const files = list.data?.files ?? [];
@@ -282,9 +275,9 @@ export function FilesPage({ id }: { id: string }) {
                                     </Flex>
                                     {file
                                         ? (
-                                            <TextArea className="fleet-editor" aria-label={path} value={text} onChange={(_e, value) => setText(value)}
-                                                onKeyDown={onKeyDown} readOnlyVariant={editable ? undefined : "default"}
-                                                resizeOrientation="vertical" spellCheck={false} wrap="off" style={MONO} />
+                                            <CodeEditor key={path} className="fleet-editor" label={path} path={path} value={text} onChange={setText}
+                                                readOnly={!editable} complete={complete}
+                                                onSave={() => { if (editable && dirty && !saving) save(); }} />
                                         )
                                         : !error && <Spinner aria-label={t("Loading")} />}
                                     {editable && file && (

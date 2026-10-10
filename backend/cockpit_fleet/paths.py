@@ -5,6 +5,8 @@ from pathlib import Path
 STATE_DIR = Path("/var/lib/cockpit-fleet")
 RUNS_DIR = STATE_DIR / "runs"
 PROJECTS_DIR = STATE_DIR / "projects"
+# What can be computed again: the list of the installed modules.
+CACHE_DIR = STATE_DIR / "cache"
 
 # Encrypted credentials: written by root only, readable by the service user.
 SECRETS_DIR = Path("/etc/cockpit-fleet/secrets")

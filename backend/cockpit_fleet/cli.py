@@ -196,7 +196,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
 
 
 def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
-    from . import files, resources, runs, system  # noqa: F401  (register the commands)
+    from . import files, moduledocs, resources, runs, system  # noqa: F401  (register the commands)
 
     if len(argv) != 2:
         print("usage: fleetctl COMMAND < params.json", file=sys.stderr)

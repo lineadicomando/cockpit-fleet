@@ -124,6 +124,15 @@ expect_eq "the playbook did its work" "$(get "$(admin run.get "{\"id\": \"$run_i
 expect_eq "the run records the revision it ran" \
     "$(get "$run" 'a["data"]["revision"]')" "$(db "SELECT revision FROM projects WHERE id = '$id'")"
 
+# --- what the editor's completion asks ------------------------------------------------
+modules=$(admin module.list)
+expect_eq "the installed modules are listed" "$(get "$modules" '"ansible.builtin.copy" in a["data"]["modules"]')" True
+expect_ok "the list is kept for the next time" test -s /var/lib/cockpit-fleet/cache/modules.json
+expect_eq "a module tells its parameters" \
+    "$(get "$(admin module.doc '{"name": "ansible.builtin.copy"}')" '[o["required"] for o in a["data"]["options"] if o["name"] == "dest"]')" "[True]"
+expect_eq "a module name cannot be an option" "$(get "$(admin module.doc '{"name": "--version"}')" 'a["error"]["code"]')" bad_request
+expect_eq "operator cannot list modules" "$(get "$(ctl itoperator module.list)" 'a["error"]["code"]')" forbidden
+
 # --- reading the files of a project that is not written here ---------------------------
 mkdir -p /srv/fleet-it/plain && echo '- hosts: all' > /srv/fleet-it/plain/site.yml && ln -s /etc/shadow /srv/fleet-it/plain/link
 chmod -R a+rX /srv/fleet-it

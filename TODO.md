@@ -47,6 +47,7 @@ snapshot: senza, `files.sh` salta i controlli che lo riguardano.
 | `ansible.cfg` del progetto | Non usato direttamente: passano solo le chiavi in allowlist |
 | Sorgenti dei progetti | Git, directory locale, scritti nella UI (fatte); upload (fase 3) |
 | Progetti scritti nella UI | Repository git accanto all'albero, un commit per modifica, solo admin |
+| Editor | CodeMirror 6 in uno shadow root (la CSP di Cockpit resta com'è) |
 | Controllo di sintassi | Job in sandbox al salvataggio di un playbook; `ansible-lint` segnala, non boccia |
 | Notifiche | Telegram, webhook generico, SMTP, Matrix |
 | Dati dai nodi | Check di salute, CMDB, aggiornamenti, drift |
@@ -79,10 +80,16 @@ snapshot: senza, `files.sh` salta i controlli che lo riguardano.
   compare nell'audit come `root`.
 - I test di integrazione girano solo a mano sulla VM, non in CI.
 - Un inventario ha una sola credenziale vault (i template ne hanno più d'una).
-- Editor: una `textarea`, senza evidenziazione; si rinomina e si elimina un file
-  alla volta, non una directory; cambiare scheda con modifiche non salvate le
-  perde senza avviso; il controllo di sintassi non riceve password vault; ogni
-  controllo compare nell'elenco delle run.
+- Editor: si rinomina e si elimina un file alla volta, non una directory;
+  cambiare scheda con modifiche non salvate le perde senza avviso; il controllo
+  di sintassi non riceve password vault; ogni controllo compare nell'elenco
+  delle run.
+- Completamento: suggerisce solo i moduli installati sul controller, non quelli
+  delle collection dentro il progetto (va fatto in sandbox, insieme a Galaxy);
+  non suggerisce i sotto-parametri di un modulo; un file di task fuori da
+  `tasks/` o `handlers/` è trattato come un playbook.
+- `selfcheck` lascia `/var/lib/cockpit-fleet/.ansible` (`ansible --version` con
+  la home dell'account).
 
 ## Fase 3 — Runner completo
 
@@ -92,7 +99,9 @@ snapshot: senza, `files.sh` salta i controlli che lo riguardano.
       sulla VM (`runs.sh` e dalla UI)
 - [x] **Editor nella UI**: progetto come repo git locale, commit automatico con
       l'utente Cockpit come autore, `--syntax-check` al salvataggio, `ansible-lint`
-      se c'è; provato sulla VM (`files.sh` e dalla UI)
+      se c'è; provato sulla VM (`files.sh` e dalla UI). Editor CodeMirror con
+      evidenziazione, indentazione e completamento di parole chiave, moduli e
+      parametri
 - [ ] **Upload archivio**: estrazione sicura (path traversal, symlink, device, limiti),
       revisione immutabile con sha256
 - [ ] **Galaxy**: `requirements.yml` installato nel progetto in un job sandbox, cache
@@ -101,7 +110,9 @@ snapshot: senza, `files.sh` salta i controlli che lo riguardano.
       come playbook generato di un task (argomenti in file, non in argv)
 - [ ] **Inventari dinamici**: plugin YAML (da provare, il job è già in sandbox);
       script eseguibili spenti di default
-- [ ] `ansible-doc` per l'aiuto sui moduli
+- [ ] `ansible-doc` per l'aiuto sui moduli: nomi e parametri arrivano già al
+      completamento (`module.list`, `module.doc`); manca una pagina di aiuto con
+      esempi e valori di ritorno
 - [ ] Mascheramento dei segreti noti nei log salvati
 - [ ] Esportazione e importazione della configurazione, senza segreti
 
