@@ -46,7 +46,8 @@ export interface Credential {
 export interface Project {
     id: string;
     name: string;
-    kind: "local" | "git";
+    // "managed": written in the interface, each change a commit.
+    kind: "local" | "git" | "managed";
     path: string;
     url: string;
     ref: string;
@@ -54,6 +55,26 @@ export interface Project {
     revision: string;
     synced_at: number | null;
     sync_error: string;
+}
+
+export interface ProjectFiles {
+    files: { path: string; size: number }[];
+    truncated: boolean;
+    editable: boolean;
+}
+
+export interface FileContent {
+    path: string;
+    content: string;
+    // What a write quotes, so that a change made meanwhile is not overwritten.
+    sha256: string;
+}
+
+export interface Commit {
+    revision: string;
+    author: string;
+    time: number;
+    subject: string;
 }
 
 export interface InventoryHost {
@@ -148,7 +169,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "inventory" | "sync";
+    kind: "playbook" | "inventory" | "sync" | "syntax";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -161,7 +182,11 @@ export interface Run {
     rc: number | null;
     revision: string;
     error: string;
-    options: { limit?: string; check?: boolean; diff?: boolean; answers?: Record<string, SurveyValue>; secret_answers?: string[] };
+    options: {
+        limit?: string; check?: boolean; diff?: boolean; answers?: Record<string, SurveyValue>; secret_answers?: string[];
+        // A syntax check: the playbook, and what ansible-lint said if it is installed.
+        path?: string; lint?: "clean" | "findings";
+    };
     stats: Record<string, HostStats>;
     cursor?: number;
 }

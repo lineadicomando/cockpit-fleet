@@ -137,7 +137,9 @@ answer was written, so a failed exit always means the backend was not reached.
   cannot write to the database, so it logs to the journal only.
 - **Database.** SQLite in WAL mode at `/var/lib/cockpit-fleet/fleet.db`, mode
   0600. Migrations are an append-only list applied under a lock on connect; a
-  database from a newer version is refused.
+  database from a newer version is refused. They run with foreign keys off,
+  so that one can rebuild a table others refer to. The kinds of projects and
+  of runs are checked by the commands, not by the schema.
 - **Configuration.** `/etc/cockpit-fleet/config.toml`, root-owned. A missing
   file means defaults; an unknown key is an error, so a typo cannot silently
   leave a limit at its default.
@@ -152,11 +154,12 @@ through `Params` (which rejects unknown ones), and a test in `backend/tests`.
 
 ## Jobs
 
-A run unit executes one job, of one of three kinds, described by `spec.json`
+A run unit executes one job, of one of four kinds, described by `spec.json`
 in its directory: `playbook` (ansible-playbook), `inventory`
-(`ansible-inventory --list`, to learn hosts and groups) and `sync` (fetch a git
-project). All three need the sandbox, because all three can execute code from
-a project: inventory plugins and scripts, or git itself.
+(`ansible-inventory --list`, to learn hosts and groups), `sync` (fetch a git
+project) and `syntax` (check a playbook without running it). All of them need
+the sandbox, because all of them can execute code from a project: inventory
+plugins and scripts, git itself, or the rules a project gives to ansible-lint.
 
 When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 
@@ -186,6 +189,47 @@ only if the fetch succeeded. Hooks are disabled, submodules are not followed,
 and `GIT_ALLOW_PROTOCOL` leaves only https and ssh. A token is handed to git by
 an askpass helper that reads it from the credentials directory, so it is in
 neither argv nor the environment.
+
+**Projects written in the interface.** A third kind of project, `managed`,
+has no source elsewhere: its files are written in the "Files" page, one at a
+time, by administrators. They are the work tree of a git repository, and every
+change (write, rename, delete) is one commit whose author is the caller and
+whose committer is the service account. A run records the commit it ran.
+
+```
+/var/lib/cockpit-fleet/projects/<id>/tree/       the files, what a run copies
+/var/lib/cockpit-fleet/projects/<id>/repo.git/   the repository, beside the tree
+/var/lib/cockpit-fleet/projects/<id>/lock        one change at a time (flock)
+```
+
+The repository is not inside the tree, so nothing in the tree is git's own and
+no path can reach its configuration or hooks; a path with a component called
+`.git`, in any case, is refused anyway, as is one that goes through a symbolic
+link. Here git runs in `fleetctl`, outside the sandbox, which a fetched project
+never gets. What makes the difference: the repository is created by the
+backend and holds only what administrators wrote through it, git reads no
+configuration but the repository's own, hooks are off, and paths are literal,
+never patterns.
+
+A write quotes the SHA-256 of the content it started from, empty for a new
+file: one that someone else changed meanwhile is refused instead of
+overwritten. The content is not copied into the audit record. Files are text,
+UTF-8, up to 512 kB. The same page shows the files of git and local projects,
+read-only.
+
+**Syntax checks.** Saving a file that looks like a playbook (a YAML list with
+a play at its top level) queues a `syntax` job on a copy of the project:
+`ansible-playbook --syntax-check`, then `ansible-lint --offline` on the same
+file when `/usr/bin/ansible-lint` exists. The job's status is the syntax
+check's; what ansible-lint found is in the output and marked on the run
+(`options.lint`), and does not fail it. The same check can be asked for any
+playbook of any project. It is a job and not a call because it reads a project:
+ansible-lint loads the rules a project's `.ansible-lint` points to, which is
+Python of the project (`files.sh` ships one and checks where it could write).
+No vault password is given to a check.
+
+Checked on Debian 13 with ansible-core 2.19.11 and ansible-lint 25.2.1, which
+works inside the unit as it is.
 
 **A project's `ansible.cfg`** is not used as it is: a run gets a generated one
 with only the allowlisted keys of the project's file (`roles_path` and
@@ -354,6 +398,7 @@ bundled collection.
 | Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
 | Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
 | A whole run through fleetctl | `test/integration/runs.sh` | controller, as root; wipes the database |
+| Projects written in the interface | `test/integration/files.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

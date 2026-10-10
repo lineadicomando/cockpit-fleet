@@ -4,6 +4,7 @@ src/app.tsx
 src/components/AccessProblemPage.tsx
 src/components/AuditPage.tsx
 src/components/CredentialsPage.tsx
+src/components/FilesPage.tsx
 src/components/HostKeysPage.tsx
 src/components/InventoriesPage.tsx
 src/components/OverviewPage.tsx

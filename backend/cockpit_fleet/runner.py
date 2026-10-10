@@ -1,9 +1,9 @@
 """Turn a stored job specification into the commands a run unit executes.
 
-A job is one of three kinds: "playbook" (ansible-playbook), "inventory"
-(ansible-inventory, to list hosts and groups) and "sync" (fetch a git
-project). Nothing from the frontend reaches a command line without going
-through the functions here.
+A job is one of four kinds: "playbook" (ansible-playbook), "inventory"
+(ansible-inventory, to list hosts and groups), "sync" (fetch a git project)
+and "syntax" (check a playbook without running it). Nothing from the frontend
+reaches a command line without going through the functions here.
 """
 
 import configparser
@@ -26,7 +26,10 @@ from .validators import (
     resolve_inside,
 )
 
-KINDS = ("playbook", "inventory", "sync")
+KINDS = ("playbook", "inventory", "sync", "syntax")
+
+# Optional: when it is installed, a syntax job runs it after the check.
+LINT = "/usr/bin/ansible-lint"
 
 # Credential purpose -> ansible-playbook option that takes a file.
 CREDENTIAL_OPTIONS = {
@@ -322,7 +325,24 @@ def build_inventory_argv(spec: dict, run_dir: Path, credentials_dir: Path | None
     ]
 
 
-def build_env(run_dir: Path, runtime_dir: Path) -> dict[str, str]:
+def build_syntax_argv(spec: dict, run_dir: Path) -> list[str]:
+    """ansible-playbook for a "syntax" job: the playbook is read, nothing runs.
+
+    The inventory is a list of one name, so that no file is looked for and
+    Ansible does not warn that there is none.
+    """
+    playbook = resolve_inside(run_dir / "project", spec.get("playbook"), "playbook")
+    return ["/usr/bin/ansible-playbook", "--syntax-check", "--inventory", "localhost,",
+            str(playbook)]
+
+
+def build_lint_argv(spec: dict, run_dir: Path) -> list[str]:
+    """ansible-lint on the same playbook. Offline: it must not install anything."""
+    playbook = resolve_inside(run_dir / "project", spec.get("playbook"), "playbook")
+    return [LINT, "--offline", str(playbook)]
+
+
+def build_env(run_dir: Path, runtime_dir: Path, events: bool = True) -> dict[str, str]:
     """Environment of ansible-playbook and ansible-inventory."""
     project = run_dir / "project"
     home = runtime_dir / "home"
@@ -335,7 +355,7 @@ def build_env(run_dir: Path, runtime_dir: Path) -> dict[str, str]:
     config = runtime_dir / "ansible.cfg"
     config.write_text(text)
     # A clean environment: nothing is inherited from the unit beyond these.
-    return {
+    env = {
         "PATH": "/usr/bin:/bin",
         "HOME": str(home),
         "LANG": "C.UTF-8",
@@ -347,10 +367,12 @@ def build_env(run_dir: Path, runtime_dir: Path) -> dict[str, str]:
         "ANSIBLE_SSH_ARGS": "-o ControlMaster=auto -o ControlPersist=60s " + _ssh_options(run_dir),
         "ANSIBLE_HOST_KEY_CHECKING": "True",
         "ANSIBLE_COLLECTIONS_PATH": ":".join([str(COLLECTIONS_DIR), str(project), *collections]),
-        "ANSIBLE_CALLBACKS_ENABLED": "lineadicomando.fleet.events",
         "ANSIBLE_FORCE_COLOR": "1",
-        "FLEET_EVENTS_FILE": str(run_dir / "events.jsonl"),
     }
+    if events:
+        env["ANSIBLE_CALLBACKS_ENABLED"] = "lineadicomando.fleet.events"
+        env["FLEET_EVENTS_FILE"] = str(run_dir / "events.jsonl")
+    return env
 
 
 def _ssh_options(run_dir: Path) -> str:

@@ -19,6 +19,7 @@ import { AuditPage } from "./components/AuditPage.tsx";
 import { OverviewPage } from "./components/OverviewPage.tsx";
 import { SystemPage } from "./components/SystemPage.tsx";
 import { CredentialsPage } from "./components/CredentialsPage.tsx";
+import { FilesPage } from "./components/FilesPage.tsx";
 import { HostKeysPage } from "./components/HostKeysPage.tsx";
 import { InventoriesPage } from "./components/InventoriesPage.tsx";
 import { ProjectsPage } from "./components/ProjectsPage.tsx";
@@ -87,7 +88,9 @@ export function App() {
                         : <RunsPage />)}
                     {section === "templates" && <TemplatesPage />}
                     {section === "inventories" && <InventoriesPage />}
-                    {section === "projects" && <ProjectsPage />}
+                    {section === "projects" && (location.path[1]
+                        ? <FilesPage key={location.path[1]} id={location.path[1]} />
+                        : <ProjectsPage />)}
                     {section === "credentials" && <CredentialsPage />}
                     {section === "hostkeys" && <HostKeysPage />}
                     {section === "system" && <SystemPage />}

@@ -25,6 +25,12 @@ msgstr "Azione"
 msgid "Administrator"
 msgstr "Amministratore"
 
+msgid "All changes"
+msgstr "Tutte le modifiche"
+
+msgid "All projects"
+msgstr "Tutti i progetti"
+
 msgid "Allows"
 msgstr "Consente"
 
@@ -40,14 +46,29 @@ msgstr "Registro di audit"
 msgid "Bundled Ansible collection"
 msgstr "Collection Ansible inclusa"
 
+msgid "Changes"
+msgstr "Modifiche"
+
 msgid "Changes made through Fleet and refused attempts are listed here."
 msgstr "Qui compaiono le modifiche fatte tramite Fleet e i tentativi rifiutati."
+
+msgid "Changes to {{path}}"
+msgstr "Modifiche a {{path}}"
 
 msgid "Check"
 msgstr "Controllo"
 
 msgid "Check again"
 msgstr "Ricontrolla"
+
+msgid "Check syntax"
+msgstr "Controlla la sintassi"
+
+msgid "Checking the syntax…"
+msgstr "Controllo della sintassi in corso…"
+
+msgid "Choose a file to see it."
+msgstr "Scegli un file per vederlo."
 
 msgid "Configuration file"
 msgstr "File di configurazione"
@@ -58,14 +79,26 @@ msgstr "Copiato"
 msgid "Copy"
 msgstr "Copia"
 
+msgid "Create the first file of this project: a playbook, for example site.yml."
+msgstr "Crea il primo file di questo progetto: un playbook, per esempio site.yml."
+
 msgid "Database"
 msgstr "Database"
 
 msgid "Details"
 msgstr "Dettagli"
 
+msgid "Discard"
+msgstr "Scarta"
+
+msgid "Discard the changes?"
+msgstr "Scartare le modifiche?"
+
 msgid "Done"
 msgstr "Eseguita"
+
+msgid "Every change saved here is recorded with its author."
+msgstr "Ogni modifica salvata qui viene registrata con il suo autore."
 
 msgid "Everything a viewer can do, plus launching the existing job templates and acknowledging alerts."
 msgstr "Tutto ciò che può fare un osservatore, più il lancio dei template esistenti e la presa in carico degli avvisi."
@@ -76,11 +109,17 @@ msgstr "Tutto ciò che può fare un operatore, più la configurazione di progett
 msgid "Failed"
 msgstr "Fallita"
 
+msgid "Files"
+msgstr "File"
+
 msgid "Git"
 msgstr "Git"
 
 msgid "If you administer this server, turn on administrative access at the top of the page."
 msgstr "Se amministri questo server, attiva l'accesso amministrativo in alto nella pagina."
+
+msgid "Inside the project, for example roles/web/tasks/main.yml. Directories are created as needed."
+msgstr "All'interno del progetto, per esempio roles/web/tasks/main.yml. Le directory vengono create quando servono."
 
 msgid "Install the cockpit-fleet package on this server."
 msgstr "Installa il pacchetto cockpit-fleet su questo server."
@@ -94,11 +133,29 @@ msgstr "Controlli dell'installazione"
 msgid "Loading"
 msgstr "Caricamento"
 
+msgid "New file"
+msgstr "Nuovo file"
+
+msgid "No changes yet"
+msgstr "Ancora nessuna modifica"
+
+msgid "No files"
+msgstr "Nessun file"
+
+msgid "Not saved"
+msgstr "Non salvato"
+
 msgid "Nothing recorded yet"
 msgstr "Ancora nessuna registrazione"
 
 msgid "OK"
 msgstr "OK"
+
+msgid "Only the first files of this project are listed."
+msgstr "Sono elencati solo i primi file di questo progetto."
+
+msgid "Open the run"
+msgstr "Apri la run"
 
 msgid "Operator"
 msgstr "Operatore"
@@ -117,6 +174,12 @@ msgstr "Aggiorna"
 
 msgid "Refused"
 msgstr "Rifiutata"
+
+msgid "Rename"
+msgstr "Rinomina"
+
+msgid "Rename {{path}}"
+msgstr "Rinomina {{path}}"
 
 msgid "Role"
 msgstr "Ruolo"
@@ -142,6 +205,9 @@ msgstr "Directory di stato"
 msgid "Status"
 msgstr "Stato"
 
+msgid "Syntax check"
+msgstr "Controllo di sintassi"
+
 msgid "System"
 msgstr "Sistema"
 
@@ -150,6 +216,42 @@ msgstr "Il backend di Fleet non è raggiungibile"
 
 msgid "The Fleet backend is not installed"
 msgstr "Il backend di Fleet non è installato"
+
+msgid "The check did not run"
+msgstr "Il controllo non è stato eseguito"
+
+msgid "The file is deleted from the project. What it held stays in the record of changes."
+msgstr "Il file viene eliminato dal progetto. Il suo contenuto resta nel registro delle modifiche."
+
+msgid "The files are written in this interface. Every change is recorded with its author, and can be looked up later."
+msgstr "I file si scrivono in questa interfaccia. Ogni modifica viene registrata con il suo autore e si può consultare in seguito."
+
+msgid "The project, its files and the record of their changes are deleted."
+msgstr "Vengono eliminati il progetto, i suoi file e il registro delle loro modifiche."
+
+msgid "The syntax check failed"
+msgstr "Il controllo di sintassi è fallito"
+
+msgid "The syntax is correct"
+msgstr "La sintassi è corretta"
+
+msgid "The syntax is correct, and ansible-lint has no remarks"
+msgstr "La sintassi è corretta e ansible-lint non ha osservazioni"
+
+msgid "The syntax is correct; ansible-lint has remarks"
+msgstr "La sintassi è corretta; ansible-lint ha delle osservazioni"
+
+msgid "These files are a directory of this server: they are changed there."
+msgstr "Questi file sono una directory di questo server: si modificano lì."
+
+msgid "These files come from a git repository: they are changed there, and fetched again with “Update from git”."
+msgstr "Questi file vengono da un repository git: si modificano lì e si scaricano di nuovo con «Aggiorna da git»."
+
+msgid "This is only the beginning of the change."
+msgstr "Questo è solo l'inizio della modifica."
+
+msgid "This project has no files."
+msgstr "Questo progetto non ha file."
 
 msgid "Try again"
 msgstr "Riprova"
@@ -165,6 +267,12 @@ msgstr "Osservatore"
 
 msgid "Warning"
 msgstr "Avviso"
+
+msgid "What changed"
+msgstr "Che cosa è cambiato"
+
+msgid "What changed (optional)"
+msgstr "Che cosa è cambiato (facoltativo)"
 
 msgid "When"
 msgstr "Quando"
@@ -816,6 +924,9 @@ msgstr "Segreto"
 
 msgid "Encrypted as soon as it is typed and given to that run only. It is not kept and cannot be read back, but a playbook that prints it puts it in the output."
 msgstr "Viene cifrato appena digitato e consegnato solo a quell'esecuzione. Non viene conservato e non si può rileggere, ma un playbook che lo stampa lo mette nell'output."
+
+msgid "{{path}} has changes that were not saved."
+msgstr "{{path}} ha modifiche non salvate."
 
 msgid "checks_failed_count"
 msgid_plural "checks_failed_count_plural"

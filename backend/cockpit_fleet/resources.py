@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import jobs, paths, store, survey
+from . import files, jobs, paths, store, survey
 from .cli import Context, Params, command
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
@@ -130,7 +130,7 @@ def _project_values(ctx: Context, params: Params, kind: str) -> dict:
         if not values["path"].startswith("/"):
             raise BadRequest("path must be absolute")
         jobs.project_tree({"kind": "local", **values}, ctx.config)
-    else:
+    elif kind == "git":
         values["url"] = check_git_url(params.string("url", max_length=500))
         values["ref"] = check_git_ref(params.string("ref", "main", 200))
         credential_id = params.optional_id("credential_id")
@@ -140,18 +140,26 @@ def _project_values(ctx: Context, params: Params, kind: str) -> dict:
 
 @command("project.create", role="admin", mutating=True)
 def project_create(ctx: Context, params: Params) -> dict:
-    kind = params.choice("kind", ("local", "git"))
+    kind = params.choice("kind", ("local", "git", "managed"))
     values = _project_values(ctx, params, kind)
     params.done()
     project_id = store.new_id("p")
     store.insert(ctx.conn, "projects", {"id": project_id, "kind": kind,
                                         "created_at": store.now(), **values}, "project")
+    if kind == "managed":
+        # Written in the interface: it starts as an empty repository.
+        try:
+            files.init_repository(project_id)
+        except BaseException:
+            ctx.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            shutil.rmtree(paths.PROJECTS_DIR / project_id, ignore_errors=True)
+            raise
     return _project(store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
 @command("project.update", role="admin", mutating=True)
 def project_update(ctx: Context, params: Params) -> dict:
-    """Change a project; whether it is git or local cannot change."""
+    """Change a project; where its files come from cannot change."""
     project_id = params.ident("id")
     row = store.fetch(ctx.conn, "projects", project_id, "project")
     values = _project_values(ctx, params, row["kind"])

@@ -44,3 +44,15 @@
     border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default);
     border-radius: var(--pf-t--global--border--radius--small);
 }
+
+// The files of a project: the tree on one side, the open file on the other.
+.fleet-files {
+    display: grid;
+    grid-template-columns: minmax(12rem, 20rem) minmax(0, 1fr);
+    gap: var(--pf-t--global--spacer--lg);
+    align-items: start;
+
+    @media (max-width: 48rem) { grid-template-columns: minmax(0, 1fr); }
+}
+.fleet-files-tree { max-block-size: 75vh; overflow: auto; }
+.fleet-editor textarea { min-block-size: 55vh; }

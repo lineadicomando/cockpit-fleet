@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Radio, TextInput } from "@patternfly/react-core";
+import { Alert, Button, Content, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Radio, TextInput } from "@patternfly/react-core";
 import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
@@ -15,12 +15,12 @@ interface ProjectList {
     local_roots: string[];
 }
 
-// Creates a project, or edits one. Whether it is git or local cannot change.
+// Creates a project, or edits one. Where its files come from cannot change.
 function ProjectModal({ project, roots, onClose, onDone }: { project?: Project; roots: string[]; onClose: () => void; onDone: () => void }) {
     const { t } = useTranslation();
     const credentials = useLoad(() => call<{ credentials: Credential[] }>("credential.list"));
     const [name, setName] = useState(project?.name ?? "");
-    const [kind, setKind] = useState<"git" | "local">(project?.kind ?? "git");
+    const [kind, setKind] = useState<Project["kind"]>(project?.kind ?? "git");
     const [url, setUrl] = useState(project?.url ?? "");
     const [ref, setRef] = useState(project?.ref || "main");
     const [credentialId, setCredentialId] = useState(project?.credential_id ?? "");
@@ -29,7 +29,7 @@ function ProjectModal({ project, roots, onClose, onDone }: { project?: Project; 
     async function submit() {
         const params = kind === "git"
             ? { name, url: url.trim(), ref: ref.trim() || "main", credential_id: credentialId }
-            : { name, path: path.trim() };
+            : kind === "local" ? { name, path: path.trim() } : { name };
         const saved = project
             ? await call<Project>("project.update", { id: project.id, ...params })
             : await call<Project>("project.create", { kind, ...params });
@@ -40,12 +40,14 @@ function ProjectModal({ project, roots, onClose, onDone }: { project?: Project; 
         }
         onDone();
         onClose();
+        // An empty project: the next thing to do is to write its first file.
+        if (kind === "managed" && !project) cockpit.location.go(["projects", saved.id]);
     }
 
     const source = (credentials.data?.credentials ?? []).filter(credential => credential.kind === "source");
     return (
         <FormModal title={project ? t("Edit project") : t("New project")} submitLabel={project ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose}
-            isDisabled={!name.trim() || (kind === "git" ? !url.trim() : !path.trim())}>
+            isDisabled={!name.trim() || (kind === "git" && !url.trim()) || (kind === "local" && !path.trim())}>
             <FormGroup label={t("Name")} isRequired fieldId="proj-name">
                 <TextInput id="proj-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
@@ -53,6 +55,7 @@ function ProjectModal({ project, roots, onClose, onDone }: { project?: Project; 
                 <FormGroup label={t("Source")} role="radiogroup" isInline fieldId="proj-kind">
                     <Radio id="proj-kind-git" name="proj-kind" label={t("Git repository")} isChecked={kind === "git"} onChange={() => setKind("git")} />
                     <Radio id="proj-kind-local" name="proj-kind" label={t("Directory on this server")} isChecked={kind === "local"} onChange={() => setKind("local")} />
+                    <Radio id="proj-kind-managed" name="proj-kind" label={t("Written here")} isChecked={kind === "managed"} onChange={() => setKind("managed")} />
                 </FormGroup>
             )}
             {kind === "git" ? (
@@ -71,6 +74,8 @@ function ProjectModal({ project, roots, onClose, onDone }: { project?: Project; 
                         </FormSelect>
                     </FormGroup>
                 </>
+            ) : kind === "managed" ? (
+                !project && <Content component="p">{t("The files are written in this interface. Every change is recorded with its author, and can be looked up later.")}</Content>
             ) : (
                 <FormGroup label={t("Path")} isRequired fieldId="proj-path">
                     <TextInput id="proj-path" value={path} onChange={(_e, value) => setPath(value)} placeholder={roots[0] ? `${roots[0]}/…` : ""} />
@@ -128,22 +133,29 @@ export function ProjectsPage() {
                         <Tbody>
                             {data.projects.map(project => (
                                 <Tr key={project.id}>
-                                    <Td dataLabel={t("Name")}>{project.name}</Td>
+                                    <Td dataLabel={t("Name")}>
+                                        {can("file.list")
+                                            ? <Button variant="link" isInline onClick={() => cockpit.location.go(["projects", project.id])}>{project.name}</Button>
+                                            : project.name}
+                                    </Td>
                                     <Td dataLabel={t("Source")}>
-                                        {project.kind === "git" ? `${project.url} (${project.ref})` : project.path}
+                                        {project.kind === "git" ? `${project.url} (${project.ref})` : project.kind === "local" ? project.path : t("Written here")}
                                     </Td>
                                     <Td dataLabel={t("Revision")}>
                                         {project.sync_error
                                             ? <span title={project.sync_error}>{t("Last update failed")}</span>
-                                            : project.kind === "git"
-                                                ? (project.revision ? <code>{project.revision.slice(0, 10)}</code> : t("Not fetched yet"))
-                                                : t("Read at each run")}
+                                            : project.kind === "local"
+                                                ? t("Read at each run")
+                                                : project.revision
+                                                    ? <code>{project.revision.slice(0, 10)}</code>
+                                                    : project.kind === "git" ? t("Not fetched yet") : t("No changes yet")}
                                     </Td>
                                     <Td dataLabel={t("Updated")}>{formatTime(project.synced_at, i18n.language)}</Td>
                                     <Td isActionCell>
                                         {can("project.delete") && (
                                             <ActionsColumn items={[
                                                 ...(project.kind === "git" ? [{ title: t("Update from git"), onClick: () => sync(project) }] : []),
+                                                { title: t("Files"), onClick: () => cockpit.location.go(["projects", project.id]) },
                                                 { title: t("Edit"), onClick: () => setEditing(project) },
                                                 { title: t("Delete"), onClick: () => setDeleting(project) },
                                             ]} />
@@ -161,7 +173,9 @@ export function ProjectsPage() {
                 <ConfirmDelete name={deleting.name}
                     what={deleting.kind === "git"
                         ? t("The project and the files fetched for it are deleted. The repository is not touched.")
-                        : t("The project is forgotten. The directory and its files are not touched.")}
+                        : deleting.kind === "local"
+                            ? t("The project is forgotten. The directory and its files are not touched.")
+                            : t("The project, its files and the record of their changes are deleted.")}
                     onDelete={async () => { await call("project.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}
                     onClose={() => setDeleting(null)} />
             )}

@@ -5,6 +5,7 @@ wrong, so callers can use the result directly.
 """
 
 import re
+import unicodedata
 from pathlib import Path, PurePosixPath
 
 from .errors import BadRequest
@@ -80,6 +81,23 @@ def check_relative_path(value: object, what: str = "path") -> PurePosixPath:
     path = PurePosixPath(value)
     if path.is_absolute() or ".." in path.parts or value.startswith("-"):
         raise BadRequest(f"{what} must be a relative path without '..': {value!r}")
+    return path
+
+
+def check_file_path(value: object, what: str = "path") -> PurePosixPath:
+    """The path of a file written from the interface: relative, of plain names.
+
+    Nothing called .git, in any case: on a file system that ignores case it
+    would be git's own directory.
+    """
+    path = check_relative_path(value, what)
+    if not path.parts or len(path.parts) > 12:
+        raise BadRequest(f"invalid {what}: {value!r}")
+    for part in path.parts:
+        if (any(unicodedata.category(ch)[0] == "C" for ch in part) or "\\" in part
+                or part != part.strip() or len(part.encode()) > 255
+                or part.casefold() == ".git"):
+            raise BadRequest(f"invalid name in {what}: {part!r}")
     return path
 
 

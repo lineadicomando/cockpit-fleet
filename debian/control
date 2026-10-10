@@ -18,6 +18,7 @@ Depends: ${misc:Depends},
          git,
          openssh-client
 Recommends: ansible, sshpass
+Suggests: ansible-lint
 Description: Cockpit plugin to run Ansible and watch a fleet of nodes
  Runs Ansible playbooks from the Cockpit web console, with projects,
  inventories, credentials, schedules and notifications, and uses Ansible

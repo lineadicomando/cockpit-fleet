@@ -7,13 +7,15 @@ Icinga: niente tempo reale, alert "ragionevolmente tempestivi".
 ## Stato
 
 Fasi 0, 1, 2 concluse l'8 ottobre 2026. **In corso: fase 3** (survey e vista delle
-differenze fatti il 9 ottobre). `main` è allineato con `origin`.
+differenze fatti il 9 ottobre, editor nella UI il 10 ottobre). `main` è allineato con
+`origin`.
 
 Per riprendere: leggere `CLAUDE.md` (regole, comandi, ambiente di test), poi
 `docs/architecture.md` (cosa esiste e perché). Questo file dice solo cosa manca.
 
 Cosa funziona oggi: progetti (git o directory locale), inventari, credenziali con
-segreti cifrati, chiavi host attendibili, template con survey, run con coda,
+segreti cifrati, chiavi host attendibili, progetti scritti nella UI con storico
+git e controllo di sintassi, template con survey, run con coda,
 annullamento, output live, vista per task ed esito per host; ruoli da gruppi Unix
 e audit.
 Provato su nodi Linux (container) e Windows via SSH.
@@ -24,7 +26,8 @@ figlio di `baseline`) è il punto di partenza dei test: Debian 13 con `cockpit`,
 `fleet-node` già costruita; nessun dato o account di prova. Tutti i test di
 integrazione Linux vi passano. Non contiene il Samba AD DC (`baseline` è un
 Debian senza Cockpit né Samba) né il segreto `it-win-key`, da ricreare prima di
-`windows.sh`.
+`windows.sh`. Non contiene nemmeno `ansible-lint`, installato sulla VM dopo lo
+snapshot: senza, `files.sh` salta i controlli che lo riguardano.
 
 ## Decisioni
 
@@ -42,7 +45,9 @@ Debian senza Cockpit né Samba) né il segreto `it-win-key`, da ricreare prima d
 | Segreti nel survey | L'operator li consegna a `fleet-secret answer`, che sceglie il nome e restituisce un biglietto usa e getta; la run lo consuma |
 | Ansible | Pacchetto Debian `ansible-core`; collection extra nel progetto |
 | `ansible.cfg` del progetto | Non usato direttamente: passano solo le chiavi in allowlist |
-| Sorgenti dei progetti | Git, directory locale (fatte); editor nella UI, upload (fase 3) |
+| Sorgenti dei progetti | Git, directory locale, scritti nella UI (fatte); upload (fase 3) |
+| Progetti scritti nella UI | Repository git accanto all'albero, un commit per modifica, solo admin |
+| Controllo di sintassi | Job in sandbox al salvataggio di un playbook; `ansible-lint` segnala, non boccia |
 | Notifiche | Telegram, webhook generico, SMTP, Matrix |
 | Dati dai nodi | Check di salute, CMDB, aggiornamenti, drift |
 | Check | Catalogo integrato + playbook utente con contratto di risultato |
@@ -74,6 +79,10 @@ Debian senza Cockpit né Samba) né il segreto `it-win-key`, da ricreare prima d
   compare nell'audit come `root`.
 - I test di integrazione girano solo a mano sulla VM, non in CI.
 - Un inventario ha una sola credenziale vault (i template ne hanno più d'una).
+- Editor: una `textarea`, senza evidenziazione; si rinomina e si elimina un file
+  alla volta, non una directory; cambiare scheda con modifiche non salvate le
+  perde senza avviso; il controllo di sintassi non riceve password vault; ogni
+  controllo compare nell'elenco delle run.
 
 ## Fase 3 — Runner completo
 
@@ -81,8 +90,9 @@ Debian senza Cockpit né Samba) né il segreto `it-win-key`, da ricreare prima d
       (`privileges.sh`, `roles.sh`, `runs.sh`, `sandbox.sh`) e dalla UI
 - [x] **Vista delle differenze** per host: scheda "Differenze" della run; provata
       sulla VM (`runs.sh` e dalla UI)
-- [ ] **Editor nella UI**: progetto come repo git locale, commit automatico con
-      l'utente Cockpit come autore, `--syntax-check` al salvataggio, `ansible-lint` se c'è
+- [x] **Editor nella UI**: progetto come repo git locale, commit automatico con
+      l'utente Cockpit come autore, `--syntax-check` al salvataggio, `ansible-lint`
+      se c'è; provato sulla VM (`files.sh` e dalla UI)
 - [ ] **Upload archivio**: estrazione sicura (path traversal, symlink, device, limiti),
       revisione immutabile con sha256
 - [ ] **Galaxy**: `requirements.yml` installato nel progetto in un job sandbox, cache

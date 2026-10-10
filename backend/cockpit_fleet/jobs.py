@@ -64,7 +64,7 @@ def take_answer(directory: Path, ticket: str, purpose: str) -> None:
 
 def project_tree(project, config) -> Path:
     """Where the files of a project are on this machine."""
-    if project["kind"] == "git":
+    if project["kind"] in ("git", "managed"):
         tree = paths.PROJECTS_DIR / project["id"] / "tree"
         if not tree.is_dir():
             raise Conflict("this project has not been synchronised yet")
@@ -201,6 +201,10 @@ def _collect(ctx, run) -> None:
         status = "successful" if rc == 0 else "failed"
     extra = {"stats": json.dumps(_stats(directory))}
     error = str(result.get("error", ""))
+    if run["kind"] == "syntax" and "lint_rc" in result:
+        # ansible-lint ran too: what it found does not make the check fail.
+        lint = "clean" if result["lint_rc"] == 0 else "findings"
+        extra["options"] = json.dumps({**store.loads(run["options"], {}), "lint": lint})
 
     try:
         if status == "successful" and run["kind"] == "inventory":

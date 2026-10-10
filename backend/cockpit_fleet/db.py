@@ -144,6 +144,71 @@ MIGRATIONS: list[list[str]] = [
         # The questions a template asks at launch; the answers become variables.
         "ALTER TABLE templates ADD COLUMN survey TEXT NOT NULL DEFAULT '[]'",
     ],
+    [
+        # Projects edited in the interface and jobs that check a playbook: two
+        # more kinds. A CHECK cannot be altered, so both tables are rebuilt,
+        # this time without the list of kinds: the commands validate it, and
+        # the next kind will not need another rebuild.
+        """
+        CREATE TABLE projects_new (
+            id             TEXT PRIMARY KEY,
+            name           TEXT NOT NULL UNIQUE,
+            kind           TEXT NOT NULL,
+            path           TEXT NOT NULL DEFAULT '',
+            url            TEXT NOT NULL DEFAULT '',
+            ref            TEXT NOT NULL DEFAULT '',
+            credential_id  TEXT REFERENCES credentials (id),
+            revision       TEXT NOT NULL DEFAULT '',
+            synced_at      REAL,
+            sync_error     TEXT NOT NULL DEFAULT '',
+            created_at     REAL NOT NULL
+        )
+        """,
+        """
+        INSERT INTO projects_new
+        SELECT id, name, kind, path, url, ref, credential_id, revision, synced_at, sync_error,
+               created_at
+        FROM projects
+        """,
+        "DROP TABLE projects",
+        "ALTER TABLE projects_new RENAME TO projects",
+        """
+        CREATE TABLE runs_new (
+            id                TEXT PRIMARY KEY,
+            kind              TEXT NOT NULL,
+            status            TEXT NOT NULL CHECK (status IN
+                              ('queued', 'running', 'successful', 'failed', 'canceled', 'error')),
+            title             TEXT NOT NULL,
+            template_id       TEXT REFERENCES templates (id) ON DELETE SET NULL,
+            project_id        TEXT REFERENCES projects (id) ON DELETE SET NULL,
+            inventory_id      TEXT REFERENCES inventories (id) ON DELETE SET NULL,
+            created_by        TEXT NOT NULL,
+            created_at        REAL NOT NULL,
+            started_at        REAL,
+            finished_at       REAL,
+            rc                INTEGER,
+            revision          TEXT NOT NULL DEFAULT '',
+            options           TEXT NOT NULL DEFAULT '{}',
+            stats             TEXT NOT NULL DEFAULT '{}',
+            error             TEXT NOT NULL DEFAULT '',
+            cancel_requested  INTEGER NOT NULL DEFAULT 0
+        )
+        """,
+        # The row number is the cursor of the list of runs: it is kept.
+        """
+        INSERT INTO runs_new (rowid, id, kind, status, title, template_id, project_id,
+                              inventory_id, created_by, created_at, started_at, finished_at, rc,
+                              revision, options, stats, error, cancel_requested)
+        SELECT rowid, id, kind, status, title, template_id, project_id, inventory_id, created_by,
+               created_at, started_at, finished_at, rc, revision, options, stats, error,
+               cancel_requested
+        FROM runs
+        """,
+        "DROP TABLE runs",
+        "ALTER TABLE runs_new RENAME TO runs",
+        "CREATE INDEX runs_created ON runs (created_at)",
+        "CREATE INDEX runs_status ON runs (status)",
+    ],
 ]
 
 
@@ -154,6 +219,11 @@ def schema_version(conn: sqlite3.Connection) -> int:
 def migrate(conn: sqlite3.Connection) -> None:
     if schema_version(conn) > len(MIGRATIONS):
         raise Unavailable("the database was created by a newer version of cockpit-fleet")
+    # A migration may rebuild a table that others refer to: with foreign keys
+    # on, dropping the old one would apply ON DELETE to their rows. This has
+    # no effect inside a transaction, so it is set here; connect() turns the
+    # checks on again.
+    conn.execute("PRAGMA foreign_keys = OFF")
     while True:
         conn.execute("BEGIN IMMEDIATE")
         try:
@@ -178,9 +248,9 @@ def connect(path: Path) -> sqlite3.Connection:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
-        conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA busy_timeout = 5000")
         migrate(conn)
+        conn.execute("PRAGMA foreign_keys = ON")
     except sqlite3.Error as error:
         raise Unavailable(f"cannot open the database: {error}") from error
     return conn

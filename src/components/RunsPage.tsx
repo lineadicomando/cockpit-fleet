@@ -22,7 +22,7 @@ const MAX_SHOWN = 400_000;
 
 function useKinds() {
     const { t } = useTranslation();
-    return { playbook: t("Playbook"), inventory: t("Inventory reading"), sync: t("Project update") } as Record<Run["kind"], string>;
+    return { playbook: t("Playbook"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check") } as Record<Run["kind"], string>;
 }
 
 export function RunsPage() {
@@ -82,7 +82,7 @@ export function RunsPage() {
     );
 }
 
-function Output({ text }: { text: string }) {
+export function Output({ text }: { text: string }) {
     const { t } = useTranslation();
     const box = useRef<HTMLPreElement>(null);
     const follow = useRef(true);
@@ -152,7 +152,7 @@ function Tasks({ tasks }: { tasks: TaskView[] }) {
     );
 }
 
-function Diff({ text }: { text: string }) {
+export function Diff({ text }: { text: string }) {
     const lines = useMemo(() => diffLines(text), [text]);
     return (
         <pre className="fleet-log fleet-diff">
