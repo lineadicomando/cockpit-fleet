@@ -1028,3 +1028,24 @@ msgstr "Carica un archivio per {{name}}"
 
 msgid "Uploaded archive"
 msgstr "Archivio caricato"
+
+msgid "Collection installation"
+msgstr "Installazione delle collection"
+
+msgid "Collections"
+msgstr "Collection"
+
+msgid "Install collections"
+msgstr "Installa le collection"
+
+msgid "Installation failed"
+msgstr "Installazione fallita"
+
+msgid "Installed"
+msgstr "Installate"
+
+msgid "Not installed"
+msgstr "Non installate"
+
+msgid "Requirements"
+msgstr "Requisiti"

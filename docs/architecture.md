@@ -156,13 +156,15 @@ through `Params` (which rejects unknown ones), and a test in `backend/tests`.
 
 ## Jobs
 
-A run unit executes one job, of one of five kinds, described by `spec.json`
+A run unit executes one job, of one of six kinds, described by `spec.json`
 in its directory: `playbook` (ansible-playbook), `inventory`
 (`ansible-inventory --list`, to learn hosts and groups), `sync` (fetch a git
-project), `syntax` (check a playbook without running it) and `unpack` (extract
-an uploaded archive). All of them need the sandbox, because all of them work
-on what a project brings: inventory plugins and scripts, git itself, the rules
-a project gives to ansible-lint, or an archive made by anyone.
+project), `syntax` (check a playbook without running it), `unpack` (extract
+an uploaded archive) and `galaxy` (install the collections a project asks
+for). All of them need the sandbox, because all of them work on what a project
+brings: inventory plugins and scripts, git itself, the rules a project gives
+to ansible-lint, an archive made by anyone, or a list of sources to download
+from.
 
 When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 
@@ -173,17 +175,21 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 | `creds/` | ciphertext of the secrets this job may use, named by purpose |
 | `known_hosts` | the host keys an administrator has trusted |
 | `inventory/` | the inventory, when it is written in the interface rather than a project file |
+| `collections/` | a copy of the collections installed for the project, when it asks for some |
 
 The run then sees a self-contained directory and nothing else. `project/`,
-`creds/` and an uploaded `archive` are removed when the job ends; `stdout.log`, `events.jsonl` and
-`result.json` stay.
+`creds/`, `collections/` and an uploaded `archive` are removed when the job
+ends; `stdout.log`, `events.jsonl` and `result.json` stay.
 
 There is no daemon tracking jobs. The `runs` table holds the state, and
 `reconcile` brings it up to date from what a unit left behind: it runs when a
 unit ends (`OnSuccess=`/`OnFailure=` start `cockpit-fleet-finish@ID.service`,
 which is the backend itself, unsandboxed, as the service account) and whenever
 runs are read. It also starts queued runs while fewer than
-`runs.max_concurrent` are running. A unit that is gone without a
+`runs.max_concurrent` are running. Only one `reconcile` works at a time (a
+lock on the directory of the runs): the unit that ends and a page that polls
+get there together, and what a job left can be moved only once; found with
+the galaxy job, whose result takes longer to take in. A unit that is gone without a
 `result.json` is recorded as an error, or as canceled if that was asked.
 
 **Git projects.** A sync job makes a fresh shallow fetch of one reference into
@@ -264,6 +270,56 @@ Measured on the test controller, from the browser through Cockpit: an archive
 of 19 MB is answered in 1.7 s and unpacked in under a second; 600 MB of zeros
 in a gzip of 600 kB are refused at the limit.
 
+**Collections from Galaxy.** A project of any kind may list the collections
+it needs in a requirements file: the first one found among
+`collections/requirements.yml`, `collections/requirements.yaml`,
+`requirements.yml` and `requirements.yaml`. A `galaxy` job runs
+`ansible-galaxy collection install` on it, and what it installs is kept beside
+the project's tree, never inside it:
+
+```
+/var/lib/cockpit-fleet/projects/<id>/collections/<sha256 of the requirements file>/ansible_collections/…
+```
+
+Not inside, because the tree of a git project is replaced at every fetch, the
+one of a local project is not ours to write, and a managed one would get the
+collections in its history. The digest is in the name so that changed
+requirements are not answered by what was installed for the old ones: a
+project is `installed` only while a directory with the digest of its current
+file exists. One directory is kept, the last installed.
+
+Every job that copies the project gets a copy of that directory as
+`collections/`, last in `ANSIBLE_COLLECTIONS_PATH`: what the project carries
+itself wins. It is a copy, not a link, for the same reason the project is:
+runs of one project share nothing they can write. A playbook is refused while
+its project's collections are missing; a syntax check or an inventory listing
+goes on with what there is.
+
+The installation is queued by an administrator (`project.collections`, which
+installs again also when nothing changed: a requirement may name a branch),
+and by the backend when the files of a project change and ask for something
+that is not there: after a fetch, after an upload, when a requirements file is
+saved in the interface. A local project, which nobody tells us about, shows
+"not installed" until someone asks.
+
+`fleetctl` reads the requirements file only to digest it, without following a
+link; the digest it took names the directory, not something the job reports.
+What the job leaves is taken only if it is a directory and within the size
+limits of a project. In the job, ansible-galaxy clones a git source itself
+and has no option for git, so hooks and local transports are turned off
+through the environment (`GIT_CONFIG_COUNT`), next to the same
+`GIT_ALLOW_PROTOCOL` a fetch has; ssh sources meet the trusted host keys. No
+credential is offered to any source, and the servers a project's `ansible.cfg`
+lists are not used (the allowlist drops them): public sources only, for now.
+Downloads and clones go to the run's directory on disk, not to its runtime
+directory, which is memory.
+
+Checked on Debian 13 with ansible-core 2.19.11 (`galaxy.sh`): ansible-galaxy
+skips what the controller or the project already has, so with Debian's
+`ansible` package a requirement for `ansible.windows` installs nothing, and an
+installation that installs nothing is still one. A collection of 1000 files
+from a public git repository is installed in 7 to 17 s and takes 5.7 MB.
+
 **Syntax checks.** Saving a file that looks like a playbook (a YAML list with
 a play at its top level) queues a `syntax` job on a copy of the project:
 `ansible-playbook --syntax-check`, then `ansible-lint --offline` on the same
@@ -293,8 +349,9 @@ for a suggestion, and silent when in doubt. The names of the modules come from
 `module.list` and the parameters of one from `module.doc`, which run
 `ansible-doc` in `fleetctl`. That is outside the sandbox, so it only looks at
 what root installed: a closed environment, a throwaway home, `/` as working
-directory, no project. Modules that a project brings in its own collections
-are therefore not suggested. Listing the modules takes seconds (9201 of them
+directory, no project. Modules that a project brings in its own collections,
+or that were installed for it from its requirements file, are therefore not
+suggested. Listing the modules takes seconds (9201 of them
 with the `ansible` package, 0.9 MB), so the list is kept in
 `/var/lib/cockpit-fleet/cache` until a package or a system collection changes;
 the documentation of one module takes 0.4 s and is not kept.
@@ -423,9 +480,9 @@ the first limit.
 ## Windows nodes
 
 Reached over SSH with `ansible_shell_type: powershell`. The `ansible.windows`
-collection is not part of `ansible-core`: it comes from the `ansible` package
-or from `ansible-galaxy` into the project. Installing it into the run's project
-directory works, and the collection is found from there.
+collection is not part of `ansible-core`: it comes from the `ansible` package,
+from a copy inside the project, or from the project's requirements file (see
+"Collections from Galaxy").
 
 The test nodes accept public keys only, so the run uses a private key stored
 as a secret and passed with `--private-key`. Measured from the sandboxed unit
@@ -468,6 +525,7 @@ bundled collection.
 | A whole run through fleetctl | `test/integration/runs.sh` | controller, as root; wipes the database |
 | Projects written in the interface | `test/integration/files.sh` | controller, as root; wipes the database |
 | Projects uploaded as an archive | `test/integration/upload.sh` | controller, as root; wipes the database |
+| Collections from a requirements file | `test/integration/galaxy.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

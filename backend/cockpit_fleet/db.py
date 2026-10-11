@@ -209,6 +209,12 @@ MIGRATIONS: list[list[str]] = [
         "CREATE INDEX runs_created ON runs (created_at)",
         "CREATE INDEX runs_status ON runs (status)",
     ],
+    [
+        # The collections a project asks for in its requirements file: when
+        # they were last installed, and why the last attempt failed.
+        "ALTER TABLE projects ADD COLUMN collections_at REAL",
+        "ALTER TABLE projects ADD COLUMN collections_error TEXT NOT NULL DEFAULT ''",
+    ],
 ]
 
 

@@ -7,43 +7,37 @@ Icinga: niente tempo reale, alert "ragionevolmente tempestivi".
 ## Stato
 
 Fasi 0, 1, 2 concluse l'8 ottobre 2026. **In corso: fase 3** (survey e vista delle
-differenze fatti il 9 ottobre, editor nella UI e upload di archivi il 10 ottobre).
-`main` è allineato con `origin`.
+differenze fatti il 9 ottobre, editor nella UI e upload di archivi il 10 ottobre,
+Galaxy l'11 ottobre). `main` è allineato con `origin`.
 
-**Prossimo passo: Galaxy** (vedi fase 3). Da decidere all'inizio: dove finiscono
-le collection installate (nell'albero del progetto o in una cache per hash di
-`requirements.yml` accanto a esso, copiata nella run) e per quali tipi di
-progetto. Il job ha bisogno della rete (`network.proxy` esiste già in
-`config.toml`) e va scritto sul modello di `sync` e `unpack`: un tipo di job in
-`fleet-run`, il risultato raccolto in `jobs._collect`. Con le collection del
-progetto disponibili si chiude anche il residuo sul completamento dei moduli.
+**Prossimo passo: comandi ad-hoc** (vedi fase 3). Poi, con le collection ora
+disponibili senza toccare il repository, la prova di accettazione della fase:
+`ansible-win_edulab` dalla UI, con il suo `requirements.yaml` e il suo vault.
 
 Per riprendere: leggere `CLAUDE.md` (regole, comandi, ambiente di test), poi
 `docs/architecture.md` (cosa esiste e perché). Questo file dice solo cosa manca.
 
 Cosa funziona oggi: progetti (git o directory locale), inventari, credenziali con
 segreti cifrati, chiavi host attendibili, progetti scritti nella UI con storico
-git e controllo di sintassi, progetti caricati come archivio, template con
-survey, run con coda, annullamento, output live, vista per task ed esito per
+git e controllo di sintassi, progetti caricati come archivio, collection
+installate dal file dei requisiti, template con survey, run con coda, annullamento, output live, vista per task ed esito per
 host; ruoli da gruppi Unix e audit.
 Provato su nodi Linux (container) e Windows via SSH.
 
-Stato della VM di test `deb13-samba-dc`: lo snapshot `baseline_fleet` (9 ottobre,
-figlio di `baseline`) è il punto di partenza dei test: Debian 13 con `cockpit`,
-`cockpit-fleet` al commit `124f131`, `ansible`, `sshpass`, `podman` e l'immagine
-`fleet-node` già costruita; nessun dato o account di prova. Tutti i test di
-integrazione Linux vi passano. Non contiene il Samba AD DC (`baseline` è un
-Debian senza Cockpit né Samba) né il segreto `it-win-key`, da ricreare prima di
-`windows.sh`. Non contiene nemmeno `ansible-lint`, installato sulla VM dopo lo
-snapshot: senza, `files.sh` salta i controlli che lo riguardano.
+Stato della VM di test `deb13-samba-dc`: lo snapshot `baseline_fleet` (rifatto
+l'11 ottobre, figlio di `baseline`) è il punto di partenza dei test: Debian 13 con
+`cockpit`, `cockpit-fleet` al commit `124f131`, `ansible`, `ansible-lint`,
+`sshpass`, `podman` e l'immagine `fleet-node` già costruita; nessun dato o account
+di prova. Non contiene il Samba AD DC (`baseline` è un Debian senza Cockpit né
+Samba) né il segreto `it-win-key`, da ricreare prima di `windows.sh`.
 
-La VM, spenta, è più avanti dello snapshot: ha `ansible-lint` e il pacchetto con
-l'upload (10 ottobre), senza dati né account di prova. Si può ripartire da lì
-con `make vm-deb-deploy`, senza tornare allo snapshot. Il 10 ottobre vi sono
-passati `upload.sh`, `privileges.sh`, `roles.sh`, `runs.sh` (senza la parte git:
-`IT_GIT_URL` non impostata), `files.sh` e `sandbox.sh`; non rieseguiti
-`multihost.sh` e `windows.sh`. `runs.sh` e `sandbox.sh` vogliono `IT_SSH_USER`
-(`maint`) e `IT_SSH_PASSWORD`.
+La VM, spenta, è allo snapshot: prima di un test serve `make vm-deb-deploy` per
+installare il codice attuale. L'11 ottobre, con il pacchetto di Galaxy, vi sono
+passati `galaxy.sh` (con `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
+`sandbox.sh`, `runs.sh` (senza la parte git: `IT_GIT_URL` non impostata),
+`files.sh` (senza `ansible-lint`, che allora mancava) e `upload.sh`; non
+rieseguiti `multihost.sh` e `windows.sh`. `runs.sh` e `sandbox.sh` vogliono
+`IT_SSH_USER` (`maint`) e `IT_SSH_PASSWORD`.
 
 ## Decisioni
 
@@ -62,6 +56,7 @@ passati `upload.sh`, `privileges.sh`, `roles.sh`, `runs.sh` (senza la parte git:
 | Ansible | Pacchetto Debian `ansible-core`; collection extra nel progetto |
 | `ansible.cfg` del progetto | Non usato direttamente: passano solo le chiavi in allowlist |
 | Sorgenti dei progetti | Git, directory locale, scritti nella UI, archivio caricato |
+| Collection da Galaxy | Per tutti i tipi di progetto; installate da un job in sandbox accanto all'albero (`projects/<id>/collections/<sha256 del file dei requisiti>`), mai dentro; copiate in ogni run; senza di esse un playbook non parte |
 | Archivio caricato | Viaggia in base64 nel JSON su stdin di `fleetctl` (20 MB, al più 50); estratto in sandbox; revisione = sha256; link fuori dall'albero, hard link e device fanno rifiutare tutto l'archivio |
 | Progetti scritti nella UI | Repository git accanto all'albero, un commit per modifica, solo admin |
 | Editor | CodeMirror 6 in uno shadow root (la CSP di Cockpit resta com'è) |
@@ -102,12 +97,19 @@ passati `upload.sh`, `privileges.sh`, `roles.sh`, `runs.sh` (senza la parte git:
   di sintassi non riceve password vault; ogni controllo compare nell'elenco
   delle run.
 - Completamento: suggerisce solo i moduli installati sul controller, non quelli
-  delle collection dentro il progetto (va fatto in sandbox, insieme a Galaxy);
+  delle collection dentro il progetto o installate per esso (`ansible-doc` va
+  eseguito in sandbox: lo può fare il job `galaxy`, lasciando l'elenco accanto
+  alle collection);
   non suggerisce i sotto-parametri di un modulo; un file di task fuori da
   `tasks/` o `handlers/` è trattato come un playbook.
 - Upload: l'archivio non viene conservato (si può verificare lo sha256, non
   riscaricarlo); nessuna barra di avanzamento; oltre 50 MB servirebbe un altro
   trasporto.
+- Galaxy: solo sorgenti pubbliche (nessuna credenziale ai sorgenti git, nessun
+  server o token Galaxy privato); i ruoli elencati nel file dei requisiti non
+  vengono installati; un progetto locale non si accorge da solo che il file è
+  cambiato (lo dice "non installate", l'installazione va chiesta); nessun
+  limite di tempo sul job.
 - `selfcheck` lascia `/var/lib/cockpit-fleet/.ansible` (`ansible --version` con
   la home dell'account).
 
@@ -125,8 +127,9 @@ passati `upload.sh`, `privileges.sh`, `roles.sh`, `runs.sh` (senza la parte git:
 - [x] **Upload archivio**: tar o zip dal browser, estratto da un job in sandbox con
       controlli propri (path traversal, link, device, limiti), revisione = sha256;
       provato sulla VM (`upload.sh` e dalla UI, 19 MB in 1,7 s)
-- [ ] **Galaxy**: `requirements.yml` installato nel progetto in un job sandbox, cache
-      per hash. Oggi `ansible.windows` va messa a mano nel progetto
+- [x] **Galaxy**: collection del file dei requisiti installate da un job in sandbox,
+      tenute accanto al progetto per digest del file, copiate nelle run; provato
+      sulla VM (`galaxy.sh`, anche da un repository git pubblico)
 - [ ] **Comandi ad-hoc**: solo admin, allowlist dei moduli in `config.toml`, eseguiti
       come playbook generato di un task (argomenti in file, non in argv)
 - [ ] **Inventari dinamici**: plugin YAML (da provare, il job è già in sandbox);

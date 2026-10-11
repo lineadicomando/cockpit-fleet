@@ -5,8 +5,11 @@ and is brought up to date by reconcile(), which is called when a run unit
 ends (cockpit-fleet-finish@.service) and whenever runs are read.
 """
 
+import fcntl
+import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -22,6 +25,12 @@ MAX_PROJECT_BYTES = 500 * 1024 * 1024
 _START_GRACE = 20
 
 ACTIVE = ("queued", "running")
+
+# Where a project may list the collections it needs; the first one found counts.
+REQUIREMENTS = ("collections/requirements.yml", "collections/requirements.yaml",
+                "requirements.yml", "requirements.yaml")
+MAX_REQUIREMENTS = 256 * 1024
+_DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def run_dir(run_id: str) -> Path:
@@ -105,16 +114,122 @@ def snapshot(tree: Path, destination: Path) -> None:
         directories[:] = [name for name in directories if not (Path(current) / name).is_symlink()]
 
 
+def requirements(tree: Path) -> tuple[str, str] | None:
+    """The requirements file of a project and the digest of its content.
+
+    It is read here, outside the sandbox, so a symbolic link is not followed.
+    """
+    for name in REQUIREMENTS:
+        target = tree / name
+        try:
+            if target.parent.is_symlink():
+                continue
+            descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except OSError:
+            continue
+        with os.fdopen(descriptor, "rb") as source:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                continue
+            data = source.read(MAX_REQUIREMENTS + 1)
+        if len(data) > MAX_REQUIREMENTS:
+            raise Conflict(f"{name} is larger than {MAX_REQUIREMENTS // 1024} kB")
+        return name, hashlib.sha256(data).hexdigest()
+    return None
+
+
+def collections_home(project_id: str) -> Path:
+    """Where the collections installed for a project are kept, beside its tree:
+    one directory, named after the digest of the requirements file it answers."""
+    return paths.PROJECTS_DIR / check_id(project_id, "project id") / "collections"
+
+
+def collections_state(project, config) -> dict:
+    """Whether a project asks for collections, and whether they are installed."""
+    try:
+        found = requirements(project_tree(project, config))
+    except FleetError:
+        found = None
+    if found is None:
+        return {"file": "", "state": "none"}
+    installed = (collections_home(project["id"]) / found[1]).is_dir()
+    return {"file": found[0], "state": "installed" if installed else "missing"}
+
+
+def place_collections(project, directory: Path, required: bool = False) -> None:
+    """Give a job a copy of the collections installed for its project.
+
+    The requirements file is the one of the job's own copy of the project.
+    A playbook does not start without what its project asks for; a check or
+    an inventory listing goes on with what there is.
+    """
+    found = requirements(directory / "project")
+    if found is None:
+        return
+    source = collections_home(project["id"]) / found[1]
+    if not source.is_dir():
+        if required:
+            raise Conflict(f"the collections listed in {found[0]} are not installed yet:"
+                           " install them from the list of projects")
+        return
+    try:
+        snapshot(source, directory / "collections")
+    except OSError:
+        raise Conflict("the collections of this project are being replaced: try again") from None
+
+
+def queue_collections(ctx, project, created_by: str | None = None, start: bool = True) -> str:
+    """Queue a job that installs what the requirements file of a project lists."""
+    tree = project_tree(project, ctx.config)
+    run_id = store.new_id("r")
+    directory = create_dir(run_id)
+    try:
+        snapshot(tree, directory / "project")
+        found = requirements(directory / "project")
+        if found is None:
+            raise Conflict("this project has no requirements file: " + ", ".join(REQUIREMENTS))
+        write_known_hosts(ctx.conn, directory)
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+    path, digest = found
+    run = {"id": run_id, "kind": "galaxy", "title": project["name"],
+           "project_id": project["id"], "revision": project["revision"],
+           # The digest names what the job leaves: taken here, not by the job.
+           "options": json.dumps({"path": path, "sha256": digest})}
+    if created_by:
+        run["created_by"] = created_by
+    spec = {"kind": "galaxy", "requirements": path, "proxy": ctx.config.proxy}
+    (enqueue if start else _queue)(ctx, run, spec, directory)
+    return run_id
+
+
+def install_missing(ctx, project_id: str | None, created_by: str | None = None,
+                    start: bool = True) -> str | None:
+    """Queue the installation when the files of a project changed and what it
+    asks for now is not there; returns the job, if one was queued."""
+    row = ctx.conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+    if row is None or collections_state(row, ctx.config)["state"] != "missing":
+        return None
+    if ctx.conn.execute("SELECT 1 FROM runs WHERE kind = 'galaxy' AND project_id = ?"
+                        " AND status IN ('queued', 'running')", (project_id,)).fetchone():
+        return None
+    return queue_collections(ctx, row, created_by, start)
+
+
 def write_known_hosts(conn, directory: Path) -> None:
     rows = conn.execute("SELECT host, key_type, key FROM host_keys ORDER BY host")
     text = "".join(f"{row['host']} {row['key_type']} {row['key']}\n" for row in rows)
     (directory / "known_hosts").write_text(text)
 
 
-def enqueue(ctx, run: dict, spec: dict, directory: Path) -> None:
+def _queue(ctx, run: dict, spec: dict, directory: Path) -> None:
     (directory / "spec.json").write_text(json.dumps(spec))
-    store.insert(ctx.conn, "runs", {**run, "status": "queued", "created_by": ctx.caller.user,
+    store.insert(ctx.conn, "runs", {"created_by": ctx.caller.user, **run, "status": "queued",
                                     "created_at": store.now()}, "run")
+
+
+def enqueue(ctx, run: dict, spec: dict, directory: Path) -> None:
+    _queue(ctx, run, spec, directory)
     dispatch(ctx)
 
 
@@ -225,14 +340,33 @@ def _collect(ctx, run) -> None:
         elif run["kind"] in ("sync", "unpack") and run["project_id"]:
             store.update(ctx.conn, "projects", run["project_id"],
                          {"sync_error": _log_tail(directory)}, "project")
+        if status == "successful" and run["kind"] == "galaxy":
+            _store_collections(ctx, run, directory)
+        elif run["kind"] == "galaxy" and run["project_id"]:
+            store.update(ctx.conn, "projects", run["project_id"],
+                         {"collections_error": _log_tail(directory)}, "project")
     except (FleetError, OSError) as failure:
         status, error = "error", str(failure)
+        if run["kind"] == "galaxy" and run["project_id"]:
+            store.update(ctx.conn, "projects", run["project_id"],
+                         {"collections_error": error}, "project")
 
     _finish(ctx, run_id, status, rc, error, extra)
     # The copy of the project and the ciphertext are only needed while it runs.
-    for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory"):
+    for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
+                     "collections", "galaxy", "scratch"):
         shutil.rmtree(directory / leftover, ignore_errors=True)
     (directory / "archive").unlink(missing_ok=True)
+
+    if status == "successful" and run["kind"] in ("sync", "unpack", "galaxy"):
+        # New files may ask for collections that are not here: reconcile()
+        # starts the job that installs them. After an installation, this is
+        # for a requirements file that changed while it ran.
+        try:
+            install_missing(ctx, run["project_id"], run["created_by"], start=False)
+        except (FleetError, OSError) as failure:
+            store.update(ctx.conn, "projects", run["project_id"],
+                         {"collections_error": str(failure)}, "project")
 
 
 def _log_tail(directory: Path, limit: int = 2000) -> str:
@@ -308,9 +442,46 @@ def _store_checkout(ctx, run, directory: Path, revision: str) -> str:
     return revision
 
 
+def _store_collections(ctx, run, directory: Path) -> None:
+    """Keep what a galaxy job installed, in place of what was kept before."""
+    if not run["project_id"]:
+        raise Conflict("the project was deleted meanwhile")
+    digest = str(store.loads(run["options"], {}).get("sha256", ""))
+    if not _DIGEST_RE.fullmatch(digest):
+        raise Conflict("the job does not say which requirements it installed")
+    source = directory / "galaxy"
+    if not os.path.lexists(source):
+        # Nothing was installed: the controller already has all that is asked for.
+        source.mkdir(mode=0o700)
+    if not stat.S_ISDIR(os.lstat(source).st_mode):
+        raise Conflict("the job did not leave a directory")
+    files = size = 0
+    for current, _directories, names in os.walk(source):
+        for name in names:
+            files += 1
+            size += os.lstat(os.path.join(current, name)).st_size
+    if files > MAX_PROJECT_FILES or size > MAX_PROJECT_BYTES:
+        raise Conflict("the collections are too large to be copied for a run")
+    home = collections_home(run["project_id"])
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for old in home.iterdir():
+        shutil.rmtree(old, ignore_errors=True)
+    source.rename(home / digest)
+    store.update(ctx.conn, "projects", run["project_id"],
+                 {"collections_at": store.now(), "collections_error": ""}, "project")
+
+
 def reconcile(ctx) -> None:
-    for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'").fetchall():
-        _collect(ctx, run)
+    # One at a time: the unit that ends and a page that reads the runs get here
+    # together, and what a job left can be taken only once. The rows are read
+    # under the lock, so the second one finds the run already recorded.
+    descriptor = os.open(paths.RUNS_DIR, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'").fetchall():
+            _collect(ctx, run)
+    finally:
+        os.close(descriptor)
     dispatch(ctx)
 
 

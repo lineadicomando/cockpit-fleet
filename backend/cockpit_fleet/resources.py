@@ -111,9 +111,14 @@ def credential_delete(ctx: Context, params: Params) -> dict:
 
 # --- projects --------------------------------------------------------------------
 
-def _project(row) -> dict:
-    return {key: row[key] for key in ("id", "name", "kind", "path", "url", "ref", "credential_id",
+def _project(ctx: Context, row) -> dict:
+    data = {key: row[key] for key in ("id", "name", "kind", "path", "url", "ref", "credential_id",
                                       "revision", "synced_at", "sync_error")}
+    # What its requirements file asks for, if it has one.
+    data["collections"] = {**jobs.collections_state(row, ctx.config),
+                           "installed_at": row["collections_at"],
+                           "error": row["collections_error"]}
+    return data
 
 
 @command("project.list", role="viewer")
@@ -121,7 +126,7 @@ def project_list(ctx: Context, params: Params) -> dict:
     params.done()
     jobs.reconcile(ctx)  # a finished sync job may have a new revision to show
     rows = ctx.conn.execute("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
-    return {"projects": [_project(row) for row in rows],
+    return {"projects": [_project(ctx, row) for row in rows],
             "local_roots": list(ctx.config.local_project_roots),
             "max_upload_mb": ctx.config.max_upload_mb}
 
@@ -157,7 +162,7 @@ def project_create(ctx: Context, params: Params) -> dict:
             ctx.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
             shutil.rmtree(paths.PROJECTS_DIR / project_id, ignore_errors=True)
             raise
-    return _project(store.fetch(ctx.conn, "projects", project_id, "project"))
+    return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
 @command("project.update", role="admin", mutating=True)
@@ -168,7 +173,7 @@ def project_update(ctx: Context, params: Params) -> dict:
     values = _project_values(ctx, params, row["kind"])
     params.done()
     store.update(ctx.conn, "projects", project_id, values, "project")
-    return _project(store.fetch(ctx.conn, "projects", project_id, "project"))
+    return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
 @command("project.delete", role="admin", mutating=True)
@@ -201,6 +206,19 @@ def project_sync(ctx: Context, params: Params) -> dict:
     jobs.enqueue(ctx, {"id": run_id, "kind": "sync", "title": project["name"],
                        "project_id": project_id}, spec, directory)
     return {"run_id": run_id}
+
+
+@command("project.collections", role="admin", mutating=True)
+def project_collections(ctx: Context, params: Params) -> dict:
+    """Queue a job that installs the collections a project asks for.
+
+    Also when they are installed already: a requirement may name a branch,
+    and this is how what it points to now is fetched.
+    """
+    project_id = params.ident("id")
+    params.done()
+    project = store.fetch(ctx.conn, "projects", project_id, "project")
+    return {"run_id": jobs.queue_collections(ctx, project)}
 
 
 # The archive travels as base64 in the JSON on stdin, like every parameter.
@@ -376,6 +394,7 @@ def inventory_parse(ctx: Context, params: Params) -> dict:
         if inventory["kind"] == "file":
             project = store.fetch(ctx.conn, "projects", inventory["project_id"], "project")
             jobs.snapshot(jobs.project_tree(project, ctx.config), directory / "project")
+            jobs.place_collections(project, directory)
         else:
             (directory / "project").mkdir(mode=0o700)
         spec = {"kind": "inventory", **place_inventory(ctx, inventory, directory, None)}

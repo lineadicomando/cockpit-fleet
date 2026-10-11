@@ -56,6 +56,9 @@ export interface Project {
     revision: string;
     synced_at: number | null;
     sync_error: string;
+    // What its requirements file asks for: "none" when it has no such file,
+    // "missing" until a job has installed what the file lists now.
+    collections: { file: string; state: "none" | "installed" | "missing"; installed_at: number | null; error: string };
 }
 
 export interface ProjectFiles {
@@ -170,7 +173,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "inventory" | "sync" | "syntax" | "unpack";
+    kind: "playbook" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -186,6 +189,7 @@ export interface Run {
     options: {
         limit?: string; check?: boolean; diff?: boolean; answers?: Record<string, SurveyValue>; secret_answers?: string[];
         // A syntax check: the playbook, and what ansible-lint said if it is installed.
+        // An installation of collections: the requirements file.
         path?: string; lint?: "clean" | "findings";
         // An uploaded archive.
         filename?: string; size?: number; sha256?: string;

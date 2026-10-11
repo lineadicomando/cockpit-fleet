@@ -151,14 +151,22 @@ export function ProjectsPage() {
     const [waiting, setWaiting] = useState(0);
     usePolling(() => { setWaiting(count => count - 1); list.reload(); }, 2000, waiting > 0);
 
-    async function sync(project: Project) {
+    // Both are jobs: the next thing to look at is how they go.
+    async function start(command: "project.sync" | "project.collections", project: Project) {
         setError(null);
         try {
-            const { run_id } = await call<{ run_id: string }>("project.sync", { id: project.id });
+            const { run_id } = await call<{ run_id: string }>(command, { id: project.id });
             cockpit.location.go(["runs", run_id]);
         } catch (ex) {
             setError(message(ex));
         }
+    }
+
+    function collections({ collections }: Project) {
+        if (collections.state === "none") return "";
+        if (collections.error) return <span title={collections.error}>{t("Installation failed")}</span>;
+        if (collections.state === "missing") return t("Not installed");
+        return <span title={formatTime(collections.installed_at, i18n.language)}>{t("Installed")}</span>;
     }
 
     return (
@@ -173,7 +181,7 @@ export function ProjectsPage() {
                 {data => (
                     <Table variant="compact" aria-label={t("Projects")}>
                         <Thead>
-                            <Tr><Th>{t("Name")}</Th><Th>{t("Source")}</Th><Th>{t("Revision")}</Th><Th>{t("Updated")}</Th><Th screenReaderText={t("Actions")} /></Tr>
+                            <Tr><Th>{t("Name")}</Th><Th>{t("Source")}</Th><Th>{t("Revision")}</Th><Th>{t("Updated")}</Th><Th>{t("Collections")}</Th><Th screenReaderText={t("Actions")} /></Tr>
                         </Thead>
                         <Tbody>
                             {data.projects.map(project => (
@@ -196,10 +204,12 @@ export function ProjectsPage() {
                                                     : project.kind === "git" ? t("Not fetched yet") : project.kind === "archive" ? t("No archive yet") : t("No changes yet")}
                                     </Td>
                                     <Td dataLabel={t("Updated")}>{formatTime(project.synced_at, i18n.language)}</Td>
+                                    <Td dataLabel={t("Collections")}>{collections(project)}</Td>
                                     <Td isActionCell>
                                         {can("project.delete") && (
                                             <ActionsColumn items={[
-                                                ...(project.kind === "git" ? [{ title: t("Update from git"), onClick: () => sync(project) }] : []),
+                                                ...(project.kind === "git" ? [{ title: t("Update from git"), onClick: () => start("project.sync", project) }] : []),
+                                                ...(project.collections.file ? [{ title: t("Install collections"), onClick: () => start("project.collections", project) }] : []),
                                                 ...(project.kind === "archive" ? [{ title: t("Upload an archive"), onClick: () => setUploading(project) }] : []),
                                                 { title: t("Files"), onClick: () => cockpit.location.go(["projects", project.id]) },
                                                 { title: t("Edit"), onClick: () => setEditing(project) },

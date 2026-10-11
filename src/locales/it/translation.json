@@ -341,5 +341,12 @@
   "Upload": "Carica",
   "Upload an archive": "Carica un archivio",
   "Upload an archive for {{name}}": "Carica un archivio per {{name}}",
-  "Uploaded archive": "Archivio caricato"
+  "Uploaded archive": "Archivio caricato",
+  "Collection installation": "Installazione delle collection",
+  "Collections": "Collection",
+  "Install collections": "Installa le collection",
+  "Installation failed": "Installazione fallita",
+  "Installed": "Installate",
+  "Not installed": "Non installate",
+  "Requirements": "Requisiti"
 }

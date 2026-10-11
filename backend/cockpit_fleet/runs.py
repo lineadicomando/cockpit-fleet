@@ -64,6 +64,7 @@ def run_start(ctx: Context, params: Params) -> dict:
     directory = jobs.create_dir(run_id)
     try:
         jobs.snapshot(jobs.project_tree(project, ctx.config), directory / "project")
+        jobs.place_collections(project, directory, required=True)
         spec.update(place_inventory(ctx, inventory, directory, project["id"]))
         if machine:
             jobs.add_secret(directory, machine["id"], "private_key", "private_key")

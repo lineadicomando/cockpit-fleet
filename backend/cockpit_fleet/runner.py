@@ -1,10 +1,11 @@
 """Turn a stored job specification into the commands a run unit executes.
 
-A job is one of five kinds: "playbook" (ansible-playbook), "inventory"
+A job is one of six kinds: "playbook" (ansible-playbook), "inventory"
 (ansible-inventory, to list hosts and groups), "sync" (fetch a git project),
-"syntax" (check a playbook without running it) and "unpack" (extract an
-uploaded archive, which runs no command: see archive.py). Nothing from the
-frontend reaches a command line without going through the functions here.
+"syntax" (check a playbook without running it), "unpack" (extract an
+uploaded archive, which runs no command: see archive.py) and "galaxy" (install
+the collections a project asks for). Nothing from the frontend reaches a
+command line without going through the functions here.
 """
 
 import configparser
@@ -27,7 +28,7 @@ from .validators import (
     resolve_inside,
 )
 
-KINDS = ("playbook", "inventory", "sync", "syntax", "unpack")
+KINDS = ("playbook", "inventory", "sync", "syntax", "unpack", "galaxy")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"
@@ -370,6 +371,11 @@ def build_env(run_dir: Path, runtime_dir: Path, events: bool = True) -> dict[str
         "ANSIBLE_COLLECTIONS_PATH": ":".join([str(COLLECTIONS_DIR), str(project), *collections]),
         "ANSIBLE_FORCE_COLOR": "1",
     }
+    # What was installed from the project's requirements file, after what the
+    # project carries itself.
+    installed = run_dir / "collections"
+    if installed.is_dir() and not installed.is_symlink():
+        env["ANSIBLE_COLLECTIONS_PATH"] += f":{installed}"
     if events:
         env["ANSIBLE_CALLBACKS_ENABLED"] = "lineadicomando.fleet.events"
         env["FLEET_EVENTS_FILE"] = str(run_dir / "events.jsonl")
@@ -381,6 +387,45 @@ def _ssh_options(run_dir: Path) -> str:
         f"-o StrictHostKeyChecking=yes -o UserKnownHostsFile={run_dir / 'known_hosts'} "
         "-o GlobalKnownHostsFile=/dev/null"
     )
+
+
+# git as a job runs it: no configuration but the repository's own, no prompt,
+# and no transport that could run a local program.
+_GIT_ENV = {
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_ALLOW_PROTOCOL": "https:ssh",
+}
+
+
+def build_galaxy(spec: dict, run_dir: Path, runtime_dir: Path) -> tuple[list[str], dict[str, str]]:
+    """ansible-galaxy for a "galaxy" job, and its environment.
+
+    The collections of the project's requirements file go to run_dir/galaxy.
+    What the controller or the project already has is not installed again.
+    A collection taken from git is cloned by ansible-galaxy itself, which
+    takes no option for git: hooks and local transports are turned off
+    through the environment. No credential is offered to any source.
+    """
+    requirements = resolve_inside(run_dir / "project", spec.get("requirements"), "requirements")
+    target = run_dir / "galaxy"
+    env = build_env(run_dir, runtime_dir, events=False)
+    env["ANSIBLE_COLLECTIONS_PATH"] += f":{target}"
+    # Clones and downloads: on disk, not in the runtime directory, which is memory.
+    env["ANSIBLE_LOCAL_TEMP"] = str(run_dir / "scratch")
+    env.update(_GIT_ENV)
+    env.update({
+        "GIT_SSH_COMMAND": f"ssh -o BatchMode=yes {_ssh_options(run_dir)}",
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": "core.hooksPath", "GIT_CONFIG_VALUE_0": "/dev/null",
+        "GIT_CONFIG_KEY_1": "protocol.file.allow", "GIT_CONFIG_VALUE_1": "never",
+    })
+    if spec.get("proxy"):
+        env["https_proxy"] = str(spec["proxy"])
+    argv = ["/usr/bin/ansible-galaxy", "collection", "install",
+            "--requirements-file", str(requirements), "--collections-path", str(target)]
+    return argv, env
 
 
 def build_sync(
@@ -397,15 +442,7 @@ def build_sync(
     home = runtime_dir / "home"
     home.mkdir(mode=0o700, exist_ok=True)
 
-    env = {
-        "PATH": "/usr/bin:/bin",
-        "HOME": str(home),
-        "LANG": "C.UTF-8",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_TERMINAL_PROMPT": "0",
-        "GIT_ALLOW_PROTOCOL": "https:ssh",
-    }
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "LANG": "C.UTF-8", **_GIT_ENV}
     ssh = f"ssh -o BatchMode=yes {_ssh_options(run_dir)}"
     if credentials_dir is not None:
         key = credentials_dir / "fleet_git_private_key"

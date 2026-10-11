@@ -189,6 +189,7 @@ def _queue_check(ctx: Context, project, path: PurePosixPath) -> str:
     directory = jobs.create_dir(run_id)
     try:
         jobs.snapshot(tree, directory / "project")
+        jobs.place_collections(project, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
@@ -279,7 +280,12 @@ def file_write(ctx: Context, params: Params) -> dict:
     if looks_like_playbook(str(path), content):
         project = store.fetch(ctx.conn, "projects", project["id"], "project")
         check = _queue_check(ctx, project, path)
-    return {"revision": revision, "sha256": _digest(data), "check_run_id": check}
+    # A requirements file that changed: what it lists now is installed.
+    collections = None
+    if str(path) in jobs.REQUIREMENTS:
+        collections = jobs.install_missing(ctx, project["id"])
+    return {"revision": revision, "sha256": _digest(data), "check_run_id": check,
+            "collections_run_id": collections}
 
 
 @command("file.delete", role="admin", mutating=True)
