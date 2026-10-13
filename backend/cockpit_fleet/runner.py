@@ -191,8 +191,11 @@ def _vault_args(spec: dict, credentials_dir: Path | None) -> list[str]:
         secret = credentials_dir / f"fleet_{vault['file']}"
         if not secret.is_file():
             continue
-        label = vault.get("id") or ""
-        argv += ["--vault-id", f"{check_vault_id(label)}@{secret}" if label else str(secret)]
+        # Always with a label: the path holds the "@" of the unit's name, and
+        # alone it would be read as LABEL@FILE. "default" is Ansible's own
+        # name for a vault without one.
+        label = check_vault_id(vault.get("id") or "default")
+        argv += ["--vault-id", f"{label}@{secret}"]
     return argv
 
 

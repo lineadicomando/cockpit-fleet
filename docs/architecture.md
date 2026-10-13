@@ -384,6 +384,10 @@ is still in no command line and no environment.
 **Several vaults.** A template lists any number of vault credentials; each has
 an identifier, and each reaches Ansible as `--vault-id IDENTIFIER@FILE`, in the
 template's order. Credentials used together must have different identifiers.
+One without an identifier is given as `default@FILE`, Ansible's own name for
+it, never as the file alone: the path of a unit's credentials has the `@` of
+the unit's name in it, and Ansible would split it there (found running
+`ansible-win_edulab`, whose vault has no identifier).
 
 **Limits a launcher can change.** Launching a template, an operator may add a
 host limit and ask for a dry run. The limit is combined with the template's

@@ -75,6 +75,14 @@ class BuildArgvTest(unittest.TestCase):
         with self.assertRaises(BadRequest):
             self.argv(vaults=[{"file": "vault_password_0", "id": "x@/etc/shadow"}])
 
+    def test_vault_without_identifier_is_still_label_at_file(self):
+        # The real path has an "@" in it (the unit's name): alone, Ansible
+        # would split it there.
+        (self.creds / "fleet_vault_password_0").write_text("v")
+        argv = self.argv(vaults=[{"file": "vault_password_0", "id": ""}])
+        self.assertEqual(argv[argv.index("--vault-id") + 1],
+                         f"default@{self.creds / 'fleet_vault_password_0'}")
+
     def test_no_credentials_directory(self):
         self.assertNotIn("--private-key", self.argv(creds=False))
 
