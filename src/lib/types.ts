@@ -6,6 +6,24 @@ export interface Session {
     version: string;
     // Names of the backend commands this role may call.
     commands: string[];
+    // Whether config.toml names an agent for the chat page.
+    chat: boolean;
+}
+
+export interface ChatAgentInfo {
+    name: string;
+    label: string;
+    // What to type in a terminal to log the agent in to its model.
+    login: string;
+}
+
+export interface ChatInfo {
+    agents: ChatAgentInfo[];
+    // Why the chat cannot be used, or an empty string.
+    unavailable: string;
+    max_role: Role;
+    max_sessions: number;
+    open_sessions: number;
 }
 
 export type CheckStatus = "ok" | "warn" | "fail";

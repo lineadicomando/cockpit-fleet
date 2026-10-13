@@ -131,6 +131,7 @@ test/integration/galaxy.sh           # collections from a requirements file (IT_
 test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
 test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
 test/integration/mcp.sh              # fleet-mcp: tools by role, ceiling, via in the audit, forced-command key; WIPES
+test/integration/chat.sh             # fleet-chat with fake-agent.py: start, limit on sessions, tools by role; WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES

@@ -16,6 +16,8 @@ from .validators import MODULE_RE
 MAX_UPLOAD_MB = 50
 
 _PROXY_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?")
+_AGENT_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+_MAX_AGENTS = 8
 
 # What an ad-hoc command may run when config.toml does not say.
 ADHOC_MODULES = (
@@ -34,6 +36,18 @@ ADHOC_MODULES = (
 
 
 @dataclass(frozen=True)
+class ChatAgent:
+    """An agent the chat page may start: a program that speaks the Agent
+    Client Protocol on its standard input and output."""
+
+    name: str
+    command: tuple[str, ...]
+    label: str = ""
+    # What a user types in a terminal to log the agent in to its model.
+    login: str = ""
+
+
+@dataclass(frozen=True)
 class Config:
     max_concurrent_runs: int = 4
     default_forks: int = 5
@@ -45,6 +59,8 @@ class Config:
     inventory_scripts: bool = False
     mcp_enabled: bool = False
     mcp_max_role: str = "operator"
+    chat_agents: tuple[ChatAgent, ...] = ()
+    chat_max_sessions: int = 2
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -87,12 +103,42 @@ def _module(value: object) -> str:
     return value
 
 
+def _text(section: dict, table: str, key: str, limit: int) -> str:
+    value = section.get(key, "")
+    if (not isinstance(value, str) or len(value) > limit
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)):
+        raise ConfigError(f"{table}.{key} must be one line of at most {limit} characters")
+    return value
+
+
+def _agent(name: str, section: object) -> ChatAgent:
+    table = f"chat.agents.{name}"
+    if not _AGENT_RE.fullmatch(name):
+        raise ConfigError(f"{table}: the name of an agent is made of a-z, 0-9, - and _")
+    if not isinstance(section, dict):
+        raise ConfigError(f"[{table}] must be a table")
+    unknown = sorted(set(section) - {"command", "label", "login"})
+    if unknown:
+        raise ConfigError(f"unknown key in [{table}]: {', '.join(unknown)}")
+    command = section.get("command")
+    if (not isinstance(command, list) or not 1 <= len(command) <= 32
+            or not all(isinstance(word, str) and word and "\x00" not in word and len(word) <= 1024
+                       for word in command)):
+        raise ConfigError(f"{table}.command must be a list of strings: a program and its"
+                          " arguments")
+    if not command[0].startswith("/"):
+        raise ConfigError(f"{table}.command must begin with the absolute path of a program")
+    return ChatAgent(name, tuple(command), _text(section, table, "label", 60),
+                     _text(section, table, "login", 200))
+
+
 def parse(text: str) -> Config:
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
-    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp"})
+    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
+                                     "chat"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -131,6 +177,11 @@ def parse(text: str) -> Config:
     if mcp_max_role not in ("viewer", "operator", "admin"):
         raise ConfigError("mcp.max_role must be viewer, operator or admin")
 
+    chat = _section(data, "chat", {"agents", "max_sessions"})
+    agents = chat.get("agents", {})
+    if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
+        raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -143,6 +194,8 @@ def parse(text: str) -> Config:
         inventory_scripts=scripts,
         mcp_enabled=mcp_enabled,
         mcp_max_role=mcp_max_role,
+        chat_agents=tuple(_agent(name, section) for name, section in agents.items()),
+        chat_max_sessions=_int(chat, "chat", "max_sessions", Config.chat_max_sessions, 1, 64),
     )
 
 

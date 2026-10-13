@@ -378,6 +378,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
 def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     from . import (  # noqa: F401  (register the commands)
         agents,
+        chat,
         files,
         moduledocs,
         resources,

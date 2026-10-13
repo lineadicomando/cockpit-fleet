@@ -13,6 +13,8 @@ declare module "cockpit" {
 
     interface SpawnProcess extends Promise<string> {
         input(data: string, stream?: boolean): SpawnProcess;
+        stream(handler: (data: string) => void): SpawnProcess;
+        close(problem?: string): void;
     }
 
     interface Cockpit {

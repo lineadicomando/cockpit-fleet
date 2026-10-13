@@ -631,34 +631,107 @@ Checked on Debian 13 (`mcp.sh`), with a client written for the test, and
 from Claude Code 2.1 over ssh with a forced-command key: five turns to launch
 a template, wait for it and report host and tasks.
 
-**The chat, tried.** A chat page in Cockpit would be a client of the Agent
-Client Protocol: the agent is a process of the user, started by the page and
-given `fleet-mcp` as its only MCP server. It does not exist yet; this is what
-a trial on the test controller found (13 October, as an operator, with the
-adapter for Claude, `@agentclientprotocol/claude-agent-acp` 0.89.1).
+## The chat
 
-- The adapter wants Node.js 22 or later and Debian 13 has 20: it ran on the
-  official Node 22 tarball, 203 MB, plus 308 MB of adapter and SDK, which
-  brings its own `claude` binary. None of it can be a dependency of the
-  package, so the agent is installed once by the administrator and named in
-  `config.toml`; the plugin installs nothing.
-- The model needs a login, made once by the user in a terminal
-  (`claude /login`, which over ssh gives an address and takes a code). The
-  adapter offers a client like ours no login of its own.
-- With `_meta.disableBuiltInTools` in `session/new` the agent has no tool of
-  its own: asked for a shell command and a file, it said it had neither. A
-  login to claude.ai brings that account's connectors into the session, which
-  `ENABLE_CLAUDEAI_MCP_SERVERS=false` in the adapter's environment removes.
-- Each call to a tool comes first as a `session/request_permission`, with the
-  tool and its arguments, for the client to answer: allow once, always, or
-  refuse. A confirmation in the interface is made of this.
-- `session/load` in a new process replays the conversation and the agent
-  remembers it; sessions are files under `~/.claude/projects/`.
-- `cockpit.spawn` with `stream()` and `input(…, true)` keeps the agent alive
-  and answering, also across the tabs of the plugin. A reload of the page
-  ends adapter, `claude` and `fleet-mcp` together, leaving no process.
+A page of the interface where the user talks to an agent that works through
+`fleet-mcp`. The page is a client of the Agent Client Protocol (ACP): JSON-RPC
+on the standard input and output of the agent, which is a process of the
+user, on a Cockpit channel.
+
+```
+ChatPage ── cockpit.spawn ──▶ fleet-chat NAME        (the user, no privilege)
+   │ ACP on stdio               │ sudo -u cockpit-fleet fleetctl chat.start
+   │                            ▼
+   └──────────────────────▶ the agent ──▶ fleet-mcp ──▶ fleetctl (via, ceiling)
+```
+
+**The agent is not ours.** The administrator of the machine installs it once
+and names its command line in `[chat.agents.NAME]` of `config.toml`; the
+package installs and downloads nothing (`docs/chat.md` has the recipe for
+the adapter for Claude). Naming an agent is what turns the chat on, apart
+from `[mcp] enabled`, which the chat also needs: enabling `fleet-mcp` sends
+data to nobody, a chat sends what is said in it to the provider of the model.
+`whoami` says whether an agent is named, and the tab is shown only then.
+
+**The page names the agent, it does not start it.** It spawns `fleet-chat
+NAME`, a packaged program that runs as the user. `fleet-chat` asks
+`chat.start` for the command line (any role; the start is in the audit
+trail), runs it with its own input and output, and waits for it. It writes
+one line before the agent says anything, in the same form: `_fleet/ready`,
+with the home of the user and `fleet-mcp` as the server to give the agent, or
+`_fleet/error` with the refusal of the backend. It also sets
+`ENABLE_CLAUDEAI_MCP_SERVERS=false`, so that a login to claude.ai does not
+bring that account's connectors into the session.
+
+**The limit on sessions.** `[chat] max_sessions` (2 by default) is for the
+whole controller. Nothing is recorded: `chat.start` counts the `fleet-chat`
+processes in `/proc`, the one asking included, which is why `fleet-chat`
+stays around its agent instead of becoming it. It bounds memory and is not a
+control: a user with a shell can start the agent by hand.
+
+**What a session is given.** `session/new` and `session/load` carry
+`fleet-mcp` as the only MCP server, `_meta.disableBuiltInTools` (the agent
+has no shell and no files), `settingSources: []` and `strictMcpConfig` among
+the options of the adapter (none of the user's own settings for the agent,
+which could add servers or rules that allow a call without asking), and a
+few lines added to the agent's instructions. The client offers neither files
+nor a terminal. The session's directory is the user's home.
+
+**Permissions.** The agent asks before each call to a tool
+(`session/request_permission`). The page answers by itself for a tool of
+`fleet-mcp` that `mcp.tools` marks as read-only; for anything else it shows
+the description of the tool and its arguments and waits: once, always in
+this conversation, refuse. "Always" is kept by the page and answered as
+"once": the agent's own option of that kind writes a rule in the user's
+settings. A call that names something `mcp.tools` does not list is always
+asked about, with no "always". Stopping an answer cancels what was waiting.
+None of this is a control: the backend decides again, with the role of the
+user under the ceiling of `[mcp]`.
+
+**Conversations.** They are the agent's: the page lists them
+(`session/list`) and has the agent replay one (`session/load`) to go on
+after a reload. The session lives outside the React tree, so it goes on
+across the tabs of the plugin; a reload of the page closes the channel, and
+`fleet-chat`, the agent and `fleet-mcp` end with it. Answers are shown as
+plain text. The page takes the height left in the window and the
+conversation scrolls inside it, so that the message box stays in sight
+(measured, not a fixed share of the window: what is above it changes).
+
+**No login to the model.** The adapter says so (`_auth/status_update`, and
+error -32000 to a prompt): the page shows the command `config.toml` gives
+for the login, to be run once by the user in a terminal.
+
+Measured on the test controller with the adapter for Claude,
+`@agentclientprotocol/claude-agent-acp` 0.89.1:
+
+- The adapter wants Node.js 22 or later and Debian 13 has 20: the official
+  Node 22 tarball is 203 MB, adapter and SDK 308 MB, and they bring their own
+  `claude` binary. None of it can be a dependency of the package.
 - One idle session takes about 360 MB: adapter 93, `claude` 256, `fleet-mcp`
   12.
+- With `_meta.disableBuiltInTools` the agent, asked for a shell command and a
+  file, said it had neither (13 October, logged in, before the page existed).
+
+Checked on Debian 13: `chat.sh` drives `fleet-chat` with an agent written
+for the test (`fake-agent.py`, the protocol with no model behind it), and
+the page was tried from the browser with it as an operator and as a viewer:
+a read-only tool with no question, a template launched after a
+confirmation, a tool outside the role refused by the backend, no process
+left behind after a reload.
+
+Then with the adapter and its model, as an operator (13 October): asked
+what it could do, the agent called `whoami` and `template_list` with no
+question and listed its tools and its role; asked to launch a template, it
+waited for the confirmation, which showed the description of the tool and
+the answer to the survey, then called `run_result` and told the outcome by
+host and by task; the audit trail has the launch as the user's, via
+`mcp:claude-code`. Asked for a shell command, a file and an ad-hoc command,
+it said it had no tool for the first two and that the third is not for an
+operator. After a reload the conversation was in the list, was replayed, and
+the agent remembered the run. The adapter names the tool of a permission
+request in `_meta.claudeCode.toolName`, which is what the page reads;
+`settingSources: []` and `strictMcpConfig` do not get in the way of the
+login.
 
 ## Events
 
@@ -748,6 +821,7 @@ bundled collection.
 | Ad-hoc commands | `test/integration/adhoc.sh` | controller, as root; wipes the database |
 | Inventory plugins, directories, scripts | `test/integration/inventories.sh` | controller, as root; wipes the database |
 | Agents: fleet-mcp, ceiling, tools, ssh | `test/integration/mcp.sh` | controller, as root; wipes the database |
+| Chat: fleet-chat, limit on sessions, tools | `test/integration/chat.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

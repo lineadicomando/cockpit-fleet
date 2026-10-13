@@ -1,0 +1,12 @@
+#!/usr/bin/python3 -I
+"""Starts the agent of a chat session, named in config.toml, as the user who
+opened the chat page. It has no privilege; see cockpit_fleet/chat_agent.py."""
+
+import sys
+
+sys.path.insert(0, "/usr/lib/cockpit-fleet")
+
+from cockpit_fleet.chat_agent import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

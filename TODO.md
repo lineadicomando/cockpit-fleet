@@ -7,13 +7,10 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1 and 2 were closed on 8 October 2026 and phase 3 on 13 October.
-**In progress: phase 3b** (agents): `fleet-mcp` is done and accepted, the ACP
-trial held, the chat page is what is left. `main` is level with `origin`.
+Phases 0, 1, 2 and 3 are closed, and so is **phase 3b** (agents), on 13
+October: `fleet-mcp`, and the chat page, tried with the model.
 
-**Next step: the chat page** (see phase 3b), on the user's confirmation; it
-was decided on 13 October how its agent gets on a controller (see Decisions,
-"Agent of the chat"). Phase 4 follows.
+**Next step: phase 4** (scheduling).
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is missing.
@@ -29,13 +26,13 @@ the configuration; roles from Unix groups and the audit trail; agents through
 `fleet-mcp`, under a role ceiling. Tried on Linux nodes (containers) and on
 Windows over SSH.
 
-State of the test VM `deb13-samba-dc`: **it is not at its snapshot**, on
-purpose. It has the package of commit `afc2f06` and, for the chat page, the
-account `acpop` (operator, password locked) with Node.js 22, the ACP adapter
-and a login to Claude in its home, a few test data and `[mcp]` enabled. Enter
-as `maint` and use `sudo -u acpop -H`. Revert to `baseline_fleet` when the chat
-page is done, or sooner to remove the login; a new login then takes the user
-at a terminal.
+State of the test VM `deb13-samba-dc`: **it is not at its snapshot**. On top
+of `baseline_fleet` it has the package with the chat and, under
+`/opt/cockpit-fleet-agent`, Node.js 22 and the ACP adapter for Claude,
+installed as `docs/chat.md` says; no test account, no data, no login to
+Claude, and the default `config.toml`. Nothing of it is needed by phase 4:
+revert to the snapshot, or keep it to try the chat again (a login then
+takes the user at a terminal).
 
 The snapshot `baseline_fleet` (redone on 11 October, a child of `baseline`) is
 where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` at commit
@@ -43,7 +40,9 @@ where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` at commit
 image already built; no data and no test accounts, and no Samba AD DC. After a
 revert, `make vm-deb-deploy` installs the current code.
 
-Integration tests last run on 13 October, on the code of `afc2f06`: `mcp.sh`,
+Integration tests last run on 13 October, on the code of `afc2f06` (and, with
+the chat, `chat.sh`, `mcp.sh`, `privileges.sh`, `roles.sh`, `files.sh`,
+`upload.sh` and `inventories.sh` again): `mcp.sh`,
 `privileges.sh`, `roles.sh`, `sandbox.sh`, `runs.sh` (without the git part:
 `IT_GIT_URL` not set), `adhoc.sh`, `inventories.sh`, `files.sh`, `upload.sh`,
 `galaxy.sh` (with `IT_GALAXY_NET=yes`) and `multihost.sh`, all passing.
@@ -96,6 +95,10 @@ and `IT_SSH_PASSWORD`.
 | Audit of agents | `fleet-mcp` declares `via` (and the name of the client) in the JSON on stdin; `fleetctl` records it in the audit trail and in the journal and, when it is there, applies the ceiling. Declaring it can only restrict. Over ssh it binds only with a dedicated key and a forced command on `fleet-mcp` in `authorized_keys`; otherwise it is a declaration, not a control. A stricter variant, with no code: a Unix account for the agent |
 | Switch of the chat | Separate from `[mcp] enabled`: enabling `fleet-mcp` sends data to nobody, the chat does |
 | Agent of the chat | Installed once by the administrator of the machine, outside the `.deb`; `config.toml` names its command (`[chat]`), and the page starts that and nothing else. The plugin downloads and installs nothing: Node.js 22 and the adapter cannot come from Debian packages, and the `claude` binary is not ours to redistribute. A command in `config.toml` is the administrator's opt-in, and any ACP agent can be named there. A recipe for the Claude adapter goes in the documentation. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP |
+| Start of the chat's agent | The page names the agent; `fleet-chat`, a packaged program with no privilege, gets the command line from `chat.start` and runs it. No command line reaches the browser |
+| Login of the chat's agent | Each user logs in once at a terminal on the controller; the page says when the login is missing and shows the command `config.toml` gives. No login driven by the page |
+| Sessions of the chat | `[chat] max_sessions`, 2 by default, for the whole controller; counted from the running `fleet-chat` processes, a bound on memory and not a control |
+| Permissions in the chat | Read-only tools of `fleet-mcp` go without a question, everything else is confirmed; "always" lasts a conversation and is kept by the page, never written in the agent's settings |
 | Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
 | Scheduling | A single static timer that runs `fleetctl scheduler tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions |
 | Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days |
@@ -103,12 +106,7 @@ and `IT_SSH_PASSWORD`.
 
 ## Open points (a default applies, to be confirmed before the phase named)
 
-- **Phase 3b, login of the chat's agent to its model**: by default each user
-  logs in once in a terminal on the controller (`claude /login`), and the page
-  only says when a login is missing; the alternative is a login driven by the
-  page, which we would have to write.
-- **Phase 3b, sessions of the chat at the same time**: by default a limit in
-  `config.toml`, since one session takes about 360 MB.
+None for the phases in progress.
 
 ## Leftovers of the closed phases
 
@@ -163,6 +161,12 @@ and `IT_SSH_PASSWORD`.
   descriptions of the parameters are still few (only the types and bounds
   reach the schema); the user manual for setting up an agent is the section
   of `docs/architecture.md`, there is no page for it in the interface.
+- Chat: answers are plain text, Markdown is not rendered; a conversation
+  cannot be deleted or renamed from the page; the model and the effort of
+  the agent cannot be chosen; the standard error of the agent is kept by
+  Cockpit for the whole session, to show its end when it fails; the limit on
+  sessions can be filled by one user; a tool the role does not have is asked
+  about as "not one of your tools" and then refused by the backend.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 
@@ -184,7 +188,7 @@ with a survey (`t = ping,sysinfo`, 14 tasks, 14 s), an ad-hoc
 `ansible.windows.win_command`, and `playbooks/shutdown.yaml`, which has a task
 delegated to the controller.
 
-## Phase 3b — Agents (MCP)
+## Phase 3b — Agents (MCP) (closed on 13 October)
 
 The commands of the later phases (schedules, notifications) become tools by
 themselves, from the registry.
@@ -207,27 +211,12 @@ same request sent to `fleetctl` with `via`, as the operator and as an
 administrator under the ceiling, was refused and is in the audit trail and in
 the journal.
 
-What is left is the chat page, not part of that criterion:
-
-- [ ] `[chat]` in `config.toml`: off unless it names the command of an agent
-      (more than one, each with a name); its own switch, apart from `[mcp]`,
-      which it needs enabled; a limit on the sessions open at the same time.
-      A backend command gives the page what it may start, to every role that
-      may use the chat
-- [ ] The page: an ACP client on a `cockpit.spawn` channel, started with
-      `fleet-mcp` as the only MCP server, no built-in tool
-      (`_meta.disableBuiltInTools`) and `ENABLE_CLAUDEAI_MCP_SERVERS=false`;
-      the conversation as it streams, with the calls to tools
-- [ ] Permission requests in the interface: every call that changes something
-      is confirmed (once, always for the session, refuse), with the tool and
-      its arguments in words
-- [ ] Sessions: the list, and `session/load` to go on after the page was
-      reloaded; the agent ends with the page, which is said in the page
-- [ ] When the agent is not logged in to its model: say so and how to log in
-- [ ] Documentation: the recipe to install Node.js 22 and the Claude adapter
-      once, for all users, with pinned versions; what the chat sends to the
-      provider of the model
-- [ ] Tried from the interface on the VM, as an operator and as a viewer
+The chat page, not part of that criterion, was written on 13 October and is
+described in `docs/architecture.md` ("The chat") and, for the administrator,
+in `docs/chat.md`. Tried from the interface on the VM with `fake-agent.py`,
+as an operator and as a viewer, and with the adapter for Claude and its
+model, as an operator: a template launched after a confirmation and its
+outcome read, a conversation resumed after a reload.
 
 ## Phase 4 — Scheduling
 

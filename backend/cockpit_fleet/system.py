@@ -18,11 +18,16 @@ _MIN_SYSTEMD = 257
 def whoami(ctx: Context, params: Values) -> dict:
     """Who is calling, with which role, and the commands that role may use."""
     allowed = sorted(c.name for c in COMMANDS.values() if role_at_least(ctx.caller.role, c.role))
+    try:
+        chat = bool(ctx.config.chat_agents)
+    except FleetError:
+        chat = False  # a broken config.toml is reported by selfcheck
     return {
         "user": ctx.caller.user,
         "role": ctx.caller.role,
         "version": __version__,
         "commands": allowed,
+        "chat": chat,
     }
 
 
