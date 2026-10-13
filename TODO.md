@@ -7,11 +7,25 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1, 2, 3 and 3b (agents and the chat) are closed, the last on 13
-October 2026, with commit `1edddea`, on which CI passes.
+Phases 0, 1, 2, 3 and 3b (agents and the chat, "Assistant" in the interface)
+are closed, the last on 13 October 2026. The last commit of that work is
+`0c3af39`, on which CI passes.
 
-**Next step: phase 4** (scheduling). Nothing of it is written; its section
-below says what it can build on and what is to be decided first.
+**Next step, before phase 4: try the assistant with its model through an
+agent installed by the role.** It was tried with the model only when the
+agent had been installed by hand; the role installs the same packages
+without running their scripts, and with it the page was tried up to the
+missing login. On the VM: `make vm-deb-deploy` (the package there predates
+the name "Assistant"), run the playbook with `-e chat_agent_configure=true`
+and set `[mcp] enabled = true` as `docs/chat.md` says, create an account in
+`cockpit-fleet-operator`, and have the user log in to Claude as that account
+(`/opt/cockpit-fleet-agent/bin/claude /login`, from Cockpit's terminal or
+over ssh). Then, from the interface: launch a template and read its outcome,
+as on 13 October (`docs/architecture.md`, "The chat"). Remove the account
+afterwards, and the login with it.
+
+**Then phase 4** (scheduling). Nothing of it is written; its section below
+says what it can build on and what is to be decided first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
@@ -29,7 +43,8 @@ the configuration; roles from Unix groups and the audit trail; agents through
 user. Tried on Linux nodes (containers) and on Windows over SSH.
 
 State of the test VM `deb13-samba-dc` (shut off): at its snapshot but for the
-package, which is the one with the role that installs the chat's agent. No
+package, which has the role that installs the chat's agent and predates the
+name "Assistant" in the interface. No
 agent is installed, no test account, no data, the default `config.toml`. To
 try the chat: run the playbook as `docs/chat.md` says, create an account in a role group and log in to Claude as that account,
 which takes the user at a terminal.
@@ -191,8 +206,7 @@ Integration tests, all passing when last run, on 13 October:
   model it was tried as an operator only (as a viewer, with the test agent);
   below 320 px of height for the chat the page scrolls again.
 - Agent of the chat: the role was tried on x86_64 only (the checksum for
-  arm64 is there, untried); the model was not asked anything through an agent
-  installed by the role; the versions of Node.js and of the adapter are fixed
+  arm64 is there, untried); the versions of Node.js and of the adapter are fixed
   in the role and move only with a release of the package; `selfcheck` says
   nothing about the chat; no integration script runs the playbook, which
   downloads the whole agent; the role used from a project, on a controller
