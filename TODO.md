@@ -7,13 +7,15 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1, 2 and 3 are closed, and so is **phase 3b** (agents), on 13
-October: `fleet-mcp`, and the chat page, tried with the model.
+Phases 0, 1, 2, 3 and 3b (agents and the chat) are closed, the last on 13
+October 2026, with commit `1edddea`, on which CI passes.
 
-**Next step: phase 4** (scheduling).
+**Next step: phase 4** (scheduling). Nothing of it is written; its section
+below says what it can build on and what is to be decided first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
-`docs/architecture.md` (what exists and why). This file only says what is missing.
+`docs/architecture.md` (what exists and why). This file only says what is
+missing. `docs/chat.md` is the administrator's guide to the chat.
 
 What works today: projects (git, a local directory, written in the interface
 with git history and syntax checks, uploaded as an archive), collections
@@ -23,33 +25,40 @@ host keys, templates with surveys, ad-hoc commands, runs with a queue,
 cancellation, live output with the secrets masked, a view by task, the
 differences and the outcome per host; help on modules, export and import of
 the configuration; roles from Unix groups and the audit trail; agents through
-`fleet-mcp`, under a role ceiling. Tried on Linux nodes (containers) and on
-Windows over SSH.
+`fleet-mcp`, under a role ceiling, and a chat page that starts one for the
+user. Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc`: **it is not at its snapshot**. On top
-of `baseline_fleet` it has the package with the chat and, under
-`/opt/cockpit-fleet-agent`, Node.js 22 and the ACP adapter for Claude,
+State of the test VM `deb13-samba-dc` (shut off): **it is not at its
+snapshot**. On top of `baseline_fleet` it has the package of `1edddea` and,
+under `/opt/cockpit-fleet-agent`, Node.js 22 and the ACP adapter for Claude,
 installed as `docs/chat.md` says; no test account, no data, no login to
 Claude, and the default `config.toml`. Nothing of it is needed by phase 4:
 revert to the snapshot, or keep it to try the chat again (a login then
 takes the user at a terminal).
 
-The snapshot `baseline_fleet` (redone on 11 October, a child of `baseline`) is
-where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` at commit
-`124f131`, `ansible`, `ansible-lint`, `sshpass`, `podman` and the `fleet-node`
-image already built; no data and no test accounts, and no Samba AD DC. After a
-revert, `make vm-deb-deploy` installs the current code.
+The snapshot `baseline_fleet` (redone on 13 October, a child of `baseline`) is
+where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` as of commit
+`1bb7a37`, `ansible`, `ansible-lint`, `sshpass`, `podman` and the `fleet-node`
+image already built; no data and no test accounts, and no Samba AD DC. It has
+neither Node.js nor an agent for the chat. After a revert, `make
+vm-deb-deploy` installs the current code.
 
-Integration tests last run on 13 October, on the code of `afc2f06` (and, with
-the chat, `chat.sh`, `mcp.sh`, `privileges.sh`, `roles.sh`, `files.sh`,
-`upload.sh` and `inventories.sh` again): `mcp.sh`,
-`privileges.sh`, `roles.sh`, `sandbox.sh`, `runs.sh` (without the git part:
-`IT_GIT_URL` not set), `adhoc.sh`, `inventories.sh`, `files.sh`, `upload.sh`,
-`galaxy.sh` (with `IT_GALAXY_NET=yes`) and `multihost.sh`, all passing.
-`windows.sh` was last run before phase 3 and wants the secret `it-win-key`
-made again (see `CLAUDE.md`); Windows was tried by the two acceptance tests
-instead. `runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`)
-and `IT_SSH_PASSWORD`.
+Integration tests, all passing when last run, on 13 October:
+
+- on the code with the chat: `chat.sh`, `mcp.sh`, `privileges.sh`,
+  `roles.sh`, `files.sh`, `upload.sh`, `inventories.sh`. The layout of the
+  chat page changed afterwards (frontend only) and was tried from the
+  browser;
+- on the code of `afc2f06`, not since: `sandbox.sh`, `runs.sh` (without the
+  git part: `IT_GIT_URL` not set), `adhoc.sh`, `galaxy.sh` (with
+  `IT_GALAXY_NET=yes`) and `multihost.sh`. The chat touched none of what they
+  try, but run them again before changing the unit, the helpers or `fleetctl`;
+- `windows.sh` was last run before phase 3 and wants the secret `it-win-key`
+  made again (see `CLAUDE.md`); Windows was tried by the two acceptance tests
+  instead.
+
+`runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`) and
+`IT_SSH_PASSWORD`.
 
 ## Decisions
 
@@ -93,8 +102,8 @@ and `IT_SSH_PASSWORD`.
 | Template with a required secret | Not published as a tool, to begin with |
 | Run output for agents | The tool gives the outcome per host and the view by task; the raw output only when asked for explicitly |
 | Audit of agents | `fleet-mcp` declares `via` (and the name of the client) in the JSON on stdin; `fleetctl` records it in the audit trail and in the journal and, when it is there, applies the ceiling. Declaring it can only restrict. Over ssh it binds only with a dedicated key and a forced command on `fleet-mcp` in `authorized_keys`; otherwise it is a declaration, not a control. A stricter variant, with no code: a Unix account for the agent |
-| Switch of the chat | Separate from `[mcp] enabled`: enabling `fleet-mcp` sends data to nobody, the chat does |
-| Agent of the chat | Installed once by the administrator of the machine, outside the `.deb`; `config.toml` names its command (`[chat]`), and the page starts that and nothing else. The plugin downloads and installs nothing: Node.js 22 and the adapter cannot come from Debian packages, and the `claude` binary is not ours to redistribute. A command in `config.toml` is the administrator's opt-in, and any ACP agent can be named there. A recipe for the Claude adapter goes in the documentation. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP |
+| Switch of the chat | Naming an agent in `[chat.agents.NAME]` of `config.toml`, apart from `[mcp] enabled`, which the chat also needs: enabling `fleet-mcp` sends data to nobody, the chat does. The tab is shown only when an agent is named |
+| Agent of the chat | Installed once by the administrator of the machine, outside the `.deb`; `config.toml` names its command (`[chat.agents.NAME]`), and nothing else is started. The plugin downloads and installs nothing: Node.js 22 and the adapter cannot come from Debian packages, and the `claude` binary is not ours to redistribute. A command in `config.toml` is the administrator's opt-in, and any ACP agent can be named there. The recipe for the Claude adapter is in `docs/chat.md`. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP |
 | Start of the chat's agent | The page names the agent; `fleet-chat`, a packaged program with no privilege, gets the command line from `chat.start` and runs it. No command line reaches the browser |
 | Login of the chat's agent | Each user logs in once at a terminal on the controller; the page says when the login is missing and shows the command `config.toml` gives. No login driven by the page |
 | Sessions of the chat | `[chat] max_sessions`, 2 by default, for the whole controller; counted from the running `fleet-chat` processes, a bound on memory and not a control |
@@ -106,7 +115,16 @@ and `IT_SSH_PASSWORD`.
 
 ## Open points (a default applies, to be confirmed before the phase named)
 
-None for the phases in progress.
+- **Phase 4, who manages schedules**: by default an administrator creates,
+  changes and deletes them, an operator turns one on or off and runs it now,
+  a viewer sees them; as for templates.
+- **Phase 4, whose run a scheduled run is**: by default `created_by` is the
+  schedule (the caller of the tick is the service account, which the backend
+  calls `system`), and the audit trail has who made or changed the schedule,
+  not one record per tick.
+- **Phase 4, a schedule of a template with a survey**: by default the answers
+  are stored with the schedule and checked when it is saved; a template with
+  a required secret question cannot be scheduled, as it cannot be a tool.
 
 ## Leftovers of the closed phases
 
@@ -166,7 +184,9 @@ None for the phases in progress.
   the agent cannot be chosen; the standard error of the agent is kept by
   Cockpit for the whole session, to show its end when it fails; the limit on
   sessions can be filled by one user; a tool the role does not have is asked
-  about as "not one of your tools" and then refused by the backend.
+  about as "not one of your tools" and then refused by the backend; with the
+  model it was tried as an operator only (as a viewer, with the test agent);
+  below 320 px of height for the chat the page scrolls again.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 
@@ -220,8 +240,24 @@ outcome read, a conversation resumed after a reload.
 
 ## Phase 4 — Scheduling
 
-The limit of concurrent runs and the start of the next one in the queue already
-exist.
+What it can build on, as the code is today:
+
+- The queue: a launch inserts a run as `queued`, and `jobs.dispatch` starts
+  queued runs, oldest first, while fewer than `[runs] max_concurrent` are
+  running. There is no priority yet: the order is `created_at`.
+- A caller that is not sudo: `fleetctl` run by the service account itself,
+  with no `SUDO_UID`, is the caller `system` with the admin role
+  (`auth.resolve_caller`). `cockpit-fleet-finish@.service` already works
+  this way (`fleetctl run.reconcile`), and it is the model for the unit of
+  the timer: `User=cockpit-fleet`, no sandbox of a run, the database
+  writable.
+- `run.start` holds every check of a launch (limit, answers of the survey,
+  role); the tick should go through the same code, not around it.
+- The schema is at migration 7; schedules are a new entry of `MIGRATIONS`.
+- New commands become tools of `fleet-mcp` by themselves (see phase 3b), and
+  `config.export` and `config.import` must learn about schedules.
+
+To do:
 
 - [ ] `cockpit-fleet-scheduler.timer` + `fleetctl scheduler tick`
 - [ ] `OnCalendar` schedules with a time zone; next execution computed on save and

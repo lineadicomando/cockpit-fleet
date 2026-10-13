@@ -4,10 +4,14 @@ Cockpit plugin to run Ansible from the web console and to watch a fleet of
 nodes through Ansible alone, without installing an agent on them.
 
 > **Status: early development.** Playbooks can be run from the interface:
-> projects (git or a local directory), inventories, credentials, trusted host
-> keys, job templates, and runs with live output, a queue and cancellation.
-> Schedules, notifications, surveys and everything about watching the fleet are
-> still to come. See [TODO.md](TODO.md) for the plan.
+> projects (git, a local directory, written in the browser, an uploaded
+> archive), collections from a requirements file, inventories, credentials,
+> trusted host keys, job templates with surveys, ad-hoc commands, and runs
+> with live output, a queue and cancellation. Agents can use it as a set of
+> tools, and a chat page starts one for the user
+> ([docs/chat.md](docs/chat.md)). Schedules, notifications and everything
+> about watching the fleet are still to come. See [TODO.md](TODO.md) for the
+> plan.
 
 ## What it is meant to do
 

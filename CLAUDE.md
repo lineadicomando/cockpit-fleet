@@ -17,6 +17,9 @@ Three documents, each with one job; do not repeat one in another:
   measured. Update it with every change of design.
 - This file: how to work on the project.
 
+`docs/chat.md` is for the administrator of a controller: how the chat is
+turned on and its agent installed. Keep it in step with `[chat]`.
+
 Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 `backend/libexec/` the helpers installed in `/usr/libexec/cockpit-fleet`,
 `backend/tests/` unit tests, `collection/` the bundled Ansible collection,
@@ -171,7 +174,16 @@ same run can be launched from the interface.
 - Cockpit there has a self-signed certificate, which the browser tools refuse.
   Open an SSH tunnel (`ssh -L 9091:127.0.0.1:9090`) and use
   `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
-- Do not `pkill -f` with a pattern that also appears in your own command line.
+- Do not `pkill -f` or `pgrep -f` with a pattern that also appears in your own
+  command line: it matches the shell that runs it.
+- `vm-deb-deploy` stops at dpkg's question when `/etc/cockpit-fleet/config.toml`
+  was changed on the VM and the packaged one changed too: put the packaged
+  file back first, or install with `dpkg -i --force-confold` to keep the test
+  configuration.
+- The work tree is in a folder synced by Nextcloud, which leaves out
+  `node_modules`, `dist` and `deb`. If `node_modules` loses its files again,
+  the client's `permanent_delete` log says why; and look at `git diff` for
+  changes of mode before a commit.
 - The controller has no standing key for the Windows nodes: make a key pair
   for the test, authorise its public half with
   `local/cockpit_fleet_ssh_key.yaml` in `ansible-win_edulab` from the host
@@ -187,7 +199,7 @@ same run can be launched from the interface.
 ## Git hosting
 
 - A private Gitea. CLI: `tea`, login `example`, which
-  is not the default: always pass `-l LOGIN`.
+  is not the default: always pass `--login LOGIN`, after the subcommand.
 - `tea` fails outside a git work tree (`git rev-parse` error): run it from inside
   the repository.
 - Remotes use HTTPS (credentials come from the git credential store). Gitea SSH
@@ -204,6 +216,9 @@ same run can be launched from the interface.
   with a version (Node.js, ruff) are pinned in the workflow and cached in
   `/data/tools`. That host runs production services: change nothing there
   beyond `runner-ci` without asking.
+- After a push, look at the run: `tea api --login LOGIN
+  "/repos/source/cockpit-fleet/actions/runs?limit=3"`, and `…/runs/ID/jobs` for
+  its steps.
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material
