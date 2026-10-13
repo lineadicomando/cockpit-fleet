@@ -5,9 +5,9 @@ import shutil
 
 from . import jobs, store, survey
 from .cli import Context, Params, command
-from .errors import BadRequest
-from .resources import place_inventory, template_vaults
-from .validators import check_limit
+from .errors import BadRequest, Conflict
+from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
+from .validators import check_limit, check_module
 
 _CHUNK = 256 * 1024
 STATUSES = ("queued", "running", "successful", "failed", "canceled", "error")
@@ -89,6 +89,77 @@ def run_start(ctx: Context, params: Params) -> dict:
     jobs.enqueue(ctx, {"id": run_id, "kind": "playbook", "title": template["name"],
                        "template_id": template_id, "project_id": project["id"],
                        "inventory_id": inventory["id"], "revision": project["revision"],
+                       "options": json.dumps(options)}, spec, directory)
+    return _run(store.fetch(ctx.conn, "runs", run_id, "run"))
+
+
+@command("run.adhoc", role="admin", mutating=True)
+def run_adhoc(ctx: Context, params: Params) -> dict:
+    """Run one module on hosts of an inventory, without a template.
+
+    The module must be among those config.toml allows. Its arguments are kept
+    with the run and in the audit record, in clear: they are not for secrets.
+    """
+    inventory_id = params.ident("inventory_id")
+    project_id = params.optional_id("project_id")
+    module = check_module(params.string("module", max_length=200))
+    free_form = params.string("free_form", "", 16 * 1024)
+    args = params.mapping("args")
+    limit = check_limit(params.string("limit", max_length=512))
+    machine_id = credential_of_kind(ctx, params.optional_id("machine_credential_id"), "machine")
+    vaults = vault_ids(ctx, params)
+    become = params.boolean("become")
+    check = params.boolean("check")
+    diff = params.boolean("diff")
+    forks = params.integer("forks", ctx.config.default_forks, 1, ctx.config.max_forks)
+    params.done()
+
+    if module not in ctx.config.adhoc_modules:
+        raise Conflict(f"{module} is not among the modules config.toml allows"
+                       " for ad-hoc commands ([adhoc] modules)")
+    if len(json.dumps(args)) > 64 * 1024:
+        raise BadRequest("args is too large")
+    inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    if inventory["kind"] == "file":
+        if project_id not in (None, inventory["project_id"]):
+            raise BadRequest("a file inventory can only be used with its own project")
+        project_id = inventory["project_id"]
+    project = store.fetch(ctx.conn, "projects", project_id, "project") if project_id else None
+
+    spec = {"kind": "adhoc", "module": module, "free_form": free_form, "args": args,
+            "limit": limit, "check": check, "diff": diff or check, "become": become,
+            "forks": forks, "vaults": []}
+    run_id = store.new_id("r")
+    directory = jobs.create_dir(run_id)
+    try:
+        if project:
+            # For its collections and for what stands beside its inventory.
+            jobs.snapshot(jobs.project_tree(project, ctx.config), directory / "project")
+            jobs.place_collections(project, directory, required=True)
+        else:
+            (directory / "project").mkdir(mode=0o700)
+        spec.update(place_inventory(ctx, inventory, directory, project_id))
+        if machine_id:
+            machine = store.fetch(ctx.conn, "credentials", machine_id, "credential")
+            spec["user"] = machine["username"]
+            jobs.add_secret(directory, machine_id, "private_key", "private_key")
+            jobs.add_secret(directory, machine_id, "key_passphrase", "key_passphrase")
+            jobs.add_secret(directory, machine_id, "password", "connection_password")
+            jobs.add_secret(directory, machine_id, "become_password", "become_password")
+        for index, vault_id in enumerate(vaults):
+            vault = store.fetch(ctx.conn, "credentials", vault_id, "credential")
+            jobs.add_secret(directory, vault_id, "vault_password", f"vault_password_{index}")
+            spec["vaults"].append({"file": f"vault_password_{index}", "id": vault["vault_id"]})
+        jobs.write_known_hosts(ctx.conn, directory)
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+
+    options = {"module": module, "free_form": free_form, "args": args, "limit": limit,
+               "check": check, "diff": spec["diff"], "become": become}
+    jobs.enqueue(ctx, {"id": run_id, "kind": "adhoc", "title": f"{module} [{limit}]",
+                       "project_id": project_id, "inventory_id": inventory_id,
+                       "revision": project["revision"] if project else "",
                        "options": json.dumps(options)}, spec, directory)
     return _run(store.fetch(ctx.conn, "runs", run_id, "run"))
 

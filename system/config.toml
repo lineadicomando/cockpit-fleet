@@ -19,3 +19,14 @@
 [network]
 # Proxy for outgoing connections (git, ansible-galaxy, notifications).
 #proxy = "http://proxy.example.org:3128"
+
+[adhoc]
+# Modules an administrator may run as an ad-hoc command, by their full name.
+# An empty list disables ad-hoc commands.
+#modules = [
+#    "ansible.builtin.ping", "ansible.builtin.setup", "ansible.builtin.command",
+#    "ansible.builtin.shell", "ansible.builtin.service_facts",
+#    "ansible.builtin.package_facts", "ansible.windows.win_ping",
+#    "ansible.windows.setup", "ansible.windows.win_command",
+#    "ansible.windows.win_shell", "ansible.windows.win_powershell",
+#]

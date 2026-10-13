@@ -120,6 +120,9 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
         command = runner.build_inventory_argv(spec, run_dir, credentials)
     elif kind == "playbook":
         command = runner.build_argv(spec, run_dir, runtime_dir, credentials)
+    elif kind == "adhoc":
+        command = runner.build_adhoc_argv(spec, run_dir, runtime_dir, credentials)
+        env.update(runner.ADHOC_ENV)
     else:
         raise ValueError(f"unknown job kind: {kind!r}")
     return {"rc": execute(command, env, run_dir / "project", log)}

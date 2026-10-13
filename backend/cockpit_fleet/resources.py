@@ -48,7 +48,7 @@ def _credential(row) -> dict:
     }
 
 
-def _credential_of_kind(ctx: Context, credential_id: str | None, kind: str) -> str | None:
+def credential_of_kind(ctx: Context, credential_id: str | None, kind: str) -> str | None:
     if credential_id is None:
         return None
     row = store.fetch(ctx.conn, "credentials", credential_id, "credential")
@@ -142,7 +142,7 @@ def _project_values(ctx: Context, params: Params, kind: str) -> dict:
         values["url"] = check_git_url(params.string("url", max_length=500))
         values["ref"] = check_git_ref(params.string("ref", "main", 200))
         credential_id = params.optional_id("credential_id")
-        values["credential_id"] = _credential_of_kind(ctx, credential_id, "source")
+        values["credential_id"] = credential_of_kind(ctx, credential_id, "source")
     return values
 
 
@@ -303,7 +303,7 @@ def _inventory(row, with_hosts: bool = False) -> dict:
 
 def _inventory_values(ctx: Context, params: Params, kind: str) -> dict:
     values: dict = {"vault_credential_id":
-                    _credential_of_kind(ctx, params.optional_id("vault_credential_id"), "vault")}
+                    credential_of_kind(ctx, params.optional_id("vault_credential_id"), "vault")}
     if kind == "file":
         values["project_id"] = params.ident("project_id")
         store.fetch(ctx.conn, "projects", values["project_id"], "project")
@@ -586,7 +586,7 @@ def _template_values(ctx: Context, params: Params) -> dict:
                                             "playbook")),
         "inventory_id": inventory_id,
         "machine_credential_id":
-            _credential_of_kind(ctx, params.optional_id("machine_credential_id"), "machine"),
+            credential_of_kind(ctx, params.optional_id("machine_credential_id"), "machine"),
         "limit_hosts": check_limit(limit) if limit else "",
         "tags": json.dumps([check_tag(tag) for tag in params.strings("tags")]),
         "skip_tags": json.dumps([check_tag(tag) for tag in params.strings("skip_tags")]),
@@ -599,7 +599,7 @@ def _template_values(ctx: Context, params: Params) -> dict:
     }
 
 
-def _vault_ids(ctx: Context, params: Params) -> list[str]:
+def vault_ids(ctx: Context, params: Params) -> list[str]:
     ids = params.strings("vault_credential_ids", 20)
     if len(set(ids)) != len(ids):
         raise BadRequest("a vault credential is listed twice")
@@ -609,7 +609,7 @@ def _vault_ids(ctx: Context, params: Params) -> list[str]:
             check_id(credential_id, "credential id")
         except ValueError as error:
             raise BadRequest(str(error)) from error
-        _credential_of_kind(ctx, credential_id, "vault")
+        credential_of_kind(ctx, credential_id, "vault")
         labels.append(store.fetch(ctx.conn, "credentials", credential_id, "credential")["vault_id"])
     if len(ids) > 1 and len(set(labels)) != len(labels):
         raise BadRequest("vault credentials used together need different vault identifiers")
@@ -647,7 +647,7 @@ def template_list(ctx: Context, params: Params) -> dict:
 @command("template.create", role="admin", mutating=True)
 def template_create(ctx: Context, params: Params) -> dict:
     values = _template_values(ctx, params)
-    vaults = _vault_ids(ctx, params)
+    vaults = vault_ids(ctx, params)
     params.done()
     return _save_template(ctx, store.new_id("t"), values, vaults, create=True)
 
@@ -657,7 +657,7 @@ def template_update(ctx: Context, params: Params) -> dict:
     template_id = params.ident("id")
     store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
-    vaults = _vault_ids(ctx, params)
+    vaults = vault_ids(ctx, params)
     params.done()
     return _save_template(ctx, template_id, values, vaults, create=False)
 

@@ -125,6 +125,7 @@ test/integration/runs.sh             # a whole run through fleetctl; WIPES the d
 test/integration/files.sh            # a project written in the interface, syntax checks; WIPES
 test/integration/upload.sh           # a project uploaded as an archive, hostile archives; WIPES
 test/integration/galaxy.sh           # collections from a requirements file (IT_GALAXY_NET=yes for git); WIPES
+test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
@@ -165,15 +166,17 @@ same run can be launched from the interface.
   Open an SSH tunnel (`ssh -L 9091:127.0.0.1:9090`) and use
   `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
 - Do not `pkill -f` with a pattern that also appears in your own command line.
-- Windows nodes accept public keys only. The controller's own test key is the
-  secret `it-win-key`; its public half is authorised on `win11-pc00` only. To
-  authorise it on another node (or remove it), run
-  `local/cockpit_fleet_ssh_key.yaml` in `ansible-win_edulab` from the host.
+- The controller has no standing key for the Windows nodes: make a key pair
+  for the test, authorise its public half with
+  `local/cockpit_fleet_ssh_key.yaml` in `ansible-win_edulab` from the host
+  (pass the key as JSON: `-e '{"fleet_ssh_public_key": "ssh-ed25519 ..."}'`),
+  and store the private half as a credential, or as the secret `it-win-key`
+  that `windows.sh` expects.
 - `ansible-win_edulab` is meant to be used from inside this plugin: read it
   freely and use it to act on the test VMs. Its own `CLAUDE.md` applies there
   (one-off playbooks go in its `local/`, which is not tracked). `win11-pc00` is `teacher` (.10),
   `win11-pc01` is `student01` (.11), `win11-pc02` is `student02` (.12); each has
-  8 GB assigned, so they do not all fit on the host together with the controller.
+  4 GB assigned: check what is free before starting more than one.
 
 ## Git hosting
 

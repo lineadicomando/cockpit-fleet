@@ -173,7 +173,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy";
+    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -193,6 +193,8 @@ export interface Run {
         path?: string; lint?: "clean" | "findings";
         // An uploaded archive.
         filename?: string; size?: number; sha256?: string;
+        // An ad-hoc command: the module and its arguments, as those of a task.
+        module?: string; free_form?: string; args?: Record<string, unknown>; become?: boolean;
     };
     stats: Record<string, HostStats>;
     cursor?: number;

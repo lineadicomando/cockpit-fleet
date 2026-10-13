@@ -9,13 +9,13 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 Phases 0, 1 and 2 were closed on 8 October 2026. **In progress: phase 3** (surveys
 and the view of differences done on 9 October, the editor in the interface and
-archive uploads on 10 October, Galaxy on 11 October). `main` is level with
-`origin`.
+archive uploads on 10 October, Galaxy on 11 October, ad-hoc commands on
+13 October). The acceptance test of the phase passed on 13 October (see
+phase 3). `main` is ahead of `origin`: nothing was pushed.
 
-**Next step: ad-hoc commands** (see phase 3). Then, with collections now
-available without touching the repository, the acceptance test of the phase:
-`ansible-win_edulab` from the interface, with its `requirements.yaml` and its
-vault. Phase 3 is followed by 3b (agents), then by 4.
+**Next step, to be chosen**: the items still open in phase 3 (dynamic
+inventories, help on modules, masking of secrets, export and import), or
+phase 3b (agents), then 4.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is missing.
@@ -23,7 +23,8 @@ To resume: read `CLAUDE.md` (rules, commands, test environment), then
 What works today: projects (git or a local directory), inventories, credentials
 with encrypted secrets, trusted host keys, projects written in the interface with
 git history and syntax checks, projects uploaded as an archive, collections
-installed from the requirements file, templates with surveys, runs with a queue,
+installed from the requirements file, templates with surveys, ad-hoc commands,
+runs with a queue,
 cancellation, live output, a view by task and the outcome per host; roles from
 Unix groups and the audit trail. Tried on Linux nodes (containers) and on Windows
 over SSH.
@@ -41,8 +42,11 @@ install the current code. On 11 October, with the Galaxy package, these passed
 there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 `sandbox.sh`, `runs.sh` (without the git part: `IT_GIT_URL` not set), `files.sh`
 (without `ansible-lint`, missing at the time) and `upload.sh`; `multihost.sh` and
-`windows.sh` were not run again. `runs.sh` and `sandbox.sh` want `IT_SSH_USER`
-(`maint`) and `IT_SSH_PASSWORD`.
+`windows.sh` were not run again. On 13 October, with the ad-hoc package:
+`adhoc.sh`, `privileges.sh`, `roles.sh`, `sandbox.sh` and `runs.sh`. `runs.sh`,
+`sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`) and `IT_SSH_PASSWORD`.
+After the vault fix of the same day only `adhoc.sh` was run again: `multihost.sh`
+(vaults with identifiers) is still to be run on that code.
 
 ## Decisions
 
@@ -63,6 +67,7 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 | Sources of projects | Git, local directory, written in the interface, uploaded archive |
 | Collections from Galaxy | For every kind of project; installed by a sandboxed job next to the tree (`projects/<id>/collections/<sha256 of the requirements file>`), never inside it; copied into every run; without them a playbook does not start |
 | Uploaded archive | Travels as base64 in the JSON on the stdin of `fleetctl` (20 MB, at most 50); extracted in the sandbox; revision = sha256; links out of the tree, hard links and devices make the whole archive refused |
+| Ad-hoc commands | Admin only; one module by its full name, among those in `[adhoc] modules` of `config.toml` (default: ping, facts, `command`, `shell` and their Windows counterparts; empty turns them off); run as a generated playbook, so module and arguments are in a file and events work as for any run |
 | Projects written in the interface | A git repository next to the tree, one commit per change, admin only |
 | Editor | CodeMirror 6 in a shadow root (Cockpit's CSP stays as it is) |
 | Syntax check | A sandboxed job when a playbook is saved; `ansible-lint` reports, it does not fail the check |
@@ -120,6 +125,19 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
   server or token); the roles listed in the requirements file are not installed;
   a local project does not notice by itself that the file changed (it says "not
   installed", the installation has to be asked for); no time limit on the job.
+- Ad-hoc commands: the interface takes the arguments as a line only (the
+  backend also takes a mapping); arguments are stored in clear, so there is no
+  way to give a secret; the list of modules has no wildcard for a whole
+  collection.
+- Acceptance with `ansible-win_edulab`: its vault file is not in its git
+  repository, so the project was an archive (the tracked files plus the vault
+  of `school`), not a git project; a git project has no way to get such a file.
+  The inventory sets `ansible_password` and its own `ansible_ssh_common_args`
+  (no host key checking: ours come first on the command line and win, checked
+  by reading the code of the ssh plugin, not by a test). Whether the node let
+  the run in by the key of the credential or by that password was not looked
+  at. The key made for the test is still authorised on `win11-pc00`; its
+  private half was deleted.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 
@@ -140,8 +158,9 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 - [x] **Galaxy**: the collections of the requirements file installed by a sandboxed
       job, kept next to the project by digest of the file, copied into runs; tried
       on the VM (`galaxy.sh`, also from a public git repository)
-- [ ] **Ad-hoc commands**: admin only, allowlist of modules in `config.toml`, run
-      as a generated playbook of one task (arguments in a file, not in argv)
+- [x] **Ad-hoc commands**: admin only, allowlist of modules in `config.toml`, run
+      as a generated playbook of one task (arguments in a file, not in argv);
+      tried on the VM (`adhoc.sh` and from the interface)
 - [ ] **Dynamic inventories**: YAML plugins (to be tried, the job is already
       sandboxed); executable scripts off by default
 - [ ] `ansible-doc` for help on modules: names and parameters already reach the
@@ -151,7 +170,14 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 - [ ] Export and import of the configuration, without secrets
 
 Done when: `ansible-win_edulab` runs from cockpit-fleet with no change to the
-repository, with its vault as a credential.
+repository, with its vault as a credential. **Met on 13 October**, from the
+interface, on `win11-pc00`: the project uploaded as an archive, the two
+collections of its `requirements.yaml` installed from GitHub, the inventory
+`inventories/school/hosts.yaml` read with the vault credential, host keys
+trusted from the inventory, `playbooks/win_wm.yaml` launched by an operator
+with a survey (`t = ping,sysinfo`, 14 tasks, 14 s), an ad-hoc
+`ansible.windows.win_command`, and `playbooks/shutdown.yaml`, which has a task
+delegated to the controller.
 
 ## Phase 3b — Agents (MCP)
 

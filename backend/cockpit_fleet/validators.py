@@ -68,6 +68,14 @@ def check_vault_id(value: object) -> str:
     return _match(_VAULT_ID_RE, value, "vault identifier")
 
 
+# A module by its full name: a short one could be answered by another collection.
+MODULE_RE = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*){2,5}")
+
+
+def check_module(value: object) -> str:
+    return _match(MODULE_RE, value, "module name (use the full one, like ansible.builtin.ping)")
+
+
 def check_int(value: object, what: str, low: int, high: int) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high:
         raise BadRequest(f"{what} must be an integer between {low} and {high}")

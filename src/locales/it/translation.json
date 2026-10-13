@@ -348,5 +348,15 @@
   "Installation failed": "Installazione fallita",
   "Installed": "Installate",
   "Not installed": "Non installate",
-  "Requirements": "Requisiti"
+  "Requirements": "Requisiti",
+  "Ad-hoc command": "Comando ad-hoc",
+  "Run a command": "Esegui un comando",
+  "Module": "Modulo",
+  "Arguments": "Argomenti",
+  "become": "become",
+  "A host pattern; \"all\" for every host of the inventory.": "Un pattern di host; \"all\" per tutti gli host dell'inventario.",
+  "The modules allowed are listed in the configuration file.": "I moduli ammessi sono elencati nel file di configurazione.",
+  "Only needed for a module of a collection the project brings.": "Serve solo per un modulo di una collection portata dal progetto.",
+  "The command line for a command or shell module, key=value pairs for the others. Not for secrets: they would be stored in clear.": "La riga di comando per un modulo command o shell, coppie chiave=valore per gli altri. Non per i segreti: verrebbero salvati in chiaro.",
+  "Ad-hoc commands are disabled: the configuration file allows no module.": "I comandi ad-hoc sono disabilitati: il file di configurazione non ammette alcun modulo."
 }

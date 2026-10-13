@@ -14,6 +14,7 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Chunk, HostStats, Run, RunStatus } from "../lib/types.ts";
 import { ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { AdhocModal } from "./AdhocModal.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 
 const isActive = (status: RunStatus) => status === "queued" || status === "running";
@@ -22,13 +23,15 @@ const MAX_SHOWN = 400_000;
 
 function useKinds() {
     const { t } = useTranslation();
-    return { playbook: t("Playbook"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation") } as Record<Run["kind"], string>;
+    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation") } as Record<Run["kind"], string>;
 }
 
 export function RunsPage() {
     const { t, i18n } = useTranslation();
+    const can = useCan();
     const kinds = useKinds();
     const [status, setStatus] = useState("");
+    const [commanding, setCommanding] = useState(false);
     const [limit, setLimit] = useState(50);
     const list = useLoad(() => call<{ runs: Run[]; more: boolean }>("run.list", { limit, status }));
     useEffect(list.reload, [status, limit]);
@@ -48,6 +51,7 @@ export function RunsPage() {
                     {Object.entries(statuses).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
                 </FormSelect>
                 <Button variant="secondary" onClick={list.reload}>{t("Refresh")}</Button>
+                {can("run.adhoc") && <Button variant="primary" onClick={() => setCommanding(true)}>{t("Run a command")}</Button>}
             </SectionHeader>
             <ListState loaded={list} isEmpty={data => data.runs.length === 0}
                 emptyTitle={status ? t("No runs with this status") : t("No runs yet")}
@@ -78,6 +82,7 @@ export function RunsPage() {
                     </>
                 )}
             </ListState>
+            {commanding && <AdhocModal onClose={() => setCommanding(false)} />}
         </>
     );
 }
@@ -298,6 +303,7 @@ export function RunDetailPage({ id }: { id: string }) {
     if (run.error) return <Alert variant="danger" isInline title={run.error.message} />;
     if (!run.data) return null;
     const data = run.data;
+    const hasTasks = data.kind === "playbook" || data.kind === "adhoc";
 
     return (
         <>
@@ -347,9 +353,27 @@ export function RunDetailPage({ id }: { id: string }) {
                                 <DescriptionListDescription>{data.options.filename}</DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
+                        {data.options.module && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Module")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    <code>{data.options.module}</code>
+                                    {data.options.become && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("become")}</Label>}
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
+                        {(data.options.free_form || Object.keys(data.options.args ?? {}).length > 0) && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Arguments")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    {data.options.free_form && <code>{data.options.free_form}</code>}
+                                    {Object.keys(data.options.args ?? {}).length > 0 && <code style={{ display: "block" }}>{JSON.stringify(data.options.args)}</code>}
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
                         {data.options.limit && (
                             <DescriptionListGroup>
-                                <DescriptionListTerm>{t("Limit to hosts")}</DescriptionListTerm>
+                                <DescriptionListTerm>{data.kind === "adhoc" ? t("Hosts") : t("Limit to hosts")}</DescriptionListTerm>
                                 <DescriptionListDescription><code>{data.options.limit}</code></DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
@@ -373,8 +397,8 @@ export function RunDetailPage({ id }: { id: string }) {
                         <Card isPlain>
                             <Tabs activeKey={tab} onSelect={(_event, key) => setTab(String(key))}>
                                 <Tab eventKey="output" title={<TabTitleText>{t("Output")}</TabTitleText>} />
-                                {data.kind === "playbook" && <Tab eventKey="tasks" title={<TabTitleText>{t("Tasks")}</TabTitleText>} />}
-                                {data.kind === "playbook" && <Tab eventKey="changes" title={<TabTitleText>{t("Differences")}</TabTitleText>} />}
+                                {hasTasks && <Tab eventKey="tasks" title={<TabTitleText>{t("Tasks")}</TabTitleText>} />}
+                                {hasTasks && <Tab eventKey="changes" title={<TabTitleText>{t("Differences")}</TabTitleText>} />}
                             </Tabs>
                             <CardBody style={{ paddingInline: 0 }}>
                                 {tab === "output" && <Output text={log} />}

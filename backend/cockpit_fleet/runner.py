@@ -1,10 +1,11 @@
 """Turn a stored job specification into the commands a run unit executes.
 
-A job is one of six kinds: "playbook" (ansible-playbook), "inventory"
-(ansible-inventory, to list hosts and groups), "sync" (fetch a git project),
-"syntax" (check a playbook without running it), "unpack" (extract an
-uploaded archive, which runs no command: see archive.py) and "galaxy" (install
-the collections a project asks for). Nothing from the frontend reaches a
+A job is one of seven kinds: "playbook" (ansible-playbook), "adhoc" (one
+module, as a playbook written for the job), "inventory" (ansible-inventory, to
+list hosts and groups), "sync" (fetch a git project), "syntax" (check a
+playbook without running it), "unpack" (extract an uploaded archive, which
+runs no command: see archive.py) and "galaxy" (install the collections a
+project asks for). Nothing from the frontend reaches a
 command line without going through the functions here.
 """
 
@@ -22,13 +23,14 @@ from .validators import (
     check_git_url,
     check_int,
     check_limit,
+    check_module,
     check_tag,
     check_user,
     check_vault_id,
     resolve_inside,
 )
 
-KINDS = ("playbook", "inventory", "sync", "syntax", "unpack", "galaxy")
+KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"
@@ -265,11 +267,8 @@ def survey_secrets(secrets: object, credentials_dir: Path | None) -> dict[str, s
     return values
 
 
-def build_argv(
-    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
-) -> list[str]:
-    """ansible-playbook for a "playbook" job."""
-    project = run_dir / "project"
+def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
+                   credentials_dir: Path | None, playbook: Path) -> list[str]:
     argv = [
         "/usr/bin/ansible-playbook",
         "--inventory", str(_inventory(spec, run_dir)),
@@ -315,8 +314,55 @@ def build_argv(
     argv += _credential_args(
         credentials_dir, ("private_key", "connection_password", "become_password"))
     argv += _vault_args(spec, credentials_dir)
-    argv.append(str(resolve_inside(project, spec.get("playbook"), "playbook")))
+    argv.append(str(playbook))
     return argv
+
+
+def build_argv(
+    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
+) -> list[str]:
+    """ansible-playbook for a "playbook" job."""
+    playbook = resolve_inside(run_dir / "project", spec.get("playbook"), "playbook")
+    return _playbook_argv(spec, run_dir, runtime_dir, credentials_dir, playbook)
+
+
+# An ad-hoc command prints what each host answered, the way "ansible" does.
+ADHOC_ENV = {"ANSIBLE_STDOUT_CALLBACK": "ansible.builtin.minimal"}
+
+
+def adhoc_playbook(spec: dict) -> str:
+    """The playbook of an "adhoc" job: one play of one task, on every host
+    the limit leaves.
+
+    The arguments are those of a task: a mapping, a line in free form (the
+    command of ansible.builtin.command, or key=value pairs), or both. They
+    are written by an administrator and stay templates, as in a playbook.
+    """
+    module = check_module(spec.get("module"))
+    free_form = spec.get("free_form", "")
+    args = spec.get("args", {})
+    if not isinstance(free_form, str) or not isinstance(args, dict):
+        raise BadRequest("free_form must be a string and args an object")
+    task: dict = {"name": module, module: free_form or args}
+    if free_form and args:
+        task["args"] = args
+    # JSON is YAML: nothing here needs quoting rules of our own.
+    return json.dumps([{"name": "Ad-hoc command", "hosts": "all", "gather_facts": False,
+                        "tasks": [task]}])
+
+
+def build_adhoc_argv(
+    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
+) -> list[str]:
+    """ansible-playbook for an "adhoc" job, on a playbook written here.
+
+    The module and its arguments are in that file, not in the command line.
+    A limit is required: it is what chooses the hosts.
+    """
+    check_limit(spec.get("limit"))
+    playbook = runtime_dir / "adhoc.yml"
+    playbook.write_text(adhoc_playbook(spec))
+    return _playbook_argv(spec, run_dir, runtime_dir, credentials_dir, playbook)
 
 
 def build_inventory_argv(spec: dict, run_dir: Path, credentials_dir: Path | None) -> list[str]:

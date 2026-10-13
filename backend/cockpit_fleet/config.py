@@ -10,11 +10,27 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
 from .errors import Unavailable
+from .validators import MODULE_RE
 
 # An archive reaches fleetctl whole, on its input: this bounds its memory.
 MAX_UPLOAD_MB = 50
 
 _PROXY_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?")
+
+# What an ad-hoc command may run when config.toml does not say.
+ADHOC_MODULES = (
+    "ansible.builtin.ping",
+    "ansible.builtin.setup",
+    "ansible.builtin.command",
+    "ansible.builtin.shell",
+    "ansible.builtin.service_facts",
+    "ansible.builtin.package_facts",
+    "ansible.windows.win_ping",
+    "ansible.windows.setup",
+    "ansible.windows.win_command",
+    "ansible.windows.win_shell",
+    "ansible.windows.win_powershell",
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +41,7 @@ class Config:
     local_project_roots: tuple[str, ...] = ()
     max_upload_mb: int = 20
     proxy: str = ""
+    adhoc_modules: tuple[str, ...] = ADHOC_MODULES
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -60,12 +77,19 @@ def _root(value: object) -> str:
     return str(path)
 
 
+def _module(value: object) -> str:
+    if not isinstance(value, str) or not MODULE_RE.fullmatch(value):
+        raise ConfigError("adhoc.modules entries must be full module names,"
+                          f" like ansible.builtin.ping: {value!r}")
+    return value
+
+
 def parse(text: str) -> Config:
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
-    unknown = sorted(set(data) - {"runs", "projects", "network"})
+    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -86,6 +110,11 @@ def parse(text: str) -> Config:
     if not isinstance(proxy, str) or (proxy and not _PROXY_RE.fullmatch(proxy)):
         raise ConfigError("network.proxy must be empty or an http(s)://host[:port] URL")
 
+    adhoc = _section(data, "adhoc", {"modules"})
+    modules = adhoc.get("modules", list(ADHOC_MODULES))
+    if not isinstance(modules, list) or len(modules) > 200:
+        raise ConfigError("adhoc.modules must be a list of at most 200 module names")
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -94,6 +123,7 @@ def parse(text: str) -> Config:
         max_upload_mb=_int(projects, "projects", "max_upload_mb", Config.max_upload_mb,
                            1, MAX_UPLOAD_MB),
         proxy=proxy,
+        adhoc_modules=tuple(dict.fromkeys(_module(module) for module in modules)),
     )
 
 

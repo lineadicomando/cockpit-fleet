@@ -156,12 +156,12 @@ through `Params` (which rejects unknown ones), and a test in `backend/tests`.
 
 ## Jobs
 
-A run unit executes one job, of one of six kinds, described by `spec.json`
-in its directory: `playbook` (ansible-playbook), `inventory`
-(`ansible-inventory --list`, to learn hosts and groups), `sync` (fetch a git
-project), `syntax` (check a playbook without running it), `unpack` (extract
-an uploaded archive) and `galaxy` (install the collections a project asks
-for). All of them need the sandbox, because all of them work on what a project
+A run unit executes one job, of one of seven kinds, described by `spec.json`
+in its directory: `playbook` (ansible-playbook), `adhoc` (one module, as a
+playbook written for the job), `inventory` (`ansible-inventory --list`, to
+learn hosts and groups), `sync` (fetch a git project), `syntax` (check a
+playbook without running it), `unpack` (extract an uploaded archive) and
+`galaxy` (install the collections a project asks for). All of them need the sandbox, because all of them work on what a project
 brings: inventory plugins and scripts, git itself, the rules a project gives
 to ansible-lint, an archive made by anyone, or a list of sources to download
 from.
@@ -393,6 +393,48 @@ the unit's name in it, and Ansible would split it there (found running
 host limit and ask for a dry run. The limit is combined with the template's
 own (`template:&caller`), so it can narrow the target but not widen it.
 
+**Ad-hoc commands.** `run.adhoc` runs one module on hosts of an inventory,
+with no template: an inventory, a host pattern, a module, its arguments, and
+optionally a machine credential, vault credentials, `become` and a dry run.
+It is for administrators only, and the module must be in `[adhoc] modules` of
+`config.toml`, by its full name (`ansible.builtin.command`): a short name
+could be answered by another collection. The file belongs to root, so the
+list is set by whoever administers the machine, not from the interface; the
+default has what one looks at a fleet with (ping, facts, `command`, `shell`
+and their Windows counterparts), and an empty list turns ad-hoc commands off.
+An administrator can write any playbook anyway: the list is not what keeps
+them from a module, it is what bounds a single call, which matters once the
+caller is an agent (phase 3b).
+
+The job does not call `ansible`: `fleet-run` writes a playbook of one play and
+one task in the run's runtime directory and runs `ansible-playbook` on it,
+with the same command line a template gets.
+
+```
+[{"name": "Ad-hoc command", "hosts": "all", "gather_facts": false,
+  "tasks": [{"name": "<module>", "<module>": "<free form>", "args": {…}}]}]
+```
+
+So the module and its arguments are in a file and never in argv, the events
+callback, the view by task, the outcome per host and the differences work as
+for any run, and there is one way to build a command line to keep safe. The
+arguments are those of a task: a line in free form (the command of `command`
+and `shell`, or `key=value` pairs, as after `-a`), a mapping, or both; the
+interface offers the line. The play targets `all` and the pattern is given as
+`--limit`, so one that matches no host fails the run instead of ending with
+nothing done. The arguments are written by an administrator and stay
+templates, as in a playbook. They are kept with the run, in `spec.json` and in
+the audit record, in clear: they are not for secrets.
+
+The project is optional: a file inventory brings its own, and one can be
+named for a module of a collection it carries or asks for. The playbook is
+not inside the project, so variables beside the inventory are read, those
+beside a playbook are not. The output is the one of `ansible`, what each host
+answered (`ANSIBLE_STDOUT_CALLBACK=ansible.builtin.minimal`), since a play of
+one task has no use for banners and a recap.
+
+Checked on Debian 13 with ansible-core 2.19.11 (`adhoc.sh`).
+
 **Surveys.** A template may ask questions at launch: typed fields (text,
 number, choice, yes or no) with a default and bounds, defined by an
 administrator. Each answer becomes a variable of the run, and this is the only
@@ -530,6 +572,7 @@ bundled collection.
 | Projects written in the interface | `test/integration/files.sh` | controller, as root; wipes the database |
 | Projects uploaded as an archive | `test/integration/upload.sh` | controller, as root; wipes the database |
 | Collections from a requirements file | `test/integration/galaxy.sh` | controller, as root; wipes the database |
+| Ad-hoc commands | `test/integration/adhoc.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

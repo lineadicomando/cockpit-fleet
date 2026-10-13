@@ -1049,3 +1049,33 @@ msgstr "Non installate"
 
 msgid "Requirements"
 msgstr "Requisiti"
+
+msgid "Ad-hoc command"
+msgstr "Comando ad-hoc"
+
+msgid "Run a command"
+msgstr "Esegui un comando"
+
+msgid "Module"
+msgstr "Modulo"
+
+msgid "Arguments"
+msgstr "Argomenti"
+
+msgid "become"
+msgstr "become"
+
+msgid "A host pattern; \"all\" for every host of the inventory."
+msgstr "Un pattern di host; \"all\" per tutti gli host dell'inventario."
+
+msgid "The modules allowed are listed in the configuration file."
+msgstr "I moduli ammessi sono elencati nel file di configurazione."
+
+msgid "Only needed for a module of a collection the project brings."
+msgstr "Serve solo per un modulo di una collection portata dal progetto."
+
+msgid "The command line for a command or shell module, key=value pairs for the others. Not for secrets: they would be stored in clear."
+msgstr "La riga di comando per un modulo command o shell, coppie chiave=valore per gli altri. Non per i segreti: verrebbero salvati in chiaro."
+
+msgid "Ad-hoc commands are disabled: the configuration file allows no module."
+msgstr "I comandi ad-hoc sono disabilitati: il file di configurazione non ammette alcun modulo."
