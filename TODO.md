@@ -11,15 +11,15 @@ Phases 0, 1 and 2 were closed on 8 October 2026, **phase 3 on 13 October** (surv
 and the view of differences done on 9 October, the editor in the interface and
 archive uploads on 10 October, Galaxy on 11 October, ad-hoc commands on
 13 October). The acceptance test of the phase passed on 13 October (see
-phase 3). `main` is ahead of `origin`: nothing was pushed.
+phase 3).
 
 Phase 3 was closed on 13 October with its last four items: inventory
 plugins, help on modules, masking of secrets, export and import.
 
 **In progress: phase 3b** (agents). `fleet-mcp` and what it needs in the
-backend were done on 13 October. **Next step: the
-acceptance of the phase with `ansible-win_edulab`** (see phase 3b), then the
-ACP trial. Phase 4 follows.
+backend were done on 13 October, and the acceptance of the phase passed the
+same day (see phase 3b). **Next step: the ACP trial**, on which the chat page
+depends; it needs the decision in the open points. Phase 4 follows.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is missing.
@@ -143,8 +143,9 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
   (no host key checking: ours come first on the command line and win, checked
   by reading the code of the ssh plugin, not by a test). Whether the node let
   the run in by the key of the credential or by that password was not looked
-  at. The key made for the test is still authorised on `win11-pc00`; its
-  private half was deleted.
+  at. The keys made for the two acceptance tests are still authorised on
+  `win11-pc00` (comment `cockpit-fleet-test`); their private halves were
+  deleted.
 - Inventory plugins: no credential for them (a cloud token), and one written
   in the interface is called `hosts.yml`, which some plugins refuse; only
   built-in plugins were tried.
@@ -240,10 +241,15 @@ phases (schedules, notifications) become tools by themselves, from the registry.
 
 Done when: from Claude Code, over ssh, an operator launches a template of
 `ansible-win_edulab` as a tool and reads its outcome, and the same request with
-an admin tool is refused and ends up in the audit trail. Half met: done with a
-template of the test, not of `ansible-win_edulab`; the refusal of an admin
-tool is tried by `mcp.sh` on `fleetctl`, since an agent is not even offered
-the tool.
+an admin tool is refused and ends up in the audit trail. **Met on 13 October**
+on `win11-pc00`, the project set up as for the acceptance of phase 3: Claude
+Code 2.1, over ssh with a key forced on `fleet-mcp`, as an operator, launched
+`playbooks/win_wm.yaml` through its `launch_*` tool with `t = ping,sysinfo`,
+waited with `run_result` and reported the host and the tasks (7 turns). Asked
+for an ad-hoc command, it found no tool for it and said which role it had; the
+same request sent to `fleetctl` with `via`, as the operator and as an
+administrator under the ceiling, was refused and is in the audit trail and in
+the journal.
 
 ## Phase 4 — Scheduling
 
