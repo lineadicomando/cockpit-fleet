@@ -76,12 +76,12 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                             {(projects.data?.projects ?? []).map(project => <FormSelectOption key={project.id} value={project.id} label={project.name} />)}
                         </FormSelect>
                     </FormGroup>
-                    <FormGroup label={t("Inventory file")} isRequired fieldId="inv-path">
+                    <FormGroup label={t("Inventory file or directory")} isRequired fieldId="inv-path">
                         <TextInput id="inv-path" value={path} onChange={(_e, value) => setPath(value)} list="inv-path-files" placeholder="inventories/production/hosts.yaml" />
                         <datalist id="inv-path-files">
                             {(files.data?.files ?? []).map(file => <option key={file} value={file} />)}
                         </datalist>
-                        <FormHelperText><HelperText><HelperTextItem>{t("Path inside the project. Its group_vars and host_vars are used too.")}</HelperTextItem></HelperText></FormHelperText>
+                        <FormHelperText><HelperText><HelperTextItem>{t("Path inside the project: a file, a directory of sources, or the YAML file of an inventory plugin. Its group_vars and host_vars are used too.")}</HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>
                 </>
             )}

@@ -127,10 +127,60 @@ def _tags(spec: dict, key: str) -> str | None:
 
 
 def _inventory(spec: dict, run_dir: Path) -> Path:
-    """An inventory file of the project, or the one written for this run."""
+    """An inventory of the project, a file or a directory of sources, or the
+    one written for this run."""
     if spec.get("inventory_source") == "managed":
         return resolve_inside(run_dir / "inventory", spec.get("inventory"), "inventory")
-    return resolve_inside(run_dir / "project", spec.get("inventory"), "inventory")
+    return resolve_inside(run_dir / "project", spec.get("inventory"), "inventory",
+                          directory=True)
+
+
+# The plugins that read an inventory source, Ansible's own defaults. Without
+# "script" an executable file is read like any other, never run.
+_INVENTORY_PLUGINS = ("host_list", "script", "auto", "yaml", "ini", "toml")
+
+
+def secret_values(credentials_dir: Path | None) -> list[bytes]:
+    """What must not be readable in the output of a run: its decrypted
+    secrets, longest first.
+
+    A secret of several lines, a private key, is taken line by line, without
+    the lines that only frame it. Anything shorter than four bytes is left
+    alone: masking it would mostly hide ordinary output. A value is looked
+    for as it is and as JSON writes it; any other encoding of it (base64, a
+    hash, one character per line) is not recognised.
+    """
+    found: set[bytes] = set()
+    if credentials_dir is not None:
+        try:
+            files = sorted(credentials_dir.glob("fleet_*"))
+        except OSError:
+            files = []
+        for file in files:
+            try:
+                data = file.read_bytes()
+            except OSError:
+                continue
+            for line in data.splitlines():
+                line = line.strip()
+                if len(line) >= 4 and not line.startswith(b"-----"):
+                    found.add(line)
+                    try:
+                        # Ansible prints results as JSON: the same value, escaped.
+                        found.add(json.dumps(line.decode(), ensure_ascii=False)[1:-1].encode())
+                    except UnicodeDecodeError:
+                        pass
+    return sorted(found, key=len, reverse=True)
+
+
+MASK = b"********"
+
+
+def mask(line: bytes, secrets: list[bytes]) -> bytes:
+    for secret in secrets:
+        if secret in line:
+            line = line.replace(secret, MASK)
+    return line
 
 
 def needs_agent(credentials_dir: Path | None, prefix: str = "") -> bool:
@@ -393,8 +443,12 @@ def build_lint_argv(spec: dict, run_dir: Path) -> list[str]:
     return [LINT, "--offline", str(playbook)]
 
 
-def build_env(run_dir: Path, runtime_dir: Path, events: bool = True) -> dict[str, str]:
-    """Environment of ansible-playbook and ansible-inventory."""
+def build_env(run_dir: Path, runtime_dir: Path, events: bool = True,
+              scripts: bool = False, credentials_dir: Path | None = None) -> dict[str, str]:
+    """Environment of ansible-playbook and ansible-inventory.
+
+    scripts lets an executable file of the project be run as an inventory.
+    credentials_dir tells the events callback which values to mask."""
     project = run_dir / "project"
     home = runtime_dir / "home"
     home.mkdir(mode=0o700, exist_ok=True)
@@ -419,6 +473,11 @@ def build_env(run_dir: Path, runtime_dir: Path, events: bool = True) -> dict[str
         "ANSIBLE_HOST_KEY_CHECKING": "True",
         "ANSIBLE_COLLECTIONS_PATH": ":".join([str(COLLECTIONS_DIR), str(project), *collections]),
         "ANSIBLE_FORCE_COLOR": "1",
+        "ANSIBLE_INVENTORY_ENABLED": ",".join(
+            plugin for plugin in _INVENTORY_PLUGINS if scripts or plugin != "script"),
+        # An inventory nothing could read stops the job, instead of leaving
+        # a playbook with no host and a successful run of nothing.
+        "ANSIBLE_INVENTORY_UNPARSED_FAILED": "True",
     }
     # What was installed from the project's requirements file, after what the
     # project carries itself.
@@ -428,6 +487,8 @@ def build_env(run_dir: Path, runtime_dir: Path, events: bool = True) -> dict[str
     if events:
         env["ANSIBLE_CALLBACKS_ENABLED"] = "lineadicomando.fleet.events"
         env["FLEET_EVENTS_FILE"] = str(run_dir / "events.jsonl")
+        if credentials_dir is not None:
+            env["FLEET_EVENTS_SECRETS_DIR"] = str(credentials_dir)
     return env
 
 

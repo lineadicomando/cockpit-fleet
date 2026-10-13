@@ -6,6 +6,7 @@ import { call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { Credential, Inventory, Project, Run } from "../lib/types.ts";
 import { FormModal } from "./common.tsx";
+import { ModuleHelpButton } from "./ModuleHelp.tsx";
 
 interface Choices {
     modules: string[];
@@ -85,7 +86,7 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
                                 <FormSelect id="adhoc-module" value={chosenModule} onChange={(_e, value) => setModule(value)}>
                                     {data.modules.map(name => <FormSelectOption key={name} value={name} label={name} />)}
                                 </FormSelect>
-                                <FormHelperText><HelperText><HelperTextItem>{t("The modules allowed are listed in the configuration file.")}</HelperTextItem></HelperText></FormHelperText>
+                                <FormHelperText><HelperText><HelperTextItem>{t("The modules allowed are listed in the configuration file.")} <ModuleHelpButton name={chosenModule} /></HelperTextItem></HelperText></FormHelperText>
                             </FormGroup>
                         </GridItem>
                         <GridItem>

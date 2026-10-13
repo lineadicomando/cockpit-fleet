@@ -316,8 +316,10 @@ class UploadTest(Base):
         limit = cli.COMMANDS["project.upload"].max_input
         self.assertIn("too large", cli.dispatch("project.upload", b" " * (limit + 1),
                                                 self.ctx())["error"]["message"])
-        self.assertEqual([name for name, spec in cli.COMMANDS.items()
-                          if spec.max_input != cli.MAX_INPUT], ["project.upload"])
+        # The other one takes a whole exported configuration.
+        self.assertLessEqual({name for name, spec in cli.COMMANDS.items()
+                              if spec.max_input != cli.MAX_INPUT},
+                             {"project.upload", "config.import"})
 
 
 if __name__ == "__main__":

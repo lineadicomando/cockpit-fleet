@@ -200,6 +200,49 @@ export interface Run {
     cursor?: number;
 }
 
+// What ansible-doc says of a module: module.help.
+export interface ModuleOption {
+    name: string;
+    type: string;
+    required: boolean;
+    default: unknown;
+    choices: string[];
+    aliases: string[];
+    description: string;
+    text?: string[];
+    suboptions?: ModuleOption[];
+}
+
+export interface ModuleReturn {
+    name: string;
+    type: string;
+    returned: string;
+    text: string[];
+    sample: unknown;
+    contains: ModuleReturn[];
+}
+
+export interface ModuleHelp {
+    name: string;
+    collection: string;
+    version_added: string;
+    description: string;
+    text: string[];
+    requirements: string[];
+    notes: string[];
+    options: ModuleOption[];
+    examples: string;
+    returns: ModuleReturn[];
+}
+
+// What config.import did with each thing of the document.
+export interface ImportReport {
+    report: { section: string; name: string; outcome: "created" | "exists" | "failed"; detail: string }[];
+    created: number;
+    exists: number;
+    failed: number;
+}
+
 export interface Chunk {
     text: string;
     offset: number;

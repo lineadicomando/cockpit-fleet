@@ -42,6 +42,17 @@ options:
     ini:
       - section: callback_fleet_events
         key: max_diff
+  secrets_dir:
+    description:
+      - Directory of files whose content must not appear in the events. Every
+        line of at least four characters of the files named C(fleet_*) is
+        replaced by asterisks wherever it occurs.
+    type: path
+    env:
+      - name: FLEET_EVENTS_SECRETS_DIR
+    ini:
+      - section: callback_fleet_events
+        key: secrets_dir
   keep_facts:
     description: Keep C(ansible_facts) in results instead of dropping them.
     type: bool
@@ -54,7 +65,9 @@ options:
 """
 
 import difflib
+import glob
 import json
+import os
 import time
 
 from ansible.plugins.callback import CallbackBase
@@ -110,6 +123,41 @@ def unified_diff(diff, context=3):
     return "".join(parts)
 
 
+def read_secrets(directory):
+    """The values to mask, longest first."""
+    found = set()
+    for path in sorted(glob.glob(os.path.join(directory, "fleet_*"))) if directory else []:
+        try:
+            with open(path, encoding="utf-8", errors="surrogateescape") as source:
+                lines = source.read().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            line = line.strip()
+            if len(line.encode("utf-8", "surrogateescape")) >= 4 and not line.startswith("-----"):
+                found.add(line)
+    return sorted(found, key=len, reverse=True)
+
+
+def mask(value, secrets):
+    """The same value with every secret replaced, in strings at any depth.
+
+    Done on the values and not on the line of JSON, where a secret that
+    happens to read like a field name would break the event.
+    """
+    if isinstance(value, str):
+        for secret in secrets:
+            if secret in value:
+                value = value.replace(secret, "********")
+        return value
+    if isinstance(value, dict):
+        return {mask(key, secrets) if isinstance(key, str) else key: mask(item, secrets)
+                for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [mask(item, secrets) for item in value]
+    return value
+
+
 def _part(result, name):
     # ansible-core 2.19 made these public; older releases only have _name.
     value = getattr(result, name, None)
@@ -128,16 +176,20 @@ class CallbackModule(CallbackBase):
         self._max_string = 2048
         self._max_diff = 16384
         self._keep_facts = False
+        self._secrets = []
 
     def set_options(self, task_keys=None, var_options=None, direct=None):
         super().set_options(task_keys=task_keys, var_options=var_options, direct=direct)
         self._max_string = self.get_option("max_string")
         self._max_diff = self.get_option("max_diff")
         self._keep_facts = self.get_option("keep_facts")
+        self._secrets = read_secrets(self.get_option("secrets_dir"))
         self._out = open(self.get_option("path"), "a", encoding="utf-8")  # noqa: SIM115
 
     def _emit(self, event, **fields):
         fields.update(event=event, ts=round(time.time(), 3))
+        if self._secrets:
+            fields = {key: mask(item, self._secrets) for key, item in fields.items()}
         self._out.write(json.dumps(fields, ensure_ascii=False, default=str) + "\n")
         self._out.flush()
 

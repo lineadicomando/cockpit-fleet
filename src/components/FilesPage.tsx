@@ -11,9 +11,11 @@ import { ancestors, buildTree, isUsablePath, isYaml, type FileNode } from "../li
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
+import { useCan } from "../lib/session.tsx";
 import type { Chunk, Commit, FileContent, Project, ProjectFiles, Run } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
 
 // Up to this many files the tree starts open: there is nothing to look for.
@@ -141,6 +143,7 @@ function PathModal({ title, submitLabel, initial, onSubmit, onClose }: {
 // written here.
 export function FilesPage({ id }: { id: string }) {
     const { t } = useTranslation();
+    const can = useCan();
     const projects = useLoad(() => call<{ projects: Project[] }>("project.list"));
     const list = useLoad(() => call<ProjectFiles>("file.list", { id }));
     const [path, setPath] = useState<string | null>(null);
@@ -234,6 +237,7 @@ export function FilesPage({ id }: { id: string }) {
             <SectionHeader title={project?.name ?? t("Files")}>
                 {editable && <Button variant="primary" onClick={() => guard(() => setDialog("new"))}>{t("New file")}</Button>}
                 {editable && <Button variant="secondary" onClick={() => setDialog("history")}>{t("All changes")}</Button>}
+                {can("module.help") && <ModuleHelpButton />}
                 <Button variant="secondary" onClick={() => guard(() => cockpit.location.go(["projects"]))}>{t("All projects")}</Button>
             </SectionHeader>
             {project && project.kind !== "managed" && (

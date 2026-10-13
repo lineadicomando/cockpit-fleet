@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from cockpit_fleet.errors import BadRequest
-from cockpit_fleet.runner import build_argv, build_env
+from cockpit_fleet.runner import build_argv, build_env, mask, secret_values
 
 
 class BuildArgvTest(unittest.TestCase):
@@ -108,6 +108,58 @@ class BuildArgvTest(unittest.TestCase):
                 self.argv(**extra)
 
 
+class InventorySourceTest(unittest.TestCase):
+    def test_scripts_run_only_when_asked_and_an_unread_inventory_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run, runtime = Path(tmp) / "run", Path(tmp) / "runtime"
+            run.mkdir()
+            runtime.mkdir()
+            env = build_env(run, runtime)
+            self.assertEqual(env["ANSIBLE_INVENTORY_ENABLED"], "host_list,auto,yaml,ini,toml")
+            self.assertEqual(env["ANSIBLE_INVENTORY_UNPARSED_FAILED"], "True")
+            self.assertIn(",script,", build_env(run, runtime, scripts=True)["ANSIBLE_INVENTORY_ENABLED"])
+
+    def test_a_project_inventory_may_be_a_directory_a_written_one_may_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run, runtime = Path(tmp) / "run", Path(tmp) / "runtime"
+            (run / "project" / "inv").mkdir(parents=True)
+            (run / "inventory" / "dir").mkdir(parents=True)
+            runtime.mkdir()
+            (run / "project" / "site.yml").write_text("")
+            spec = {"playbook": "site.yml", "inventory": "inv"}
+            argv = build_argv(spec, run, runtime, None)
+            self.assertEqual(argv[argv.index("--inventory") + 1],
+                             str((run / "project" / "inv").resolve()))
+            with self.assertRaises(BadRequest):
+                build_argv({**spec, "inventory": "dir", "inventory_source": "managed"},
+                           run, runtime, None)
+            with self.assertRaises(BadRequest):
+                build_argv({**spec, "playbook": "inv"}, run, runtime, None)
+
+
+class MaskTest(unittest.TestCase):
+    def test_secrets_of_the_run_are_masked_longest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            creds = Path(tmp)
+            (creds / "fleet_connection_password").write_text("hunter2\n")
+            (creds / "fleet_become_password").write_text("hunter2-and-more")
+            (creds / "fleet_survey_0").write_text("abc")
+            (creds / "fleet_private_key").write_text(
+                "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk\n-----END OPENSSH PRIVATE KEY-----\n")
+            (creds / "other").write_text("not-a-secret")
+            secrets = secret_values(creds)
+            self.assertEqual(secrets, [b"hunter2-and-more", b"b3BlbnNzaC1rZXk", b"hunter2"])
+            self.assertEqual(mask(b"pw=hunter2 sudo=hunter2-and-more abc -----BEGIN not-a-secret\n",
+                                  secrets),
+                             b"pw=******** sudo=******** abc -----BEGIN not-a-secret\n")
+            self.assertEqual(mask(b"key b3BlbnNzaC1rZXk", secrets), b"key ********")
+            (creds / "fleet_survey_1").write_text('say "hi"')
+            self.assertEqual(mask(b'{"msg": "say \\"hi\\""} say "hi"', secret_values(creds)),
+                             b'{"msg": "********"} ********')
+        self.assertEqual(secret_values(None), [])
+        self.assertEqual(secret_values(Path(tmp) / "gone"), [])
+
+
 class BuildEnvTest(unittest.TestCase):
     def test_environment_is_closed_and_strict_about_host_keys(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -122,6 +174,9 @@ class BuildEnvTest(unittest.TestCase):
             self.assertTrue(Path(env["ANSIBLE_CONFIG"]).is_file())
             self.assertEqual(env["FLEET_EVENTS_FILE"], str(run / "events.jsonl"))
             self.assertNotIn("SUDO_UID", env)
+            self.assertNotIn("FLEET_EVENTS_SECRETS_DIR", env)
+            masked = build_env(run, runtime, credentials_dir=Path(tmp) / "creds")
+            self.assertEqual(masked["FLEET_EVENTS_SECRETS_DIR"], str(Path(tmp) / "creds"))
 
 
 if __name__ == "__main__":

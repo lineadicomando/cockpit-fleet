@@ -42,6 +42,7 @@ class Config:
     max_upload_mb: int = 20
     proxy: str = ""
     adhoc_modules: tuple[str, ...] = ADHOC_MODULES
+    inventory_scripts: bool = False
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -89,7 +90,7 @@ def parse(text: str) -> Config:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
-    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc"})
+    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -115,6 +116,11 @@ def parse(text: str) -> Config:
     if not isinstance(modules, list) or len(modules) > 200:
         raise ConfigError("adhoc.modules must be a list of at most 200 module names")
 
+    inventories = _section(data, "inventories", {"scripts"})
+    scripts = inventories.get("scripts", False)
+    if not isinstance(scripts, bool):
+        raise ConfigError("inventories.scripts must be true or false")
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -124,6 +130,7 @@ def parse(text: str) -> Config:
                            1, MAX_UPLOAD_MB),
         proxy=proxy,
         adhoc_modules=tuple(dict.fromkeys(_module(module) for module in modules)),
+        inventory_scripts=scripts,
     )
 
 

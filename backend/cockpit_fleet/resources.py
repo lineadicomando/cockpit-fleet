@@ -379,7 +379,8 @@ def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | 
         return {"inventory": name, "inventory_source": "managed"}
     if project_id is not None and inventory["project_id"] != project_id:
         raise Conflict("this inventory is a file of another project")
-    return {"inventory": inventory["path"], "inventory_source": "project"}
+    return {"inventory": inventory["path"], "inventory_source": "project",
+            "inventory_scripts": ctx.config.inventory_scripts}
 
 
 @command("inventory.parse", role="operator", mutating=True)

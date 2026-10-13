@@ -49,6 +49,10 @@ cat > "$SRC/demo/secret.yml" <<'YAML'
         dest: /tmp/fleet-it-marker
         mode: "0600"
       no_log: true
+    - ansible.builtin.debug:
+        msg: "the token is {{ token }}"
+    - ansible.builtin.command: "echo {{ token | quote }}"
+      changed_when: false
 YAML
 cat > "$SRC/demo/wait.yml" <<'YAML'
 - hosts: all
@@ -166,6 +170,11 @@ expect_eq "the playbook got the secret, as it was typed" "$(cat /tmp/fleet-it-ma
 expect_eq "the run records that a secret was given, not its value" \
     "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["options"]["secret_answers"], a["data"]["options"]["answers"]')" "['token'] {}"
 if grep -rqa 'S3cretAnswer' /var/lib/cockpit-fleet /run/cockpit-fleet /etc/cockpit-fleet; then fail "the secret answer was stored somewhere"; else pass "the secret answer is in no file, database or log of the backend"; fi
+# The playbook prints the secret on purpose, in a message and as a command.
+log=$(get "$(ctl itoperator run.log "{\"id\": \"$run_id\"}")" 'a["data"]["text"]')
+expect_eq "a secret the playbook prints is masked in the output" "$(printf '%s' "$log" | grep -c 'the token is \*\*\*\*\*\*\*\*')" 1
+expect_eq "and in the events" "$(grep -c '\*\*\*\*\*\*\*\*' "/var/lib/cockpit-fleet/runs/$run_id/events.jsonl" | sed 's/^[1-9][0-9]*$/some/')" some
+if journalctl -t cockpit-fleet-run --since -5min 2>/dev/null | grep -q 'S3cretAnswer'; then fail "the secret answer is in the journal"; else pass "the secret answer is not in the journal"; fi
 expect_denied "the ticket is gone once used" test -e "/run/cockpit-fleet/answers/$ticket.cred"
 expect_eq "a ticket serves one launch" \
     "$(get "$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")" 'a["error"]["code"]')" bad_request
@@ -183,6 +192,25 @@ expect_denied "its unit is gone" systemctl is-active --quiet "cockpit-fleet-run@
 sleep 4
 expect_eq "the queued run starts when the slot frees" "$(db "SELECT status FROM runs WHERE id = '$second'")" running
 expect_eq "cancel the second run" "$(get "$(ctl itoperator run.cancel "{\"id\": \"$second\"}")" 'a["data"]["status"]')" canceled
+
+# --- export, and import on an empty installation ---------------------------------
+exported=$(admin config.export)
+expect_eq "the configuration is exported by name" \
+    "$(get "$exported" '[t["name"] + ">" + t["project"] + ">" + t["inventory"] + ">" + t["machine_credential"] for t in a["data"]["templates"]][0]')" "demo>demo>self>local ssh"
+if printf '%s' "$exported" | grep -q "$IT_SSH_PASSWORD"; then fail "the export holds a secret"; else pass "the export holds no secret"; fi
+expect_eq "operator cannot export" "$(get "$(ctl itoperator config.export)" 'a["error"]["code"]')" forbidden
+printf '%s' "$exported" | python3 -c 'import json,sys; print(json.dumps({"document": json.load(sys.stdin)["data"]}))' > /tmp/fleet-it-export.json
+again=$(admin config.import "$(cat /tmp/fleet-it-export.json)")
+expect_eq "importing where everything is leaves it as it is" "$(get "$again" 'a["data"]["created"], a["data"]["failed"]')" "0 0"
+for id in $(db "SELECT group_concat(id, ' ') FROM runs WHERE status IN ('queued','running')"); do [ "$id" = None ] || systemctl stop "cockpit-fleet-run@$id.service" 2>/dev/null; done
+rm -f "$DB" "$DB-wal" "$DB-shm"
+imported=$(admin config.import "$(cat /tmp/fleet-it-export.json)"); rm -f /tmp/fleet-it-export.json
+expect_eq "importing on an empty database creates everything" "$(get "$imported" 'a["data"]["failed"], a["data"]["exists"], a["data"]["created"] > 5')" "0 0 True"
+expect_eq "and exports the same again" \
+    "$(get "$(admin config.export)" '{k: v for k, v in a["data"].items() if k != "exported_at"}')" \
+    "$(get "$exported" '{k: v for k, v in a["data"].items() if k != "exported_at"}')"
+expect_eq "an imported credential has no secret" "$(get "$(admin credential.list)" '[c["secrets"]["password"] for c in a["data"]["credentials"] if c["name"] == "local ssh"]')" "[False]"
+expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 3
 
 # --- git project ---------------------------------------------------------------
 if [ -n "${IT_GIT_URL:-}" ]; then

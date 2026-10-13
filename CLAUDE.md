@@ -126,6 +126,7 @@ test/integration/files.sh            # a project written in the interface, synta
 test/integration/upload.sh           # a project uploaded as an archive, hostile archives; WIPES
 test/integration/galaxy.sh           # collections from a requirements file (IT_GALAXY_NET=yes for git); WIPES
 test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
+test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES

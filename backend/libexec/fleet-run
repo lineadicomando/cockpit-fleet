@@ -23,6 +23,8 @@ from cockpit_fleet.paths import RUNS_DIR  # noqa: E402
 
 current: subprocess.Popen | None = None
 terminated = False
+# The decrypted secrets of this run: masked in everything it prints.
+secrets: list[bytes] = []
 
 
 def on_term(signum, frame):
@@ -40,6 +42,7 @@ def execute(command: list[str], env: dict, cwd: Path, log) -> int:
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     )
     for line in current.stdout:
+        line = runner.mask(line, secrets)
         log.write(line)
         log.flush()
         sys.stdout.buffer.write(line)
@@ -112,7 +115,8 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
                                         run_dir / "project", log)
         return result
 
-    env = runner.build_env(run_dir, runtime_dir)
+    env = runner.build_env(run_dir, runtime_dir, scripts=spec.get("inventory_scripts") is True,
+                           credentials_dir=credentials)
     socket = start_agent(credentials, runtime_dir, "", log)
     if socket:
         env["SSH_AUTH_SOCK"] = socket
@@ -148,9 +152,10 @@ def main(argv: list[str]) -> int:
     with open(run_dir / "stdout.log", "ab") as log:
         try:
             credentials_dir = Path(credentials) if credentials else None
+            secrets[:] = runner.secret_values(credentials_dir)
             result = run_job(spec, run_dir, runtime_dir, credentials_dir, log)
         except (FleetError, ValueError, OSError, subprocess.SubprocessError) as error:
-            message = f"fleet-run: {error}\n".encode()
+            message = runner.mask(f"fleet-run: {error}\n".encode(), secrets)
             log.write(message)
             sys.stdout.buffer.write(message)
             result = {"rc": 2, "error": str(error)}

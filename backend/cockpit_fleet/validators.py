@@ -109,13 +109,16 @@ def check_file_path(value: object, what: str = "path") -> PurePosixPath:
     return path
 
 
-def resolve_inside(base: Path, value: object, what: str = "path") -> Path:
-    """The existing file BASE/VALUE, refusing symlinks that lead outside BASE."""
+def resolve_inside(base: Path, value: object, what: str = "path",
+                   directory: bool = False) -> Path:
+    """The existing file BASE/VALUE, refusing symlinks that lead outside BASE.
+
+    With directory, a directory is accepted as well."""
     relative = check_relative_path(value, what)
     root = base.resolve()
     path = (root / relative).resolve()
     if not path.is_relative_to(root):
         raise BadRequest(f"{what} leaves its directory: {value!r}")
-    if not path.is_file():
+    if not path.is_file() and not (directory and path.is_dir()):
         raise BadRequest(f"{what} is not a file: {value!r}")
     return path

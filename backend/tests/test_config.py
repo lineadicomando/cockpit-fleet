@@ -29,6 +29,10 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.local_project_roots, ("/srv/ansible", "/opt/playbooks"))
         self.assertEqual(config.proxy, "http://proxy.example:3128")
 
+    def test_inventory_scripts_are_off_unless_asked(self):
+        self.assertFalse(parse("").inventory_scripts)
+        self.assertTrue(parse("[inventories]\nscripts = true").inventory_scripts)
+
     def test_default_forks_follow_a_lower_maximum(self):
         self.assertEqual(parse("[runs]\nmax_forks = 2").default_forks, 2)
 
@@ -48,6 +52,8 @@ class ConfigTest(unittest.TestCase):
             "[network]\nproxy = \"proxy:3128\"": "network.proxy",
             "[network]\nproxy = \"http://u:p@proxy\"": "network.proxy",
             "runs = 3": "\\[runs\\] must be a table",
+            "[inventories]\nscripts = 1": "inventories.scripts",
+            "[inventories]\nscript = true": "unknown key in \\[inventories\\]",
             "[runs": "not valid TOML",
         }
         for text, message in cases.items():

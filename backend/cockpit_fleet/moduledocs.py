@@ -66,12 +66,75 @@ def _installed() -> str:
     return hashlib.sha256("\n".join(seen).encode()).hexdigest()
 
 
+def _plain(text: str) -> str:
+    """A line of documentation without ansible-doc's markup: L(text, url)
+    becomes "text (url)", the others (C, I, M, O, V...) what they enclose."""
+    text = re.sub(r"L\(([^,)]*),\s*([^)]*)\)", r"\1 (\2)", text)
+    return re.sub(r"[A-Z]\(([^)]*)\)", r"\1", text)
+
+
 def _text(value: object) -> str:
     """The first paragraph of a description, without ansible-doc's markup."""
     if isinstance(value, list):
         value = value[0] if value else ""
-    text = re.sub(r"[A-Z]\(([^)]*)\)", r"\1", str(value or ""))
+    text = _plain(str(value or ""))
     return text if len(text) <= _MAX_TEXT else text[:_MAX_TEXT] + "…"
+
+
+def _paragraphs(value: object, limit: int = 40) -> list[str]:
+    """Every paragraph of a description, without ansible-doc's markup."""
+    if value is None or value == "":
+        return []
+    items = value if isinstance(value, list) else [value]
+    return [_plain(str(item))[:4000] for item in items[:limit]]
+
+
+def _documented(name: str) -> dict:
+    """What ansible-doc knows of one module: "doc", "examples", "return"."""
+    if not _NAME_RE.fullmatch(name):
+        raise BadRequest(f"invalid module name: {name!r}")
+    entry = _ansible_doc(name).get(name)
+    if not isinstance(entry, dict) or not isinstance(entry.get("doc"), dict):
+        raise NotFound(f"no such module: {name}")
+    return entry
+
+
+def _option(name: str, details: dict, full: bool, depth: int = 0) -> dict:
+    choices = details.get("choices")
+    option = {
+        "name": name,
+        "type": str(details.get("type") or "str"),
+        "required": details.get("required") is True,
+        "default": details.get("default"),
+        "choices": [str(choice) for choice in choices] if isinstance(choices, list) else [],
+        "aliases": [str(alias) for alias in details.get("aliases") or []],
+        "description": _text(details.get("description")),
+    }
+    if full:
+        option["text"] = _paragraphs(details.get("description"))
+        nested = details.get("suboptions")
+        option["suboptions"] = _options(nested, True, depth + 1) if depth < 3 else []
+    return option
+
+
+def _options(options: object, full: bool, depth: int = 0) -> list[dict]:
+    if not isinstance(options, dict):
+        return []
+    return [_option(str(name), details, full, depth)
+            for name, details in sorted(options.items()) if isinstance(details, dict)]
+
+
+def _returns(values: object, depth: int = 0) -> list[dict]:
+    if not isinstance(values, dict):
+        return []
+    return [{
+        "name": str(name),
+        "type": str(details.get("type") or ""),
+        "returned": str(details.get("returned") or ""),
+        "text": _paragraphs(details.get("description")),
+        "sample": details.get("sample"),
+        "contains": _returns(details.get("contains"), depth + 1) if depth < 3 else [],
+    } for name, details in sorted(values.items()) if isinstance(details, dict)]
 
 
 @command("module.list", role="admin")
@@ -102,27 +165,32 @@ def module_list(ctx: Context, params: Params) -> dict:
 
 @command("module.doc", role="admin")
 def module_doc(ctx: Context, params: Params) -> dict:
-    """The parameters of one module."""
+    """The parameters of one module, for the editor's completion."""
     name = params.string("name", max_length=200)
     params.done()
-    if not _NAME_RE.fullmatch(name):
-        raise BadRequest(f"invalid module name: {name!r}")
-    entry = _ansible_doc(name).get(name)
-    doc = entry.get("doc") if isinstance(entry, dict) else None
-    if not isinstance(doc, dict):
-        raise NotFound(f"no such module: {name}")
-    options = []
-    for option, details in sorted((doc.get("options") or {}).items()):
-        if not isinstance(details, dict):
-            continue
-        choices = details.get("choices")
-        options.append({
-            "name": option,
-            "type": str(details.get("type") or "str"),
-            "required": details.get("required") is True,
-            "default": details.get("default"),
-            "choices": [str(choice) for choice in choices] if isinstance(choices, list) else [],
-            "aliases": [str(alias) for alias in details.get("aliases") or []],
-            "description": _text(details.get("description")),
-        })
-    return {"name": name, "description": _text(doc.get("short_description")), "options": options}
+    doc = _documented(name)["doc"]
+    return {"name": name, "description": _text(doc.get("short_description")),
+            "options": _options(doc.get("options"), False)}
+
+
+@command("module.help", role="admin")
+def module_help(ctx: Context, params: Params) -> dict:
+    """The whole documentation of one module: what it does, its parameters,
+    its examples and what it returns."""
+    name = params.string("name", max_length=200)
+    params.done()
+    entry = _documented(name)
+    doc = entry["doc"]
+    examples = entry.get("examples")
+    return {
+        "name": name,
+        "collection": str(doc.get("collection") or ""),
+        "version_added": str(doc.get("version_added") or ""),
+        "description": _text(doc.get("short_description")),
+        "text": _paragraphs(doc.get("description")),
+        "requirements": _paragraphs(doc.get("requirements")),
+        "notes": _paragraphs(doc.get("notes")),
+        "options": _options(doc.get("options"), True),
+        "examples": examples.strip("\n")[:64 * 1024] if isinstance(examples, str) else "",
+        "returns": _returns(entry.get("return")),
+    }

@@ -123,8 +123,8 @@ backend. The command is a name from a registry; parameters are a JSON object
 on stdin; the answer is one JSON object, `{"ok": true, "data": …}` or
 `{"ok": false, "error": {"code", "message"}}`. The exit status is 0 whenever an
 answer was written, so a failed exit always means the backend was not reached.
-The input is at most 1 MB, for every command but `project.upload`, which
-declares its own limit.
+The input is at most 1 MB, for every command but two, which declare their
+own limit: `project.upload` and `config.import`.
 
 - **Who is calling.** fleetctl refuses to run as anything but the service
   account, so it is always reached through sudo, which sets `SUDO_UID` and does
@@ -363,6 +363,34 @@ with only the allowlisted keys of the project's file (`roles_path` and
 plugins from elsewhere, point to a vault password file or relax host key
 checking is dropped. The integration test ships a project that tries.
 
+**Help on modules.** `module.help` returns the whole of what `ansible-doc`
+knows about one module: description, requirements, parameters with their
+suboptions, notes, examples and return values. It runs like `module.doc`,
+outside the sandbox on what root installed, so it has the same limit: no
+module of a project's own collections. The interface shows it in a dialog,
+opened from the page of the files and from the ad-hoc command.
+
+**Inventories.** A file inventory is a path of a project: a file of hosts, a
+directory of sources (read together, as Ansible does: static files and plugin
+configurations side by side), or the YAML file of an inventory plugin. Every
+one is read by a job, in the sandbox, so a plugin runs there and nowhere
+else; one written in the interface may be a plugin's file too, but its name is
+`hosts.yml`, which the plugins that want a name of their own
+(`*.aws_ec2.yml`) refuse. A plugin gets no credential beyond the vault of the
+inventory.
+
+A job enables Ansible's default inventory plugins but `script`: an executable
+file of a project is then read as text and never run. `[inventories] scripts
+= true` in `config.toml` puts it back, for the whole installation; the script
+runs in the sandbox like the rest of the project. And
+`ANSIBLE_INVENTORY_UNPARSED_FAILED` is set: an inventory that nothing can read
+fails the job. Without it a playbook went on with no host and ended as a
+successful run of nothing.
+
+Checked on Debian 13 with ansible-core 2.19.11 (`inventories.sh`):
+`ansible.builtin.generator`, a directory with a static file and
+`ansible.builtin.constructed`, a script with the setting off and on.
+
 **Host keys.** `hostkey.scan` returns the keys offered by one host, or by every
 SSH host of an inventory, with their fingerprints; nothing is trusted until an
 administrator confirms with `hostkey.add`. A run connects only to hosts listed
@@ -484,8 +512,44 @@ variables file. The run records which variables were given as secrets, never
 their values. A secret field has no default and no bounds: a default would be
 stored in clear, and nothing that could check a length ever sees the value.
 
-What this does not cover: a playbook that prints the variable puts it in the
-run's output. Use `no_log`; masking known secrets in stored logs is planned.
+**Masking.** A playbook that prints a secret would put it in the run's
+output. What a run prints is therefore filtered against the secrets of that
+run, the decrypted files of its credentials directory: passwords, vault
+passwords, tokens, secret answers, and a private key line by line. Each is
+replaced by `********` in two places: `fleet-run` filters every line before it
+goes to `stdout.log` and to the journal, and the events callback filters the
+values of an event before writing it (it is told the directory with
+`FLEET_EVENTS_SECRETS_DIR`; the values, not the line of JSON, where a secret
+that reads like a field name would break the event).
+
+This is a net, not a guarantee, and `no_log` is still the way to keep a value
+out. A value is looked for as it is and as JSON escapes it: base64, a hash, a
+value cut over two lines are not recognised. Secrets shorter than four bytes
+are left alone, since masking them would mostly hide ordinary output. And only
+the secrets cockpit-fleet handed to the run are known: a password an inventory
+takes from a vaulted variable is one the run decrypts itself.
+
+## Export and import
+
+`config.export` returns the configuration as one JSON document: credentials,
+projects, inventories, trusted host keys and job templates. Things refer to
+each other by name, since identifiers differ between two installations. It
+holds no secret: a credential is its name, its kind, its user name and its
+vault identifier, and its secrets are entered again where it is imported.
+Neither does it hold the files of a project that has no source elsewhere
+(written in the interface, uploaded): such a project arrives empty. The text
+of an inventory written in the interface and the variables of a template are
+in it as they are.
+
+`config.import` creates what the document lists and is not there yet, by
+name; what exists is left as it is, so importing twice changes nothing. Each
+thing goes through the command that creates it from the interface: the same
+checks apply (a local project outside the allowed roots is refused, a host key
+that differs from the trusted one is not replaced) and the same audit record
+is left, next to the one of the import itself. One thing that cannot be
+created does not stop the others, and the answer says what happened to each.
+The document is not copied into the audit record. Both commands are for
+administrators.
 
 ## Events
 
@@ -573,6 +637,7 @@ bundled collection.
 | Projects uploaded as an archive | `test/integration/upload.sh` | controller, as root; wipes the database |
 | Collections from a requirements file | `test/integration/galaxy.sh` | controller, as root; wipes the database |
 | Ad-hoc commands | `test/integration/adhoc.sh` | controller, as root; wipes the database |
+| Inventory plugins, directories, scripts | `test/integration/inventories.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

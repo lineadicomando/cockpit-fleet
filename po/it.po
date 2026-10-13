@@ -448,8 +448,6 @@ msgstr "Inventari"
 msgid "Inventory"
 msgstr "Inventario"
 
-msgid "Inventory file"
-msgstr "File di inventario"
 
 msgid "Inventory reading"
 msgstr "Lettura inventario"
@@ -571,8 +569,6 @@ msgstr "Password"
 msgid "Path"
 msgstr "Percorso"
 
-msgid "Path inside the project. Its group_vars and host_vars are used too."
-msgstr "Percorso dentro il progetto. Vengono usati anche i suoi group_vars e host_vars."
 
 msgid "Playbook"
 msgstr "Playbook"
@@ -1079,3 +1075,96 @@ msgstr "La riga di comando per un modulo command o shell, coppie chiave=valore p
 
 msgid "Ad-hoc commands are disabled: the configuration file allows no module."
 msgstr "I comandi ad-hoc sono disabilitati: il file di configurazione non ammette alcun modulo."
+
+msgid "Aliases: {{list}}"
+msgstr "Alias: {{list}}"
+
+msgid "Already there"
+msgstr "Già presente"
+
+msgid "Choices: {{list}}"
+msgstr "Valori ammessi: {{list}}"
+
+msgid "Configuration"
+msgstr "Configurazione"
+
+msgid "Created"
+msgstr "Creato"
+
+msgid "Created {{created}}, already there {{exists}}, not created {{failed}}"
+msgstr "Creati {{created}}, già presenti {{exists}}, non creati {{failed}}"
+
+msgid "Credentials, projects, inventories, trusted host keys and job templates, as one file. It holds no secret: after an import, enter the secrets of the credentials again. The files of a project written here or uploaded are not in it."
+msgstr "Credenziali, progetti, inventari, chiavi host attendibili e template, in un solo file. Non contiene segreti: dopo un'importazione vanno reinseriti i segreti delle credenziali. I file di un progetto scritto qui o caricato non ne fanno parte."
+
+msgid "Default: {{value}}"
+msgstr "Predefinito: {{value}}"
+
+msgid "Description"
+msgstr "Descrizione"
+
+msgid "Examples"
+msgstr "Esempi"
+
+msgid "Export"
+msgstr "Esporta"
+
+msgid "Help on modules"
+msgstr "Guida ai moduli"
+
+msgid "Help on this module"
+msgstr "Guida a questo modulo"
+
+msgid "Host key"
+msgstr "Chiave host"
+
+msgid "Import result"
+msgstr "Esito dell'importazione"
+
+msgid "Import…"
+msgstr "Importa…"
+
+msgid "Inventory file or directory"
+msgstr "File o directory di inventario"
+
+msgid "Job template"
+msgstr "Template"
+
+msgid "Kind"
+msgstr "Tipo"
+
+msgid "Not created"
+msgstr "Non creato"
+
+msgid "Notes"
+msgstr "Note"
+
+msgid "Parameter"
+msgstr "Parametro"
+
+msgid "Parameters"
+msgstr "Parametri"
+
+msgid "Path inside the project: a file, a directory of sources, or the YAML file of an inventory plugin. Its group_vars and host_vars are used too."
+msgstr "Percorso dentro il progetto: un file, una directory di sorgenti o il file YAML di un plugin di inventario. Vengono usati anche i suoi group_vars e host_vars."
+
+msgid "required"
+msgstr "obbligatorio"
+
+msgid "Return values"
+msgstr "Valori restituiti"
+
+msgid "Returned: {{when}}"
+msgstr "Restituito: {{when}}"
+
+msgid "Sample: {{value}}"
+msgstr "Esempio: {{value}}"
+
+msgid "This file is not a configuration exported from here."
+msgstr "Questo file non è una configurazione esportata da qui."
+
+msgid "Type the name of a module installed on the controller."
+msgstr "Scrivi il nome di un modulo installato sul controller."
+
+msgid "Value"
+msgstr "Valore"

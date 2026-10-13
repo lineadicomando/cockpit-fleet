@@ -30,3 +30,8 @@
 #    "ansible.windows.setup", "ansible.windows.win_command",
 #    "ansible.windows.win_shell", "ansible.windows.win_powershell",
 #]
+
+[inventories]
+# Let an executable file of a project be run as an inventory script. Off: a
+# project's inventory is then only read, by the plugins that take a file.
+#scripts = false

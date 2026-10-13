@@ -15,6 +15,24 @@ except ImportError:
 
 
 @unittest.skipIf(events is None, "ansible is not installed")
+class MaskTest(unittest.TestCase):
+    def test_secrets_are_masked_in_values_at_any_depth_not_in_field_names(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "fleet_become_password").write_text("hunter2\n")
+            (Path(tmp) / "fleet_survey_0").write_text('host\nwith "quotes"\nabc\n')
+            (Path(tmp) / "other").write_text("not-a-secret\n")
+            secrets = events.read_secrets(tmp)
+        self.assertEqual(secrets, ['with "quotes"', "hunter2", "host"])
+        event = {"host": "web01", "result": {"msg": 'pw hunter2 with "quotes"', "n": 3,
+                                             "list": ["hunter2", {"hunter2": "abc not-a-secret"}]}}
+        self.assertEqual({key: events.mask(value, secrets) for key, value in event.items()}, {
+            "host": "web01", "result": {"msg": "pw ******** ********", "n": 3,
+                                        "list": ["********", {"********": "abc not-a-secret"}]}})
+        self.assertEqual(events.read_secrets(None), [])
+
+
+@unittest.skipIf(events is None, "ansible is not installed")
 class UnifiedDiffTest(unittest.TestCase):
     def test_before_and_after_become_a_unified_diff(self):
         text = events.unified_diff({"before": "a\nb\n", "after": "a\nc", "before_header": "/etc/x",

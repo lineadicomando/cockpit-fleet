@@ -7,15 +7,16 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1 and 2 were closed on 8 October 2026. **In progress: phase 3** (surveys
+Phases 0, 1 and 2 were closed on 8 October 2026, **phase 3 on 13 October** (surveys
 and the view of differences done on 9 October, the editor in the interface and
 archive uploads on 10 October, Galaxy on 11 October, ad-hoc commands on
 13 October). The acceptance test of the phase passed on 13 October (see
 phase 3). `main` is ahead of `origin`: nothing was pushed.
 
-**Next step, to be chosen**: the items still open in phase 3 (dynamic
-inventories, help on modules, masking of secrets, export and import), or
-phase 3b (agents), then 4.
+Phase 3 was closed on 13 October with its last four items: inventory
+plugins, help on modules, masking of secrets, export and import.
+
+**Next step: phase 3b** (agents), then 4.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is missing.
@@ -24,7 +25,8 @@ What works today: projects (git or a local directory), inventories, credentials
 with encrypted secrets, trusted host keys, projects written in the interface with
 git history and syntax checks, projects uploaded as an archive, collections
 installed from the requirements file, templates with surveys, ad-hoc commands,
-runs with a queue,
+inventory plugins, help on modules, export and import of the configuration,
+secrets masked in the output, runs with a queue,
 cancellation, live output, a view by task and the outcome per host; roles from
 Unix groups and the audit trail. Tried on Linux nodes (containers) and on Windows
 over SSH.
@@ -45,8 +47,7 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 `windows.sh` were not run again. On 13 October, with the ad-hoc package:
 `adhoc.sh`, `privileges.sh`, `roles.sh`, `sandbox.sh` and `runs.sh`. `runs.sh`,
 `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`) and `IT_SSH_PASSWORD`.
-After the vault fix of the same day only `adhoc.sh` was run again: `multihost.sh`
-(vaults with identifiers) is still to be run on that code.
+`windows.sh` was not run again.
 
 ## Decisions
 
@@ -68,6 +69,9 @@ After the vault fix of the same day only `adhoc.sh` was run again: `multihost.sh
 | Collections from Galaxy | For every kind of project; installed by a sandboxed job next to the tree (`projects/<id>/collections/<sha256 of the requirements file>`), never inside it; copied into every run; without them a playbook does not start |
 | Uploaded archive | Travels as base64 in the JSON on the stdin of `fleetctl` (20 MB, at most 50); extracted in the sandbox; revision = sha256; links out of the tree, hard links and devices make the whole archive refused |
 | Ad-hoc commands | Admin only; one module by its full name, among those in `[adhoc] modules` of `config.toml` (default: ping, facts, `command`, `shell` and their Windows counterparts; empty turns them off); run as a generated playbook, so module and arguments are in a file and events work as for any run |
+| Inventory sources | A file, a directory of sources or the YAML file of a plugin, always of a project and read in the sandbox; executable scripts off unless `[inventories] scripts = true`; an inventory nothing can read fails the job |
+| Masking | The secrets handed to a run are replaced in its output, in the journal and in the events, as they are and as JSON escapes them; a net, not a guarantee |
+| Export and import | One JSON document, by name, with no secret and no project files; import creates what is missing through the usual commands and replaces nothing |
 | Projects written in the interface | A git repository next to the tree, one commit per change, admin only |
 | Editor | CodeMirror 6 in a shadow root (Cockpit's CSP stays as it is) |
 | Syntax check | A sandboxed job when a playbook is saved; `ansible-lint` reports, it does not fail the check |
@@ -138,6 +142,15 @@ After the vault fix of the same day only `adhoc.sh` was run again: `multihost.sh
   the run in by the key of the credential or by that password was not looked
   at. The key made for the test is still authorised on `win11-pc00`; its
   private half was deleted.
+- Inventory plugins: no credential for them (a cloud token), and one written
+  in the interface is called `hosts.yml`, which some plugins refuse; only
+  built-in plugins were tried.
+- Masking: other encodings of a secret are not recognised, and secrets the
+  run decrypts by itself (a vaulted variable of the inventory) are not known.
+- Export and import: nothing is updated or deleted by an import; schedules and
+  notification rules will have to join the document when they exist.
+- Help on modules: like the completion, only what is installed on the
+  controller.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 
@@ -161,13 +174,14 @@ After the vault fix of the same day only `adhoc.sh` was run again: `multihost.sh
 - [x] **Ad-hoc commands**: admin only, allowlist of modules in `config.toml`, run
       as a generated playbook of one task (arguments in a file, not in argv);
       tried on the VM (`adhoc.sh` and from the interface)
-- [ ] **Dynamic inventories**: YAML plugins (to be tried, the job is already
-      sandboxed); executable scripts off by default
-- [ ] `ansible-doc` for help on modules: names and parameters already reach the
-      completion (`module.list`, `module.doc`); a help page with examples and
-      return values is missing
-- [ ] Masking of known secrets in stored logs
-- [ ] Export and import of the configuration, without secrets
+- [x] **Dynamic inventories**: YAML plugins and directories of sources;
+      executable scripts off by default; tried on the VM (`inventories.sh`)
+- [x] Help on modules (`module.help`): description, parameters, examples and
+      return values, in a dialog
+- [x] Masking of known secrets in stored logs, in the journal and in the
+      events; tried on the VM (`runs.sh`)
+- [x] Export and import of the configuration, without secrets; tried on the VM
+      (`runs.sh`)
 
 Done when: `ansible-win_edulab` runs from cockpit-fleet with no change to the
 repository, with its vault as a credential. **Met on 13 October**, from the

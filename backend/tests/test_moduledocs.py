@@ -72,6 +72,39 @@ class ModuleDocsTest(Base):
         self.assertEqual((options["validate"]["type"], options["validate"]["choices"]),
                          ("str", ["a", "1"]))
 
+    def test_help_has_the_whole_documentation(self):
+        entry = COPY["ansible.builtin.copy"]
+        full = {"ansible.builtin.copy": {
+            "doc": {**entry["doc"], "description": ["Copies a file.",
+                                    "See M(ansible.builtin.fetch) and L(the guide, https://x.example/y)."],
+                    "notes": ["Works in check mode."], "collection": "ansible.builtin",
+                    "options": {"dest": {"description": ["Path, see O(src).", "More."],
+                                         "type": "path", "required": True,
+                                         "suboptions": {"deep": {"description": "Inside."}}}}},
+            "examples": "\n- name: Copy\n  ansible.builtin.copy:\n    dest: /srv/x\n",
+            "return": {"dest": {"description": "Where it went.", "type": "str",
+                                "returned": "success", "sample": "/srv/x",
+                                "contains": {"part": {"description": ["A part."]}}},
+                       "broken": 3},
+        }}
+        with mock.patch.dict(COPY, full):
+            doc = self.ok("module.help", {"name": "ansible.builtin.copy"})
+        self.assertEqual(doc["text"], [
+            "Copies a file.", "See ansible.builtin.fetch and the guide (https://x.example/y)."])
+        self.assertEqual((doc["notes"], doc["collection"]), (["Works in check mode."],
+                                                             "ansible.builtin"))
+        self.assertEqual(doc["options"][0]["text"], ["Path, see src.", "More."])
+        self.assertEqual(doc["options"][0]["suboptions"][0]["name"], "deep")
+        self.assertTrue(doc["examples"].startswith("- name: Copy"))
+        self.assertEqual(doc["returns"], [{
+            "name": "dest", "type": "str", "returned": "success", "text": ["Where it went."],
+            "sample": "/srv/x", "contains": [{"name": "part", "type": "", "returned": "",
+                                              "text": ["A part."], "sample": None,
+                                              "contains": []}]}])
+        self.assertEqual(self.code("module.help", {"name": "--list"}), "bad_request")
+        self.assertEqual(self.code("module.help", {"name": "ansible.builtin.copy"},
+                                   role="operator"), "forbidden")
+
     def test_names_are_checked_and_roles_enforced(self):
         self.assertEqual(self.code("module.doc", {"name": "ansible.builtin.nope"}), "not_found")
         for name in ("--list", "-h", "a/b", "../x", "a b", "", "A.b.c"):
