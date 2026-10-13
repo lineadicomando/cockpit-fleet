@@ -102,6 +102,7 @@
   "Discard the changes?": "Discard the changes?",
   "Do not write passwords here: use a credential.": "Do not write passwords here: use a credential.",
   "Done": "Done",
+  "Done by an agent, through {{via}}": "Done by an agent, through {{via}}",
   "Dry run": "Dry run",
   "Dry run: show what would change, change nothing": "Dry run: show what would change, change nothing",
   "Dry run: this is what would change, nothing was changed.": "Dry run: this is what would change, nothing was changed.",

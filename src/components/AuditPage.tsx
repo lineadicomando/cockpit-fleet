@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, EmptyState, EmptyStateBody, Flex, FlexItem, Spinner, Title } from "@patternfly/react-core";
+import { Alert, Button, EmptyState, EmptyStateBody, Flex, FlexItem, Label, Spinner, Title } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
 import type { AuditEntry, AuditOutcome } from "../lib/types.ts";
@@ -82,7 +82,10 @@ export function AuditPage() {
                         {entries.map(entry => (
                             <Tr key={entry.id}>
                                 <Td dataLabel={t("When")}>{when.format(new Date(entry.ts * 1000))}</Td>
-                                <Td dataLabel={t("User")}>{entry.user}</Td>
+                                <Td dataLabel={t("User")}>
+                                    {entry.user}
+                                    {entry.via && <Label isCompact color="purple" style={{ marginInlineStart: "0.5rem" }} title={t("Done by an agent, through {{via}}", { via: entry.via })}>{entry.via}</Label>}
+                                </Td>
                                 <Td dataLabel={t("Action")}><code>{entry.command}</code></Td>
                                 <Td dataLabel={t("Outcome")}>
                                     <StatusLabel tone={TONE[entry.outcome]}>{outcomes[entry.outcome]}</StatusLabel>

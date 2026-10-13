@@ -9,7 +9,7 @@ installations.
 """
 
 from . import audit, resources, store
-from .cli import COMMANDS, Context, Params, command
+from .cli import COMMANDS, Context, Obj, Values, command
 from .errors import BadRequest, FleetError
 
 FORMAT = "cockpit-fleet-config"
@@ -25,8 +25,8 @@ def _names(ctx: Context, table: str) -> dict[str, str]:
 
 
 @command("config.export", role="admin")
-def config_export(ctx: Context, params: Params) -> dict:
-    params.done()
+def config_export(ctx: Context, params: Values) -> dict:
+    """The whole configuration as one document, by name and without secrets."""
     conn = ctx.conn
     credentials = _names(ctx, "credentials")
     projects = _names(ctx, "projects")
@@ -91,12 +91,13 @@ class _Importer:
     def _create(self, name: str, params: dict) -> None:
         spec = COMMANDS[name]
         try:
-            spec.handler(self.ctx, Params(params))
+            spec.call(self.ctx, params)
         except FleetError as error:
             audit.record(self.ctx.conn, self.ctx.caller, name, params, "error", str(error),
-                         spec.redact)
+                         spec.redact, self.ctx.via)
             raise
-        audit.record(self.ctx.conn, self.ctx.caller, name, params, "ok", redact=spec.redact)
+        audit.record(self.ctx.conn, self.ctx.caller, name, params, "ok", redact=spec.redact,
+                     via=self.ctx.via)
 
     def _each(self, section: str, items: object, table: str | None, create) -> None:
         if not isinstance(items, list) or len(items) > _MAX_ITEMS:
@@ -177,15 +178,17 @@ class _Importer:
 
 
 @command("config.import", role="admin", mutating=True, redact=("document",),
-         max_input=_MAX_IMPORT)
-def config_import(ctx: Context, params: Params) -> dict:
+         max_input=_MAX_IMPORT,
+         params={
+             "document": Obj(),
+         })
+def config_import(ctx: Context, params: Values) -> dict:
     """Create what an exported document lists and is not here yet.
 
     What already exists, by name, is left as it is. One thing that cannot be
     created does not stop the others: the answer says what happened to each.
     """
-    document = params.mapping("document")
-    params.done()
+    document = params["document"]
     if document.get("format") != FORMAT:
         raise BadRequest("this is not a configuration exported by cockpit-fleet")
     if document.get("version") != VERSION:

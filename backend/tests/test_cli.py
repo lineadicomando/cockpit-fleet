@@ -22,7 +22,8 @@ class DispatchTest(unittest.TestCase):
         saved = dict(cli.COMMANDS)
         self.addCleanup(lambda: (cli.COMMANDS.clear(), cli.COMMANDS.update(saved)))
 
-        @cli.command("test.start", role="operator", mutating=True, redact=("token",))
+        @cli.command("test.start", role="operator", mutating=True, redact=("token",),
+                     params={"name": cli.Str(), "token": cli.Str()})
         def start(ctx, params):
             return {"started": True}
 

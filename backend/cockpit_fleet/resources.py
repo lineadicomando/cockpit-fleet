@@ -11,7 +11,7 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 
 from . import files, jobs, paths, store, survey
-from .cli import Context, Params, command
+from .cli import Bool, Choice, Context, Id, Int, Obj, Objs, Str, Strs, Values, command
 from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
@@ -58,16 +58,23 @@ def credential_of_kind(ctx: Context, credential_id: str | None, kind: str) -> st
 
 
 @command("credential.list", role="viewer")
-def credential_list(ctx: Context, params: Params) -> dict:
-    params.done()
+def credential_list(ctx: Context, params: Values) -> dict:
+    """The credentials, with which of their secrets are set; never the values."""
     rows = ctx.conn.execute("SELECT * FROM credentials ORDER BY name COLLATE NOCASE")
     return {"credentials": [_credential(row) for row in rows]}
 
 
-def _credential_values(params: Params, kind: str) -> dict:
-    name = store.check_name(params.string("name", max_length=200))
-    username = params.string("username", "", 64)
-    vault_id = params.string("vault_id", "", 64)
+_CREDENTIAL_PARAMS = {
+    "name": Str(required=True, max_length=200),
+    "username": Str(default="", max_length=64),
+    "vault_id": Str(default="", max_length=64),
+}
+
+
+def _credential_values(params: Values, kind: str) -> dict:
+    name = store.check_name(params["name"])
+    username = params["username"]
+    vault_id = params["vault_id"]
     if username:
         check_user(username)
     if vault_id:
@@ -76,32 +83,36 @@ def _credential_values(params: Params, kind: str) -> dict:
             "vault_id": vault_id if kind == "vault" else ""}
 
 
-@command("credential.create", role="admin", mutating=True)
-def credential_create(ctx: Context, params: Params) -> dict:
-    kind = params.choice("kind", tuple(CREDENTIAL_FIELDS))
+@command("credential.create", role="admin", mutating=True,
+         params={"kind": Choice(tuple(CREDENTIAL_FIELDS)), **_CREDENTIAL_PARAMS})
+def credential_create(ctx: Context, params: Values) -> dict:
+    """Create a credential. Its secrets are entered afterwards, by a person."""
+    kind = params["kind"]
     values = _credential_values(params, kind)
-    params.done()
     credential_id = store.new_id("c")
     store.insert(ctx.conn, "credentials", {"id": credential_id, "kind": kind,
                                            "created_at": store.now(), **values}, "credential")
     return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
 
 
-@command("credential.update", role="admin", mutating=True)
-def credential_update(ctx: Context, params: Params) -> dict:
+@command("credential.update", role="admin", mutating=True,
+         params={"id": Id(), **_CREDENTIAL_PARAMS})
+def credential_update(ctx: Context, params: Values) -> dict:
     """Change the name and the non-secret fields; secrets go through fleet-secret."""
-    credential_id = params.ident("id")
+    credential_id = params["id"]
     row = store.fetch(ctx.conn, "credentials", credential_id, "credential")
     values = _credential_values(params, row["kind"])
-    params.done()
     store.update(ctx.conn, "credentials", credential_id, values, "credential")
     return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
 
 
-@command("credential.delete", role="admin", mutating=True)
-def credential_delete(ctx: Context, params: Params) -> dict:
-    credential_id = params.ident("id")
-    params.done()
+@command("credential.delete", role="admin", mutating=True,
+         params={
+             "id": Id(),
+         })
+def credential_delete(ctx: Context, params: Values) -> dict:
+    """Delete a credential whose secrets have been deleted."""
+    credential_id = params["id"]
     row = _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
     if any(row["secrets"].values()):
         raise Conflict("delete the secrets of this credential first")
@@ -122,8 +133,8 @@ def _project(ctx: Context, row) -> dict:
 
 
 @command("project.list", role="viewer")
-def project_list(ctx: Context, params: Params) -> dict:
-    params.done()
+def project_list(ctx: Context, params: Values) -> dict:
+    """The projects, with their revision and the state of their collections."""
     jobs.reconcile(ctx)  # a finished sync job may have a new revision to show
     rows = ctx.conn.execute("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
     return {"projects": [_project(ctx, row) for row in rows],
@@ -131,26 +142,39 @@ def project_list(ctx: Context, params: Params) -> dict:
             "max_upload_mb": ctx.config.max_upload_mb}
 
 
-def _project_values(ctx: Context, params: Params, kind: str) -> dict:
-    values: dict = {"name": store.check_name(params.string("name", max_length=200))}
+# Which of these a project takes depends on where its files come from.
+_PROJECT_PARAMS = {
+    "name": Str(required=True, max_length=200),
+    "path": Str(max_length=1024),
+    "url": Str(max_length=500),
+    "ref": Str(max_length=200),
+    "credential_id": Id(required=False),
+}
+
+
+def _project_values(ctx: Context, params: Values, kind: str) -> dict:
+    values: dict = {"name": store.check_name(params["name"])}
+    params.unused(*{"local": ("url", "ref", "credential_id"), "git": ("path",)}.get(
+        kind, ("path", "url", "ref", "credential_id")))
     if kind == "local":
-        values["path"] = params.string("path", max_length=1024)
+        values["path"] = params.need("path")
         if not values["path"].startswith("/"):
             raise BadRequest("path must be absolute")
         jobs.project_tree({"kind": "local", **values}, ctx.config)
     elif kind == "git":
-        values["url"] = check_git_url(params.string("url", max_length=500))
-        values["ref"] = check_git_ref(params.string("ref", "main", 200))
-        credential_id = params.optional_id("credential_id")
+        values["url"] = check_git_url(params.need("url"))
+        values["ref"] = check_git_ref("main" if params["ref"] is None else params["ref"])
+        credential_id = params["credential_id"]
         values["credential_id"] = credential_of_kind(ctx, credential_id, "source")
     return values
 
 
-@command("project.create", role="admin", mutating=True)
-def project_create(ctx: Context, params: Params) -> dict:
-    kind = params.choice("kind", ("local", "git", "managed", "archive"))
+@command("project.create", role="admin", mutating=True,
+         params={"kind": Choice(("local", "git", "managed", "archive")), **_PROJECT_PARAMS})
+def project_create(ctx: Context, params: Values) -> dict:
+    """Create a project: a git repository, a local directory, or an empty one to write or upload."""
+    kind = params["kind"]
     values = _project_values(ctx, params, kind)
-    params.done()
     project_id = store.new_id("p")
     store.insert(ctx.conn, "projects", {"id": project_id, "kind": kind,
                                         "created_at": store.now(), **values}, "project")
@@ -165,30 +189,36 @@ def project_create(ctx: Context, params: Params) -> dict:
     return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
-@command("project.update", role="admin", mutating=True)
-def project_update(ctx: Context, params: Params) -> dict:
+@command("project.update", role="admin", mutating=True,
+         params={"id": Id(), **_PROJECT_PARAMS})
+def project_update(ctx: Context, params: Values) -> dict:
     """Change a project; where its files come from cannot change."""
-    project_id = params.ident("id")
+    project_id = params["id"]
     row = store.fetch(ctx.conn, "projects", project_id, "project")
     values = _project_values(ctx, params, row["kind"])
-    params.done()
     store.update(ctx.conn, "projects", project_id, values, "project")
     return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
-@command("project.delete", role="admin", mutating=True)
-def project_delete(ctx: Context, params: Params) -> dict:
-    project_id = params.ident("id")
-    params.done()
+@command("project.delete", role="admin", mutating=True,
+         params={
+             "id": Id(),
+         })
+def project_delete(ctx: Context, params: Values) -> dict:
+    """Delete a project and its files on the controller."""
+    project_id = params["id"]
     store.delete(ctx.conn, "projects", project_id, "project")
     shutil.rmtree(paths.PROJECTS_DIR / project_id, ignore_errors=True)
     return {}
 
 
-@command("project.sync", role="admin", mutating=True)
-def project_sync(ctx: Context, params: Params) -> dict:
-    project_id = params.ident("id")
-    params.done()
+@command("project.sync", role="admin", mutating=True,
+         params={
+             "id": Id(),
+         })
+def project_sync(ctx: Context, params: Values) -> dict:
+    """Queue a job that fetches a git project again; returns the run to follow."""
+    project_id = params["id"]
     project = store.fetch(ctx.conn, "projects", project_id, "project")
     if project["kind"] != "git":
         raise BadRequest("only git projects are synchronised")
@@ -208,15 +238,17 @@ def project_sync(ctx: Context, params: Params) -> dict:
     return {"run_id": run_id}
 
 
-@command("project.collections", role="admin", mutating=True)
-def project_collections(ctx: Context, params: Params) -> dict:
+@command("project.collections", role="admin", mutating=True,
+         params={
+             "id": Id(),
+         })
+def project_collections(ctx: Context, params: Values) -> dict:
     """Queue a job that installs the collections a project asks for.
 
     Also when they are installed already: a requirement may name a branch,
     and this is how what it points to now is fetched.
     """
-    project_id = params.ident("id")
-    params.done()
+    project_id = params["id"]
     project = store.fetch(ctx.conn, "projects", project_id, "project")
     return {"run_id": jobs.queue_collections(ctx, project)}
 
@@ -226,17 +258,22 @@ _MAX_UPLOAD_TEXT = MAX_UPLOAD_MB * 1024 * 1024 * 4 // 3 + 4
 
 
 @command("project.upload", role="admin", mutating=True, redact=("data",),
-         max_input=_MAX_UPLOAD_TEXT + 64 * 1024)
-def project_upload(ctx: Context, params: Params) -> dict:
+         tool=False,
+         max_input=_MAX_UPLOAD_TEXT + 64 * 1024,
+         params={
+             "id": Id(),
+             "filename": Str(default="", max_length=1024),
+             "data": Str(required=True, max_length=_MAX_UPLOAD_TEXT),
+         })
+def project_upload(ctx: Context, params: Values) -> dict:
     """Take an archive as the new files of a project; a job unpacks it.
 
     Nothing of the archive is read here but its bytes, to count and to digest
     them: the digest is the revision the project gets if the job succeeds.
     """
-    project_id = params.ident("id")
-    filename = params.string("filename", "", 1024)
-    data = params.string("data", max_length=_MAX_UPLOAD_TEXT)
-    params.done()
+    project_id = params["id"]
+    filename = params["filename"]
+    data = params["data"]
     project = store.fetch(ctx.conn, "projects", project_id, "project")
     if project["kind"] != "archive":
         raise BadRequest("only a project made of an archive takes an upload")
@@ -268,11 +305,13 @@ def project_upload(ctx: Context, params: Params) -> dict:
     return {"run_id": run_id, **options}
 
 
-@command("project.files", role="admin")
-def project_files(ctx: Context, params: Params) -> dict:
+@command("project.files", role="admin",
+         params={
+             "id": Id(),
+         })
+def project_files(ctx: Context, params: Values) -> dict:
     """YAML files of a project, to choose a playbook or an inventory from."""
-    project_id = params.ident("id")
-    params.done()
+    project_id = params["id"]
     tree = jobs.project_tree(store.fetch(ctx.conn, "projects", project_id, "project"), ctx.config)
     found = []
     for current, directories, names in os.walk(tree):
@@ -301,31 +340,46 @@ def _inventory(row, with_hosts: bool = False) -> dict:
     return data
 
 
-def _inventory_values(ctx: Context, params: Params, kind: str) -> dict:
+# A file inventory takes the project and the path, a written one the rest.
+_INVENTORY_PARAMS = {
+    "vault_credential_id": Id(required=False),
+    "project_id": Id(required=False),
+    "path": Str(max_length=1024),
+    "format": Choice(("yaml", "ini"), default="yaml"),
+    "content": Str(max_length=512 * 1024),
+}
+
+
+def _inventory_values(ctx: Context, params: Values, kind: str) -> dict:
     values: dict = {"vault_credential_id":
-                    credential_of_kind(ctx, params.optional_id("vault_credential_id"), "vault")}
+                    credential_of_kind(ctx, params["vault_credential_id"], "vault")}
     if kind == "file":
-        values["project_id"] = params.ident("project_id")
+        params.unused("format", "content")
+        values["project_id"] = params.need("project_id")
         store.fetch(ctx.conn, "projects", values["project_id"], "project")
-        values["path"] = str(check_relative_path(params.string("path", max_length=1024), "path"))
+        values["path"] = str(check_relative_path(params.need("path"), "path"))
     else:
-        values["format"] = params.choice("format", ("yaml", "ini"), "yaml")
-        values["content"] = params.string("content", max_length=512 * 1024)
+        params.unused("project_id", "path")
+        values["format"] = params["format"]
+        values["content"] = params.need("content")
     return values
 
 
 @command("inventory.list", role="viewer")
-def inventory_list(ctx: Context, params: Params) -> dict:
-    params.done()
+def inventory_list(ctx: Context, params: Values) -> dict:
+    """The inventories, with how many hosts each was last read to have."""
     jobs.reconcile(ctx)
     rows = ctx.conn.execute("SELECT * FROM inventories ORDER BY name COLLATE NOCASE")
     return {"inventories": [_inventory(row) for row in rows]}
 
 
-@command("inventory.get", role="viewer")
-def inventory_get(ctx: Context, params: Params) -> dict:
-    inventory_id = params.ident("id")
-    params.done()
+@command("inventory.get", role="viewer",
+         params={
+             "id": Id(),
+         })
+def inventory_get(ctx: Context, params: Values) -> dict:
+    """One inventory with its hosts and groups, as last read."""
+    inventory_id = params["id"]
     jobs.reconcile(ctx)
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     data = _inventory(row, with_hosts=True)
@@ -335,33 +389,39 @@ def inventory_get(ctx: Context, params: Params) -> dict:
     return data
 
 
-@command("inventory.create", role="admin", mutating=True, redact=("content",))
-def inventory_create(ctx: Context, params: Params) -> dict:
-    name = store.check_name(params.string("name", max_length=200))
-    kind = params.choice("kind", ("file", "managed"))
+@command("inventory.create", role="admin", mutating=True, redact=("content",),
+         params={"name": Str(required=True, max_length=200),
+                 "kind": Choice(("file", "managed")), **_INVENTORY_PARAMS})
+def inventory_create(ctx: Context, params: Values) -> dict:
+    """Create an inventory: a path of a project, or text written here."""
+    name = store.check_name(params["name"])
+    kind = params["kind"]
     values = _inventory_values(ctx, params, kind)
-    params.done()
     inventory_id = store.new_id("i")
     store.insert(ctx.conn, "inventories", {"id": inventory_id, "name": name, "kind": kind,
                                            "created_at": store.now(), **values}, "inventory")
     return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
-@command("inventory.update", role="admin", mutating=True, redact=("content",))
-def inventory_update(ctx: Context, params: Params) -> dict:
-    inventory_id = params.ident("id")
+@command("inventory.update", role="admin", mutating=True, redact=("content",),
+         params={"id": Id(), "name": Str(max_length=200), **_INVENTORY_PARAMS})
+def inventory_update(ctx: Context, params: Values) -> dict:
+    """Change an inventory."""
+    inventory_id = params["id"]
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-    name = store.check_name(params.string("name", row["name"], 200))
+    name = store.check_name(row["name"] if params["name"] is None else params["name"])
     values = _inventory_values(ctx, params, row["kind"])
-    params.done()
     store.update(ctx.conn, "inventories", inventory_id, {"name": name, **values}, "inventory")
     return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
-@command("inventory.delete", role="admin", mutating=True)
-def inventory_delete(ctx: Context, params: Params) -> dict:
-    inventory_id = params.ident("id")
-    params.done()
+@command("inventory.delete", role="admin", mutating=True,
+         params={
+             "id": Id(),
+         })
+def inventory_delete(ctx: Context, params: Values) -> dict:
+    """Delete an inventory that no template uses."""
+    inventory_id = params["id"]
     store.delete(ctx.conn, "inventories", inventory_id, "inventory")
     return {}
 
@@ -383,11 +443,13 @@ def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | 
             "inventory_scripts": ctx.config.inventory_scripts}
 
 
-@command("inventory.parse", role="operator", mutating=True)
-def inventory_parse(ctx: Context, params: Params) -> dict:
+@command("inventory.parse", role="operator", mutating=True,
+         params={
+             "id": Id(),
+         })
+def inventory_parse(ctx: Context, params: Values) -> dict:
     """Queue a job that lists the hosts and groups of an inventory."""
-    inventory_id = params.ident("id")
-    params.done()
+    inventory_id = params["id"]
     inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
@@ -426,8 +488,8 @@ def _fingerprint(key: str) -> str:
 
 
 @command("hostkey.list", role="viewer")
-def hostkey_list(ctx: Context, params: Params) -> dict:
-    params.done()
+def hostkey_list(ctx: Context, params: Values) -> dict:
+    """The SSH host keys trusted for runs, with their fingerprints."""
     rows = ctx.conn.execute("SELECT * FROM host_keys ORDER BY host, key_type")
     return {"keys": [{"id": row["id"], "host": row["host"], "key_type": row["key_type"],
                       "fingerprint": _fingerprint(row["key"]), "added_by": row["added_by"],
@@ -465,16 +527,21 @@ def _key_state(ctx: Context, host: str, key_type: str, key: str) -> str:
     return "trusted" if row["key"] == key else "changed"
 
 
-@command("hostkey.scan", role="admin")
-def hostkey_scan(ctx: Context, params: Params) -> dict:
+@command("hostkey.scan", role="admin",
+         params={
+             "inventory_id": Id(required=False),
+             "host": Str(max_length=253),
+             "port": Int(1, 65535, default=22),
+         })
+def hostkey_scan(ctx: Context, params: Values) -> dict:
     """Ask one host, or every SSH host of an inventory, for its keys.
 
     Nothing is trusted until hostkey.add. Each key says whether it is new,
     already trusted, or different from the one trusted so far.
     """
-    inventory_id = params.optional_id("inventory_id")
+    inventory_id = params["inventory_id"]
     if inventory_id is not None:
-        params.done()
+        params.unused("host", "port")
         jobs.reconcile(ctx)
         inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
         targets: dict[int, list[str]] = {}
@@ -489,9 +556,8 @@ def hostkey_scan(ctx: Context, params: Params) -> dict:
         if sum(len(hosts) for hosts in targets.values()) > MAX_SCAN_HOSTS:
             raise BadRequest(f"more than {MAX_SCAN_HOSTS} hosts: scan a smaller inventory")
     else:
-        host = check_host(params.string("host", max_length=253))
-        targets = {params.integer("port", 22, 1, 65535): [host]}
-        params.done()
+        host = check_host(params.need("host"))
+        targets = {params["port"]: [host]}
 
     keys, unanswered = [], []
     for port, hosts in sorted(targets.items()):
@@ -508,13 +574,19 @@ def hostkey_scan(ctx: Context, params: Params) -> dict:
     return {"keys": keys, "unanswered": unanswered}
 
 
-@command("hostkey.add", role="admin", mutating=True)
-def hostkey_add(ctx: Context, params: Params) -> dict:
-    host = params.string("host", max_length=300)
-    key_type = params.string("key_type", max_length=64)
-    key = params.string("key", max_length=8192)
-    replace = params.boolean("replace")
-    params.done()
+@command("hostkey.add", role="admin", mutating=True,
+         params={
+             "host": Str(required=True, max_length=300),
+             "key_type": Str(required=True, max_length=64),
+             "key": Str(required=True, max_length=8192),
+             "replace": Bool(),
+         })
+def hostkey_add(ctx: Context, params: Values) -> dict:
+    """Trust one SSH host key. A key that differs from the trusted one needs replace."""
+    host = params["host"]
+    key_type = params["key_type"]
+    key = params["key"]
+    replace = params["replace"]
     bare = host[1:].split("]:")[0] if host.startswith("[") else host
     check_host(bare)
     if not key_type.replace("-", "").replace("@", "").replace(".", "").isalnum():
@@ -533,10 +605,13 @@ def hostkey_add(ctx: Context, params: Params) -> dict:
     return {}
 
 
-@command("hostkey.remove", role="admin", mutating=True)
-def hostkey_remove(ctx: Context, params: Params) -> dict:
-    key_id = params.integer("id", None, 1, 2**62)
-    params.done()
+@command("hostkey.remove", role="admin", mutating=True,
+         params={
+             "id": Int(1, 2**62),
+         })
+def hostkey_remove(ctx: Context, params: Values) -> dict:
+    """Stop trusting one SSH host key."""
+    key_id = params["id"]
     if ctx.conn.execute("DELETE FROM host_keys WHERE id = ?", (key_id,)).rowcount == 0:
         raise NotFound("no such host key")
     return {}
@@ -565,43 +640,61 @@ def _template(ctx: Context, row) -> dict:
     return data
 
 
-def _template_values(ctx: Context, params: Params) -> dict:
-    name = store.check_name(params.string("name", max_length=200))
-    project_id = params.ident("project_id")
-    inventory_id = params.ident("inventory_id")
+_TEMPLATE_PARAMS = {
+    "name": Str(required=True, max_length=200),
+    "project_id": Id(),
+    "playbook": Str(required=True, max_length=1024),
+    "inventory_id": Id(),
+    "machine_credential_id": Id(required=False),
+    "vault_credential_ids": Strs(max_items=20),
+    "limit_hosts": Str(default="", max_length=512),
+    "tags": Strs(),
+    "skip_tags": Strs(),
+    "extra_vars": Obj(),
+    "survey": Objs(max_items=survey.MAX_FIELDS),
+    "forks": Int(1, 200),
+    "verbosity": Int(0, 4, default=0),
+    "become": Bool(),
+}
+
+
+def _template_values(ctx: Context, params: Values) -> dict:
+    name = store.check_name(params["name"])
+    project_id = params["project_id"]
+    inventory_id = params["inventory_id"]
     store.fetch(ctx.conn, "projects", project_id, "project")
     inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     if inventory["kind"] == "file" and inventory["project_id"] != project_id:
         raise BadRequest("a file inventory can only be used with its own project")
-    limit = params.string("limit_hosts", "", 512)
-    forks = params.integer("forks", None, 1, 200)
+    limit = params["limit_hosts"]
+    forks = params["forks"]
     if forks is not None and forks > ctx.config.max_forks:
         raise BadRequest(f"forks cannot exceed {ctx.config.max_forks} (config.toml)")
-    extra_vars = params.mapping("extra_vars")
+    extra_vars = params["extra_vars"]
     if len(json.dumps(extra_vars)) > 64 * 1024:
         raise BadRequest("extra_vars is too large")
     return {
         "name": name,
         "project_id": project_id,
-        "playbook": str(check_relative_path(params.string("playbook", max_length=1024),
+        "playbook": str(check_relative_path(params["playbook"],
                                             "playbook")),
         "inventory_id": inventory_id,
         "machine_credential_id":
-            credential_of_kind(ctx, params.optional_id("machine_credential_id"), "machine"),
+            credential_of_kind(ctx, params["machine_credential_id"], "machine"),
         "limit_hosts": check_limit(limit) if limit else "",
-        "tags": json.dumps([check_tag(tag) for tag in params.strings("tags")]),
-        "skip_tags": json.dumps([check_tag(tag) for tag in params.strings("skip_tags")]),
+        "tags": json.dumps([check_tag(tag) for tag in params["tags"]]),
+        "skip_tags": json.dumps([check_tag(tag) for tag in params["skip_tags"]]),
         "extra_vars": json.dumps(extra_vars),
-        "survey": json.dumps(survey.check_survey(params.objects("survey", survey.MAX_FIELDS))),
+        "survey": json.dumps(survey.check_survey(params["survey"])),
         "forks": forks,
-        "verbosity": check_int(params.integer("verbosity", 0, 0, 4), "verbosity", 0, 4),
-        "become": int(params.boolean("become")),
+        "verbosity": check_int(params["verbosity"], "verbosity", 0, 4),
+        "become": int(params["become"]),
         "updated_at": store.now(),
     }
 
 
-def vault_ids(ctx: Context, params: Params) -> list[str]:
-    ids = params.strings("vault_credential_ids", 20)
+def vault_ids(ctx: Context, params: Values) -> list[str]:
+    ids = params["vault_credential_ids"]
     if len(set(ids)) != len(ids):
         raise BadRequest("a vault credential is listed twice")
     labels = []
@@ -639,33 +732,37 @@ def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[st
 
 
 @command("template.list", role="viewer")
-def template_list(ctx: Context, params: Params) -> dict:
-    params.done()
+def template_list(ctx: Context, params: Values) -> dict:
+    """The job templates: playbook, inventory, credentials and the questions each asks."""
     rows = ctx.conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE").fetchall()
     return {"templates": [_template(ctx, row) for row in rows]}
 
 
-@command("template.create", role="admin", mutating=True)
-def template_create(ctx: Context, params: Params) -> dict:
+@command("template.create", role="admin", mutating=True, params=_TEMPLATE_PARAMS)
+def template_create(ctx: Context, params: Values) -> dict:
+    """Create a job template."""
     values = _template_values(ctx, params)
     vaults = vault_ids(ctx, params)
-    params.done()
     return _save_template(ctx, store.new_id("t"), values, vaults, create=True)
 
 
-@command("template.update", role="admin", mutating=True)
-def template_update(ctx: Context, params: Params) -> dict:
-    template_id = params.ident("id")
+@command("template.update", role="admin", mutating=True,
+         params={"id": Id(), **_TEMPLATE_PARAMS})
+def template_update(ctx: Context, params: Values) -> dict:
+    """Change a job template."""
+    template_id = params["id"]
     store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
     vaults = vault_ids(ctx, params)
-    params.done()
     return _save_template(ctx, template_id, values, vaults, create=False)
 
 
-@command("template.delete", role="admin", mutating=True)
-def template_delete(ctx: Context, params: Params) -> dict:
-    template_id = params.ident("id")
-    params.done()
+@command("template.delete", role="admin", mutating=True,
+         params={
+             "id": Id(),
+         })
+def template_delete(ctx: Context, params: Values) -> dict:
+    """Delete a job template; its past runs stay."""
+    template_id = params["id"]
     store.delete(ctx.conn, "templates", template_id, "template")
     return {}

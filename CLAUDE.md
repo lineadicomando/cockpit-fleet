@@ -75,9 +75,12 @@ them needs the user's explicit agreement.
 ## Adding things
 
 - **A backend command**: a function with `@command("area.verb", role=...,
-  mutating=..., redact=(...))` in `backend/cockpit_fleet/`, in a module that
-  `cli.main` imports. Read parameters through `Params` and end with
-  `params.done()`. Raise the errors in `errors.py`; their codes are part of the
+  mutating=..., redact=(...), params={...})` in `backend/cockpit_fleet/`, in a
+  module that `cli.main` imports. Declare every parameter (`Str`, `Int`,
+  `Bool`, `Id`, `Strs`, `Objs`, `Obj`, `Choice` from `cli.py`), read them from
+  the `Values` the handler gets, and give the handler a docstring: with the
+  parameters it is what an agent sees of the command as a tool (`tool=False`
+  keeps it from agents). Raise the errors in `errors.py`; their codes are part of the
   interface, so add but never rename. Test it in `backend/tests/test_cli.py` style.
 - **A schema change**: append an entry to `MIGRATIONS` in `db.py`. Never edit
   an entry that has been released.
@@ -127,6 +130,7 @@ test/integration/upload.sh           # a project uploaded as an archive, hostile
 test/integration/galaxy.sh           # collections from a requirements file (IT_GALAXY_NET=yes for git); WIPES
 test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
 test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
+test/integration/mcp.sh              # fleet-mcp: tools by role, ceiling, via in the audit, forced-command key; WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES

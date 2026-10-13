@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 from . import jobs, paths, store
-from .cli import Context, Params, command
+from .cli import Context, Id, Int, Str, Values, command
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
 from .validators import check_file_path
@@ -112,8 +112,8 @@ def _commit(ctx: Context, project, message: str) -> str:
     return revision
 
 
-def _message(params: Params, default: str) -> str:
-    text = params.string("message", "", 200).strip()
+def _message(params: Values, default: str) -> str:
+    text = params["message"].strip()
     return store.check_name(text, "message") if text else default
 
 
@@ -164,8 +164,8 @@ def _prune(tree: Path, directory: Path) -> None:
         directory = directory.parent
 
 
-def _project(ctx: Context, params: Params, managed: bool = False):
-    project = store.fetch(ctx.conn, "projects", params.ident("id"), "project")
+def _project(ctx: Context, params: Values, managed: bool = False):
+    project = store.fetch(ctx.conn, "projects", params["id"], "project")
     if managed and project["kind"] != "managed":
         raise Conflict("only a project written in the interface can be changed here")
     return project
@@ -200,11 +200,10 @@ def _queue_check(ctx: Context, project, path: PurePosixPath) -> str:
     return run_id
 
 
-@command("file.list", role="admin")
-def file_list(ctx: Context, params: Params) -> dict:
+@command("file.list", role="admin", params={"id": Id()})
+def file_list(ctx: Context, params: Values) -> dict:
     """Every file of a project, with its size."""
     project = _project(ctx, params)
-    params.done()
     tree = jobs.project_tree(project, ctx.config)
     found: list[dict] = []
     for current, directories, names in os.walk(tree):
@@ -225,11 +224,15 @@ def file_list(ctx: Context, params: Params) -> dict:
             "editable": project["kind"] == "managed"}
 
 
-@command("file.read", role="admin")
-def file_read(ctx: Context, params: Params) -> dict:
+@command("file.read", role="admin",
+         params={
+             "id": Id(),
+             "path": Str(required=True, max_length=1024),
+         })
+def file_read(ctx: Context, params: Values) -> dict:
+    """The content of one file of a project, with the digest a write must quote."""
     project = _project(ctx, params)
-    path = check_file_path(params.string("path", max_length=1024))
-    params.done()
+    path = check_file_path(params["path"])
     data = _read(_locate(jobs.project_tree(project, ctx.config), path))
     try:
         content = data.decode()
@@ -239,19 +242,25 @@ def file_read(ctx: Context, params: Params) -> dict:
     return {"path": str(path), "content": content, "sha256": _digest(data)}
 
 
-@command("file.write", role="admin", mutating=True, redact=("content",))
-def file_write(ctx: Context, params: Params) -> dict:
+@command("file.write", role="admin", mutating=True, redact=("content",),
+         params={
+             "id": Id(),
+             "content": Str(required=True, max_length=MAX_FILE),
+             "expected": Str(required=True, max_length=64),
+             "path": Str(required=True, max_length=1024),
+             "message": Str(default="", max_length=200),
+         })
+def file_write(ctx: Context, params: Values) -> dict:
     """Create or replace one file of a managed project, as one commit.
 
     `expected` is the digest of the content the change started from, empty for
     a new file: a file that someone else changed meanwhile is not overwritten.
     """
     project = _project(ctx, params, managed=True)
-    path = check_file_path(params.string("path", max_length=1024))
-    content = params.string("content", max_length=MAX_FILE)
-    expected = params.string("expected", max_length=64)
+    path = check_file_path(params["path"])
+    content = params["content"]
+    expected = params["expected"]
     message = _message(params, "")
-    params.done()
     try:
         data = content.encode()
     except UnicodeEncodeError:
@@ -288,12 +297,17 @@ def file_write(ctx: Context, params: Params) -> dict:
             "collections_run_id": collections}
 
 
-@command("file.delete", role="admin", mutating=True)
-def file_delete(ctx: Context, params: Params) -> dict:
+@command("file.delete", role="admin", mutating=True,
+         params={
+             "id": Id(),
+             "path": Str(required=True, max_length=1024),
+             "message": Str(default="", max_length=200),
+         })
+def file_delete(ctx: Context, params: Values) -> dict:
+    """Delete one file of a project written in the interface, as a commit."""
     project = _project(ctx, params, managed=True)
-    path = check_file_path(params.string("path", max_length=1024))
+    path = check_file_path(params["path"])
     message = _message(params, f"Delete {path}")
-    params.done()
     tree = jobs.project_tree(project, ctx.config)
     with _locked(project["id"]):
         target = _locate(tree, path)
@@ -306,14 +320,19 @@ def file_delete(ctx: Context, params: Params) -> dict:
         return {"revision": _commit(ctx, project, message)}
 
 
-@command("file.move", role="admin", mutating=True)
-def file_move(ctx: Context, params: Params) -> dict:
+@command("file.move", role="admin", mutating=True,
+         params={
+             "id": Id(),
+             "path": Str(required=True, max_length=1024),
+             "to": Str(required=True, max_length=1024),
+             "message": Str(default="", max_length=200),
+         })
+def file_move(ctx: Context, params: Values) -> dict:
     """Rename one file, or move it to another directory of the project."""
     project = _project(ctx, params, managed=True)
-    path = check_file_path(params.string("path", max_length=1024))
-    to = check_file_path(params.string("to", max_length=1024), "to")
+    path = check_file_path(params["path"])
+    to = check_file_path(params["to"], "to")
     message = _message(params, f"Rename {path} to {to}")
-    params.done()
     tree = jobs.project_tree(project, ctx.config)
     with _locked(project["id"]):
         source, target = _locate(tree, path), _locate(tree, to)
@@ -328,13 +347,17 @@ def file_move(ctx: Context, params: Params) -> dict:
         return {"revision": _commit(ctx, project, message)}
 
 
-@command("file.history", role="admin")
-def file_history(ctx: Context, params: Params) -> dict:
+@command("file.history", role="admin",
+         params={
+             "id": Id(),
+             "path": Str(default="", max_length=1024),
+             "limit": Int(1, 500, default=50),
+         })
+def file_history(ctx: Context, params: Values) -> dict:
     """The changes of a managed project, newest first; of one file if asked."""
     project = _project(ctx, params, managed=True)
-    path = params.string("path", "", 1024)
-    limit = params.integer("limit", 50, 1, 500)
-    params.done()
+    path = params["path"]
+    limit = params["limit"]
     selection = ["--", str(check_file_path(path))] if path else []
     # Nothing committed yet is not an error: git says so by failing.
     output = _git(project["id"], "log", f"--max-count={limit}", "-z",
@@ -348,12 +371,15 @@ def file_history(ctx: Context, params: Params) -> dict:
     return {"commits": commits}
 
 
-@command("file.diff", role="admin")
-def file_diff(ctx: Context, params: Params) -> dict:
+@command("file.diff", role="admin",
+         params={
+             "id": Id(),
+             "revision": Str(required=True, max_length=64),
+         })
+def file_diff(ctx: Context, params: Values) -> dict:
     """What one change of a managed project did, as a unified diff."""
     project = _project(ctx, params, managed=True)
-    revision = params.string("revision", max_length=64)
-    params.done()
+    revision = params["revision"]
     if not _REVISION_RE.fullmatch(revision):
         raise BadRequest("revision must be a commit id")
     text = _git(project["id"], "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv",
@@ -363,10 +389,13 @@ def file_diff(ctx: Context, params: Params) -> dict:
     return {"text": text[:MAX_DIFF], "cut": len(text) > MAX_DIFF}
 
 
-@command("file.check", role="admin", mutating=True)
-def file_check(ctx: Context, params: Params) -> dict:
+@command("file.check", role="admin", mutating=True,
+         params={
+             "id": Id(),
+             "path": Str(required=True, max_length=1024),
+         })
+def file_check(ctx: Context, params: Values) -> dict:
     """Queue a syntax check of one playbook, of any kind of project."""
     project = _project(ctx, params)
-    path = check_file_path(params.string("path", max_length=1024))
-    params.done()
+    path = check_file_path(params["path"])
     return {"run_id": _queue_check(ctx, project, path)}

@@ -35,3 +35,11 @@
 # Let an executable file of a project be run as an inventory script. Off: a
 # project's inventory is then only read, by the plugins that take a file.
 #scripts = false
+
+[mcp]
+# Let agents reach the backend through fleet-mcp, as the user who starts it.
+# An agent never gets more than that user's role, nor more than max_role
+# (viewer, operator or admin). The output of a run is written by the nodes:
+# an agent that reads it and may also change things can be steered by it.
+#enabled = false
+#max_role = "operator"

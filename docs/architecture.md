@@ -134,7 +134,8 @@ own limit: `project.upload` and `config.import`.
   may call it, and the check happens in one place, before the handler runs.
 - **Audit.** Commands that change something, and every refusal, are written to
   the `audit` table and to the journal (`journalctl -t cockpit-fleet`, with
-  `FLEET_USER`, `FLEET_COMMAND`, `FLEET_OUTCOME` fields). Parameters marked as
+  `FLEET_USER`, `FLEET_COMMAND`, `FLEET_OUTCOME` fields, and `FLEET_VIA` when
+  the call was made for an agent). Parameters marked as
   secret are replaced before being stored. `fleet-secret` runs as root and
   cannot write to the database, so it logs to the journal only.
 - **Database.** SQLite in WAL mode at `/var/lib/cockpit-fleet/fleet.db`, mode
@@ -151,8 +152,14 @@ With Cockpit's administrative access turned on, the frontend retries as root
 and gets the admin role; the audit trail then shows `root`, not the person.
 
 To add a command: a function decorated with `@command(name, role=…,
-mutating=…, redact=…)` in a module imported by `cli.main`, parameters read
-through `Params` (which rejects unknown ones), and a test in `backend/tests`.
+mutating=…, redact=…, params={…})` in a module imported by `cli.main`, and a
+test in `backend/tests`. The parameters are declared, each with its type and
+its bounds (`Str`, `Int`, `Bool`, `Id`, `Strs`, `Objs`, `Obj`, `Choice`): the
+declaration is what checks the input before the handler runs (an unknown
+parameter is refused) and what describes the command as JSON Schema to an
+agent. The handler gets the checked values. A command with several forms, a
+project of one kind or another, declares the parameters of all of them and
+refuses those that mean nothing in the form asked for.
 
 ## Jobs
 
@@ -551,6 +558,79 @@ created does not stop the others, and the answer says what happened to each.
 The document is not copied into the audit record. Both commands are for
 administrators.
 
+## Agents
+
+`fleet-mcp` is the backend as a Model Context Protocol server: JSON-RPC on
+its standard input and output, one message per line, tools only. A user
+starts it, on the controller or as the command of an ssh connection, and it
+runs as that user with no privilege of its own. Every tool is one call to
+`fleetctl` through sudo, exactly what the interface does, so there is still
+one way into the backend, and roles and the audit trail are the same. It
+uses the standard library only and listens on nothing.
+
+```
+agent ── JSON-RPC on stdio ──▶ fleet-mcp          (the user, e.g. over ssh)
+                                 │ sudo -u cockpit-fleet fleetctl COMMAND
+                                 │   < {…arguments, "via": "mcp:<client>"}
+                                 ▼
+                               fleetctl            role = min(user's, ceiling)
+```
+
+**The ceiling.** `[mcp]` in `config.toml` has `enabled`, off by default, and
+`max_role`, `operator` by default. `fleet-mcp` adds `via` to the JSON of every
+call. When `fleetctl` finds it, it refuses everything while agents are not
+enabled, and lowers the caller's role to the ceiling for that call, never
+raises it; the audit record and the journal (`FLEET_VIA`) say where the call
+came from. The reason for a ceiling below what the person may do: the output
+of a run is written by the nodes, and an agent that reads it and may also
+write files and launch anything can be steered by what a node prints.
+
+Saying `via` can only restrict, and that is all it is: a declaration. A user
+with a shell can call `fleetctl` without it, with their whole role, which is
+no more than they could do by hand. It binds an agent only when the agent
+cannot reach anything but `fleet-mcp`: a key of its own in `authorized_keys`
+with a forced command,
+
+```
+restrict,command="/usr/libexec/cockpit-fleet/fleet-mcp" ssh-ed25519 AAAA… agent
+```
+
+which gets `fleet-mcp` whatever it asks for (`mcp.sh` tries), or, stricter
+and with no setting at all, a Unix account for the agent in the role group it
+should have.
+
+**Tools.** `mcp.tools` gives `fleet-mcp` what to offer: one tool per command
+the caller's role allows under the ceiling (`run.start` becomes `run_start`),
+with the first lines of its documentation as description and its declared
+parameters as `inputSchema`. Tools above the ceiling are not listed, and
+`fleetctl` refuses them anyway. A few commands are not tools: the upload of an
+archive, the list of all modules and the raw events, which are too large to be
+useful to an agent, and those only the backend calls. There is no tool for
+secrets, because `fleet-secret` is not a command of `fleetctl`: an agent may
+create a credential, a person enters its value.
+
+**Templates as tools.** Each job template is also a tool of its own,
+`launch_<name>_<id>`, for whoever may launch it: its description says what it
+runs and where, and its parameters are the questions of its survey, typed and
+bounded as the survey is, plus the limit and the dry run. The tool fixes the
+template: what it fixes and `via` are set by `fleet-mcp` after the agent's
+arguments, so a call cannot replace them. A template that cannot start
+without a secret is not offered; an optional secret question is left out.
+This is what stands in for the MCP servers a project may carry, which are
+never started: they would run Ansible outside the sandbox.
+
+**Reading a run.** `run.result` answers with the status of a run, the outcome
+per host and, task by task, how many hosts went each way and what was said
+where one failed, cut to 500 characters; with `wait` it answers when the run
+ends or after at most 50 seconds, so an agent follows a run with one call at
+a time and no polling loop of its own. It is built from the events, not from
+the output. The raw output stays a separate tool, `run_log`, in chunks, whose
+description says to read it only when asked.
+
+Checked on Debian 13 (`mcp.sh`), with a client written for the test, and
+from Claude Code 2.1 over ssh with a forced-command key: five turns to launch
+a template, wait for it and report host and tasks.
+
 ## Events
 
 The callback `lineadicomando.fleet.events` appends one JSON object per line:
@@ -638,6 +718,7 @@ bundled collection.
 | Collections from a requirements file | `test/integration/galaxy.sh` | controller, as root; wipes the database |
 | Ad-hoc commands | `test/integration/adhoc.sh` | controller, as root; wipes the database |
 | Inventory plugins, directories, scripts | `test/integration/inventories.sh` | controller, as root; wipes the database |
+| Agents: fleet-mcp, ceiling, tools, ssh | `test/integration/mcp.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

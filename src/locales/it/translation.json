@@ -387,5 +387,6 @@
   "Sample: {{value}}": "Esempio: {{value}}",
   "This file is not a configuration exported from here.": "Questo file non è una configurazione esportata da qui.",
   "Type the name of a module installed on the controller.": "Scrivi il nome di un modulo installato sul controller.",
-  "Value": "Valore"
+  "Value": "Valore",
+  "Done by an agent, through {{via}}": "Eseguito da un agente, tramite {{via}}"
 }

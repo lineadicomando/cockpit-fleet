@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 from . import paths
-from .cli import Context, Params, command
+from .cli import Context, Str, Values, command
 from .errors import BadRequest, NotFound, Unavailable
 
 _NAME_RE = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+){0,4}")
@@ -137,14 +137,13 @@ def _returns(values: object, depth: int = 0) -> list[dict]:
     } for name, details in sorted(values.items()) if isinstance(details, dict)]
 
 
-@command("module.list", role="admin")
-def module_list(ctx: Context, params: Params) -> dict:
+@command("module.list", role="admin", tool=False)
+def module_list(ctx: Context, params: Values) -> dict:
     """Every module installed on the controller, with what it does in a line.
 
     Listing them takes seconds, so the answer is kept until something is
     installed or removed.
     """
-    params.done()
     cache = paths.CACHE_DIR / "modules.json"
     key = _installed()
     try:
@@ -163,22 +162,26 @@ def module_list(ctx: Context, params: Params) -> dict:
     return {"modules": modules}
 
 
-@command("module.doc", role="admin")
-def module_doc(ctx: Context, params: Params) -> dict:
+@command("module.doc", role="admin",
+         params={
+             "name": Str(required=True, max_length=200),
+         })
+def module_doc(ctx: Context, params: Values) -> dict:
     """The parameters of one module, for the editor's completion."""
-    name = params.string("name", max_length=200)
-    params.done()
+    name = params["name"]
     doc = _documented(name)["doc"]
     return {"name": name, "description": _text(doc.get("short_description")),
             "options": _options(doc.get("options"), False)}
 
 
-@command("module.help", role="admin")
-def module_help(ctx: Context, params: Params) -> dict:
+@command("module.help", role="admin",
+         params={
+             "name": Str(required=True, max_length=200),
+         })
+def module_help(ctx: Context, params: Values) -> dict:
     """The whole documentation of one module: what it does, its parameters,
     its examples and what it returns."""
-    name = params.string("name", max_length=200)
-    params.done()
+    name = params["name"]
     entry = _documented(name)
     doc = entry["doc"]
     examples = entry.get("examples")

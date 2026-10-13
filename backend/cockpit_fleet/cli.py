@@ -11,21 +11,140 @@ whenever an answer was written, so the caller always gets to read it.
 import json
 import os
 import pwd
+import re
 import sqlite3
 import sys
 import traceback
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import audit, db, journal, paths
-from .auth import Caller, resolve_caller, role_at_least
+from .auth import ROLES, Caller, resolve_caller, role_at_least
 from .config import Config
 from .config import load as load_config
 from .errors import BadRequest, FleetError, Forbidden
 from .names import check_id
 
 MAX_INPUT = 1024 * 1024
+# How a call that does not come from the interface names what it came through.
+_VIA_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}")
+
+
+@dataclass(frozen=True)
+class Field:
+    """One parameter of a command: its type, its bounds and what it is for.
+
+    The declaration is what checks the input and what describes the command
+    to whoever calls it without the interface (see schema()).
+    """
+
+    kind: str
+    doc: str = ""
+    required: bool = False
+    default: object = None
+    low: int = 0
+    high: int = 0
+    max_length: int = 4096
+    max_items: int = 50
+    choices: tuple[str, ...] = ()
+
+    def read(self, params: "Params", name: str) -> object:
+        if self.kind == "string":
+            if not self.required and self.default is None and not params.has(name):
+                return None
+            return params.string(name, None if self.required else self.default, self.max_length)
+        if self.kind == "integer":
+            return params.integer(name, self.default, self.low, self.high)
+        if self.kind == "boolean":
+            return params.boolean(name, bool(self.default))
+        if self.kind == "id":
+            return params.ident(name) if self.required else params.optional_id(name)
+        if self.kind == "strings":
+            return params.strings(name, self.max_items)
+        if self.kind == "objects":
+            return params.objects(name, self.max_items)
+        if self.kind == "object":
+            return params.mapping(name)
+        return params.choice(name, self.choices, self.default)
+
+    def schema(self) -> dict:
+        """This parameter as JSON Schema."""
+        if self.kind == "string":
+            out: dict = {"type": "string", "maxLength": self.max_length}
+        elif self.kind == "integer":
+            out = {"type": "integer", "minimum": self.low, "maximum": self.high}
+        elif self.kind == "boolean":
+            out = {"type": "boolean"}
+        elif self.kind == "id":
+            out = {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"}
+        elif self.kind == "strings":
+            out = {"type": "array", "items": {"type": "string"}, "maxItems": self.max_items}
+        elif self.kind == "objects":
+            out = {"type": "array", "items": {"type": "object"}, "maxItems": self.max_items}
+        elif self.kind == "object":
+            out = {"type": "object"}
+        else:
+            out = {"type": "string", "enum": list(self.choices)}
+        if self.doc:
+            out["description"] = self.doc
+        if self.default is not None and not self.required:
+            out["default"] = self.default
+        return out
+
+
+def Str(doc: str = "", *, required: bool = False, default: str | None = None,  # noqa: N802
+        max_length: int = 4096) -> Field:
+    return Field("string", doc, required, default, max_length=max_length)
+
+
+def Int(low: int, high: int, doc: str = "", *, default: int | None = None) -> Field:  # noqa: N802
+    return Field("integer", doc, default=default, low=low, high=high)
+
+
+def Bool(doc: str = "", *, default: bool = False) -> Field:  # noqa: N802
+    return Field("boolean", doc, default=default)
+
+
+def Id(doc: str = "", *, required: bool = True) -> Field:  # noqa: N802
+    return Field("id", doc, required)
+
+
+def Strs(doc: str = "", *, max_items: int = 50) -> Field:  # noqa: N802
+    return Field("strings", doc, max_items=max_items)
+
+
+def Objs(doc: str = "", *, max_items: int = 50) -> Field:  # noqa: N802
+    return Field("objects", doc, max_items=max_items)
+
+
+def Obj(doc: str = "") -> Field:  # noqa: N802
+    return Field("object", doc)
+
+
+def Choice(choices: tuple[str, ...], doc: str = "", *, default: str | None = None) -> Field:  # noqa: N802
+    return Field("choice", doc, default is None, default, choices=choices)
+
+
+class Values(dict):
+    """The parameters of a call, checked: every declared name is there, with
+    the value given, or its default, or None."""
+
+    def __init__(self, values: dict, given: frozenset[str]):
+        super().__init__(values)
+        self.given = given
+
+    def unused(self, *names: str) -> None:
+        """Refuse parameters that mean nothing in this form of the command."""
+        extra = sorted(self.given.intersection(names))
+        if extra:
+            raise BadRequest(f"unknown parameter: {', '.join(extra)}")
+
+    def need(self, name: str) -> object:
+        """A parameter that this form of the command cannot do without."""
+        if self[name] is None:
+            raise BadRequest(f"{name} is required")
+        return self[name]
 
 
 @dataclass(frozen=True)
@@ -36,21 +155,46 @@ class Command:
     mutating: bool
     redact: tuple[str, ...]
     max_input: int
+    params: Mapping[str, Field]
+    # Whether an agent is offered this command as a tool.
+    tool: bool = True
+
+    def read(self, data: dict) -> Values:
+        """Check the parameters of a call against the declaration."""
+        params = Params(data)
+        values = {name: field.read(params, name) for name, field in self.params.items()}
+        params.done()
+        return Values(values, frozenset(data).intersection(self.params))
+
+    def call(self, ctx: "Context", data: dict) -> dict:
+        return self.handler(ctx, self.read(data))
+
+    def schema(self) -> dict:
+        """The parameters as JSON Schema: what a tool built on this command takes."""
+        return {
+            "type": "object",
+            "properties": {name: field.schema() for name, field in self.params.items()},
+            "required": [name for name, field in self.params.items() if field.required],
+            "additionalProperties": False,
+        }
 
 
 COMMANDS: dict[str, Command] = {}
 
 
 def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...] = (),
-            max_input: int = MAX_INPUT):
-    """Register a handler. Every command states the least role that may call it.
+            max_input: int = MAX_INPUT, params: Mapping[str, Field] | None = None,
+            tool: bool = True):
+    """Register a handler. Every command states the least role that may call
+    it and the parameters it takes; the handler gets them checked, as Values.
 
-    max_input is for the one command that takes a file: the others never need
+    max_input is for the commands that take a file: the others never need
     more than the default.
     """
 
     def register(handler: Callable) -> Callable:
-        COMMANDS[name] = Command(name, role, handler, mutating, redact, max_input)
+        COMMANDS[name] = Command(name, role, handler, mutating, redact, max_input, params or {},
+                                 tool)
         return handler
 
     return register
@@ -61,6 +205,8 @@ class Context:
     caller: Caller
     database: Path = paths.DATABASE
     config_file: Path = paths.CONFIG_FILE
+    # Set when the call says it comes from an agent: see dispatch().
+    via: str = ""
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _config: Config | None = field(default=None, repr=False)
 
@@ -91,6 +237,9 @@ class Params:
 
     def _take(self, name: str, default: object) -> object:
         return self._data.pop(name, default)
+
+    def has(self, name: str) -> bool:
+        return name in self._data
 
     def integer(self, name: str, default: int | None, low: int, high: int) -> int | None:
         value = self._take(name, default)
@@ -172,6 +321,30 @@ def _parse_input(raw: bytes, limit: int = MAX_INPUT) -> dict:
     return data
 
 
+def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> None:
+    """Take "via" out of the parameters of a call made for an agent, and hold
+    the call to what config.toml lets agents do.
+
+    fleet-mcp adds it to everything it sends. Saying it can only restrict:
+    the caller's role is lowered to the ceiling, never raised, and nothing
+    goes through while agents are not enabled. Not saying it is not a way
+    around anything the caller could not already do by hand.
+    """
+    via = params.pop("via", None)
+    if via is None:
+        return
+    if not isinstance(via, str) or not _VIA_RE.fullmatch(via):
+        raise BadRequest("via must name what the call comes through")
+    ctx.via = via
+    if not ctx.config.mcp_enabled:
+        audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
+                     "agents are not enabled", redact, via)
+        raise Forbidden("agents are not enabled on this controller ([mcp] in config.toml)")
+    ceiling = ctx.config.mcp_max_role
+    if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
+        ctx.caller = replace(ctx.caller, role=ceiling)
+
+
 def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
     """Run one command and return the answer. Never raises."""
     params: dict = {}
@@ -180,18 +353,19 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         if spec is None:
             raise BadRequest(f"unknown command: {name}")
         params = _parse_input(raw, spec.max_input)
+        _through(ctx, params, name, spec.redact)
         if not role_at_least(ctx.caller.role, spec.role):
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                         f"requires {spec.role}", spec.redact)
+                         f"requires {spec.role}", spec.redact, ctx.via)
             raise Forbidden(f"{name} requires the {spec.role} role")
-        data = spec.handler(ctx, Params(params))
+        data = spec.call(ctx, params)
         if spec.mutating:
-            audit.record(ctx.conn, ctx.caller, name, params, "ok", redact=spec.redact)
+            audit.record(ctx.conn, ctx.caller, name, params, "ok", redact=spec.redact, via=ctx.via)
         return {"ok": True, "data": data}
     except FleetError as error:
         if spec is not None and spec.mutating and not isinstance(error, Forbidden):
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "error",
-                         str(error), spec.redact)
+                         str(error), spec.redact, ctx.via)
         return {"ok": False, "error": {"code": error.code, "message": str(error)}}
     except Exception:
         # The details go to the journal, not to the browser.
@@ -203,6 +377,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
 
 def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     from . import (  # noqa: F401  (register the commands)
+        agents,
         files,
         moduledocs,
         resources,

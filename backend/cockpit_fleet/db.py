@@ -215,6 +215,10 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE projects ADD COLUMN collections_at REAL",
         "ALTER TABLE projects ADD COLUMN collections_error TEXT NOT NULL DEFAULT ''",
     ],
+    [
+        # What a call came through when it was not the interface: an agent.
+        "ALTER TABLE audit ADD COLUMN via TEXT NOT NULL DEFAULT ''",
+    ],
 ]
 
 

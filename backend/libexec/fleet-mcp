@@ -1,0 +1,15 @@
+#!/usr/bin/python3 -I
+"""The backend as a Model Context Protocol server on stdio, for an agent.
+
+Run by a user, on the controller or as the command of an ssh connection. It
+has no privilege: every tool calls fleetctl through sudo, as that user.
+"""
+
+import sys
+
+sys.path.insert(0, "/usr/lib/cockpit-fleet")
+
+from cockpit_fleet.mcp import serve  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(serve())

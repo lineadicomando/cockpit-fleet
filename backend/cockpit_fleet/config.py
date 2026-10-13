@@ -43,6 +43,8 @@ class Config:
     proxy: str = ""
     adhoc_modules: tuple[str, ...] = ADHOC_MODULES
     inventory_scripts: bool = False
+    mcp_enabled: bool = False
+    mcp_max_role: str = "operator"
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -90,7 +92,7 @@ def parse(text: str) -> Config:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
-    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories"})
+    unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -121,6 +123,14 @@ def parse(text: str) -> Config:
     if not isinstance(scripts, bool):
         raise ConfigError("inventories.scripts must be true or false")
 
+    mcp = _section(data, "mcp", {"enabled", "max_role"})
+    mcp_enabled = mcp.get("enabled", False)
+    if not isinstance(mcp_enabled, bool):
+        raise ConfigError("mcp.enabled must be true or false")
+    mcp_max_role = mcp.get("max_role", Config.mcp_max_role)
+    if mcp_max_role not in ("viewer", "operator", "admin"):
+        raise ConfigError("mcp.max_role must be viewer, operator or admin")
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -131,6 +141,8 @@ def parse(text: str) -> Config:
         proxy=proxy,
         adhoc_modules=tuple(dict.fromkeys(_module(module) for module in modules)),
         inventory_scripts=scripts,
+        mcp_enabled=mcp_enabled,
+        mcp_max_role=mcp_max_role,
     )
 
 

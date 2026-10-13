@@ -7,7 +7,7 @@ import subprocess
 
 from . import __version__, audit, db, paths
 from .auth import role_at_least
-from .cli import COMMANDS, Context, Params, command
+from .cli import COMMANDS, Context, Int, Values, command
 from .errors import FleetError
 
 _MIN_ANSIBLE = (2, 19)
@@ -15,8 +15,8 @@ _MIN_SYSTEMD = 257
 
 
 @command("whoami", role="viewer")
-def whoami(ctx: Context, params: Params) -> dict:
-    params.done()
+def whoami(ctx: Context, params: Values) -> dict:
+    """Who is calling, with which role, and the commands that role may use."""
     allowed = sorted(c.name for c in COMMANDS.values() if role_at_least(ctx.caller.role, c.role))
     return {
         "user": ctx.caller.user,
@@ -27,16 +27,20 @@ def whoami(ctx: Context, params: Params) -> dict:
 
 
 @command("config.show", role="admin")
-def config_show(ctx: Context, params: Params) -> dict:
-    params.done()
+def config_show(ctx: Context, params: Values) -> dict:
+    """The limits set in config.toml."""
     return {"file": str(ctx.config_file), "values": ctx.config.as_dict()}
 
 
-@command("audit.list", role="admin")
-def audit_list(ctx: Context, params: Params) -> dict:
-    limit = params.integer("limit", 50, 1, 500)
-    before = params.integer("before", None, 1, 2**62)
-    params.done()
+@command("audit.list", role="admin",
+         params={
+             "limit": Int(1, 500, default=50),
+             "before": Int(1, 2**62),
+         })
+def audit_list(ctx: Context, params: Values) -> dict:
+    """The audit trail, newest first: who did what and what was refused."""
+    limit = params["limit"]
+    before = params["before"]
     entries = audit.entries(ctx.conn, limit, before)
     return {"entries": entries, "more": len(entries) == limit}
 
@@ -125,9 +129,8 @@ def _check_tool(name: str, missing: str) -> tuple[str, str]:
 
 
 @command("selfcheck", role="viewer")
-def selfcheck(ctx: Context, params: Params) -> dict:
+def selfcheck(ctx: Context, params: Values) -> dict:
     """Is everything a run needs in place? One entry per check, worst first in the UI."""
-    params.done()
     checks = [
         ("ansible", _check_ansible()),
         ("systemd", _check_systemd()),

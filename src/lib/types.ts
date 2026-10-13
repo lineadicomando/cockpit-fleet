@@ -27,6 +27,8 @@ export interface AuditEntry {
     params: string;
     outcome: AuditOutcome;
     detail: string;
+    // What the call came through when it was not the interface: an agent.
+    via: string;
 }
 
 export type CredentialKind = "machine" | "vault" | "source";

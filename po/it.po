@@ -1168,3 +1168,6 @@ msgstr "Scrivi il nome di un modulo installato sul controller."
 
 msgid "Value"
 msgstr "Valore"
+
+msgid "Done by an agent, through {{via}}"
+msgstr "Eseguito da un agente, tramite {{via}}"

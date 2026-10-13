@@ -4,7 +4,7 @@ import json
 import shutil
 
 from . import jobs, store, survey
-from .cli import Context, Params, command
+from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command
 from .errors import BadRequest, Conflict
 from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
 from .validators import check_limit, check_module
@@ -13,7 +13,7 @@ _CHUNK = 256 * 1024
 STATUSES = ("queued", "running", "successful", "failed", "canceled", "error")
 
 
-def _run(row) -> dict:
+def run_row(row) -> dict:
     data = {key: row[key] for key in ("id", "kind", "status", "title", "template_id", "project_id",
                                       "inventory_id", "created_by", "created_at", "started_at",
                                       "finished_at", "rc", "revision", "error")}
@@ -22,15 +22,21 @@ def _run(row) -> dict:
     return data
 
 
-@command("run.start", role="operator", mutating=True)
-def run_start(ctx: Context, params: Params) -> dict:
+@command("run.start", role="operator", mutating=True,
+         params={
+             "template_id": Id(),
+             "limit": Str(default="", max_length=512),
+             "check": Bool(),
+             "diff": Bool(),
+             "answers": Obj(),
+         })
+def run_start(ctx: Context, params: Values) -> dict:
     """Launch a job template. The caller may narrow it, not widen it."""
-    template_id = params.ident("template_id")
-    limit = params.string("limit", "", 512)
-    check = params.boolean("check")
-    diff = params.boolean("diff")
-    answers = params.mapping("answers")
-    params.done()
+    template_id = params["template_id"]
+    limit = params["limit"]
+    check = params["check"]
+    diff = params["diff"]
+    answers = params["answers"]
 
     template = store.fetch(ctx.conn, "templates", template_id, "template")
     project = store.fetch(ctx.conn, "projects", template["project_id"], "project")
@@ -90,29 +96,44 @@ def run_start(ctx: Context, params: Params) -> dict:
                        "template_id": template_id, "project_id": project["id"],
                        "inventory_id": inventory["id"], "revision": project["revision"],
                        "options": json.dumps(options)}, spec, directory)
-    return _run(store.fetch(ctx.conn, "runs", run_id, "run"))
+    return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 
-@command("run.adhoc", role="admin", mutating=True)
-def run_adhoc(ctx: Context, params: Params) -> dict:
+@command("run.adhoc", role="admin", mutating=True,
+         params={
+             "inventory_id": Id(),
+             "project_id": Id(required=False),
+             "free_form": Str(default="", max_length=16 * 1024),
+             "args": Obj(),
+             "become": Bool(),
+             "check": Bool(),
+             "diff": Bool(),
+             "forks": Int(1, 200),
+             "vault_credential_ids": Strs(max_items=20),
+             "module": Str(required=True, max_length=200),
+             "limit": Str(required=True, max_length=512),
+             "machine_credential_id": Id(required=False),
+         })
+def run_adhoc(ctx: Context, params: Values) -> dict:
     """Run one module on hosts of an inventory, without a template.
 
     The module must be among those config.toml allows. Its arguments are kept
     with the run and in the audit record, in clear: they are not for secrets.
     """
-    inventory_id = params.ident("inventory_id")
-    project_id = params.optional_id("project_id")
-    module = check_module(params.string("module", max_length=200))
-    free_form = params.string("free_form", "", 16 * 1024)
-    args = params.mapping("args")
-    limit = check_limit(params.string("limit", max_length=512))
-    machine_id = credential_of_kind(ctx, params.optional_id("machine_credential_id"), "machine")
+    inventory_id = params["inventory_id"]
+    project_id = params["project_id"]
+    module = check_module(params["module"])
+    free_form = params["free_form"]
+    args = params["args"]
+    limit = check_limit(params["limit"])
+    machine_id = credential_of_kind(ctx, params["machine_credential_id"], "machine")
     vaults = vault_ids(ctx, params)
-    become = params.boolean("become")
-    check = params.boolean("check")
-    diff = params.boolean("diff")
-    forks = params.integer("forks", ctx.config.default_forks, 1, ctx.config.max_forks)
-    params.done()
+    become = params["become"]
+    check = params["check"]
+    diff = params["diff"]
+    forks = params["forks"] or ctx.config.default_forks
+    if forks > ctx.config.max_forks:
+        raise BadRequest(f"forks cannot exceed {ctx.config.max_forks} (config.toml)")
 
     if module not in ctx.config.adhoc_modules:
         raise Conflict(f"{module} is not among the modules config.toml allows"
@@ -161,23 +182,32 @@ def run_adhoc(ctx: Context, params: Params) -> dict:
                        "project_id": project_id, "inventory_id": inventory_id,
                        "revision": project["revision"] if project else "",
                        "options": json.dumps(options)}, spec, directory)
-    return _run(store.fetch(ctx.conn, "runs", run_id, "run"))
+    return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 
-@command("run.cancel", role="operator", mutating=True)
-def run_cancel(ctx: Context, params: Params) -> dict:
-    run_id = params.ident("id")
-    params.done()
+@command("run.cancel", role="operator", mutating=True,
+         params={
+             "id": Id(),
+         })
+def run_cancel(ctx: Context, params: Values) -> dict:
+    """Cancel a run that is queued or running."""
+    run_id = params["id"]
     return {"status": jobs.cancel(ctx, run_id)}
 
 
-@command("run.list", role="viewer")
-def run_list(ctx: Context, params: Params) -> dict:
-    limit = params.integer("limit", 50, 1, 200)
-    before = params.integer("before", None, 0, 2**62)
-    status = params.string("status", "", 20)
-    kind = params.string("kind", "", 20)
-    params.done()
+@command("run.list", role="viewer",
+         params={
+             "limit": Int(1, 200, default=50),
+             "before": Int(0, 2**62),
+             "status": Str(default="", max_length=20),
+             "kind": Str(default="", max_length=20),
+         })
+def run_list(ctx: Context, params: Values) -> dict:
+    """The runs, newest first, with their status and outcome per host."""
+    limit = params["limit"]
+    before = params["before"]
+    status = params["status"]
+    kind = params["kind"]
     if status and status not in STATUSES:
         raise BadRequest(f"status must be one of: {', '.join(STATUSES)}")
     jobs.reconcile(ctx)
@@ -186,23 +216,25 @@ def run_list(ctx: Context, params: Params) -> dict:
         " AND (? = '' OR kind = ?) ORDER BY rowid DESC LIMIT ?",
         (before, before, status, status, kind, kind, limit),
     ).fetchall()
-    return {"runs": [{**_run(row), "cursor": row["rowid"]} for row in rows],
+    return {"runs": [{**run_row(row), "cursor": row["rowid"]} for row in rows],
             "more": len(rows) == limit}
 
 
-@command("run.get", role="viewer")
-def run_get(ctx: Context, params: Params) -> dict:
-    run_id = params.ident("id")
-    params.done()
+@command("run.get", role="viewer",
+         params={
+             "id": Id(),
+         })
+def run_get(ctx: Context, params: Values) -> dict:
+    """One run: its status, its options and its outcome per host."""
+    run_id = params["id"]
     jobs.reconcile(ctx)
-    return _run(store.fetch(ctx.conn, "runs", run_id, "run"))
+    return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 
-def _read_from(ctx: Context, params: Params, name: str) -> dict:
+def _read_from(ctx: Context, params: Values, name: str) -> dict:
     """A chunk of one of the run's files, from a byte offset, for polling."""
-    run_id = params.ident("id")
-    offset = params.integer("offset", 0, 0, 2**62)
-    params.done()
+    run_id = params["id"]
+    offset = params["offset"]
     store.fetch(ctx.conn, "runs", run_id, "run")
     try:
         with open(jobs.run_dir(run_id) / name, "rb") as source:
@@ -217,19 +249,24 @@ def _read_from(ctx: Context, params: Params, name: str) -> dict:
             "more": len(data) == _CHUNK}
 
 
-@command("run.log", role="operator")
-def run_log(ctx: Context, params: Params) -> dict:
+_CHUNK_PARAMS = {"id": Id(), "offset": Int(0, 2**62, default=0)}
+
+
+@command("run.log", role="operator", params=_CHUNK_PARAMS)
+def run_log(ctx: Context, params: Values) -> dict:
+    """The raw output of a run, in chunks from a byte offset. It is written by the
+    nodes and may be long: prefer run.result, and read this only when asked."""
     return _read_from(ctx, params, "stdout.log")
 
 
-@command("run.events", role="operator")
-def run_events(ctx: Context, params: Params) -> dict:
+@command("run.events", role="operator", params=_CHUNK_PARAMS, tool=False)
+def run_events(ctx: Context, params: Values) -> dict:
+    """The events of a run as JSON lines, in chunks from a byte offset."""
     return _read_from(ctx, params, "events.jsonl")
 
 
-@command("run.reconcile", role="admin")
-def run_reconcile(ctx: Context, params: Params) -> dict:
+@command("run.reconcile", role="admin", tool=False)
+def run_reconcile(ctx: Context, params: Values) -> dict:
     """Called when a run unit ends, to record the outcome and start what waits."""
-    params.done()
     jobs.reconcile(ctx)
     return {}

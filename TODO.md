@@ -16,7 +16,10 @@ phase 3). `main` is ahead of `origin`: nothing was pushed.
 Phase 3 was closed on 13 October with its last four items: inventory
 plugins, help on modules, masking of secrets, export and import.
 
-**Next step: phase 3b** (agents), then 4.
+**In progress: phase 3b** (agents). `fleet-mcp` and what it needs in the
+backend were done on 13 October. **Next step: the
+acceptance of the phase with `ansible-win_edulab`** (see phase 3b), then the
+ACP trial. Phase 4 follows.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is missing.
@@ -151,6 +154,11 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
   notification rules will have to join the document when they exist.
 - Help on modules: like the completion, only what is installed on the
   controller.
+- Agents: every `tools/list` while agents are not enabled leaves a denial in
+  the audit trail; `run.result` holds a `fleetctl` process for up to 50 s; the
+  descriptions of the parameters are still few (only the types and bounds
+  reach the schema); the user manual for setting up an agent is the section
+  of `docs/architecture.md`, there is no page for it in the interface.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 
@@ -198,30 +206,33 @@ delegated to the controller.
 After ad-hoc commands and the acceptance of phase 3. The commands of the later
 phases (schedules, notifications) become tools by themselves, from the registry.
 
-- [ ] Declarative parameters in `@command`, from which to generate the
-      `inputSchema` of tools (today `Params` reads them imperatively)
-- [ ] `fleet-mcp` in `/usr/libexec/cockpit-fleet`: JSON-RPC on stdio (`initialize`,
+- [x] Declarative parameters in `@command`, from which the `inputSchema` of
+      tools is generated; every command has a description
+- [x] `fleet-mcp` in `/usr/libexec/cockpit-fleet`: JSON-RPC on stdio (`initialize`,
       `tools/list`, `tools/call`), one tool per command, `sudo -n fleetctl` with
       argv
-- [ ] `[mcp]` in `config.toml`: off by default, role ceiling; tools above the
+- [x] `[mcp]` in `config.toml`: off by default, role ceiling; tools above the
       ceiling are not listed and `fleetctl` refuses them anyway
-- [ ] Audit: column `via` (migration) and `FLEET_VIA` in the journal, from the
+- [x] Audit: column `via` (migration) and `FLEET_VIA` in the journal, from the
       field `fleet-mcp` adds to the JSON; with `via` present `fleetctl` applies
-      the ceiling
-- [ ] Documentation: an ssh key dedicated to the agent with a forced command on
-      `fleet-mcp`; without it, `via` and the ceiling are a declaration (to be
-      written in `docs/architecture.md` too); as an alternative, a Unix account
-      for the agent
-- [ ] **Templates as tools**: name and description from the template, schema from
+      the ceiling; shown in the audit page
+- [x] Documentation (`docs/architecture.md`, "Agents"): an ssh key dedicated to
+      the agent with a forced command on `fleet-mcp`; without it, `via` and the
+      ceiling are a declaration; as an alternative, a Unix account for the agent
+- [x] **Templates as tools**: name and description from the template, schema from
       the survey; a template with a required secret field is not published,
       optional ones stay out of the schema
-- [ ] A tool to wait for the end of a run and read its outcome per host and its
-      view by task; the raw output, in chunks, only when asked for explicitly
-- [ ] Ad-hoc commands as tools (the equivalent of `run_powershell` and
-      `run_tasks`)
-- [ ] Integration test `mcp.sh`: roles, ceiling, refusals, `via` in the audit
+- [x] `run.result`: waits for the end of a run and gives its outcome per host
+      and its view by task; the raw output, in chunks, is `run_log`
+- [x] Ad-hoc commands as tools: `run_adhoc`, with the ceiling at admin
+- [x] Integration test `mcp.sh`: roles, ceiling, refusals, `via` in the audit
       trail, no secret in the responses, a key with a forced command that reaches
-      `fleet-mcp` only; tried from Claude Code over ssh
+      `fleet-mcp` only
+- [x] `fleet-mcp` tried from Claude Code 2.1 over ssh, with a key forced on
+      `fleet-mcp`, as an operator: it launched a template written for the test
+      through its `launch_*` tool, followed it with `run_result` and reported
+      host and tasks; asked to create a credential, it found no tool for it.
+      The run is in the audit trail as the operator's, via `mcp:claude-code`
 - [ ] **ACP trial** on the VM: the agent kept alive by a `cockpit.spawn` channel,
       resuming a session, the Claude Code adapter on Debian 13
 - [ ] Chat page (only if the trial holds): several agents, confirmation for every
@@ -229,7 +240,10 @@ phases (schedules, notifications) become tools by themselves, from the registry.
 
 Done when: from Claude Code, over ssh, an operator launches a template of
 `ansible-win_edulab` as a tool and reads its outcome, and the same request with
-an admin tool is refused and ends up in the audit trail.
+an admin tool is refused and ends up in the audit trail. Half met: done with a
+template of the test, not of `ansible-win_edulab`; the refusal of an admin
+tool is tried by `mcp.sh` on `fleetctl`, since an agent is not even offered
+the tool.
 
 ## Phase 4 — Scheduling
 
