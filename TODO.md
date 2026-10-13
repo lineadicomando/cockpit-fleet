@@ -1,259 +1,314 @@
-# cockpit-fleet — piano
+# cockpit-fleet — plan
 
-Plugin Cockpit che esegue Ansible dal browser (stile Semaphore UI) e che raccoglie,
-storicizza e notifica dati dai nodi usando solo Ansible. Non è un sostituto di
-Icinga: niente tempo reale, alert "ragionevolmente tempestivi".
+A Cockpit plugin that runs Ansible from the browser (in the style of Semaphore
+UI) and that collects, stores and notifies on data from the nodes using Ansible
+only. It does not replace Icinga: nothing in real time, alerts that are
+"reasonably timely".
 
-## Stato
+## Status
 
-Fasi 0, 1, 2 concluse l'8 ottobre 2026. **In corso: fase 3** (survey e vista delle
-differenze fatti il 9 ottobre, editor nella UI e upload di archivi il 10 ottobre,
-Galaxy l'11 ottobre). `main` è allineato con `origin`.
+Phases 0, 1 and 2 were closed on 8 October 2026. **In progress: phase 3** (surveys
+and the view of differences done on 9 October, the editor in the interface and
+archive uploads on 10 October, Galaxy on 11 October). `main` is level with
+`origin`.
 
-**Prossimo passo: comandi ad-hoc** (vedi fase 3). Poi, con le collection ora
-disponibili senza toccare il repository, la prova di accettazione della fase:
-`ansible-win_edulab` dalla UI, con il suo `requirements.yaml` e il suo vault.
+**Next step: ad-hoc commands** (see phase 3). Then, with collections now
+available without touching the repository, the acceptance test of the phase:
+`ansible-win_edulab` from the interface, with its `requirements.yaml` and its
+vault. Phase 3 is followed by 3b (agents), then by 4.
 
-Per riprendere: leggere `CLAUDE.md` (regole, comandi, ambiente di test), poi
-`docs/architecture.md` (cosa esiste e perché). Questo file dice solo cosa manca.
+To resume: read `CLAUDE.md` (rules, commands, test environment), then
+`docs/architecture.md` (what exists and why). This file only says what is missing.
 
-Cosa funziona oggi: progetti (git o directory locale), inventari, credenziali con
-segreti cifrati, chiavi host attendibili, progetti scritti nella UI con storico
-git e controllo di sintassi, progetti caricati come archivio, collection
-installate dal file dei requisiti, template con survey, run con coda, annullamento, output live, vista per task ed esito per
-host; ruoli da gruppi Unix e audit.
-Provato su nodi Linux (container) e Windows via SSH.
+What works today: projects (git or a local directory), inventories, credentials
+with encrypted secrets, trusted host keys, projects written in the interface with
+git history and syntax checks, projects uploaded as an archive, collections
+installed from the requirements file, templates with surveys, runs with a queue,
+cancellation, live output, a view by task and the outcome per host; roles from
+Unix groups and the audit trail. Tried on Linux nodes (containers) and on Windows
+over SSH.
 
-Stato della VM di test `deb13-samba-dc`: lo snapshot `baseline_fleet` (rifatto
-l'11 ottobre, figlio di `baseline`) è il punto di partenza dei test: Debian 13 con
-`cockpit`, `cockpit-fleet` al commit `124f131`, `ansible`, `ansible-lint`,
-`sshpass`, `podman` e l'immagine `fleet-node` già costruita; nessun dato o account
-di prova. Non contiene il Samba AD DC (`baseline` è un Debian senza Cockpit né
-Samba) né il segreto `it-win-key`, da ricreare prima di `windows.sh`.
+State of the test VM `deb13-samba-dc`: the snapshot `baseline_fleet` (redone on
+11 October, a child of `baseline`) is where tests start from: Debian 13 with
+`cockpit`, `cockpit-fleet` at commit `124f131`, `ansible`, `ansible-lint`,
+`sshpass`, `podman` and the `fleet-node` image already built; no data and no test
+accounts. It has neither the Samba AD DC (`baseline` is a Debian with no Cockpit
+and no Samba) nor the secret `it-win-key`, to be created again before
+`windows.sh`.
 
-La VM, spenta, è allo snapshot: prima di un test serve `make vm-deb-deploy` per
-installare il codice attuale. L'11 ottobre, con il pacchetto di Galaxy, vi sono
-passati `galaxy.sh` (con `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
-`sandbox.sh`, `runs.sh` (senza la parte git: `IT_GIT_URL` non impostata),
-`files.sh` (senza `ansible-lint`, che allora mancava) e `upload.sh`; non
-rieseguiti `multihost.sh` e `windows.sh`. `runs.sh` e `sandbox.sh` vogliono
-`IT_SSH_USER` (`maint`) e `IT_SSH_PASSWORD`.
+The VM, shut off, is at the snapshot: a test needs `make vm-deb-deploy` first, to
+install the current code. On 11 October, with the Galaxy package, these passed
+there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
+`sandbox.sh`, `runs.sh` (without the git part: `IT_GIT_URL` not set), `files.sh`
+(without `ansible-lint`, missing at the time) and `upload.sh`; `multihost.sh` and
+`windows.sh` were not run again. `runs.sh` and `sandbox.sh` want `IT_SSH_USER`
+(`maint`) and `IT_SSH_PASSWORD`.
 
-## Decisioni
+## Decisions
 
-| Tema | Decisione |
+| Topic | Decision |
 |---|---|
-| Nome | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet` |
-| Licenza | `LGPL-2.1-or-later` (come `cockpit-samba-dc`), da riconfermare alla pubblicazione |
-| Repository | un Gitea privato; GitHub quando sarà stabile |
-| Backend | Nessun demone né porta: unit systemd avviate a richiesta |
-| Identità | Account di sistema `cockpit-fleet`; root solo in `fleet-unit` e `fleet-secret` |
-| Ruoli | Gruppi `cockpit-fleet-admin`, `-operator`, `-viewer` |
-| Viewer | Vede stato ed esito per host delle run, non l'output |
-| Operator | Lancia template; può restringere gli host e chiedere la prova a vuoto, non allargare il limite; dà variabili solo rispondendo al survey |
-| Segreti | `systemd-creds`; solo PID 1 li decifra, per la singola run |
-| Segreti nel survey | L'operator li consegna a `fleet-secret answer`, che sceglie il nome e restituisce un biglietto usa e getta; la run lo consuma |
-| Ansible | Pacchetto Debian `ansible-core`; collection extra nel progetto |
-| `ansible.cfg` del progetto | Non usato direttamente: passano solo le chiavi in allowlist |
-| Sorgenti dei progetti | Git, directory locale, scritti nella UI, archivio caricato |
-| Collection da Galaxy | Per tutti i tipi di progetto; installate da un job in sandbox accanto all'albero (`projects/<id>/collections/<sha256 del file dei requisiti>`), mai dentro; copiate in ogni run; senza di esse un playbook non parte |
-| Archivio caricato | Viaggia in base64 nel JSON su stdin di `fleetctl` (20 MB, al più 50); estratto in sandbox; revisione = sha256; link fuori dall'albero, hard link e device fanno rifiutare tutto l'archivio |
-| Progetti scritti nella UI | Repository git accanto all'albero, un commit per modifica, solo admin |
-| Editor | CodeMirror 6 in uno shadow root (la CSP di Cockpit resta com'è) |
-| Controllo di sintassi | Job in sandbox al salvataggio di un playbook; `ansible-lint` segnala, non boccia |
-| Notifiche | Telegram, webhook generico, SMTP, Matrix |
-| Dati dai nodi | Check di salute, CMDB, aggiornamenti, drift |
-| Check | Catalogo integrato + playbook utente con contratto di risultato |
-| Storico | SQLite: stato, cambi di stato, serie temporali con downsampling |
-| Scala | Oltre 200 nodi: intervalli 5-15 min, una connessione per host, sharding |
-| Nodi gestiti | Qualunque cosa supporti Ansible; Windows solo via SSH |
-| Controller | Solo Debian 13 |
-| Trigger esterni | Fuori perimetro, sviluppo futuro |
+| Name | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet` |
+| License | `LGPL-2.1-or-later` (as `cockpit-samba-dc`), to be confirmed again on publication |
+| Repository | a private Gitea; GitHub once it is stable |
+| Backend | No daemon and no port: systemd units started on demand |
+| Identity | System account `cockpit-fleet`; root only in `fleet-unit` and `fleet-secret` |
+| Roles | Groups `cockpit-fleet-admin`, `-operator`, `-viewer` |
+| Viewer | Sees the state of runs and their outcome per host, not the output |
+| Operator | Launches templates; may narrow the hosts and ask for a dry run, not widen the limit; gives variables only by answering the survey |
+| Secrets | `systemd-creds`; only PID 1 decrypts them, for the single run |
+| Secrets in a survey | The operator hands them to `fleet-secret answer`, which chooses the name and returns a single-use ticket; the run consumes it |
+| Ansible | Debian package `ansible-core`; extra collections in the project |
+| A project's `ansible.cfg` | Not used directly: only the keys in an allowlist pass |
+| Sources of projects | Git, local directory, written in the interface, uploaded archive |
+| Collections from Galaxy | For every kind of project; installed by a sandboxed job next to the tree (`projects/<id>/collections/<sha256 of the requirements file>`), never inside it; copied into every run; without them a playbook does not start |
+| Uploaded archive | Travels as base64 in the JSON on the stdin of `fleetctl` (20 MB, at most 50); extracted in the sandbox; revision = sha256; links out of the tree, hard links and devices make the whole archive refused |
+| Projects written in the interface | A git repository next to the tree, one commit per change, admin only |
+| Editor | CodeMirror 6 in a shadow root (Cockpit's CSP stays as it is) |
+| Syntax check | A sandboxed job when a playbook is saved; `ansible-lint` reports, it does not fail the check |
+| Notifications | Telegram, generic webhook, SMTP, Matrix |
+| Data from the nodes | Health checks, CMDB, updates, drift |
+| Checks | Built-in catalog + user playbooks with a result contract |
+| History | SQLite: state, state changes, time series with downsampling |
+| Scale | Over 200 nodes: intervals of 5-15 min, one connection per host, sharding |
+| Managed nodes | Anything Ansible supports; Windows over SSH only |
+| Controller | Debian 13 only |
+| External triggers | Out of scope, future development |
+| Agents (MCP) | `fleet-mcp` on stdio, launched by the user (also over ssh): every tool is a call to `fleetctl`, so roles and audit stay the same; no HTTP; standard library only |
+| Secrets and agents | No tool for `fleet-secret`: the agent creates the credential, a person enters the value from the interface |
+| MCP servers of projects | Not started (they launch Ansible outside the sandbox, with vaults and keys in clear): templates with a survey are published as tools by `fleet-mcp` |
+| Chat | Stays in `cockpit-fleet`, it does not become a separate package; `cockpit-samba-dc` does not hook into it: a Samba AD DC is managed from here like any other Ansible project (the collection of `ansible-win_edulab` or a dedicated one), which the plugin knows nothing about |
+| Role ceiling of agents | `[mcp] enabled = false` and `max_role = "operator"` in `config.toml`, which the administrator may raise to `admin`: the output of a run is written by the nodes, and an admin agent that reads it can then write files and launch runs |
+| Template with a required secret | Not published as a tool, to begin with |
+| Run output for agents | The tool gives the outcome per host and the view by task; the raw output only when asked for explicitly |
+| Audit of agents | `fleet-mcp` declares `via` (and the name of the client) in the JSON on stdin; `fleetctl` records it in the audit trail and in the journal and, when it is there, applies the ceiling. Declaring it can only restrict. Over ssh it binds only with a dedicated key and a forced command on `fleet-mcp` in `authorized_keys`; otherwise it is a declaration, not a control. A stricter variant, with no code: a Unix account for the agent |
+| Switch of the chat | Separate from `[mcp] enabled`: enabling `fleet-mcp` sends data to nobody, the chat does |
+| Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
+| Scheduling | A single static timer that runs `fleetctl scheduler tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions |
+| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days |
+| Who approves | Group `cockpit-fleet-approver` |
 
-## Punti aperti (default applicabile, da confermare prima della fase indicata)
+## Open points (a default applies, to be confirmed before the phase named)
 
-- **Fase 4, schedulazione**: un solo timer statico che ogni minuto esegue
-  `fleetctl scheduler tick`, non un timer per schedulazione (root non deve scrivere
-  unit da input utente; coda e sharding servono comunque). Espressioni `OnCalendar`.
-- **Fase 8, retention**: grezzi 14 giorni, orari 90 giorni, giornalieri 2 anni, log
-  delle run 90 giorni.
-- **Fase 9, chi approva**: un admin diverso da chi lancia; alternativa, gruppo
-  `cockpit-fleet-approver`.
-- **Nome di `fleetctl`**: omonimo della CLI di FleetDM (è in `/usr/libexec`, fuori
-  dal `PATH`). Alternativa: `cockpit-fleetctl`.
+- **Phase 3b, chat in Cockpit**: decided after the ACP trial on the VM; the agent
+  runs as the user, with no shell and no access to files, with `fleet-mcp` alone,
+  and sends data (inventories, output) to the provider of the model: opt-in by
+  the admin.
 
-## Residui delle fasi concluse
+## Leftovers of the closed phases
 
-- Token git su https mai provato contro un repository privato reale (serve un
-  token dedicato); https pubblico e ssh con chiave sono provati.
-- Le directory delle run (`stdout.log`, `events.jsonl`) non vengono mai cancellate:
-  la pulizia arriva con la retention (fase 8).
-- Chi entra con l'accesso amministrativo di Cockpit senza essere in un gruppo
-  compare nell'audit come `root`.
-- I test di integrazione girano solo a mano sulla VM, non in CI.
-- Un inventario ha una sola credenziale vault (i template ne hanno più d'una).
-- Editor: si rinomina e si elimina un file alla volta, non una directory;
-  cambiare scheda con modifiche non salvate le perde senza avviso; il controllo
-  di sintassi non riceve password vault; ogni controllo compare nell'elenco
-  delle run.
-- Completamento: suggerisce solo i moduli installati sul controller, non quelli
-  delle collection dentro il progetto o installate per esso (`ansible-doc` va
-  eseguito in sandbox: lo può fare il job `galaxy`, lasciando l'elenco accanto
-  alle collection);
-  non suggerisce i sotto-parametri di un modulo; un file di task fuori da
-  `tasks/` o `handlers/` è trattato come un playbook.
-- Upload: l'archivio non viene conservato (si può verificare lo sha256, non
-  riscaricarlo); nessuna barra di avanzamento; oltre 50 MB servirebbe un altro
-  trasporto.
-- Galaxy: solo sorgenti pubbliche (nessuna credenziale ai sorgenti git, nessun
-  server o token Galaxy privato); i ruoli elencati nel file dei requisiti non
-  vengono installati; un progetto locale non si accorge da solo che il file è
-  cambiato (lo dice "non installate", l'installazione va chiesta); nessun
-  limite di tempo sul job.
-- `selfcheck` lascia `/var/lib/cockpit-fleet/.ansible` (`ansible --version` con
-  la home dell'account).
+- A git token over https was never tried against a real private repository (it
+  needs a dedicated token); public https and ssh with a key are tried.
+- Run directories (`stdout.log`, `events.jsonl`) are never deleted: the cleanup
+  comes with retention (phase 8).
+- Whoever enters with Cockpit's administrative access without being in a group
+  appears in the audit trail as `root`.
+- Integration tests only run by hand on the VM, not in CI.
+- An inventory has one vault credential only (templates have more than one).
+- Editor: files are renamed and deleted one at a time, not a directory; changing
+  tab with unsaved changes loses them without warning; the syntax check gets no
+  vault password; every check appears in the list of runs.
+- Completion: it only suggests the modules installed on the controller, not
+  those of the collections inside the project or installed for it (`ansible-doc`
+  must run in the sandbox: the `galaxy` job can do it, leaving the list next to
+  the collections); it does not suggest the sub-parameters of a module; a task
+  file outside `tasks/` or `handlers/` is treated as a playbook.
+- Upload: the archive is not kept (its sha256 can be verified, it cannot be
+  downloaded again); no progress bar; over 50 MB another transport would be
+  needed.
+- Galaxy: public sources only (no credential for git sources, no private Galaxy
+  server or token); the roles listed in the requirements file are not installed;
+  a local project does not notice by itself that the file changed (it says "not
+  installed", the installation has to be asked for); no time limit on the job.
+- `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
+  --version` with the account's home).
 
-## Fase 3 — Runner completo
+## Phase 3 — Complete runner
 
-- [x] **Survey**: testo, numero, scelta, booleano, segreto; provato sulla VM
-      (`privileges.sh`, `roles.sh`, `runs.sh`, `sandbox.sh`) e dalla UI
-- [x] **Vista delle differenze** per host: scheda "Differenze" della run; provata
-      sulla VM (`runs.sh` e dalla UI)
-- [x] **Editor nella UI**: progetto come repo git locale, commit automatico con
-      l'utente Cockpit come autore, `--syntax-check` al salvataggio, `ansible-lint`
-      se c'è; provato sulla VM (`files.sh` e dalla UI). Editor CodeMirror con
-      evidenziazione, indentazione e completamento di parole chiave, moduli e
-      parametri
-- [x] **Upload archivio**: tar o zip dal browser, estratto da un job in sandbox con
-      controlli propri (path traversal, link, device, limiti), revisione = sha256;
-      provato sulla VM (`upload.sh` e dalla UI, 19 MB in 1,7 s)
-- [x] **Galaxy**: collection del file dei requisiti installate da un job in sandbox,
-      tenute accanto al progetto per digest del file, copiate nelle run; provato
-      sulla VM (`galaxy.sh`, anche da un repository git pubblico)
-- [ ] **Comandi ad-hoc**: solo admin, allowlist dei moduli in `config.toml`, eseguiti
-      come playbook generato di un task (argomenti in file, non in argv)
-- [ ] **Inventari dinamici**: plugin YAML (da provare, il job è già in sandbox);
-      script eseguibili spenti di default
-- [ ] `ansible-doc` per l'aiuto sui moduli: nomi e parametri arrivano già al
-      completamento (`module.list`, `module.doc`); manca una pagina di aiuto con
-      esempi e valori di ritorno
-- [ ] Mascheramento dei segreti noti nei log salvati
-- [ ] Esportazione e importazione della configurazione, senza segreti
+- [x] **Surveys**: text, number, choice, boolean, secret; tried on the VM
+      (`privileges.sh`, `roles.sh`, `runs.sh`, `sandbox.sh`) and from the interface
+- [x] **View of differences** per host: the "Differences" tab of a run; tried on
+      the VM (`runs.sh` and from the interface)
+- [x] **Editor in the interface**: the project as a local git repository, an
+      automatic commit with the Cockpit user as author, `--syntax-check` on save,
+      `ansible-lint` if present; tried on the VM (`files.sh` and from the
+      interface). CodeMirror editor with highlighting, indentation and completion
+      of keywords, modules and parameters
+- [x] **Archive upload**: tar or zip from the browser, extracted by a sandboxed job
+      with its own checks (path traversal, links, devices, limits), revision =
+      sha256; tried on the VM (`upload.sh` and from the interface, 19 MB in 1.7 s)
+- [x] **Galaxy**: the collections of the requirements file installed by a sandboxed
+      job, kept next to the project by digest of the file, copied into runs; tried
+      on the VM (`galaxy.sh`, also from a public git repository)
+- [ ] **Ad-hoc commands**: admin only, allowlist of modules in `config.toml`, run
+      as a generated playbook of one task (arguments in a file, not in argv)
+- [ ] **Dynamic inventories**: YAML plugins (to be tried, the job is already
+      sandboxed); executable scripts off by default
+- [ ] `ansible-doc` for help on modules: names and parameters already reach the
+      completion (`module.list`, `module.doc`); a help page with examples and
+      return values is missing
+- [ ] Masking of known secrets in stored logs
+- [ ] Export and import of the configuration, without secrets
 
-Fatto quando: `ansible-win_edulab` gira da cockpit-fleet senza modifiche al
-repository, con il suo vault come credenziale.
+Done when: `ansible-win_edulab` runs from cockpit-fleet with no change to the
+repository, with its vault as a credential.
 
-## Fase 4 — Schedulazione
+## Phase 3b — Agents (MCP)
 
-Il limite di run concorrenti e l'avvio della successiva in coda esistono già.
+After ad-hoc commands and the acceptance of phase 3. The commands of the later
+phases (schedules, notifications) become tools by themselves, from the registry.
+
+- [ ] Declarative parameters in `@command`, from which to generate the
+      `inputSchema` of tools (today `Params` reads them imperatively)
+- [ ] `fleet-mcp` in `/usr/libexec/cockpit-fleet`: JSON-RPC on stdio (`initialize`,
+      `tools/list`, `tools/call`), one tool per command, `sudo -n fleetctl` with
+      argv
+- [ ] `[mcp]` in `config.toml`: off by default, role ceiling; tools above the
+      ceiling are not listed and `fleetctl` refuses them anyway
+- [ ] Audit: column `via` (migration) and `FLEET_VIA` in the journal, from the
+      field `fleet-mcp` adds to the JSON; with `via` present `fleetctl` applies
+      the ceiling
+- [ ] Documentation: an ssh key dedicated to the agent with a forced command on
+      `fleet-mcp`; without it, `via` and the ceiling are a declaration (to be
+      written in `docs/architecture.md` too); as an alternative, a Unix account
+      for the agent
+- [ ] **Templates as tools**: name and description from the template, schema from
+      the survey; a template with a required secret field is not published,
+      optional ones stay out of the schema
+- [ ] A tool to wait for the end of a run and read its outcome per host and its
+      view by task; the raw output, in chunks, only when asked for explicitly
+- [ ] Ad-hoc commands as tools (the equivalent of `run_powershell` and
+      `run_tasks`)
+- [ ] Integration test `mcp.sh`: roles, ceiling, refusals, `via` in the audit
+      trail, no secret in the responses, a key with a forced command that reaches
+      `fleet-mcp` only; tried from Claude Code over ssh
+- [ ] **ACP trial** on the VM: the agent kept alive by a `cockpit.spawn` channel,
+      resuming a session, the Claude Code adapter on Debian 13
+- [ ] Chat page (only if the trial holds): several agents, confirmation for every
+      tool that changes something, permission requests in the interface
+
+Done when: from Claude Code, over ssh, an operator launches a template of
+`ansible-win_edulab` as a tool and reads its outcome, and the same request with
+an admin tool is refused and ends up in the audit trail.
+
+## Phase 4 — Scheduling
+
+The limit of concurrent runs and the start of the next one in the queue already
+exist.
 
 - [ ] `cockpit-fleet-scheduler.timer` + `fleetctl scheduler tick`
-- [ ] Schedulazioni `OnCalendar` con fuso orario; prossima esecuzione calcolata al
-      salvataggio e a ogni scatto (`systemd-analyze calendar`)
-- [ ] Import da cron a 5 campi; costruttore con preset nella UI
-- [ ] Recupero delle esecuzioni perse a controller spento, per schedulazione
-- [ ] Priorità nella coda; anti-sovrapposizione (salta, accoda, annulla la precedente)
-- [ ] Ritardo casuale per distribuire il carico
-- [ ] UI: elenco, prossime esecuzioni, attiva/disattiva, "esegui ora"
+- [ ] `OnCalendar` schedules with a time zone; next execution computed on save and
+      at every tick (`systemd-analyze calendar`)
+- [ ] Import from 5-field cron; a builder with presets in the interface
+- [ ] Catching up on the executions missed while the controller was off, per
+      schedule
+- [ ] Priority in the queue; overlap policy (skip, queue, cancel the previous one)
+- [ ] Random delay to spread the load
+- [ ] Interface: list, next executions, enable/disable, "run now"
 
-Fatto quando: dieci schedulazioni allo stesso minuto rispettano il limite di
-concorrenza e nessuna va persa dopo un riavvio.
+Done when: ten schedules on the same minute respect the concurrency limit and
+none is lost after a reboot.
 
-## Fase 5 — Notifiche
+## Phase 5 — Notifications
 
-- [ ] Outbox in SQLite con ritentativi e backoff; `cockpit-fleet-notify.service` in
-      sandbox con sola rete in uscita
-- [ ] Canali Telegram, webhook (template JSON), SMTP, Matrix; solo libreria standard
-- [ ] Token come segreti; pulsante "invia prova"; supporto al proxy
-- [ ] Regole: tipo di evento × ambito (progetto, template, gruppo) × canale
-- [ ] Eventi: run riuscita, fallita, con modifiche, annullata, approvazione richiesta
-- [ ] Messaggi in italiano e inglese con link alla pagina Cockpit
-- [ ] Raggruppamento per finestra temporale e limite di frequenza
+- [ ] Outbox in SQLite with retries and backoff; `cockpit-fleet-notify.service`
+      sandboxed with outgoing network only
+- [ ] Channels Telegram, webhook (JSON template), SMTP, Matrix; standard library
+      only
+- [ ] Tokens as secrets; a "send a test" button; proxy support
+- [ ] Rules: kind of event × scope (project, template, group) × channel
+- [ ] Events: run succeeded, failed, with changes, cancelled, approval requested
+- [ ] Messages in Italian and English with a link to the Cockpit page
+- [ ] Grouping by time window and rate limit
 
-Fatto quando: una run fallita arriva sui quattro canali e un canale irraggiungibile
-viene ritentato senza bloccare gli altri.
+Done when: a failed run reaches the four channels and an unreachable channel is
+retried without blocking the others.
 
-## Fase 6 — Raccolta dati e check
+## Phase 6 — Data collection and checks
 
-- [ ] **Registro host** dagli inventari, identità `(inventario, hostname)`, piattaforma
-      dai facts
-- [ ] **Contratto di risultato**: `check`, `state` (0-3), `summary`, `metrics[]`
-      (`name`, `value`, `unit`, `min`, `max`), `details`; modulo
-      `lineadicomando.fleet.fleet_result` per i check dell'utente
-- [ ] **Catalogo** con una implementazione per piattaforma e uno schema solo:
-      raggiungibilità, disco e inode, CPU e memoria, servizi, uptime e riavvio
-      richiesto, scadenza certificati, orologio
-- [ ] **Vincolo misurato**: su Windows ogni task costa 4-5 s. Tutti i check di un nodo
-      in un solo task con un solo script
-- [ ] Soglie valutate sul controller all'ingest, modificabili senza nuova raccolta
-- [ ] Assegnazione dei check a gruppi, con intervallo e parametri
-- [ ] **Pianificazione**: check in scadenza raggruppati per host, host in shard, una
-      run per shard, `strategy: free`, timeout per task
-- [ ] **Motore di stato**: soft/hard dopo N tentativi, host irraggiungibile che
-      sopprime gli alert dei suoi check, flapping
-- [ ] Presa in carico e finestre di manutenzione
-- [ ] Notifiche su cambio di stato, ripristino, promemoria
-- [ ] UI: contatori, elenco problemi, griglia host × check, dettaglio host
+- [ ] **Host registry** from the inventories, identity `(inventory, hostname)`,
+      platform from the facts
+- [ ] **Result contract**: `check`, `state` (0-3), `summary`, `metrics[]`
+      (`name`, `value`, `unit`, `min`, `max`), `details`; module
+      `lineadicomando.fleet.fleet_result` for the user's checks
+- [ ] **Catalog** with one implementation per platform and one schema only:
+      reachability, disk and inodes, CPU and memory, services, uptime and reboot
+      required, certificate expiry, clock
+- [ ] **Measured constraint**: on Windows every task costs 4-5 s. All the checks
+      of a node in a single task with a single script
+- [ ] Thresholds evaluated on the controller at ingest, changeable without a new
+      collection
+- [ ] Assignment of checks to groups, with interval and parameters
+- [ ] **Planning**: checks that are due grouped by host, hosts in shards, one run
+      per shard, `strategy: free`, timeout per task
+- [ ] **State engine**: soft/hard after N attempts, an unreachable host that
+      suppresses the alerts of its checks, flapping
+- [ ] Acknowledgement and maintenance windows
+- [ ] Notifications on state change, recovery, reminder
+- [ ] Interface: counters, list of problems, host × check grid, host detail
 
-Fatto quando: "spazio disco" dà risultati confrontabili su Debian e Windows, e un
-disco di test pieno produce una notifica entro due intervalli.
+Done when: "disk space" gives comparable results on Debian and Windows, and a
+full test disk produces a notification within two intervals.
 
-## Fase 7 — Inventario, aggiornamenti, drift
+## Phase 7 — Inventory, updates, drift
 
-- [ ] **CMDB**: facts, pacchetti, servizi; ultimo snapshot per host, colonne
-      normalizzate, storico delle variazioni
-- [ ] UI CMDB: tabella filtrabile, dettaglio host, distribuzione per OS, export CSV/JSON
-- [ ] **Aggiornamenti**: apt, dnf, zypper, Windows Update in sola ricerca; quelli di
-      sicurezza distinti; collegamento a un template che li applica
-- [ ] **Drift**: template "conformità" in `--check --diff` a intervalli; diff conservato
-- [ ] Notifiche: aggiornamenti di sicurezza, host non conforme, variazione hardware
+- [ ] **CMDB**: facts, packages, services; last snapshot per host, normalised
+      columns, history of changes
+- [ ] CMDB interface: filterable table, host detail, distribution by OS, CSV/JSON
+      export
+- [ ] **Updates**: apt, dnf, zypper, Windows Update in search-only mode; security
+      ones kept apart; a link to a template that applies them
+- [ ] **Drift**: a "compliance" template in `--check --diff` at intervals; the diff
+      is kept
+- [ ] Notifications: security updates, non-compliant host, hardware change
 
-Fatto quando: la CMDB mostra insieme Linux e Windows e una modifica manuale a un
-file gestito compare come drift al ciclo successivo.
+Done when: the CMDB shows Linux and Windows together and a manual change to a
+managed file appears as drift at the next cycle.
 
-## Fase 8 — Serie temporali e scala
+## Phase 8 — Time series and scale
 
-- [ ] Tabella metriche stretta, aggregati orari e giornalieri, retention
-- [ ] Manutenzione: downsampling, cancellazione (anche delle directory delle run), vacuum
-- [ ] Grafici (`@patternfly/react-charts`)
-- [ ] Shard e fork dimensionati su durata misurata e RAM
-- [ ] Fact caching, riuso delle connessioni SSH tra cicli
-- [ ] Un ciclo che non finisce prima del successivo viene saltato e segnalato
-- [ ] Pagina "Salute del sistema": durata dei cicli, coda, dimensione del database
-- [ ] Test di carico con 200, 500, 1000 host simulati. **Vincolo misurato**: circa
-      0,6 s per host su 2 vCPU, il limite è la CPU del controller. La VM ha 2 GB:
-      portarla a 4 per questi test
+- [ ] Narrow metrics table, hourly and daily aggregates, retention
+- [ ] Maintenance: downsampling, deletion (of run directories too), vacuum
+- [ ] Charts (`@patternfly/react-charts`)
+- [ ] Shards and forks sized on measured duration and RAM
+- [ ] Fact caching, reuse of SSH connections between cycles
+- [ ] A cycle that does not end before the next one is skipped and reported
+- [ ] "System health" page: duration of cycles, queue, size of the database
+- [ ] Load tests with 200, 500, 1000 simulated hosts. **Measured constraint**:
+      about 0.6 s per host on 2 vCPUs, the limit is the controller's CPU. The VM
+      has 2 GB: bring it to 4 for these tests
 
-Fatto quando: 500 host simulati con 10 check ogni 10 minuti girano 24 ore senza
-arretrato e con la UI reattiva.
+Done when: 500 simulated hosts with 10 checks every 10 minutes run for 24 hours
+with no backlog and a responsive interface.
 
-## Fase 9 — Workflow e approvazioni
+## Phase 9 — Workflows and approvals
 
-- [ ] **Approvazioni**: template critico, run in `pending_approval`, conferma di un
-      secondo utente, scadenza, notifica, audit
-- [ ] **Workflow**: grafo di template con archi su successo, fallimento, sempre;
-      variabili tra i passi (`set_stats`); editor e vista dell'esecuzione
-- [ ] Annullamento e ripresa da un passo fallito
+- [ ] **Approvals**: critical template, run in `pending_approval`, confirmation by
+      a second user in the group `cockpit-fleet-approver` (to be added to sysusers
+      and sudoers), expiry, notification, audit
+- [ ] **Workflows**: a graph of templates with edges on success, failure, always;
+      variables between steps (`set_stats`); editor and view of the execution
+- [ ] Cancelling and resuming from a failed step
 
-Fatto quando: un workflow di tre passi con approvazione al secondo si ferma, viene
-approvato da un altro utente e termina.
+Done when: a workflow of three steps with an approval at the second stops, is
+approved by another user and completes.
 
-## Fase 10 — Rilascio 0.1.0
+## Phase 10 — Release 0.1.0
 
-- [ ] Revisione di sicurezza: helper root, sandbox, sudoers, estrazione archivi, git
-- [ ] Test negativi automatizzati: injection, path traversal, escalation di ruolo,
-      lettura dei segreti (molti esistono già in `test/integration/`)
-- [ ] Accessibilità; traduzione italiana completa
-- [ ] Documentazione: installazione, modello di sicurezza, scrivere un check, backup
-- [ ] Upgrade e rimozione del pacchetto provati, `purge` compreso
-- [ ] Screenshot, `CHANGELOG`, tag `v0.1.0`
-- [ ] Workflow per GitHub Actions (l'attuale è solo per Gitea)
-- [ ] Pubblicazione su GitHub: licenza riconfermata, cronologia senza segreti né
-      dettagli di ambienti reali
+- [ ] Security review: root helpers, sandbox, sudoers, archive extraction, git
+- [ ] Automated negative tests: injection, path traversal, role escalation,
+      reading of secrets (many already exist in `test/integration/`)
+- [ ] Accessibility; complete Italian translation
+- [ ] Documentation: installation, security model, writing a check, backup
+- [ ] Upgrade and removal of the package tried, `purge` included
+- [ ] Screenshots, `CHANGELOG`, tag `v0.1.0`
+- [ ] Workflow for GitHub Actions (the current one is for Gitea only)
+- [ ] Publication on GitHub: license confirmed again, history with no secrets and
+      no details of real environments
 
-## Sviluppi futuri
+## Future developments
 
-Trigger esterni (webhook git, auto-remediation su cambio di stato); modalità pull
-(`ansible-pull`) per flotte molto grandi; segreti su backend esterni (OpenBao,
-Bitwarden); export verso Prometheus o InfluxDB; execution environment in container;
-controller su altre distribuzioni.
+External triggers (git webhooks, auto-remediation on state change); pull mode
+(`ansible-pull`) for very large fleets; secrets on external backends (OpenBao,
+Bitwarden); export to Prometheus or InfluxDB; execution environments in
+containers; controller on other distributions.

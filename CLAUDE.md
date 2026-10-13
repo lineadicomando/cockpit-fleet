@@ -10,7 +10,7 @@ notifies on information from managed nodes using Ansible only (agentless).
 
 Three documents, each with one job; do not repeat one in another:
 
-- `TODO.md` (Italian): status, decisions, open points and what is left to do.
+- `TODO.md`: status, decisions, open points and what is left to do.
   Read it first. Tick items as they are completed, record a decision when it
   changes, and keep it short: what is done moves out, to the place below.
 - `docs/architecture.md`: what exists, why it is built that way, and what was
@@ -68,8 +68,8 @@ them needs the user's explicit agreement.
   host is Fedora with ansible-core 2.20, newer than Debian's: anything involving
   Ansible, systemd or packaging must be verified on the VM, not locally.
 - User-visible strings are English in source, translated in `po/it.po`.
-- Code, comments, commit messages and docs in English; conversation with the user
-  in Italian.
+- Code, comments, commit messages and docs (`TODO.md` included) in English;
+  conversation with the user in Italian.
 - Commits: short imperative subject, as in the sibling project's history.
 
 ## Adding things
