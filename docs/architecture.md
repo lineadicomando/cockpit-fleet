@@ -631,6 +631,35 @@ Checked on Debian 13 (`mcp.sh`), with a client written for the test, and
 from Claude Code 2.1 over ssh with a forced-command key: five turns to launch
 a template, wait for it and report host and tasks.
 
+**The chat, tried.** A chat page in Cockpit would be a client of the Agent
+Client Protocol: the agent is a process of the user, started by the page and
+given `fleet-mcp` as its only MCP server. It does not exist yet; this is what
+a trial on the test controller found (13 October, as an operator, with the
+adapter for Claude, `@agentclientprotocol/claude-agent-acp` 0.89.1).
+
+- The adapter wants Node.js 22 or later and Debian 13 has 20: it ran on the
+  official Node 22 tarball, 203 MB, plus 308 MB of adapter and SDK, which
+  brings its own `claude` binary. None of it can be a dependency of the
+  package, so the agent is installed once by the administrator and named in
+  `config.toml`; the plugin installs nothing.
+- The model needs a login, made once by the user in a terminal
+  (`claude /login`, which over ssh gives an address and takes a code). The
+  adapter offers a client like ours no login of its own.
+- With `_meta.disableBuiltInTools` in `session/new` the agent has no tool of
+  its own: asked for a shell command and a file, it said it had neither. A
+  login to claude.ai brings that account's connectors into the session, which
+  `ENABLE_CLAUDEAI_MCP_SERVERS=false` in the adapter's environment removes.
+- Each call to a tool comes first as a `session/request_permission`, with the
+  tool and its arguments, for the client to answer: allow once, always, or
+  refuse. A confirmation in the interface is made of this.
+- `session/load` in a new process replays the conversation and the agent
+  remembers it; sessions are files under `~/.claude/projects/`.
+- `cockpit.spawn` with `stream()` and `input(…, true)` keeps the agent alive
+  and answering, also across the tabs of the plugin. A reload of the page
+  ends adapter, `claude` and `fleet-mcp` together, leaving no process.
+- One idle session takes about 360 MB: adapter 93, `claude` 256, `fleet-mcp`
+  12.
+
 ## Events
 
 The callback `lineadicomando.fleet.events` appends one JSON object per line:

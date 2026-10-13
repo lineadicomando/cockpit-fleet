@@ -7,50 +7,50 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1 and 2 were closed on 8 October 2026, **phase 3 on 13 October** (surveys
-and the view of differences done on 9 October, the editor in the interface and
-archive uploads on 10 October, Galaxy on 11 October, ad-hoc commands on
-13 October). The acceptance test of the phase passed on 13 October (see
-phase 3).
+Phases 0, 1 and 2 were closed on 8 October 2026 and phase 3 on 13 October.
+**In progress: phase 3b** (agents): `fleet-mcp` is done and accepted, the ACP
+trial held, the chat page is what is left. `main` is level with `origin`.
 
-Phase 3 was closed on 13 October with its last four items: inventory
-plugins, help on modules, masking of secrets, export and import.
-
-**In progress: phase 3b** (agents). `fleet-mcp` and what it needs in the
-backend were done on 13 October, and the acceptance of the phase passed the
-same day (see phase 3b). **Next step: the ACP trial**, on which the chat page
-depends; it needs the decision in the open points. Phase 4 follows.
+**Next step: the chat page** (see phase 3b), on the user's confirmation; it
+was decided on 13 October how its agent gets on a controller (see Decisions,
+"Agent of the chat"). Phase 4 follows.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is missing.
 
-What works today: projects (git or a local directory), inventories, credentials
-with encrypted secrets, trusted host keys, projects written in the interface with
-git history and syntax checks, projects uploaded as an archive, collections
-installed from the requirements file, templates with surveys, ad-hoc commands,
-inventory plugins, help on modules, export and import of the configuration,
-secrets masked in the output, runs with a queue,
-cancellation, live output, a view by task and the outcome per host; roles from
-Unix groups and the audit trail. Tried on Linux nodes (containers) and on Windows
-over SSH.
+What works today: projects (git, a local directory, written in the interface
+with git history and syntax checks, uploaded as an archive), collections
+installed from the requirements file, inventories (a file, a directory of
+sources, the file of a plugin), credentials with encrypted secrets, trusted
+host keys, templates with surveys, ad-hoc commands, runs with a queue,
+cancellation, live output with the secrets masked, a view by task, the
+differences and the outcome per host; help on modules, export and import of
+the configuration; roles from Unix groups and the audit trail; agents through
+`fleet-mcp`, under a role ceiling. Tried on Linux nodes (containers) and on
+Windows over SSH.
 
-State of the test VM `deb13-samba-dc`: the snapshot `baseline_fleet` (redone on
-11 October, a child of `baseline`) is where tests start from: Debian 13 with
-`cockpit`, `cockpit-fleet` at commit `124f131`, `ansible`, `ansible-lint`,
-`sshpass`, `podman` and the `fleet-node` image already built; no data and no test
-accounts. It has neither the Samba AD DC (`baseline` is a Debian with no Cockpit
-and no Samba) nor the secret `it-win-key`, to be created again before
-`windows.sh`.
+State of the test VM `deb13-samba-dc`: **it is not at its snapshot**, on
+purpose. It has the package of commit `afc2f06` and, for the chat page, the
+account `acpop` (operator, password locked) with Node.js 22, the ACP adapter
+and a login to Claude in its home, a few test data and `[mcp]` enabled. Enter
+as `maint` and use `sudo -u acpop -H`. Revert to `baseline_fleet` when the chat
+page is done, or sooner to remove the login; a new login then takes the user
+at a terminal.
 
-The VM, shut off, is at the snapshot: a test needs `make vm-deb-deploy` first, to
-install the current code. On 11 October, with the Galaxy package, these passed
-there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
-`sandbox.sh`, `runs.sh` (without the git part: `IT_GIT_URL` not set), `files.sh`
-(without `ansible-lint`, missing at the time) and `upload.sh`; `multihost.sh` and
-`windows.sh` were not run again. On 13 October, with the ad-hoc package:
-`adhoc.sh`, `privileges.sh`, `roles.sh`, `sandbox.sh` and `runs.sh`. `runs.sh`,
-`sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`) and `IT_SSH_PASSWORD`.
-`windows.sh` was not run again.
+The snapshot `baseline_fleet` (redone on 11 October, a child of `baseline`) is
+where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` at commit
+`124f131`, `ansible`, `ansible-lint`, `sshpass`, `podman` and the `fleet-node`
+image already built; no data and no test accounts, and no Samba AD DC. After a
+revert, `make vm-deb-deploy` installs the current code.
+
+Integration tests last run on 13 October, on the code of `afc2f06`: `mcp.sh`,
+`privileges.sh`, `roles.sh`, `sandbox.sh`, `runs.sh` (without the git part:
+`IT_GIT_URL` not set), `adhoc.sh`, `inventories.sh`, `files.sh`, `upload.sh`,
+`galaxy.sh` (with `IT_GALAXY_NET=yes`) and `multihost.sh`, all passing.
+`windows.sh` was last run before phase 3 and wants the secret `it-win-key`
+made again (see `CLAUDE.md`); Windows was tried by the two acceptance tests
+instead. `runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`)
+and `IT_SSH_PASSWORD`.
 
 ## Decisions
 
@@ -95,6 +95,7 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 | Run output for agents | The tool gives the outcome per host and the view by task; the raw output only when asked for explicitly |
 | Audit of agents | `fleet-mcp` declares `via` (and the name of the client) in the JSON on stdin; `fleetctl` records it in the audit trail and in the journal and, when it is there, applies the ceiling. Declaring it can only restrict. Over ssh it binds only with a dedicated key and a forced command on `fleet-mcp` in `authorized_keys`; otherwise it is a declaration, not a control. A stricter variant, with no code: a Unix account for the agent |
 | Switch of the chat | Separate from `[mcp] enabled`: enabling `fleet-mcp` sends data to nobody, the chat does |
+| Agent of the chat | Installed once by the administrator of the machine, outside the `.deb`; `config.toml` names its command (`[chat]`), and the page starts that and nothing else. The plugin downloads and installs nothing: Node.js 22 and the adapter cannot come from Debian packages, and the `claude` binary is not ours to redistribute. A command in `config.toml` is the administrator's opt-in, and any ACP agent can be named there. A recipe for the Claude adapter goes in the documentation. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP |
 | Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
 | Scheduling | A single static timer that runs `fleetctl scheduler tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions |
 | Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days |
@@ -102,10 +103,12 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 
 ## Open points (a default applies, to be confirmed before the phase named)
 
-- **Phase 3b, chat in Cockpit**: decided after the ACP trial on the VM; the agent
-  runs as the user, with no shell and no access to files, with `fleet-mcp` alone,
-  and sends data (inventories, output) to the provider of the model: opt-in by
-  the admin.
+- **Phase 3b, login of the chat's agent to its model**: by default each user
+  logs in once in a terminal on the controller (`claude /login`), and the page
+  only says when a login is missing; the alternative is a login driven by the
+  page, which we would have to write.
+- **Phase 3b, sessions of the chat at the same time**: by default a limit in
+  `config.toml`, since one session takes about 360 MB.
 
 ## Leftovers of the closed phases
 
@@ -163,34 +166,13 @@ there: `galaxy.sh` (with `IT_GALAXY_NET=yes`), `privileges.sh`, `roles.sh`,
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 
-## Phase 3 — Complete runner
+## Phase 3 — Complete runner (closed on 13 October)
 
-- [x] **Surveys**: text, number, choice, boolean, secret; tried on the VM
-      (`privileges.sh`, `roles.sh`, `runs.sh`, `sandbox.sh`) and from the interface
-- [x] **View of differences** per host: the "Differences" tab of a run; tried on
-      the VM (`runs.sh` and from the interface)
-- [x] **Editor in the interface**: the project as a local git repository, an
-      automatic commit with the Cockpit user as author, `--syntax-check` on save,
-      `ansible-lint` if present; tried on the VM (`files.sh` and from the
-      interface). CodeMirror editor with highlighting, indentation and completion
-      of keywords, modules and parameters
-- [x] **Archive upload**: tar or zip from the browser, extracted by a sandboxed job
-      with its own checks (path traversal, links, devices, limits), revision =
-      sha256; tried on the VM (`upload.sh` and from the interface, 19 MB in 1.7 s)
-- [x] **Galaxy**: the collections of the requirements file installed by a sandboxed
-      job, kept next to the project by digest of the file, copied into runs; tried
-      on the VM (`galaxy.sh`, also from a public git repository)
-- [x] **Ad-hoc commands**: admin only, allowlist of modules in `config.toml`, run
-      as a generated playbook of one task (arguments in a file, not in argv);
-      tried on the VM (`adhoc.sh` and from the interface)
-- [x] **Dynamic inventories**: YAML plugins and directories of sources;
-      executable scripts off by default; tried on the VM (`inventories.sh`)
-- [x] Help on modules (`module.help`): description, parameters, examples and
-      return values, in a dialog
-- [x] Masking of known secrets in stored logs, in the journal and in the
-      events; tried on the VM (`runs.sh`)
-- [x] Export and import of the configuration, without secrets; tried on the VM
-      (`runs.sh`)
+Surveys, the view of differences, the editor in the interface, archive
+uploads, collections from Galaxy, ad-hoc commands, inventory plugins, help on
+modules, masking of secrets, export and import: all described in
+`docs/architecture.md`, and what they leave to be desired is in the leftovers
+above.
 
 Done when: `ansible-win_edulab` runs from cockpit-fleet with no change to the
 repository, with its vault as a credential. **Met on 13 October**, from the
@@ -204,40 +186,14 @@ delegated to the controller.
 
 ## Phase 3b — Agents (MCP)
 
-After ad-hoc commands and the acceptance of phase 3. The commands of the later
-phases (schedules, notifications) become tools by themselves, from the registry.
+The commands of the later phases (schedules, notifications) become tools by
+themselves, from the registry.
 
-- [x] Declarative parameters in `@command`, from which the `inputSchema` of
-      tools is generated; every command has a description
-- [x] `fleet-mcp` in `/usr/libexec/cockpit-fleet`: JSON-RPC on stdio (`initialize`,
-      `tools/list`, `tools/call`), one tool per command, `sudo -n fleetctl` with
-      argv
-- [x] `[mcp]` in `config.toml`: off by default, role ceiling; tools above the
-      ceiling are not listed and `fleetctl` refuses them anyway
-- [x] Audit: column `via` (migration) and `FLEET_VIA` in the journal, from the
-      field `fleet-mcp` adds to the JSON; with `via` present `fleetctl` applies
-      the ceiling; shown in the audit page
-- [x] Documentation (`docs/architecture.md`, "Agents"): an ssh key dedicated to
-      the agent with a forced command on `fleet-mcp`; without it, `via` and the
-      ceiling are a declaration; as an alternative, a Unix account for the agent
-- [x] **Templates as tools**: name and description from the template, schema from
-      the survey; a template with a required secret field is not published,
-      optional ones stay out of the schema
-- [x] `run.result`: waits for the end of a run and gives its outcome per host
-      and its view by task; the raw output, in chunks, is `run_log`
-- [x] Ad-hoc commands as tools: `run_adhoc`, with the ceiling at admin
-- [x] Integration test `mcp.sh`: roles, ceiling, refusals, `via` in the audit
-      trail, no secret in the responses, a key with a forced command that reaches
-      `fleet-mcp` only
-- [x] `fleet-mcp` tried from Claude Code 2.1 over ssh, with a key forced on
-      `fleet-mcp`, as an operator: it launched a template written for the test
-      through its `launch_*` tool, followed it with `run_result` and reported
-      host and tasks; asked to create a credential, it found no tool for it.
-      The run is in the audit trail as the operator's, via `mcp:claude-code`
-- [ ] **ACP trial** on the VM: the agent kept alive by a `cockpit.spawn` channel,
-      resuming a session, the Claude Code adapter on Debian 13
-- [ ] Chat page (only if the trial holds): several agents, confirmation for every
-      tool that changes something, permission requests in the interface
+Done on 13 October and described in `docs/architecture.md` ("Agents"):
+declared parameters and their schemas, `fleet-mcp`, the role ceiling and `via`
+in the audit trail, templates as tools, `run.result`, ad-hoc commands as a
+tool, `mcp.sh`, and the trial of the Agent Client Protocol on which the chat
+rests.
 
 Done when: from Claude Code, over ssh, an operator launches a template of
 `ansible-win_edulab` as a tool and reads its outcome, and the same request with
@@ -250,6 +206,28 @@ for an ad-hoc command, it found no tool for it and said which role it had; the
 same request sent to `fleetctl` with `via`, as the operator and as an
 administrator under the ceiling, was refused and is in the audit trail and in
 the journal.
+
+What is left is the chat page, not part of that criterion:
+
+- [ ] `[chat]` in `config.toml`: off unless it names the command of an agent
+      (more than one, each with a name); its own switch, apart from `[mcp]`,
+      which it needs enabled; a limit on the sessions open at the same time.
+      A backend command gives the page what it may start, to every role that
+      may use the chat
+- [ ] The page: an ACP client on a `cockpit.spawn` channel, started with
+      `fleet-mcp` as the only MCP server, no built-in tool
+      (`_meta.disableBuiltInTools`) and `ENABLE_CLAUDEAI_MCP_SERVERS=false`;
+      the conversation as it streams, with the calls to tools
+- [ ] Permission requests in the interface: every call that changes something
+      is confirmed (once, always for the session, refuse), with the tool and
+      its arguments in words
+- [ ] Sessions: the list, and `session/load` to go on after the page was
+      reloaded; the agent ends with the page, which is said in the page
+- [ ] When the agent is not logged in to its model: say so and how to log in
+- [ ] Documentation: the recipe to install Node.js 22 and the Claude adapter
+      once, for all users, with pinned versions; what the chat sends to the
+      provider of the model
+- [ ] Tried from the interface on the VM, as an operator and as a viewer
 
 ## Phase 4 — Scheduling
 
