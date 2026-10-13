@@ -1,0 +1,146 @@
+---
+- name: Check that there is a Node.js archive for this machine
+  ansible.builtin.assert:
+    that: ansible_facts['architecture'] in chat_agent_node_archives
+    fail_msg: >-
+      No Node.js archive is listed for {{ ansible_facts['architecture'] }}:
+      see chat_agent_node_archives.
+
+- name: Set where things are
+  ansible.builtin.set_fact:
+    chat_agent_node: "node-v{{ chat_agent_node_version }}-{{ chat_agent_node_archives[ansible_facts['architecture']].name }}"
+    chat_agent_adapter: "{{ chat_agent_dir }}/node_modules/@agentclientprotocol/claude-agent-acp"
+    chat_agent_claude: >-
+      {{ chat_agent_dir }}/node_modules/@anthropic-ai/claude-agent-sdk-{{
+      chat_agent_node_archives[ansible_facts['architecture']].name }}/claude
+
+- name: Install what unpacks the archive
+  ansible.builtin.apt:
+    name: xz-utils
+    state: present
+
+- name: Create the directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ chat_agent_dir }}"
+    - "{{ chat_agent_dir }}/bin"
+
+- name: Look for this version of Node.js
+  ansible.builtin.stat:
+    path: "{{ chat_agent_dir }}/{{ chat_agent_node }}/bin/node"
+  register: chat_agent_node_stat
+
+- name: Fetch Node.js
+  when: not chat_agent_node_stat.stat.exists
+  block:
+    - name: Download the archive and check it against its checksum
+      ansible.builtin.get_url:
+        url: "{{ chat_agent_node_url }}/v{{ chat_agent_node_version }}/{{ chat_agent_node }}.tar.xz"
+        dest: "{{ chat_agent_dir }}/{{ chat_agent_node }}.tar.xz"
+        checksum: "sha256:{{ chat_agent_node_archives[ansible_facts['architecture']].sha256 }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Unpack it
+      ansible.builtin.unarchive:
+        src: "{{ chat_agent_dir }}/{{ chat_agent_node }}.tar.xz"
+        dest: "{{ chat_agent_dir }}"
+        remote_src: true
+        owner: root
+        group: root
+        creates: "{{ chat_agent_dir }}/{{ chat_agent_node }}/bin/node"
+  always:
+    - name: Remove the archive
+      ansible.builtin.file:
+        path: "{{ chat_agent_dir }}/{{ chat_agent_node }}.tar.xz"
+        state: absent
+
+- name: Point node at this version
+  ansible.builtin.file:
+    src: "{{ chat_agent_node }}"
+    dest: "{{ chat_agent_dir }}/node"
+    state: link
+
+# The lockfile names every package of the adapter with its hash: npm installs
+# those and nothing else, or fails.
+- name: Say which packages the adapter is made of
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ chat_agent_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - package.json
+    - package-lock.json
+  register: chat_agent_packages
+
+- name: Look for the adapter
+  ansible.builtin.stat:
+    path: "{{ chat_agent_claude }}"
+  register: chat_agent_claude_stat
+
+- name: Install the adapter from the lockfile
+  ansible.builtin.command:
+    argv:
+      - "{{ chat_agent_dir }}/node/bin/npm"
+      - ci
+      - --ignore-scripts
+      - --omit=dev
+      - --no-fund
+      - --no-audit
+    chdir: "{{ chat_agent_dir }}"
+  environment:
+    PATH: "{{ chat_agent_dir }}/node/bin:/usr/bin:/bin"
+    npm_config_update_notifier: "false"
+  changed_when: true
+  when: chat_agent_packages is changed or not chat_agent_claude_stat.stat.exists
+
+# The lockfile does not say which C library a package is for, so npm brings
+# the build for musl next to the one for glibc: 236 MB that Debian never runs.
+- name: Remove the build for another C library
+  ansible.builtin.file:
+    path: "{{ chat_agent_claude | dirname }}-musl"
+    state: absent
+
+- name: Give the agent a command
+  ansible.builtin.copy:
+    dest: "{{ chat_agent_dir }}/bin/claude-agent-acp"
+    content: |
+      #!/bin/sh
+      # The agent of the chat page of cockpit-fleet: the ACP adapter for Claude.
+      exec {{ chat_agent_dir }}/node/bin/node {{ chat_agent_adapter }}/dist/index.js "$@"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Give the login a command
+  ansible.builtin.file:
+    src: "{{ chat_agent_claude }}"
+    dest: "{{ chat_agent_dir }}/bin/claude"
+    state: link
+
+- name: Check that the agent starts
+  ansible.builtin.command:
+    argv:
+      - "{{ chat_agent_dir }}/bin/claude"
+      - --version
+  changed_when: false
+  register: chat_agent_version
+
+- name: Say what is there
+  ansible.builtin.debug:
+    msg:
+      - "Installed in {{ chat_agent_dir }}: Node.js {{ chat_agent_node_version }}, claude {{ chat_agent_version.stdout }}."
+      - "To turn the chat on, /etc/cockpit-fleet/config.toml needs [mcp] enabled = true and:"
+      - "[chat.agents.{{ chat_agent_name }}]"
+      - "command = [\"{{ chat_agent_dir }}/bin/claude-agent-acp\"]"
+      - "label = \"{{ chat_agent_label }}\""
+      - "login = \"{{ chat_agent_dir }}/bin/claude /login\""
+      - "Each user then logs in once, in a terminal: {{ chat_agent_dir }}/bin/claude /login"

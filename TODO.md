@@ -28,13 +28,11 @@ the configuration; roles from Unix groups and the audit trail; agents through
 `fleet-mcp`, under a role ceiling, and a chat page that starts one for the
 user. Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): **it is not at its
-snapshot**. On top of `baseline_fleet` it has the package of `1edddea` and,
-under `/opt/cockpit-fleet-agent`, Node.js 22 and the ACP adapter for Claude,
-installed as `docs/chat.md` says; no test account, no data, no login to
-Claude, and the default `config.toml`. Nothing of it is needed by phase 4:
-revert to the snapshot, or keep it to try the chat again (a login then
-takes the user at a terminal).
+State of the test VM `deb13-samba-dc` (shut off): at its snapshot but for the
+package, which is the one with the role that installs the chat's agent. No
+agent is installed, no test account, no data, the default `config.toml`. To
+try the chat: run the playbook as `docs/chat.md` says, create an account in a role group and log in to Claude as that account,
+which takes the user at a terminal.
 
 The snapshot `baseline_fleet` (redone on 13 October, a child of `baseline`) is
 where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` as of commit
@@ -48,7 +46,10 @@ Integration tests, all passing when last run, on 13 October:
 - on the code with the chat: `chat.sh`, `mcp.sh`, `privileges.sh`,
   `roles.sh`, `files.sh`, `upload.sh`, `inventories.sh`. The layout of the
   chat page changed afterwards (frontend only) and was tried from the
-  browser;
+  browser so was what came with the role that installs
+  the agent (`chat.agents` says whether an agent is installed), and the role
+  itself was tried by hand, as `docs/architecture.md` tells: there is no
+  script for it;
 - on the code of `afc2f06`, not since: `sandbox.sh`, `runs.sh` (without the
   git part: `IT_GIT_URL` not set), `adhoc.sh`, `galaxy.sh` (with
   `IT_GALAXY_NET=yes`) and `multihost.sh`. The chat touched none of what they
@@ -103,7 +104,9 @@ Integration tests, all passing when last run, on 13 October:
 | Run output for agents | The tool gives the outcome per host and the view by task; the raw output only when asked for explicitly |
 | Audit of agents | `fleet-mcp` declares `via` (and the name of the client) in the JSON on stdin; `fleetctl` records it in the audit trail and in the journal and, when it is there, applies the ceiling. Declaring it can only restrict. Over ssh it binds only with a dedicated key and a forced command on `fleet-mcp` in `authorized_keys`; otherwise it is a declaration, not a control. A stricter variant, with no code: a Unix account for the agent |
 | Switch of the chat | Naming an agent in `[chat.agents.NAME]` of `config.toml`, apart from `[mcp] enabled`, which the chat also needs: enabling `fleet-mcp` sends data to nobody, the chat does. The tab is shown only when an agent is named |
-| Agent of the chat | Installed once by the administrator of the machine, outside the `.deb`; `config.toml` names its command (`[chat.agents.NAME]`), and nothing else is started. The plugin downloads and installs nothing: Node.js 22 and the adapter cannot come from Debian packages, and the `claude` binary is not ours to redistribute. A command in `config.toml` is the administrator's opt-in, and any ACP agent can be named there. The recipe for the Claude adapter is in `docs/chat.md`. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP |
+| Agent of the chat | Not in the `.deb`, which downloads nothing by itself: Node.js 22 cannot come from Debian packages and the `claude` binary is not ours to redistribute. The package carries a role and a playbook (`lineadicomando.fleet.chat_agent`) that an administrator of the machine runs once, as root, in a terminal: Node.js by checksum, the adapter from a lockfile with the hash of every package. `config.toml` names the command (`[chat.agents.NAME]`), which the playbook writes only when asked; any ACP agent can be named there. No program of ours runs as root for this and sudoers does not change. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP, a shell recipe in the documentation (it was the first form) |
+| Name of the chat in the interface | "Assistant": "Chat" reads as a chat between people, and "agent" already means two other things here. Only what the user reads: `[chat]`, `fleet-chat` and the `chat.*` commands keep their names |
+| Terminal for the chat | Cockpit's own, which is in `cockpit-system` and runs as the user of the page: the page shows the command to install the agent, or to log in, with a copy button and one that opens it. No terminal of ours in the page |
 | Start of the chat's agent | The page names the agent; `fleet-chat`, a packaged program with no privilege, gets the command line from `chat.start` and runs it. No command line reaches the browser |
 | Login of the chat's agent | Each user logs in once at a terminal on the controller; the page says when the login is missing and shows the command `config.toml` gives. No login driven by the page |
 | Sessions of the chat | `[chat] max_sessions`, 2 by default, for the whole controller; counted from the running `fleet-chat` processes, a bound on memory and not a control |
@@ -187,6 +190,13 @@ Integration tests, all passing when last run, on 13 October:
   about as "not one of your tools" and then refused by the backend; with the
   model it was tried as an operator only (as a viewer, with the test agent);
   below 320 px of height for the chat the page scrolls again.
+- Agent of the chat: the role was tried on x86_64 only (the checksum for
+  arm64 is there, untried); the model was not asked anything through an agent
+  installed by the role; the versions of Node.js and of the adapter are fixed
+  in the role and move only with a release of the package; `selfcheck` says
+  nothing about the chat; no integration script runs the playbook, which
+  downloads the whole agent; the role used from a project, on a controller
+  reached over ssh, and the installation behind a proxy were not tried.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 

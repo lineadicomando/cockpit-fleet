@@ -1,0 +1,31 @@
+---
+# Installs the agent of the chat page on the controller it is run on:
+#
+#   sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections \
+#       ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent
+#
+# with -e chat_agent_configure=true to name the agent in config.toml
+# too, and -e chat_agent_state=absent to remove it. See docs/chat.md.
+- name: Install the agent of the chat page of cockpit-fleet
+  hosts: all
+  gather_facts: false
+  vars:
+    # The machine it runs on: the interpreter is the one running Ansible.
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  tasks:
+    - name: Learn about this machine
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - platform
+          - user
+
+    - name: Check that it may be done
+      ansible.builtin.assert:
+        that: ansible_facts['user_id'] == 'root'
+        fail_msg: This playbook writes under /opt and, when asked, /etc/cockpit-fleet - run it with sudo, or with become.
+
+    - name: Install it
+      ansible.builtin.import_role:
+        name: lineadicomando.fleet.chat_agent

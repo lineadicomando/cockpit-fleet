@@ -1,0 +1,24 @@
+---
+- name: Check what was asked for
+  ansible.builtin.assert:
+    that:
+      - chat_agent_state in ['present', 'absent']
+      - chat_agent_dir is match('^/[^/]')
+      - chat_agent_name is match('^[a-z0-9][a-z0-9_-]{0,31}$')
+    fail_msg: >-
+      chat_agent_state is present or absent, chat_agent_dir an
+      absolute path, chat_agent_name made of a-z, 0-9, - and _.
+
+- name: Install the agent
+  ansible.builtin.include_tasks: install.yml
+  when: chat_agent_state == 'present'
+
+- name: Name the agent in config.toml
+  ansible.builtin.include_tasks: configure.yml
+  when: chat_agent_state == 'absent' or chat_agent_configure | bool
+
+- name: Remove the agent
+  ansible.builtin.file:
+    path: "{{ chat_agent_dir }}"
+    state: absent
+  when: chat_agent_state == 'absent'

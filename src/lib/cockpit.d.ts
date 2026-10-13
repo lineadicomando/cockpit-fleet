@@ -20,6 +20,8 @@ declare module "cockpit" {
     interface Cockpit {
         location: CockpitLocation;
         spawn(args: string[], options?: CockpitSpawnOptions): SpawnProcess;
+        // Shows another page of Cockpit, like its terminal.
+        jump(path: string, host?: string): void;
         addEventListener(event: "locationchanged", handler: () => void): void;
         removeEventListener(event: "locationchanged", handler: () => void): void;
     }

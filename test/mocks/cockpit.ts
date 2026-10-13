@@ -39,6 +39,7 @@ const cockpit = {
         return p;
     },
     location: { path: [] as string[], options: {}, go() { /* no-op */ } },
+    jump() { /* no-op */ },
     addEventListener() { /* no-op */ },
     removeEventListener() { /* no-op */ },
 };

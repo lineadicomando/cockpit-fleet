@@ -71,7 +71,7 @@ export function App() {
         const titles: Record<string, string> = {
             overview: t("Overview"), runs: t("Runs"), templates: t("Job templates"), inventories: t("Inventories"),
             projects: t("Projects"), credentials: t("Credentials"), hostkeys: t("Host keys"), system: t("System"),
-            audit: t("Audit log"), chat: t("Chat"),
+            audit: t("Audit log"), chat: t("Assistant"),
         };
 
         return (

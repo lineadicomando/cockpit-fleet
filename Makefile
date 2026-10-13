@@ -48,6 +48,8 @@ install-files: ## Install the built bundle, backend and system files under DESTD
 		$(SHARE_DIR)/collections/$(COLLECTION)/
 	install -m 0644 collection/$(COLLECTION)/plugins/callback/*.py \
 		$(SHARE_DIR)/collections/$(COLLECTION)/plugins/callback/
+	cp -r --no-preserve=mode,ownership collection/$(COLLECTION)/roles collection/$(COLLECTION)/playbooks \
+		$(SHARE_DIR)/collections/$(COLLECTION)/
 	install -D -m 0644 system/cockpit-fleet-run@.service \
 		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-run@.service
 	install -D -m 0644 system/cockpit-fleet-finish@.service \

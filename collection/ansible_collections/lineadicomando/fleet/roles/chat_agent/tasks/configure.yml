@@ -1,0 +1,45 @@
+---
+- name: Read config.toml
+  ansible.builtin.slurp:
+    src: "{{ chat_agent_config_file }}"
+  register: chat_agent_config
+
+# Everything but what this role wrote there: an agent of the same name set by
+# hand would make the file invalid, and is not ours to replace.
+- name: Refuse to name an agent that is named already
+  ansible.builtin.assert:
+    that: >-
+      chat_agent_config.content | b64decode
+      | regex_replace('(?s)' ~ (chat_agent_marker | replace('{mark}', 'BEGIN') | regex_escape)
+                      ~ '.*?' ~ (chat_agent_marker | replace('{mark}', 'END') | regex_escape), '')
+      is not regex('(?m)^\s*\[chat\.agents\.' ~ (chat_agent_name | regex_escape) ~ '\]')
+    fail_msg: >-
+      {{ chat_agent_config_file }} already has [chat.agents.{{ chat_agent_name }}],
+      not written by this role: remove it, or run without chat_agent_configure.
+  vars:
+    chat_agent_marker: "# {mark} agent of the chat, written by lineadicomando.fleet.chat_agent"
+  when: chat_agent_state == 'present'
+
+- name: Name the agent in config.toml, or take it out
+  ansible.builtin.blockinfile:
+    path: "{{ chat_agent_config_file }}"
+    marker: "# {mark} agent of the chat, written by lineadicomando.fleet.chat_agent"
+    block: |
+      [chat.agents.{{ chat_agent_name }}]
+      command = ["{{ chat_agent_dir }}/bin/claude-agent-acp"]
+      label = "{{ chat_agent_label }}"
+      login = "{{ chat_agent_dir }}/bin/claude /login"
+    state: "{{ chat_agent_state }}"
+    # The file is read by the backend as it is: one it refuses is not written.
+    validate: >-
+      /usr/bin/python3 -I -c "import sys; sys.path.insert(0, '/usr/lib/cockpit-fleet');
+      from pathlib import Path; from cockpit_fleet.config import load; load(Path(sys.argv[1]))" %s
+
+- name: Say what the chat still needs
+  ansible.builtin.debug:
+    msg: >-
+      The agent is named in {{ chat_agent_config_file }}. The chat also needs
+      [mcp] enabled = true there, which this role does not set.
+  when:
+    - chat_agent_state == 'present'
+    - chat_agent_config.content | b64decode is not regex('(?m)^\s*enabled\s*=\s*true')

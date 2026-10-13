@@ -22,7 +22,8 @@ turned on and its agent installed. Keep it in step with `[chat]`.
 
 Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 `backend/libexec/` the helpers installed in `/usr/libexec/cockpit-fleet`,
-`backend/tests/` unit tests, `collection/` the bundled Ansible collection,
+`backend/tests/` unit tests, `collection/` the bundled Ansible collection
+(the callback of the runs, and roles an administrator runs on the controller),
 `system/` units, sudoers, sysusers, tmpfiles and the default config,
 `debian/` packaging, `test/` frontend tests, `test/integration/` scripts for
 the VM, `po/` translations.

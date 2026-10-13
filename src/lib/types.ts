@@ -15,6 +15,9 @@ export interface ChatAgentInfo {
     label: string;
     // What to type in a terminal to log the agent in to its model.
     login: string;
+    installed: boolean;
+    // What an administrator of the machine runs to install it, when known.
+    setup: string;
 }
 
 export interface ChatInfo {

@@ -7,6 +7,7 @@ role of that user under the ceiling set for agents. Nothing here runs it:
 these commands say what may be started and count what is.
 """
 
+import os
 from pathlib import Path
 
 from .cli import Context, Str, Values, command
@@ -14,6 +15,11 @@ from .errors import Conflict, NotFound, Unavailable
 from .paths import LIBEXEC_DIR
 
 LAUNCHER = str(LIBEXEC_DIR / "fleet-chat")
+# Where the role lineadicomando.fleet.chat_agent puts the agent, and what an
+# administrator of the machine runs, in a terminal, to have it there.
+AGENT_DIR = "/opt/cockpit-fleet-agent/"
+SETUP = ("sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections"
+         " ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent")
 
 
 def open_sessions(proc: Path = Path("/proc")) -> int:
@@ -51,9 +57,18 @@ def _needs_agents(ctx: Context) -> str:
 def chat_agents(ctx: Context, params: Values) -> dict:
     """The agents the chat page may start, and whether it may start one now."""
     config = ctx.config
+    agents = []
+    for agent in config.chat_agents:
+        program = agent.command[0]
+        installed = os.access(program, os.X_OK)
+        agents.append({
+            "name": agent.name, "label": agent.label or agent.name, "login": agent.login,
+            "installed": installed,
+            # How to install it, when it is the one the package knows how to.
+            "setup": SETUP if not installed and program.startswith(AGENT_DIR) else "",
+        })
     return {
-        "agents": [{"name": agent.name, "label": agent.label or agent.name, "login": agent.login}
-                   for agent in config.chat_agents],
+        "agents": agents,
         "unavailable": _needs_agents(ctx),
         "max_role": config.mcp_max_role,
         "max_sessions": config.chat_max_sessions,

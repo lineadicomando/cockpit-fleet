@@ -1,6 +1,6 @@
 # The chat
 
-A page of Fleet where a user talks to an assistant that works on the
+A page of Fleet, "Assistant" in its tabs, where a user talks to an assistant that works on the
 controller through Fleet itself: it reads what that user may read, launches
 what that user may launch, and asks before every action that changes
 something. How it is built is in [architecture.md](architecture.md), "The
@@ -19,62 +19,102 @@ guarantee. Do not turn the chat on where that is not acceptable.
 
 ## Turning it on
 
-Two settings in `/etc/cockpit-fleet/config.toml`, both off in a new
-installation:
+Three steps, the first two for an administrator of the machine. Each is a
+command in a terminal, and Cockpit has one ("Terminal" in its menu), which
+runs as whoever is logged in.
+
+1. Install the agent, once, for all users:
+
+   ```sh
+   sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections \
+       ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent \
+       -e chat_agent_configure=true
+   ```
+
+2. Let agents reach the backend, in `/etc/cockpit-fleet/config.toml`:
+
+   ```toml
+   [mcp]
+   enabled = true          # as the user who starts them
+   #max_role = "operator"  # and never with more than this role
+   ```
+
+3. Each user logs in to the model, once (see below).
+
+The "Assistant" tab appears, after a reload, for every role once an agent is named
+in `config.toml`. The agent runs as the user who opens the page.
+
+## What the playbook does
+
+It is part of the package (the collection `lineadicomando.fleet`, role
+`chat_agent`) and installs the ACP adapter for Claude under
+`/opt/cockpit-fleet-agent`, about 510 MB. The package itself downloads
+nothing: this does, when an administrator runs it.
+
+- **Node.js 22**, which the adapter needs and Debian 13 does not have, from
+  `nodejs.org`, checked against the checksum published with the release.
+- **The adapter**, `@agentclientprotocol/claude-agent-acp` 0.89.1, from
+  `registry.npmjs.org` with `npm ci`: a lockfile in the package names each of
+  its 115 packages with its hash, so nothing else can be installed, and no
+  install script of a package is run. It brings its own `claude` binary.
+- **Two commands** in `/opt/cockpit-fleet-agent/bin`: `claude-agent-acp`, the
+  agent, and `claude`, for the login.
+- With `-e chat_agent_configure=true`, the agent in `config.toml`, between two
+  marker lines:
+
+  ```toml
+  [chat.agents.claude]
+  command = ["/opt/cockpit-fleet-agent/bin/claude-agent-acp"]
+  label = "Claude"
+  login = "/opt/cockpit-fleet-agent/bin/claude /login"
+  ```
+
+  Without it, the playbook prints these lines for you to add. It never sets
+  `[mcp] enabled`, and refuses to write over an agent of the same name that
+  it did not write.
+
+Running it again changes nothing; a later version of the package may name a
+newer Node.js or adapter, and running it again then updates them. To remove
+everything it wrote, add `-e chat_agent_state=absent`. Behind a proxy, add
+`https_proxy=…` after `env` in the command (not tried).
+
+A named agent that is not installed shows in the page with this command,
+ready to be copied, and a button that opens the terminal.
+
+Other things `[chat]` takes:
 
 ```toml
-[mcp]
-enabled = true          # agents may reach the backend, as the user who starts them
-#max_role = "operator"  # and never with more than this role
-
 [chat]
 #max_sessions = 2       # for all users: a session takes about 360 MB
-
-[chat.agents.claude]
-command = ["/opt/cockpit-fleet-agent/node/bin/node",
-           "/opt/cockpit-fleet-agent/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js"]
-label = "Claude"
-login = "/opt/cockpit-fleet-agent/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude /login"
 ```
 
-An agent is any program that speaks the Agent Client Protocol on its
-standard input and output. The "Chat" tab appears, after a reload, for every
-role once an agent is named. The agent runs as the user who opens the page.
+An agent is any program that speaks the Agent Client Protocol on its standard
+input and output: another one can be named in the same way, installed by
+other means.
 
-## Installing the adapter for Claude
+To install the agent on other controllers from this one, use the role in a
+playbook of a project, with the controllers as hosts and a credential that
+may become root:
 
-The package does not install it: it needs Node.js 22, which Debian 13 does
-not have, and brings its own `claude` binary. Once, as root, for all users
-(about 510 MB under `/opt/cockpit-fleet-agent`):
-
-```sh
-NODE=node-v22.23.3-linux-x64.tar.xz
-cd /tmp
-wget "https://nodejs.org/dist/v22.23.3/$NODE"
-echo "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de  $NODE" | sha256sum -c -
-install -d /opt/cockpit-fleet-agent/node
-tar -C /opt/cockpit-fleet-agent/node --strip-components=1 -xJf "$NODE"
-PATH=/opt/cockpit-fleet-agent/node/bin:$PATH \
-    npm install --prefix /opt/cockpit-fleet-agent --no-fund --no-audit \
-    @agentclientprotocol/claude-agent-acp@0.89.1
+```yaml
+- hosts: controllers
+  become: true
+  roles:
+    - lineadicomando.fleet.chat_agent
 ```
-
-The versions are the ones the chat was tried with. To update, install
-another version of the adapter in the same way; `package-lock.json` in that
-directory says what is there.
 
 ## The login of each user
 
 The model wants a login, which is the user's own and is made once, in a
-terminal on the controller (Cockpit has one), as that user:
+terminal on the controller, as that user:
 
 ```sh
-/opt/cockpit-fleet-agent/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude /login
+/opt/cockpit-fleet-agent/bin/claude /login
 ```
 
 It gives an address to open in a browser and takes the code shown there. The
 login is kept in the user's home (`~/.claude`). Until it is made the page
-says so, with the command set as `login` in `config.toml`.
+says so, with this command and a button that opens the terminal.
 
 ## What a user gets
 

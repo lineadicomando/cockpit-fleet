@@ -633,8 +633,8 @@ a template, wait for it and report host and tasks.
 
 ## The chat
 
-A page of the interface where the user talks to an agent that works through
-`fleet-mcp`. The page is a client of the Agent Client Protocol (ACP): JSON-RPC
+A page of the interface, "Assistant" in its tabs, where the user talks to an
+agent that works through `fleet-mcp`. The page is a client of the Agent Client Protocol (ACP): JSON-RPC
 on the standard input and output of the agent, which is a process of the
 user, on a Cockpit channel.
 
@@ -645,13 +645,36 @@ ChatPage ── cockpit.spawn ──▶ fleet-chat NAME        (the user, no pri
    └──────────────────────▶ the agent ──▶ fleet-mcp ──▶ fleetctl (via, ceiling)
 ```
 
-**The agent is not ours.** The administrator of the machine installs it once
-and names its command line in `[chat.agents.NAME]` of `config.toml`; the
-package installs and downloads nothing (`docs/chat.md` has the recipe for
-the adapter for Claude). Naming an agent is what turns the chat on, apart
-from `[mcp] enabled`, which the chat also needs: enabling `fleet-mcp` sends
-data to nobody, a chat sends what is said in it to the provider of the model.
-`whoami` says whether an agent is named, and the tab is shown only then.
+**The agent is not ours.** The package does not carry it and downloads
+nothing by itself: Node.js 22 is not in Debian 13, and the adapter brings a
+`claude` binary that is not ours to redistribute. What the package carries is
+how to install it: the role `lineadicomando.fleet.chat_agent` of the bundled
+collection, and a playbook an administrator of the machine runs once, as
+root, in a terminal (`docs/chat.md`). Ansible is already there, so this adds
+no program of ours that runs as root and no rule to sudoers. A run of Fleet
+could not do it on its own controller: the sandbox has no sudo and cannot
+write under `/opt`; with the controller as a host reached over ssh, the same
+role works from a project.
+
+The role fetches Node.js from `nodejs.org` and checks it against the
+checksum published with the release, then installs the adapter with `npm ci
+--ignore-scripts` from a lockfile shipped in the role, which names each of
+its 115 packages with its hash. The lockfile does not say which C library a
+package is for, so the build for musl comes too and is removed. Running the
+role again changes nothing; `chat_agent_state=absent` removes what it wrote.
+
+Naming an agent in `[chat.agents.NAME]` of `config.toml` is what turns the
+chat on, apart from `[mcp] enabled`, which the chat also needs: enabling
+`fleet-mcp` sends data to nobody, a chat sends what is said in it to the
+provider of the model. The role writes that section only when asked
+(`chat_agent_configure`), between two marker lines, through the backend's own
+parser, and never over an agent it did not write. `whoami` says whether an
+agent is named, and the tab is shown only then. `chat.agents` says whether
+each agent is there to be started, and for one under
+`/opt/cockpit-fleet-agent` that is not, the command that installs it: the
+page shows it, to be copied, with a button that opens Cockpit's terminal
+(`cockpit.jump`), which is part of `cockpit-system` and runs as the user of
+the page.
 
 **The page names the agent, it does not start it.** It spawns `fleet-chat
 NAME`, a packaged program that runs as the user. `fleet-chat` asks
@@ -699,14 +722,15 @@ conversation scrolls inside it, so that the message box stays in sight
 
 **No login to the model.** The adapter says so (`_auth/status_update`, and
 error -32000 to a prompt): the page shows the command `config.toml` gives
-for the login, to be run once by the user in a terminal.
+for the login, to be run once by the user in a terminal, with the same button
+to Cockpit's own.
 
 Measured on the test controller with the adapter for Claude,
 `@agentclientprotocol/claude-agent-acp` 0.89.1:
 
 - The adapter wants Node.js 22 or later and Debian 13 has 20: the official
-  Node 22 tarball is 203 MB, adapter and SDK 308 MB, and they bring their own
-  `claude` binary. None of it can be a dependency of the package.
+  Node 22 tarball is 203 MB, adapter and SDK 308 MB (about 540 with the build
+  for musl, before it is removed).
 - One idle session takes about 360 MB: adapter 93, `claude` 256, `fleet-mcp`
   12.
 - With `_meta.disableBuiltInTools` the agent, asked for a shell command and a
@@ -732,6 +756,18 @@ the agent remembered the run. The adapter names the tool of a permission
 request in `_meta.claudeCode.toolName`, which is what the page reads;
 `settingSources: []` and `strictMcpConfig` do not get in the way of the
 login.
+
+The role, from the snapshot of the test controller, where there is neither
+Node.js nor an agent (13 October): the playbook installs 511 MB, a second run
+changes nothing, `chat_agent_configure` writes the section and a second time
+does not, an agent of the same name written by hand is refused, a user who is
+not root is told so, `absent` leaves `/opt` empty and `config.toml` as
+packaged; `ansible-lint` has nothing to say. With the agent so installed the
+page started it and reached the missing login; with the agent named and not
+installed it showed the command, copied it and opened the terminal. **The
+model was not asked anything through an agent installed by the role**: same
+adapter and same packages as the one tried, but installed without their
+scripts.
 
 ## Events
 

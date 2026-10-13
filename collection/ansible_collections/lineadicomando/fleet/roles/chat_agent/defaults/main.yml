@@ -1,0 +1,28 @@
+---
+# present installs the agent, absent removes it and what this role wrote in
+# config.toml.
+chat_agent_state: present
+
+# Where everything goes: Node.js, the adapter, and bin/ with the two commands
+# config.toml names.
+chat_agent_dir: /opt/cockpit-fleet-agent
+
+# Node.js, from the official archive: the adapter wants 22 or later, which
+# Debian 13 does not have. The checksums are those published with the release.
+chat_agent_node_version: 22.23.3
+chat_agent_node_url: https://nodejs.org/dist
+chat_agent_node_archives:
+  x86_64:
+    name: linux-x64
+    sha256: df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de
+  aarch64:
+    name: linux-arm64
+    sha256: a44aeb94849a299b22df10b9e622ec2f605c2183501bc40590705131de7c740f
+
+# Name the agent in config.toml too. Off by default: naming an agent is what
+# turns the chat on, and what is said in a chat goes to the provider of the
+# model. [mcp] enabled, which the chat also needs, is never touched.
+chat_agent_configure: false
+chat_agent_config_file: /etc/cockpit-fleet/config.toml
+chat_agent_name: claude
+chat_agent_label: Claude

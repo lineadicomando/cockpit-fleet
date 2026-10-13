@@ -93,10 +93,21 @@ class CommandsTest(Base):
     def test_the_page_learns_what_it_may_start_and_not_how(self):
         data = self.ok("chat.agents", role="viewer")
         self.assertEqual(data["agents"],
-                         [{"name": "claude", "label": "Claude", "login": "claude /login"}])
+                         [{"name": "claude", "label": "Claude", "login": "claude /login",
+                           "installed": False, "setup": ""}])
         self.assertEqual((data["unavailable"], data["max_sessions"], data["open_sessions"],
                           data["max_role"]), ("", 2, 1, "operator"))
         self.assertNotIn("/opt/agent", json.dumps(data))
+
+    def test_an_agent_that_is_not_installed_is_told_with_how_to_install_ours(self):
+        here = ChatAgent("here", ("/bin/sh",))
+        ours = ChatAgent("ours", (chat.AGENT_DIR + "bin/claude-agent-acp",))
+        self.config = replace(self.config, chat_agents=(here, ours, AGENT))
+        agents = {agent["name"]: agent for agent in self.ok("chat.agents", role="viewer")["agents"]}
+        self.assertEqual((agents["here"]["installed"], agents["here"]["setup"]), (True, ""))
+        self.assertEqual((agents["ours"]["installed"], agents["ours"]["setup"]),
+                         (False, chat.SETUP))
+        self.assertEqual((agents["claude"]["installed"], agents["claude"]["setup"]), (False, ""))
 
     def test_why_the_chat_cannot_be_used(self):
         self.config = replace(self.config, mcp_enabled=False)

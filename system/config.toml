@@ -52,12 +52,15 @@
 # the outcome of runs, their output when asked), goes to the provider of the
 # agent's model.
 # An agent is a program that speaks the Agent Client Protocol on its standard
-# input and output. Nothing here installs it: see docs/chat.md.
+# input and output. The package does not install one: for the adapter for
+# Claude there is a playbook to run once, which can also write the section
+# below (see docs/chat.md):
+#   sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections \
+#       ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent
 # Sessions open at the same time, for all users: one takes about 360 MB.
 #max_sessions = 2
 #[chat.agents.claude]
-#command = ["/opt/cockpit-fleet-agent/node/bin/node",
-#           "/opt/cockpit-fleet-agent/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js"]
+#command = ["/opt/cockpit-fleet-agent/bin/claude-agent-acp"]
 #label = "Claude"
 # What a user runs in a terminal on this machine to log in to the model.
-#login = "/opt/cockpit-fleet-agent/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude /login"
+#login = "/opt/cockpit-fleet-agent/bin/claude /login"

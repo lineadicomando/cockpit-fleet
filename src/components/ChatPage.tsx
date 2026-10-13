@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import cockpit from "cockpit";
 import {
     Alert,
     Button,
+    ClipboardCopy,
     Content,
     DescriptionList,
     DescriptionListDescription,
@@ -69,7 +71,7 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
     const log = useRef<HTMLDivElement>(null);
     // The box scrolls, not the page: the message box below must stay in sight.
     useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [items, busy]);
-    const who: Record<string, string> = { user: t("You"), agent: t("Agent"), thought: t("Agent, thinking") };
+    const who: Record<string, string> = { user: t("You"), agent: t("Assistant"), thought: t("Assistant, thinking") };
     return (
         <div ref={log} className="fleet-chat-log" role="log" aria-label={t("Conversation")}>
             {items.length === 0 && children}
@@ -83,7 +85,7 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
                     </div>
                 );
             })}
-            {busy && <Spinner size="md" aria-label={t("The agent is answering")} />}
+            {busy && <Spinner size="md" aria-label={t("The assistant is answering")} />}
         </div>
     );
 }
@@ -135,7 +137,7 @@ function AskModal({ ask }: { ask: Ask }) {
             <ModalBody>
                 {ask.tool
                     ? <Content component="p">{ask.tool.description}</Content>
-                    : <Alert variant="warning" isInline title={t("The agent asks to use something that is not one of your tools in Fleet: {{name}}", { name: ask.title })} />}
+                    : <Alert variant="warning" isInline title={t("The assistant asks to use something that is not one of your tools in Fleet: {{name}}", { name: ask.title })} />}
                 {fields.length > 0 && (
                     <DescriptionList isHorizontal isCompact style={{ marginBlockStart: "1rem" }}>
                         {fields.map(([name, value]) => (
@@ -160,30 +162,57 @@ function AskModal({ ask }: { ask: Ask }) {
     );
 }
 
+// A command to run in a terminal: it can be copied, and Cockpit's own
+// terminal, which runs as the user of this page, is one click away.
+function Command({ text }: { text: string }) {
+    const { t } = useTranslation();
+    return (
+        <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} flexWrap={{ default: "nowrap" }}>
+            <FlexItem grow={{ default: "grow" }}>
+                <ClipboardCopy isReadOnly isCode hoverTip={t("Copy")} clickTip={t("Copied")} aria-label={t("Command")}>{text}</ClipboardCopy>
+            </FlexItem>
+            <Button variant="secondary" onClick={() => cockpit.jump("/system/terminal")}>{t("Open the terminal")}</Button>
+        </Flex>
+    );
+}
+
 // What happens when the chat is started, said before it is.
 function Start({ info, state }: { info: ChatInfo; state: ChatState }) {
     const { t } = useTranslation();
     const [name, setName] = useState(state.agent || info.agents[0].name);
     const full = info.open_sessions >= info.max_sessions;
+    const agent = info.agents.find(one => one.name === name) ?? info.agents[0];
     return (
         <>
-            {state.error && <Alert variant="danger" isInline title={t("The agent ended")} style={{ marginBlockEnd: "1rem" }}><pre>{state.error}</pre></Alert>}
+            {state.error && <Alert variant="danger" isInline title={t("The assistant ended")} style={{ marginBlockEnd: "1rem" }}><pre>{state.error}</pre></Alert>}
             <Content component="p">{t("An assistant that works on this controller through Fleet: it reads what you may read and launches what you may launch, and asks you before every action that changes something.")}</Content>
             <Content component="ul">
                 <Content component="li">{t("What you write, and what Fleet answers to the assistant (inventories, job templates, the outcome of runs and, when asked, their output), is sent to the provider of the model.")}</Content>
                 <Content component="li">{t("It acts with your role, and never above the one set for agents on this controller: {{role}}.", { role: info.max_role })}</Content>
                 <Content component="li">{t("It runs while this page is open: closing or reloading the page ends it. The conversation is kept, and can be continued later.")}</Content>
             </Content>
-            {full && <Alert variant="info" isInline title={t("{{open}} chat sessions are open on this controller, the most it allows.", { open: info.open_sessions })} style={{ marginBlockEnd: "1rem" }} />}
+            {full && <Alert variant="info" isInline title={t("{{open}} sessions of the assistant are open on this controller, the most it allows.", { open: info.open_sessions })} style={{ marginBlockEnd: "1rem" }} />}
+            {!agent.installed && (
+                <Alert variant="warning" isInline title={t("{{agent}} is not installed on this machine", { agent: agent.label })} style={{ marginBlockEnd: "1rem" }}>
+                    {agent.setup
+                        ? (
+                            <>
+                                <Content component="p">{t("An administrator of this machine installs it once, for all users, from a terminal:")}</Content>
+                                <Command text={agent.setup} />
+                            </>
+                        )
+                        : <Content component="p">{t("An administrator of this machine has to install it, or correct its command in /etc/cockpit-fleet/config.toml.")}</Content>}
+                </Alert>
+            )}
             <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
                 {info.agents.length > 1 && (
                     <FlexItem>
-                        <FormSelect value={name} onChange={(_event, value) => setName(value)} aria-label={t("Agent")}>
+                        <FormSelect value={name} onChange={(_event, value) => setName(value)} aria-label={t("Assistant")}>
                             {info.agents.map(agent => <FormSelectOption key={agent.name} value={agent.name} label={agent.label} />)}
                         </FormSelect>
                     </FlexItem>
                 )}
-                <Button variant="primary" onClick={() => chat.start(name)}>{t("Start the chat")}</Button>
+                <Button variant="primary" isDisabled={!agent.installed} onClick={() => chat.start(agent.name)}>{t("Start the assistant")}</Button>
             </Flex>
         </>
     );
@@ -222,9 +251,9 @@ function Composer({ state }: { state: ChatState }) {
 function Login({ agent }: { agent: ChatAgentInfo | undefined }) {
     const { t } = useTranslation();
     return (
-        <Alert variant="warning" isInline title={t("The agent is not logged in to its model")} style={{ marginBlockEnd: "1rem" }}>
+        <Alert variant="warning" isInline title={t("The assistant is not logged in to its model")} style={{ marginBlockEnd: "1rem" }}>
             <Content component="p">{t("Log in once, as your user, from a terminal on this machine, then send the message again. The login is kept for the next times.")}</Content>
-            {agent?.login && <pre>{agent.login}</pre>}
+            {agent?.login && <Command text={agent.login} />}
         </Alert>
     );
 }
@@ -243,9 +272,9 @@ export function ChatPage() {
     if (!info.data) return <Spinner aria-label={t("Loading")} />;
     if (info.data.unavailable || info.data.agents.length === 0) {
         return (
-            <EmptyState titleText={t("The chat cannot be used yet")} headingLevel="h3">
+            <EmptyState titleText={t("The assistant cannot be used yet")} headingLevel="h3">
                 <EmptyStateBody>
-                    {t("The chat works through the agents of Fleet, which an administrator of this machine enables in /etc/cockpit-fleet/config.toml ([mcp] enabled = true), together with the agent to start ([chat]).")}
+                    {t("The assistant works through the agents of Fleet, which an administrator of this machine enables in /etc/cockpit-fleet/config.toml ([mcp] enabled = true), together with the agent to start ([chat]).")}
                     {session.role === "admin" && info.data.unavailable && <><br />{info.data.unavailable}</>}
                 </EmptyStateBody>
             </EmptyState>
@@ -257,7 +286,7 @@ export function ChatPage() {
     const idle = !state.busy && !state.loading;
     return (
         <div ref={box} className={running ? "fleet-chat" : undefined} style={{ blockSize: height }}>
-            <SectionHeader title={running && agent ? t("Chat with {{agent}}", { agent: agent.label }) : t("Chat")}>
+            <SectionHeader title={running && agent ? t("Assistant: {{agent}}", { agent: agent.label }) : t("Assistant")}>
                 {running && (
                     <>
                         {state.sessions.length > 0 && (
@@ -274,15 +303,15 @@ export function ChatPage() {
                             </FlexItem>
                         )}
                         <Button variant="secondary" isDisabled={!idle || state.items.length === 0} onClick={() => chat.fresh()}>{t("New conversation")}</Button>
-                        <Button variant="secondary" onClick={() => chat.stop()}>{t("End the chat")}</Button>
+                        <Button variant="secondary" onClick={() => chat.stop()}>{t("End the session")}</Button>
                     </>
                 )}
             </SectionHeader>
-            {state.phase === "starting" && <Spinner aria-label={t("Starting the agent")} />}
+            {state.phase === "starting" && <Spinner aria-label={t("Starting the assistant")} />}
             {state.phase === "ended" && state.items.length > 0 && <Conversation items={state.items} busy={false} />}
             {running && (
                 <Conversation items={state.items} busy={state.busy || state.loading}>
-                    {!state.loading && <Content component="p">{t("The agent is ready. It ends when this page is closed or reloaded; the conversation is kept.")}</Content>}
+                    {!state.loading && <Content component="p">{t("The assistant is ready. It ends when this page is closed or reloaded; the conversation is kept.")}</Content>}
                 </Conversation>
             )}
             {running && state.needsLogin && <Login agent={agent} />}
