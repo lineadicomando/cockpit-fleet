@@ -8,24 +8,17 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 ## Status
 
 Phases 0, 1, 2, 3 and 3b (agents and the chat, "Assistant" in the interface)
-are closed, the last on 13 October 2026. The last commit of that work is
-`0c3af39`, on which CI passes.
+are closed, the last on 13 October 2026. On 14 October the assistant was
+tried with its model through an agent installed by the role, from the
+interface (`docs/architecture.md`, "The chat"), and the button to the
+terminal now opens a new tab. The same day `fleet` was written, the backend
+for a person at a terminal (`docs/architecture.md`, "The terminal"); the
+rest of what the terminal could give is under "The terminal" below.
 
-**Next step, before phase 4: try the assistant with its model through an
-agent installed by the role.** It was tried with the model only when the
-agent had been installed by hand; the role installs the same packages
-without running their scripts, and with it the page was tried up to the
-missing login. On the VM: `make vm-deb-deploy` (the package there predates
-the name "Assistant"), run the playbook with `-e chat_agent_configure=true`
-and set `[mcp] enabled = true` as `docs/chat.md` says, create an account in
-`cockpit-fleet-operator`, and have the user log in to Claude as that account
-(`/opt/cockpit-fleet-agent/bin/claude /login`, from Cockpit's terminal or
-over ssh). Then, from the interface: launch a template and read its outcome,
-as on 13 October (`docs/architecture.md`, "The chat"). Remove the account
-afterwards, and the login with it.
-
-**Then phase 4** (scheduling). Nothing of it is written; its section below
-says what it can build on and what is to be decided first.
+**Next step: phase 4** (scheduling). Nothing of it is written; its section below
+says what it can build on, and the open points below say what to confirm with
+the user before writing it. The ideas left for the terminal are an
+alternative the user may pick first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
@@ -40,14 +33,21 @@ cancellation, live output with the secrets masked, a view by task, the
 differences and the outcome per host; help on modules, export and import of
 the configuration; roles from Unix groups and the audit trail; agents through
 `fleet-mcp`, under a role ceiling, and a chat page that starts one for the
-user. Tried on Linux nodes (containers) and on Windows over SSH.
+user; the command `fleet` for a terminal. Tried on Linux nodes (containers)
+and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): at its snapshot but for the
-package, which has the role that installs the chat's agent and predates the
-name "Assistant" in the interface. No
-agent is installed, no test account, no data, the default `config.toml`. To
-try the chat: run the playbook as `docs/chat.md` says, create an account in a role group and log in to Claude as that account,
-which takes the user at a terminal.
+State of the test VM `deb13-samba-dc` (shut off): the package with `fleet`,
+the agent of the chat installed by the role and named in `config.toml`,
+`[mcp] enabled = true`; the project `demo`, the inventory `controller` and
+the templates "Say hello" and "withsecret", left by a trial of `fleet`. No
+test account, no login to Claude (logged out and removed on 14 October).
+Its `config.toml` differs from the packaged one (the agent and `[mcp]`), so
+`make vm-deb-deploy` stops at dpkg's question: finish with `dpkg
+--force-confold --configure -a` on the VM, or put the packaged file back
+first. Going back to `baseline_fleet` removes all of it. To try the chat
+again: a test account in a role group, and the user logs it in to Claude at
+Cockpit's terminal (`/opt/cockpit-fleet-agent/bin/claude /login`); log it
+out (`claude auth logout`) before removing the account.
 
 The snapshot `baseline_fleet` (redone on 13 October, a child of `baseline`) is
 where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` as of commit
@@ -56,15 +56,14 @@ image already built; no data and no test accounts, and no Samba AD DC. It has
 neither Node.js nor an agent for the chat. After a revert, `make
 vm-deb-deploy` installs the current code.
 
-Integration tests, all passing when last run, on 13 October:
+Integration tests, all passing when last run:
 
-- on the code with the chat: `chat.sh`, `mcp.sh`, `privileges.sh`,
-  `roles.sh`, `files.sh`, `upload.sh`, `inventories.sh`. The layout of the
-  chat page changed afterwards (frontend only) and was tried from the
-  browser so was what came with the role that installs
-  the agent (`chat.agents` says whether an agent is installed), and the role
-  itself was tried by hand, as `docs/architecture.md` tells: there is no
-  script for it;
+- on the code with `fleet` (14 October): `cli.sh`, `mcp.sh`, `chat.sh`,
+  `roles.sh`;
+- on the code with the chat (13 October): `privileges.sh`, `files.sh`,
+  `upload.sh`, `inventories.sh`. The role that installs the chat's agent has
+  no script: it was tried by hand, on 13 and 14 October, as
+  `docs/architecture.md` tells;
 - on the code of `afc2f06`, not since: `sandbox.sh`, `runs.sh` (without the
   git part: `IT_GIT_URL` not set), `adhoc.sh`, `galaxy.sh` (with
   `IT_GALAXY_NET=yes`) and `multihost.sh`. The chat touched none of what they
@@ -127,6 +126,9 @@ Integration tests, all passing when last run, on 13 October:
 | Sessions of the chat | `[chat] max_sessions`, 2 by default, for the whole controller; counted from the running `fleet-chat` processes, a bound on memory and not a control |
 | Permissions in the chat | Read-only tools of `fleet-mcp` go without a question, everything else is confirmed; "always" lasts a conversation and is kept by the page, never written in the agent's settings |
 | Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
+| Name of the command for the terminal | `fleet`, confirmed on 14 October. No Debian package (trixie, sid) installs `bin/fleet`, its completion or its manual; the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
+| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`); tables for a person, `--json` for a program |
+| Secrets at the terminal | Never on the command line: asked for with no echo, or read from stdin, and handed to `fleet-secret` on its stdin |
 | Scheduling | A single static timer that runs `fleetctl scheduler tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions |
 | Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days |
 | Who approves | Group `cockpit-fleet-approver` |
@@ -204,6 +206,8 @@ Integration tests, all passing when last run, on 13 October:
   sessions can be filled by one user; a tool the role does not have is asked
   about as "not one of your tools" and then refused by the backend; with the
   model it was tried as an operator only (as a viewer, with the test agent);
+  with no login the page says so only after a first message, not at the
+  start, when `~/.claude` already exists;
   below 320 px of height for the chat the page scrolls again.
 - Agent of the chat: the role was tried on x86_64 only (the checksum for
   arm64 is there, untried); the versions of Node.js and of the adapter are fixed
@@ -262,6 +266,28 @@ as an operator and as a viewer, and with the adapter for Claude and its
 model, as an operator: a template launched after a confirmation and its
 outcome read, a conversation resumed after a reload.
 
+## The terminal (started on 14 October)
+
+Done: the command `fleet` (point 1 of the brainstorm), with completion for
+bash and a manual, tried by `cli.sh` and by hand at a terminal. Ideas left,
+in the order they were weighed, none decided:
+
+- [ ] Projects at the terminal: a convention for `[projects] local_roots`
+      (a group that writes, `cockpit-fleet` that reads) and its guide; for
+      a managed project, a read-only clone of `repo.git` for administrators
+      (it touches "an operator does not read files": decide first)
+- [ ] `fleet assistant`: the chat's agent at a terminal, with `fleet-mcp` as
+      its only tools and the same ceiling
+- [ ] From the page to the terminal: next to a run, a template or a project,
+      the `fleet` command that does the same, to copy, with the button to
+      Cockpit's terminal (which cannot be handed a command to run)
+
+What `fleet` leaves to be desired: completion knows commands and options,
+not the names of templates, runs or credentials; `project upload` wants
+base64 pieces, so an archive is not uploaded from it; answers to a survey
+are typed by `-a` as the questions say, but a choice is not offered as a
+list to pick from; English only.
+
 ## Phase 4 — Scheduling
 
 What it can build on, as the code is today:
@@ -278,7 +304,8 @@ What it can build on, as the code is today:
 - `run.start` holds every check of a launch (limit, answers of the survey,
   role); the tick should go through the same code, not around it.
 - The schema is at migration 7; schedules are a new entry of `MIGRATIONS`.
-- New commands become tools of `fleet-mcp` by themselves (see phase 3b), and
+- New commands become tools of `fleet-mcp` and commands of `fleet` by
+  themselves (see phase 3b and "The terminal"), and
   `config.export` and `config.import` must learn about schedules.
 
 To do:

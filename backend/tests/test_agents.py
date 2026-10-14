@@ -100,6 +100,12 @@ class CeilingTest(Base):
         self.ok("run.cancel", {"id": run["data"]["id"]})
         self.assertEqual(self.audit()[-1][3], "")
 
+    def test_a_call_from_the_terminal_is_recorded_and_not_held_as_an_agent(self):
+        answer = self.call("credential.create", {"name": "x", "kind": "vault", "via": "cli"})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(self.audit()[-1][:4], ("credential.create", "ok", "admin", "cli"))
+        self.assertEqual(self.via("whoami", mcp_enabled=False)["error"]["code"], "forbidden")
+
     def test_via_must_be_a_plain_name(self):
         self.config = replace(self.config, mcp_enabled=True)
         for bad in ("", "x" * 100, "a\nb", 3, ["mcp"], "-x"):

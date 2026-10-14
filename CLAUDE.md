@@ -22,6 +22,7 @@ turned on and its agent installed. Keep it in step with `[chat]`.
 
 Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 `backend/libexec/` the helpers installed in `/usr/libexec/cockpit-fleet`,
+`backend/bin/` the command `fleet` installed in `/usr/bin`,
 `backend/tests/` unit tests, `collection/` the bundled Ansible collection
 (the callback of the runs, and roles an administrator runs on the controller),
 `system/` units, sudoers, sysusers, tmpfiles and the default config,
@@ -84,7 +85,7 @@ them needs the user's explicit agreement.
   `Bool`, `Id`, `Strs`, `Objs`, `Obj`, `Choice` from `cli.py`), read them from
   the `Values` the handler gets, and give the handler a docstring: with the
   parameters it is what an agent sees of the command as a tool (`tool=False`
-  keeps it from agents). Raise the errors in `errors.py`; their codes are part of the
+  keeps it from agents) and what `fleet help` shows of it at a terminal. Raise the errors in `errors.py`; their codes are part of the
   interface, so add but never rename. Test it in `backend/tests/test_cli.py` style.
 - **A schema change**: append an entry to `MIGRATIONS` in `db.py`. Never edit
   an entry that has been released.
@@ -136,6 +137,7 @@ test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules
 test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
 test/integration/mcp.sh              # fleet-mcp: tools by role, ceiling, via in the audit, forced-command key; WIPES
 test/integration/chat.sh             # fleet-chat with fake-agent.py: start, limit on sessions, tools by role; WIPES
+test/integration/cli.sh              # fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin; WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES

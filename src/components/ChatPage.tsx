@@ -26,6 +26,7 @@ import {
     Spinner,
     TextArea,
 } from "@patternfly/react-core";
+import { ExternalLinkAltIcon } from "@patternfly/react-icons";
 import type { Item, ToolItem, ToolStatus } from "../lib/acp.ts";
 import { chat } from "../lib/chat-agent.ts";
 import type { Ask, ChatState } from "../lib/chat.ts";
@@ -33,6 +34,7 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useSession } from "../lib/session.tsx";
+import { shellPage } from "../lib/shell.ts";
 import type { ChatAgentInfo, ChatInfo } from "../lib/types.ts";
 import { SectionHeader } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
@@ -162,16 +164,29 @@ function AskModal({ ask }: { ask: Ask }) {
     );
 }
 
+function terminalUrl(): string {
+    try {
+        return window.top && window.top !== window ? shellPage(window.top.location.pathname, window.location.pathname, "/system/terminal") : "";
+    } catch {
+        return "";
+    }
+}
+
 // A command to run in a terminal: it can be copied, and Cockpit's own
-// terminal, which runs as the user of this page, is one click away.
+// terminal, which runs as the user of this page, is one click away. In a new
+// tab: leaving this page would end the agent it has started.
 function Command({ text }: { text: string }) {
     const { t } = useTranslation();
+    const url = terminalUrl();
     return (
         <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} flexWrap={{ default: "nowrap" }}>
             <FlexItem grow={{ default: "grow" }}>
                 <ClipboardCopy isReadOnly isCode hoverTip={t("Copy")} clickTip={t("Copied")} aria-label={t("Command")}>{text}</ClipboardCopy>
             </FlexItem>
-            <Button variant="secondary" onClick={() => cockpit.jump("/system/terminal")}>{t("Open the terminal")}</Button>
+            {url
+                ? <Button variant="secondary" component="a" href={url} target="_blank" rel="noopener noreferrer"
+                    icon={<ExternalLinkAltIcon />} iconPosition="end">{t("Open the terminal")}</Button>
+                : <Button variant="secondary" onClick={() => cockpit.jump("/system/terminal")}>{t("Open the terminal")}</Button>}
         </Flex>
     );
 }

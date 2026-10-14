@@ -1,0 +1,14 @@
+#!/usr/bin/python3 -I
+"""The backend for a person at a terminal; see cockpit_fleet/terminal.py.
+
+It has no privilege: every command calls fleetctl through sudo, as the user.
+"""
+
+import sys
+
+sys.path.insert(0, "/usr/lib/cockpit-fleet")
+
+from cockpit_fleet.terminal import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

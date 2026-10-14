@@ -43,6 +43,9 @@ install-files: ## Install the built bundle, backend and system files under DESTD
 	install -m 0644 backend/cockpit_fleet/*.py $(LIB_DIR)/cockpit_fleet/
 	install -d $(LIBEXEC_DIR)
 	install -m 0755 backend/libexec/* $(LIBEXEC_DIR)/
+	install -D -m 0755 backend/bin/fleet $(DESTDIR)/usr/bin/fleet
+	install -D -m 0644 system/fleet.bash-completion $(DESTDIR)/usr/share/bash-completion/completions/fleet
+	install -D -m 0644 system/fleet.1 $(DESTDIR)/usr/share/man/man1/fleet.1
 	install -d $(SHARE_DIR)/collections/$(COLLECTION)/plugins/callback
 	install -m 0644 collection/$(COLLECTION)/galaxy.yml collection/$(COLLECTION)/README.md \
 		$(SHARE_DIR)/collections/$(COLLECTION)/
@@ -65,7 +68,9 @@ uninstall: ## Remove the files installed by install-files (keeps data and secret
 		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-finish@.service \
 		$(DESTDIR)/usr/lib/sysusers.d/cockpit-fleet.conf \
 		$(DESTDIR)/usr/lib/tmpfiles.d/cockpit-fleet.conf \
-		$(DESTDIR)/etc/sudoers.d/cockpit-fleet
+		$(DESTDIR)/etc/sudoers.d/cockpit-fleet \
+		$(DESTDIR)/usr/bin/fleet $(DESTDIR)/usr/share/bash-completion/completions/fleet \
+		$(DESTDIR)/usr/share/man/man1/fleet.1
 
 check: check-ts check-py ## Run all unit tests
 

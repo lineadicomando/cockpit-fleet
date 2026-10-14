@@ -1,0 +1,118 @@
+.TH FLEET 1 "October 2026" "cockpit-fleet" "User Commands"
+.SH NAME
+fleet \- drive Ansible through cockpit-fleet from a terminal
+.SH SYNOPSIS
+.B fleet
+.I area verb
+.RB [ \-\-param
+.IR value ]...
+.RB [ \-\-json ]
+.br
+.B fleet launch
+.I template
+.RB [ \-a
+.IR name = value ]...
+.RB [ \-\-limit
+.IR pattern ]
+.RB [ \-\-check ]
+.RB [ \-\-diff ]
+.RB [ \-\-detach ]
+.br
+.B fleet log
+.I run
+.RB [ \-f ]
+.br
+.B fleet result
+.I run
+.RB [ \-\-wait ]
+.br
+.B fleet secret
+.I credential field
+.br
+.B fleet help
+.RI [ area " [" verb ]]
+.SH DESCRIPTION
+.B fleet
+does from a terminal what the Fleet page of Cockpit does, with the role the
+user has there: it is for the members of the groups
+.BR cockpit\-fleet\-viewer ,
+.B cockpit\-fleet\-operator
+and
+.BR cockpit\-fleet\-admin .
+It has no privilege of its own: every command is a call to the backend
+through
+.BR sudo (8),
+checked as one made from the interface and, when it changes something,
+recorded in the audit trail
+with
+.B cli
+in its "via" column.
+.PP
+Every command of the backend is
+.B fleet
+followed by its area and verb, such as
+.B fleet run list
+or
+.BR "fleet template list" ;
+.B fleet help
+lists those of the caller's role and
+.B fleet help
+.I area verb
+says what one takes. Parameters are options:
+.B \-\-status failed
+or
+.BR \-\-status=failed ,
+a flag alone for true and
+.B \-\-no\-
+before it for false, a list by repeating the option, JSON for an object.
+A text or JSON value is read from a file with
+.BI @ path\fR,
+from the standard input with
+.BR @\- ;
+.B @@
+is a plain @. A command that takes an id also takes it alone.
+.SH SHORTCUTS
+.TP
+.B launch
+Launches a job template, by name or id, follows its output and says how it
+went. The answers to its survey are given with
+.BR \-a ;
+a required one left out is asked for at the terminal, and so is every secret
+question, which is never taken from the command line: the value goes to the
+backend on the standard input of
+.BR fleet\-secret .
+.TP
+.B log
+Prints the output of a run;
+.B \-f
+follows it while the run goes on, then says how it went.
+.TP
+.B result
+How a run went, per host and task by task;
+.B \-\-wait
+waits for its end.
+.TP
+.B secret
+Sets a secret of a credential (administrators only), asked for twice at the
+terminal or read from the standard input. It cannot be read back.
+.SH OPTIONS
+.TP
+.B \-\-json
+Prints the answer as the backend gives it, for a program.
+.SH EXIT STATUS
+0 when the command succeeded and, for a run that was followed, when the run
+succeeded; 1 when that run failed, was canceled or ended in error; 2 for a
+mistake in the command line; 3 when the backend refused the command or could
+not be reached.
+.SH EXAMPLES
+.nf
+fleet run list \-\-status failed
+fleet launch "Say hello" \-a greeting=ciao \-\-limit web01 \-\-check
+fleet log \-f r3c9d2e1f0a4b
+fleet file write p1a2b3c4d5e6 \-\-path site.yml \-\-content @site.yml \e
+    \-\-expected SHA256_OF_THE_VERSION_READ
+printf '%s' "$TOKEN" | fleet secret git\-token token
+.fi
+.SH SEE ALSO
+.BR sudo (8),
+.BR ansible\-playbook (1)

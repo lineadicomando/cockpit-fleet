@@ -321,14 +321,22 @@ def _parse_input(raw: bytes, limit: int = MAX_INPUT) -> dict:
     return data
 
 
-def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> None:
-    """Take "via" out of the parameters of a call made for an agent, and hold
-    the call to what config.toml lets agents do.
+def is_agent(via: str) -> bool:
+    """Whether a call says it comes from an agent, through fleet-mcp."""
+    return via == "mcp" or via.startswith("mcp:")
 
-    fleet-mcp adds it to everything it sends. Saying it can only restrict:
-    the caller's role is lowered to the ceiling, never raised, and nothing
-    goes through while agents are not enabled. Not saying it is not a way
-    around anything the caller could not already do by hand.
+
+def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> None:
+    """Take "via" out of the parameters of a call that does not come from the
+    interface, and hold a call made for an agent to what config.toml lets
+    agents do.
+
+    fleet-mcp adds "mcp:CLIENT" to everything it sends, the command fleet
+    adds "cli". For an agent saying it can only restrict: the caller's role
+    is lowered to the ceiling, never raised, and nothing goes through while
+    agents are not enabled. Any other value is only recorded. Not saying it,
+    or saying another, is not a way around anything the caller could not
+    already do by hand.
     """
     via = params.pop("via", None)
     if via is None:
@@ -336,6 +344,8 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     if not isinstance(via, str) or not _VIA_RE.fullmatch(via):
         raise BadRequest("via must name what the call comes through")
     ctx.via = via
+    if not is_agent(via):
+        return
     if not ctx.config.mcp_enabled:
         audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
                      "agents are not enabled", redact, via)
@@ -375,7 +385,8 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         return {"ok": False, "error": {"code": "internal", "message": message}}
 
 
-def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
+def load_commands() -> dict[str, Command]:
+    """Every command, registered by importing the modules that declare them."""
     from . import (  # noqa: F401  (register the commands)
         agents,
         chat,
@@ -387,6 +398,11 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
         transfer,
     )
 
+    return COMMANDS
+
+
+def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
+    load_commands()
     if len(argv) != 2:
         print("usage: fleetctl COMMAND < params.json", file=sys.stderr)
         return 2

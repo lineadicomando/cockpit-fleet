@@ -8,8 +8,9 @@ nodes through Ansible alone, without installing an agent on them.
 > archive), collections from a requirements file, inventories, credentials,
 > trusted host keys, job templates with surveys, ad-hoc commands, and runs
 > with live output, a queue and cancellation. Agents can use it as a set of
-> tools, and a chat page starts one for the user
-> ([docs/chat.md](docs/chat.md)). Schedules, notifications and everything
+> tools, a chat page starts one for the user
+> ([docs/chat.md](docs/chat.md)), and the command `fleet` does the same
+> from a terminal (`man fleet`). Schedules, notifications and everything
 > about watching the fleet are still to come. See [TODO.md](TODO.md) for the
 > plan.
 

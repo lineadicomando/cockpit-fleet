@@ -585,7 +585,10 @@ came from. The reason for a ceiling below what the person may do: the output
 of a run is written by the nodes, and an agent that reads it and may also
 write files and launch anything can be steered by what a node prints.
 
-Saying `via` can only restrict, and that is all it is: a declaration. A user
+Only a `via` that is `mcp` or starts with `mcp:` is an agent's; any other
+value, such as the `cli` of the command `fleet` (see "The terminal"), is
+recorded and changes nothing else. Saying `via` can only restrict, and that
+is all it is: a declaration. A user
 with a shell can call `fleetctl` without it, with their whole role, which is
 no more than they could do by hand. It binds an agent only when the agent
 cannot reach anything but `fleet-mcp`: a key of its own in `authorized_keys`
@@ -631,6 +634,72 @@ Checked on Debian 13 (`mcp.sh`), with a client written for the test, and
 from Claude Code 2.1 over ssh with a forced-command key: five turns to launch
 a template, wait for it and report host and tasks.
 
+## The terminal
+
+`fleet`, in `/usr/bin`, does from a terminal what the page does, for whoever
+is in a role group: Cockpit's own terminal, an ssh session, a script. It is
+the third client of `fleetctl`, after the page and `fleet-mcp`, and it is
+built the same way: it runs as the user with no privilege of its own, and
+every command is one call to `fleetctl` through sudo, with `"via": "cli"`.
+So roles, validation and the audit trail are the interface's, a viewer still
+does not read the output of a run, and the audit trail and the journal say
+the call came from a terminal. `cli` is not an agent's `via`: the ceiling of
+`[mcp]` does not apply, as it does not to a person at the page.
+
+```
+fleet run list --status failed      ──▶ sudo -u cockpit-fleet fleetctl run.list
+fleet launch "Say hello" -a k=v     ──▶ template.list, run.start, run.log…, run.result
+fleet secret vault vault_password   ──▶ credential.list, then sudo fleet-secret set NAME < value
+```
+
+**Commands from the registry.** Every command of `fleetctl` is `fleet`
+followed by its area and verb, with its declared parameters as options typed
+as they are declared (`--limit 3`, a flag for a boolean and `--no-` before it,
+a repeated option for a list, JSON for an object, `@path` or `@-` for a text
+read from a file or stdin). Its help is its docstring and its parameters,
+the same that describe it to an agent: a command added to the backend is in
+`fleet` with no work, phase 4 included. The registry is read from the
+installed package, so `fleet help AREA VERB` and the completion for bash need
+no call; `fleet help` asks `whoami` which commands the role has. Three
+commands meant for other programs (`run.reconcile`, `mcp.tools`,
+`chat.start`) are not listed, and still answer.
+
+**Shortcuts** for what is done most often: `launch` takes a template by name
+or id and answers to its survey as `-a NAME=VALUE`, follows the output and
+ends with the outcome per host and per task (`run.result`); `log` prints the
+output, `-f` follows it; `result` reads the outcome; `secret` sets a secret
+of a credential. The exit status lets a script tell a run that failed (1)
+from a command line that is wrong (2) and a refusal or an unreachable
+backend (3).
+
+**Secrets stay off the command line.** A secret question of a survey is
+never taken from `-a`: it is asked for at the terminal, with no echo, and
+the value goes to `fleet-secret answer` on its stdin, whose ticket is what
+`run.start` gets, as from the page. Without a terminal a required secret
+question is an error. `fleet secret` reads the value twice at a terminal, or
+once from stdin; one line read from stdin loses its newline, a key keeps it.
+The value is in no argv, environment or record (`cli.sh` looks).
+
+**Output** is for a person by default: lists of records as tables, the
+known columns first, cut to the width of the terminal; anything else as
+`key: value`; times in local time; the output of a run with its colours at a
+terminal and without them elsewhere. `--json` gives the answer as the
+backend gives it, for a program. English only, like the backend's messages.
+
+**Why not more.** A user at the terminal does not get the projects' files
+(`/var/lib/cockpit-fleet` is the service account's), the credentials, or an
+`ansible-playbook` of their own: the secrets are decrypted only by PID 1 for
+a run, and a run outside the unit would have neither the sandbox nor the
+audit trail. Who wants to work on a project's files at a terminal uses a
+local-directory project under `[projects] local_roots`.
+
+Checked on Debian 13 (`cli.sh`): a project, an inventory and a template set
+up by an administrator, a file written from a file and from stdin, an
+operator's launch followed to its end, exit statuses, refusals by role, a
+user in no group told why, a secret from stdin; and by hand, at a terminal,
+a secret question asked with no echo, which reached the run masked and is in
+no record.
+
 ## The chat
 
 A page of the interface, "Assistant" in its tabs, where the user talks to an
@@ -672,9 +741,12 @@ parser, and never over an agent it did not write. `whoami` says whether an
 agent is named, and the tab is shown only then. `chat.agents` says whether
 each agent is there to be started, and for one under
 `/opt/cockpit-fleet-agent` that is not, the command that installs it: the
-page shows it, to be copied, with a button that opens Cockpit's terminal
-(`cockpit.jump`), which is part of `cockpit-system` and runs as the user of
-the page.
+page shows it, to be copied, with a button that opens Cockpit's terminal,
+which is part of `cockpit-system` and runs as the user of the page. It opens
+in a new tab, at an address built from the shell's own (`src/lib/shell.ts`):
+`cockpit.jump` would replace the page, and with it end the agent the page
+has started, which is what the user is logging in for. Outside the shell
+the button falls back to `cockpit.jump`.
 
 **The page names the agent, it does not start it.** It spawns `fleet-chat
 NAME`, a packaged program that runs as the user. `fleet-chat` asks
@@ -764,10 +836,16 @@ does not, an agent of the same name written by hand is refused, a user who is
 not root is told so, `absent` leaves `/opt` empty and `config.toml` as
 packaged; `ansible-lint` has nothing to say. With the agent so installed the
 page started it and reached the missing login; with the agent named and not
-installed it showed the command, copied it and opened the terminal. **The
-model was not asked anything through an agent installed by the role**: same
-adapter and same packages as the one tried, but installed without their
-scripts.
+installed it showed the command, copied it and opened the terminal.
+
+With the model, through an agent installed by the role (14 October, as an
+operator with no earlier login): the page reached the missing login, the
+user logged in at Cockpit's terminal, and the assistant then launched a
+template with an answer to its survey, after a confirmation that showed
+the answer, and reported its outcome per host and per task from
+`run.result`; the launch is in the audit trail with `via` `mcp:claude-code`.
+The button to the terminal then replaced the page and ended the agent,
+which is why it opens a new tab now.
 
 ## Events
 
@@ -838,8 +916,8 @@ which also runs lintian; on a Debian 13 system `scripts/build-deb.sh --native`
 does the same without a container. The frontend bundle is built beforehand with npm,
 because the package build has no network. The package creates the account and
 the role groups (`sysusers.d`), the state and secret directories
-(`tmpfiles.d`), and installs the unit, the helpers, the sudoers line and the
-bundled collection.
+(`tmpfiles.d`), and installs the unit, the helpers, the sudoers line, the
+bundled collection, and `fleet` with its completion for bash and its manual.
 
 ## Tests
 
@@ -858,6 +936,7 @@ bundled collection.
 | Inventory plugins, directories, scripts | `test/integration/inventories.sh` | controller, as root; wipes the database |
 | Agents: fleet-mcp, ceiling, tools, ssh | `test/integration/mcp.sh` | controller, as root; wipes the database |
 | Chat: fleet-chat, limit on sessions, tools | `test/integration/chat.sh` | controller, as root; wipes the database |
+| The command fleet for a terminal | `test/integration/cli.sh` | controller, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |
