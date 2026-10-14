@@ -57,6 +57,8 @@ install-files: ## Install the built bundle, backend and system files under DESTD
 		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-run@.service
 	install -D -m 0644 system/cockpit-fleet-finish@.service \
 		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-finish@.service
+	install -m 0644 system/cockpit-fleet-scheduler.service system/cockpit-fleet-scheduler.timer \
+		$(DESTDIR)/usr/lib/systemd/system/
 	install -D -m 0644 system/cockpit-fleet.sysusers $(DESTDIR)/usr/lib/sysusers.d/cockpit-fleet.conf
 	install -D -m 0644 system/cockpit-fleet.tmpfiles $(DESTDIR)/usr/lib/tmpfiles.d/cockpit-fleet.conf
 	install -D -m 0644 system/config.toml $(DESTDIR)/etc/cockpit-fleet/config.toml
@@ -66,6 +68,8 @@ uninstall: ## Remove the files installed by install-files (keeps data and secret
 	rm -rf $(COCKPIT_DIR) $(LIB_DIR) $(LIBEXEC_DIR) $(SHARE_DIR)
 	rm -f $(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-run@.service \
 		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-finish@.service \
+		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-scheduler.service \
+		$(DESTDIR)/usr/lib/systemd/system/cockpit-fleet-scheduler.timer \
 		$(DESTDIR)/usr/lib/sysusers.d/cockpit-fleet.conf \
 		$(DESTDIR)/usr/lib/tmpfiles.d/cockpit-fleet.conf \
 		$(DESTDIR)/etc/sudoers.d/cockpit-fleet \

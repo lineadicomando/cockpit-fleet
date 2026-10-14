@@ -1,0 +1,18 @@
+[Unit]
+Description=Launch the schedules of Cockpit Fleet that are due
+Documentation=https://github.com/lineadicomando/cockpit-fleet
+
+[Service]
+Type=oneshot
+User=cockpit-fleet
+Group=cockpit-fleet
+# Not sandboxed like a run: this is the backend itself, which must write the
+# database and start runs through sudo, as cockpit-fleet-finish@ does.
+ExecStart=/usr/libexec/cockpit-fleet/fleetctl scheduler.tick
+StandardInput=null
+StandardOutput=null
+UMask=0077
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cockpit-fleet
+ProtectHome=yes
+PrivateTmp=yes

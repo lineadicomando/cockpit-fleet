@@ -219,6 +219,40 @@ MIGRATIONS: list[list[str]] = [
         # What a call came through when it was not the interface: an agent.
         "ALTER TABLE audit ADD COLUMN via TEXT NOT NULL DEFAULT ''",
     ],
+    [
+        # Schedules: a template launched at the times of an OnCalendar
+        # expression, with the answers to its survey stored here.
+        """
+        CREATE TABLE schedules (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL UNIQUE,
+            template_id   TEXT NOT NULL REFERENCES templates (id),
+            calendar      TEXT NOT NULL,
+            timezone      TEXT NOT NULL DEFAULT '',
+            enabled       INTEGER NOT NULL DEFAULT 1,
+            limit_hosts   TEXT NOT NULL DEFAULT '',
+            check_mode    INTEGER NOT NULL DEFAULT 0,
+            diff          INTEGER NOT NULL DEFAULT 0,
+            answers       TEXT NOT NULL DEFAULT '{}',
+            overlap       TEXT NOT NULL DEFAULT 'skip',
+            catch_up      INTEGER NOT NULL DEFAULT 0,
+            priority      INTEGER NOT NULL DEFAULT 0,
+            random_delay  INTEGER NOT NULL DEFAULT 0,
+            next_at       REAL,
+            last_at       REAL,
+            last_outcome  TEXT NOT NULL DEFAULT '',
+            last_error    TEXT NOT NULL DEFAULT '',
+            last_run_id   TEXT REFERENCES runs (id) ON DELETE SET NULL,
+            created_by    TEXT NOT NULL,
+            created_at    REAL NOT NULL,
+            updated_at    REAL NOT NULL
+        )
+        """,
+        "CREATE INDEX schedules_next ON schedules (enabled, next_at)",
+        "ALTER TABLE runs ADD COLUMN schedule_id TEXT REFERENCES schedules (id) ON DELETE SET NULL",
+        "ALTER TABLE runs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+        "CREATE INDEX runs_schedule ON runs (schedule_id)",
+    ],
 ]
 
 

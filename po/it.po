@@ -1286,3 +1286,170 @@ msgstr "Apri il terminale"
 
 msgid "{{agent}} is not installed on this machine"
 msgstr "{{agent}} non è installato su questa macchina"
+
+msgid "A schedule launches a job template at the times of a calendar: every night, every quarter of an hour, on the first of the month. Its runs go through the same queue as the others."
+msgstr "Una pianificazione avvia un job template agli orari di un calendario: ogni notte, ogni quarto d'ora, il primo del mese. Le sue esecuzioni passano per la stessa coda delle altre."
+
+msgid "An OnCalendar expression of systemd, such as \"Mon..Fri *-*-* 06:00\" or \"*:0/15\". The builder above writes it; it can also be typed."
+msgstr "Un'espressione OnCalendar di systemd, come \"Mon..Fri *-*-* 06:00\" o \"*:0/15\". La scrivono i campi qui sopra; si può anche digitare."
+
+msgid "At"
+msgstr "Alle"
+
+msgid "At minute"
+msgstr "Al minuto"
+
+msgid "Calendar"
+msgstr "Calendario"
+
+msgid "Cancel the previous one"
+msgstr "Annulla la precedente"
+
+msgid "Choose a job template"
+msgstr "Scegli un job template"
+
+msgid "Convert"
+msgstr "Converti"
+
+msgid "Custom expression"
+msgstr "Espressione personalizzata"
+
+msgid "Edit schedule"
+msgstr "Modifica pianificazione"
+
+msgid "Enabled"
+msgstr "Attiva"
+
+msgid "Every"
+msgstr "Ogni"
+
+msgid "Every day"
+msgstr "Ogni giorno"
+
+msgid "Every few minutes"
+msgstr "Ogni pochi minuti"
+
+msgid "Every hour"
+msgstr "Ogni ora"
+
+msgid "Every month"
+msgstr "Ogni mese"
+
+msgid "Every week"
+msgstr "Ogni settimana"
+
+msgid "Friday"
+msgstr "Venerdì"
+
+msgid "From a cron line"
+msgstr "Da una riga di cron"
+
+msgid "If the previous run is not over"
+msgstr "Se l'esecuzione precedente non è finita"
+
+msgid "Last time"
+msgstr "Ultima volta"
+
+msgid "Missed while the controller was off"
+msgstr "Saltata: il controller era spento"
+
+msgid "Monday"
+msgstr "Lunedì"
+
+msgid "Monday to Friday"
+msgstr "Dal lunedì al venerdì"
+
+msgid "Narrows the template's own limit; it cannot widen it."
+msgstr "Restringe il limite del template; non può allargarlo."
+
+msgid "Never"
+msgstr "Mai"
+
+msgid "New schedule"
+msgstr "Nuova pianificazione"
+
+msgid "Next time"
+msgstr "Prossima volta"
+
+msgid "Next times: {{times}}"
+msgstr "Prossime volte: {{times}}"
+
+msgid "No schedules"
+msgstr "Nessuna pianificazione"
+
+msgid "Not launched"
+msgstr "Non avviata"
+
+msgid "Off"
+msgstr "Disattivata"
+
+msgid "On"
+msgstr "Il"
+
+msgid "On day"
+msgstr "Il giorno"
+
+msgid "Priority in the queue"
+msgstr "Priorità nella coda"
+
+msgid "Queue this one too"
+msgstr "Metti in coda anche questa"
+
+msgid "Random delay, up to (minutes)"
+msgstr "Ritardo casuale, fino a (minuti)"
+
+msgid "Repeat"
+msgstr "Ripeti"
+
+msgid "Run now"
+msgstr "Esegui ora"
+
+msgid "Saturday"
+msgstr "Sabato"
+
+msgid "Scheduler"
+msgstr "Scheduler"
+
+msgid "Schedules"
+msgstr "Pianificazioni"
+
+msgid "Skip this time"
+msgstr "Salta questa volta"
+
+msgid "Skipped: the previous run was not over"
+msgstr "Saltata: l'esecuzione precedente non era finita"
+
+msgid "Sunday"
+msgstr "Domenica"
+
+msgid "The controller's own"
+msgstr "Quello del controller"
+
+msgid "The schedule is deleted. The runs it launched stay in the history."
+msgstr "La pianificazione viene eliminata. Le esecuzioni che ha avviato restano nello storico."
+
+msgid "This calendar has no time left to run at."
+msgstr "Questo calendario non ha più orari in cui eseguire."
+
+msgid "This job template asks for a secret at launch, so it cannot be scheduled: a schedule never stores a secret."
+msgstr "Questo job template chiede un segreto all'avvio, quindi non si può pianificare: una pianificazione non conserva mai un segreto."
+
+msgid "Thursday"
+msgstr "Giovedì"
+
+msgid "Time zone"
+msgstr "Fuso orario"
+
+msgid "Tuesday"
+msgstr "Martedì"
+
+msgid "Wednesday"
+msgstr "Mercoledì"
+
+msgid "When times were missed while the controller was off, launch once at start-up"
+msgstr "Se degli orari sono saltati mentre il controller era spento, avvia una volta all'accensione"
+
+msgid "minutes_count"
+msgid_plural "minutes_count_plural"
+msgstr[0] "{{count}} minuto"
+msgstr[1] "{{count}} minuti"

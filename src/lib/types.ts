@@ -182,6 +182,40 @@ export interface Template {
     become: boolean;
 }
 
+export type Overlap = "skip" | "queue" | "cancel";
+
+export interface Schedule {
+    id: string;
+    name: string;
+    template_id: string;
+    // The template's name, or "" when it is gone.
+    template: string;
+    calendar: string;
+    timezone: string;
+    enabled: boolean;
+    limit: string;
+    check: boolean;
+    diff: boolean;
+    answers: Record<string, SurveyValue>;
+    overlap: Overlap;
+    catch_up: boolean;
+    priority: number;
+    random_delay: number;
+    next_at: number | null;
+    last_at: number | null;
+    last_outcome: "" | "launched" | "skipped" | "missed" | "error";
+    last_error: string;
+    last_run_id: string | null;
+    last_status: RunStatus | "";
+    created_by: string;
+}
+
+export interface SchedulePreview {
+    calendar: string;
+    normalized: string;
+    next: number[];
+}
+
 export type RunStatus = "queued" | "running" | "successful" | "failed" | "canceled" | "error";
 
 export interface HostStats {
@@ -204,6 +238,9 @@ export interface Run {
     inventory_id: string | null;
     created_by: string;
     created_at: number;
+    // The schedule that launched it, when one did.
+    schedule_id: string | null;
+    priority: number;
     started_at: number | null;
     finished_at: number | null;
     rc: number | null;

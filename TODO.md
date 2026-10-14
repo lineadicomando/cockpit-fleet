@@ -7,18 +7,14 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1, 2, 3 and 3b (agents and the chat, "Assistant" in the interface)
-are closed, the last on 13 October 2026. On 14 October the assistant was
-tried with its model through an agent installed by the role, from the
-interface (`docs/architecture.md`, "The chat"), and the button to the
-terminal now opens a new tab. The same day `fleet` was written, the backend
-for a person at a terminal (`docs/architecture.md`, "The terminal"); the
-rest of what the terminal could give is under "The terminal" below.
+Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface)
+and 4 (schedules) are closed, the last on 14 October 2026. The same day
+`fleet` was written, the backend for a person at a terminal
+(`docs/architecture.md`, "The terminal"); the rest of what the terminal
+could give is under "The terminal" below.
 
-**Next step: phase 4** (scheduling). Nothing of it is written; its section below
-says what it can build on, and the open points below say what to confirm with
-the user before writing it. The ideas left for the terminal are an
-alternative the user may pick first.
+**Next step: phase 5** (notifications). Nothing of it is written; the ideas
+left for the terminal are an alternative the user may pick first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
@@ -38,9 +34,11 @@ and on Windows over SSH.
 
 State of the test VM `deb13-samba-dc` (shut off): the package with `fleet`,
 the agent of the chat installed by the role and named in `config.toml`,
-`[mcp] enabled = true`; the project `demo`, the inventory `controller` and
-the templates "Say hello" and "withsecret", left by a trial of `fleet`. No
+`[mcp] enabled = true`; an empty database (`schedules.sh` wiped it). No
 test account, no login to Claude (logged out and removed on 14 October).
+On 14 October a `wipe` put back an old `config.toml` (of 8 October, from a
+`.it-backup` left by an earlier session): it was written again by hand, as
+the packaged file with `[mcp] enabled = true` and `[chat.agents.claude]`.
 Its `config.toml` differs from the packaged one (the agent and `[mcp]`), so
 `make vm-deb-deploy` stops at dpkg's question: finish with `dpkg
 --force-confold --configure -a` on the VM, or put the packaged file back
@@ -58,6 +56,8 @@ vm-deb-deploy` installs the current code.
 
 Integration tests, all passing when last run:
 
+- on the code with schedules (14 October): `schedules.sh`, and a reboot by
+  hand (see phase 4);
 - on the code with `fleet` (14 October): `cli.sh`, `mcp.sh`, `chat.sh`,
   `roles.sh`;
 - on the code with the chat (13 October): `privileges.sh`, `files.sh`,
@@ -129,22 +129,18 @@ Integration tests, all passing when last run:
 | Name of the command for the terminal | `fleet`, confirmed on 14 October. No Debian package (trixie, sid) installs `bin/fleet`, its completion or its manual; the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
 | Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`); tables for a person, `--json` for a program |
 | Secrets at the terminal | Never on the command line: asked for with no echo, or read from stdin, and handed to `fleet-secret` on its stdin |
-| Scheduling | A single static timer that runs `fleetctl scheduler tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions |
+| Scheduling | A single static timer that runs `fleetctl scheduler.tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions read by `systemd-analyze`, with a time zone |
+| Who manages schedules | As templates: an administrator creates, changes and deletes; an operator turns one on or off and runs it now; a viewer sees them (confirmed on 14 October) |
+| Whose a scheduled run is | The schedule's: `created_by` is `schedule:NAME`, the tick runs as `system`; the audit trail has who made, changed, switched or ran a schedule, not one record per tick. "Run now" is the operator's (confirmed on 14 October) |
+| Schedule of a template with a survey | The answers are stored with the schedule and checked when it is saved and at each launch; never a secret, so a template with a required secret question cannot be scheduled (confirmed on 14 October) |
+| Missed times | More than 5 minutes late is missed; per schedule, either recorded as missed or launched once for all the times lost |
+| Overlap | Per schedule: skip (default), queue, cancel the previous run |
 | Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days |
 | Who approves | Group `cockpit-fleet-approver` |
 
 ## Open points (a default applies, to be confirmed before the phase named)
 
-- **Phase 4, who manages schedules**: by default an administrator creates,
-  changes and deletes them, an operator turns one on or off and runs it now,
-  a viewer sees them; as for templates.
-- **Phase 4, whose run a scheduled run is**: by default `created_by` is the
-  schedule (the caller of the tick is the service account, which the backend
-  calls `system`), and the audit trail has who made or changed the schedule,
-  not one record per tick.
-- **Phase 4, a schedule of a template with a survey**: by default the answers
-  are stored with the schedule and checked when it is saved; a template with
-  a required secret question cannot be scheduled, as it cannot be a tool.
+None now.
 
 ## Leftovers of the closed phases
 
@@ -190,8 +186,8 @@ Integration tests, all passing when last run:
   built-in plugins were tried.
 - Masking: other encodings of a secret are not recognised, and secrets the
   run decrypts by itself (a vaulted variable of the inventory) are not known.
-- Export and import: nothing is updated or deleted by an import; schedules and
-  notification rules will have to join the document when they exist.
+- Export and import: nothing is updated or deleted by an import; notification
+  rules will have to join the document when they exist.
 - Help on modules: like the completion, only what is installed on the
   controller.
 - Agents: every `tools/list` while agents are not enabled leaves a denial in
@@ -217,6 +213,15 @@ Integration tests, all passing when last run:
   reached over ssh, and the installation behind a proxy were not tried.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
+- Schedules: the builder of the interface knows a few shapes (every few
+  minutes, hourly, daily, weekdays, weekly, monthly), anything else is typed;
+  no end date and no window in which a schedule may run; the list of runs
+  cannot be filtered by schedule and the overview says nothing of them;
+  a time that ends in `error` because the calendar could not be read leaves
+  the schedule with no next time until it is saved or switched again; the
+  tick runs `fleetctl` every minute even with no schedule (it also collects
+  runs and starts queued ones, which is what makes a reboot lose nothing).
+  A failed scheduled run notifies nobody until phase 5.
 
 ## Phase 3 — Complete runner (closed on 13 October)
 
@@ -288,40 +293,25 @@ base64 pieces, so an archive is not uploaded from it; answers to a survey
 are typed by `-a` as the questions say, but a choice is not offered as a
 list to pick from; English only.
 
-## Phase 4 — Scheduling
+## Phase 4 — Scheduling (closed on 14 October)
 
-What it can build on, as the code is today:
-
-- The queue: a launch inserts a run as `queued`, and `jobs.dispatch` starts
-  queued runs, oldest first, while fewer than `[runs] max_concurrent` are
-  running. There is no priority yet: the order is `created_at`.
-- A caller that is not sudo: `fleetctl` run by the service account itself,
-  with no `SUDO_UID`, is the caller `system` with the admin role
-  (`auth.resolve_caller`). `cockpit-fleet-finish@.service` already works
-  this way (`fleetctl run.reconcile`), and it is the model for the unit of
-  the timer: `User=cockpit-fleet`, no sandbox of a run, the database
-  writable.
-- `run.start` holds every check of a launch (limit, answers of the survey,
-  role); the tick should go through the same code, not around it.
-- The schema is at migration 7; schedules are a new entry of `MIGRATIONS`.
-- New commands become tools of `fleet-mcp` and commands of `fleet` by
-  themselves (see phase 3b and "The terminal"), and
-  `config.export` and `config.import` must learn about schedules.
-
-To do:
-
-- [ ] `cockpit-fleet-scheduler.timer` + `fleetctl scheduler tick`
-- [ ] `OnCalendar` schedules with a time zone; next execution computed on save and
-      at every tick (`systemd-analyze calendar`)
-- [ ] Import from 5-field cron; a builder with presets in the interface
-- [ ] Catching up on the executions missed while the controller was off, per
-      schedule
-- [ ] Priority in the queue; overlap policy (skip, queue, cancel the previous one)
-- [ ] Random delay to spread the load
-- [ ] Interface: list, next executions, enable/disable, "run now"
+Schedules of templates with `OnCalendar` expressions and a time zone, the
+timer and its tick, conversion of a cron line, priority in the queue,
+overlap, catching up, random delay, the page with a builder and the next
+times, export and import: described in `docs/architecture.md`
+("Schedules"), and what they leave to be desired is in the leftovers above.
 
 Done when: ten schedules on the same minute respect the concurrency limit and
-none is lost after a reboot.
+none is lost after a reboot. **Met on 14 October** on the VM: `schedules.sh`
+launched ten schedules from one tick with `max_concurrent = 2`, never more
+than two running, highest priority first. For the reboot, the VM was shut
+down with one run running and two queued, before the time of two schedules,
+one that catches up and one that does not, and started again eight minutes
+later. The first tick after the boot recorded the run cut by the shutdown
+(failed: its unit was stopped), started the next queued one, launched the
+schedule that catches up once and recorded the other as missed; both were
+planned for the next day. The page was looked at in the browser: the list,
+the builder, the preview and the conversion of a cron line.
 
 ## Phase 5 — Notifications
 

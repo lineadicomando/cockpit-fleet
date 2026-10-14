@@ -16,7 +16,8 @@ STATUSES = ("queued", "running", "successful", "failed", "canceled", "error")
 def run_row(row) -> dict:
     data = {key: row[key] for key in ("id", "kind", "status", "title", "template_id", "project_id",
                                       "inventory_id", "created_by", "created_at", "started_at",
-                                      "finished_at", "rc", "revision", "error")}
+                                      "finished_at", "rc", "revision", "error", "schedule_id",
+                                      "priority")}
     data["options"] = store.loads(row["options"], {})
     data["stats"] = store.loads(row["stats"], {})
     return data
@@ -32,12 +33,14 @@ def run_row(row) -> dict:
          })
 def run_start(ctx: Context, params: Values) -> dict:
     """Launch a job template. The caller may narrow it, not widen it."""
-    template_id = params["template_id"]
-    limit = params["limit"]
-    check = params["check"]
-    diff = params["diff"]
-    answers = params["answers"]
+    return launch(ctx, params["template_id"], params["limit"], params["check"], params["diff"],
+                  params["answers"])
 
+
+def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, answers: dict,
+           schedule=None, created_by: str | None = None) -> dict:
+    """Queue a run of a template: what run.start does, and what a schedule does
+    at its time, with the answers stored with it."""
     template = store.fetch(ctx.conn, "templates", template_id, "template")
     project = store.fetch(ctx.conn, "projects", template["project_id"], "project")
     inventory = store.fetch(ctx.conn, "inventories", template["inventory_id"], "inventory")
@@ -92,10 +95,15 @@ def run_start(ctx: Context, params: Values) -> dict:
     options = {"limit": limit, "check": check, "diff": spec["diff"], "answers": variables,
                # Which secrets were given; their values are in no record.
                "secret_answers": sorted(tickets)}
-    jobs.enqueue(ctx, {"id": run_id, "kind": "playbook", "title": template["name"],
-                       "template_id": template_id, "project_id": project["id"],
-                       "inventory_id": inventory["id"], "revision": project["revision"],
-                       "options": json.dumps(options)}, spec, directory)
+    run = {"id": run_id, "kind": "playbook", "title": template["name"],
+           "template_id": template_id, "project_id": project["id"],
+           "inventory_id": inventory["id"], "revision": project["revision"],
+           "options": json.dumps(options)}
+    if schedule is not None:
+        run.update(schedule_id=schedule["id"], priority=schedule["priority"])
+    if created_by:
+        run["created_by"] = created_by
+    jobs.enqueue(ctx, run, spec, directory)
     return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 

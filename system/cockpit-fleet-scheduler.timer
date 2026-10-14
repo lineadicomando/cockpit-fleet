@@ -1,0 +1,12 @@
+[Unit]
+Description=Launch the schedules of Cockpit Fleet that are due
+Documentation=https://github.com/lineadicomando/cockpit-fleet
+
+[Timer]
+# Every minute, on the minute. One timer for every schedule: the schedules
+# themselves are rows of the database, never units.
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

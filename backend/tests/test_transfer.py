@@ -3,10 +3,11 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import paths, transfer
+from cockpit_fleet import paths, schedules, transfer
 from cockpit_fleet.auth import Caller
 from cockpit_fleet.cli import Context, dispatch
 
@@ -36,6 +37,12 @@ class TransferTest(Base):
             "vault_credential_ids": [vault["id"]], "limit_hosts": "web*", "tags": ["a"],
             "extra_vars": {"x": 1}, "forks": 7, "become": True,
             "survey": [{"name": "version", "type": "text", "required": True}]})
+        template = self.ok("template.list")["templates"][0]
+        with mock.patch.object(schedules, "analyze", lambda *args: ("", [2e9])):
+            self.ok("schedule.create", {
+                "name": "nightly", "template_id": template["id"], "calendar": "02:00",
+                "timezone": "Europe/Rome", "limit": "web01", "answers": {"version": "2"},
+                "overlap": "queue", "catch_up": True, "priority": 2, "random_delay": 60})
 
     def elsewhere(self):
         """A context on another, empty database."""
@@ -63,16 +70,18 @@ class TransferTest(Base):
     def test_import_recreates_everything_and_is_repeatable(self):
         self.populate()
         document = self.ok("config.export")
+        self.assertEqual(document["schedules"][0]["template"], "deploy")
         ctx = self.elsewhere()
+        self.enterContext(mock.patch.object(schedules, "analyze", lambda *args: ("", [2e9])))
         answer = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)
         self.assertTrue(answer["ok"], answer)
         data = answer["data"]
-        self.assertEqual((data["created"], data["exists"], data["failed"]), (9, 0, 0), data)
+        self.assertEqual((data["created"], data["exists"], data["failed"]), (10, 0, 0), data)
         again = dispatch("config.export", b"", ctx)["data"]
         for section in transfer.SECTIONS:
             self.assertEqual(again[section], document[section], section)
         second = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)["data"]
-        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 9, 0))
+        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 10, 0))
         # Each thing left the record its own command leaves; the text of an
         # inventory is in none.
         rows = ctx.conn.execute("SELECT command, params FROM audit").fetchall()

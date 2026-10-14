@@ -110,6 +110,7 @@ export function SystemPage() {
         state_dir: t("State directory"),
         secrets_dir: t("Secret store"),
         run_unit: t("Run unit"),
+        scheduler: t("Scheduler"),
         collection: t("Bundled Ansible collection"),
         git: t("Git"),
         sshpass: t("sshpass, for SSH logins with a password"),

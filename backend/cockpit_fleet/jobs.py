@@ -243,14 +243,16 @@ def _fleet_unit(verb: str, run_id: str) -> None:
 
 
 def dispatch(ctx) -> None:
-    """Start queued runs while fewer than the configured maximum are running."""
+    """Start queued runs while fewer than the configured maximum are running:
+    those of a higher priority first, then the oldest."""
     conn = ctx.conn
     conn.execute("BEGIN IMMEDIATE")
     try:
         running = conn.execute("SELECT count(*) FROM runs WHERE status = 'running'").fetchone()[0]
         free = max(ctx.config.max_concurrent_runs - running, 0)
         chosen = [row["id"] for row in conn.execute(
-            "SELECT id FROM runs WHERE status = 'queued' ORDER BY created_at LIMIT ?", (free,))]
+            "SELECT id FROM runs WHERE status = 'queued' ORDER BY priority DESC, created_at"
+            " LIMIT ?", (free,))]
         for run_id in chosen:
             conn.execute("UPDATE runs SET status = 'running', started_at = ? WHERE id = ?",
                          (store.now(), run_id))

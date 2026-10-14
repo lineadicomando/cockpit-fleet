@@ -19,10 +19,13 @@ ANSWERS_DIR = Path("/run/cockpit-fleet/answers")
 COLLECTIONS_DIR = Path("/usr/share/cockpit-fleet/collections")
 
 DATABASE = STATE_DIR / "fleet.db"
+# Held by the tick of the scheduler, so that two never launch the same thing.
+SCHEDULER_LOCK = STATE_DIR / "scheduler.lock"
 CONFIG_FILE = Path("/etc/cockpit-fleet/config.toml")
 LIBEXEC_DIR = Path("/usr/libexec/cockpit-fleet")
 
 SERVICE_USER = "cockpit-fleet"
 RUN_UNIT = "cockpit-fleet-run@{}.service"
 FINISH_UNIT_FILE = Path("/usr/lib/systemd/system/cockpit-fleet-finish@.service")
+SCHEDULER_TIMER = "cockpit-fleet-scheduler.timer"
 RUN_UNIT_FILE = Path("/usr/lib/systemd/system/cockpit-fleet-run@.service")

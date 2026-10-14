@@ -394,6 +394,7 @@ def load_commands() -> dict[str, Command]:
         moduledocs,
         resources,
         runs,
+        schedules,
         system,
         transfer,
     )

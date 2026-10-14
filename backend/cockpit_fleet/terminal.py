@@ -51,13 +51,13 @@ SHORTCUTS = {
 }
 # The columns a table shows first, when its rows have them.
 _COLUMNS = ("id", "name", "status", "title", "kind", "user", "role", "command", "outcome",
-            "via", "playbook", "path", "host", "created_by", "created_at", "finished_at", "ts",
-            "rc", "revision", "url", "username")
+            "via", "playbook", "path", "host", "template", "calendar", "enabled", "next_at",
+            "created_by", "created_at", "finished_at", "ts", "rc", "revision", "url", "username")
 _MAX_COLUMNS = 6
 _MAX_CELL = 40
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # Commands made for other programs: they work, they are not listed.
-_UNLISTED = ("chat.start", "mcp.tools", "run.reconcile")
+_UNLISTED = ("chat.start", "mcp.tools", "run.reconcile", "scheduler.tick")
 
 
 class Usage(Exception):

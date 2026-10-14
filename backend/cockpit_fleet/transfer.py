@@ -1,5 +1,5 @@
 """Export and import of the configuration: credentials, projects, inventories,
-trusted host keys and job templates, as one JSON document.
+trusted host keys, job templates and schedules, as one JSON document.
 
 No secret is in it: a credential travels as its name and its kind, and its
 secrets are entered again where it is imported. Neither are the files of a
@@ -14,7 +14,7 @@ from .errors import BadRequest, FleetError
 
 FORMAT = "cockpit-fleet-config"
 VERSION = 1
-SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates")
+SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates", "schedules")
 _MAX_ITEMS = 2000
 _MAX_IMPORT = 8 * 1024 * 1024
 
@@ -62,6 +62,16 @@ def config_export(ctx: Context, params: Values) -> dict:
             "survey": store.loads(row["survey"], []), "forks": row["forks"],
             "verbosity": row["verbosity"], "become": bool(row["become"]),
         })
+    templates = _names(ctx, "templates")
+    document["schedules"] = [
+        {"name": row["name"], "template": templates.get(row["template_id"], ""),
+         "calendar": row["calendar"], "timezone": row["timezone"],
+         "enabled": bool(row["enabled"]), "limit": row["limit_hosts"],
+         "check": bool(row["check_mode"]), "diff": bool(row["diff"]),
+         "answers": store.loads(row["answers"], {}), "overlap": row["overlap"],
+         "catch_up": bool(row["catch_up"]), "priority": row["priority"],
+         "random_delay": row["random_delay"]}
+        for row in conn.execute("SELECT * FROM schedules ORDER BY name COLLATE NOCASE")]
     return document
 
 
@@ -176,6 +186,15 @@ class _Importer:
             params["forks"] = item["forks"]
         self._create("template.create", params)
 
+    def schedule(self, item: dict) -> None:
+        params = {"name": item.get("name"), "calendar": item.get("calendar"),
+                  "template_id": self._id("templates", item.get("template"), "template", True)}
+        for key in ("timezone", "enabled", "limit", "check", "diff", "answers", "overlap",
+                    "catch_up", "priority", "random_delay"):
+            if key in item:
+                params[key] = item[key]
+        self._create("schedule.create", params)
+
 
 @command("config.import", role="admin", mutating=True, redact=("document",),
          max_input=_MAX_IMPORT,
@@ -199,6 +218,7 @@ def config_import(ctx: Context, params: Values) -> dict:
     work._each("inventories", document.get("inventories", []), "inventories", work.inventory)
     work._each("host_keys", document.get("host_keys", []), None, work.host_key)
     work._each("templates", document.get("templates", []), "templates", work.template)
+    work._each("schedules", document.get("schedules", []), "schedules", work.schedule)
     counts = {outcome: sum(1 for entry in work.report if entry["outcome"] == outcome)
               for outcome in ("created", "exists", "failed")}
     return {"report": work.report, **counts}
