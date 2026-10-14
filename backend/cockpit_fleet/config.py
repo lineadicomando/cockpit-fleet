@@ -16,6 +16,7 @@ from .validators import MODULE_RE
 MAX_UPLOAD_MB = 50
 
 _PROXY_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?")
+_LINK_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?")
 _AGENT_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
 _MAX_AGENTS = 8
 
@@ -61,6 +62,8 @@ class Config:
     mcp_max_role: str = "operator"
     chat_agents: tuple[ChatAgent, ...] = ()
     chat_max_sessions: int = 2
+    # Where the web console is reached, for the links in notifications.
+    notify_url: str = ""
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -138,7 +141,7 @@ def parse(text: str) -> Config:
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
     unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
-                                     "chat"})
+                                     "chat", "notifications"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -182,6 +185,12 @@ def parse(text: str) -> Config:
     if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
         raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
 
+    notifications = _section(data, "notifications", {"url"})
+    notify_url = notifications.get("url", "")
+    if not isinstance(notify_url, str) or (notify_url and not _LINK_RE.fullmatch(notify_url)):
+        raise ConfigError("notifications.url must be empty or an http(s)://host[:port][/path]"
+                          " URL")
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -196,6 +205,7 @@ def parse(text: str) -> Config:
         mcp_max_role=mcp_max_role,
         chat_agents=tuple(_agent(name, section) for name, section in agents.items()),
         chat_max_sessions=_int(chat, "chat", "max_sessions", Config.chat_max_sessions, 1, 64),
+        notify_url=notify_url.rstrip("/"),
     )
 
 

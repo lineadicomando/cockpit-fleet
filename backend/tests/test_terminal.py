@@ -68,7 +68,7 @@ class ParseTest(unittest.TestCase):
 class CompleteTest(unittest.TestCase):
     def test_commands_verbs_and_options(self):
         complete = terminal.complete
-        self.assertEqual(complete(COMMANDS, ["r"]), ["result", "run"])
+        self.assertEqual(complete(COMMANDS, ["r"]), ["result", "rule", "run"])
         self.assertIn("start", complete(COMMANDS, ["run", ""]))
         self.assertNotIn("reconcile", complete(COMMANDS, ["run", ""]))
         self.assertEqual(complete(COMMANDS, ["run", "start", "--t"]), ["--template-id"])

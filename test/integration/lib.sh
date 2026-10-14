@@ -71,7 +71,7 @@ wipe() {
     for id in $(db "SELECT group_concat(id, ' ') FROM runs WHERE status IN ('queued','running')" 2>/dev/null); do
         [ "$id" = None ] || systemctl stop "cockpit-fleet-run@$id.service" 2>/dev/null
     done
-    for name in $("$SECRET" list | grep '^c-'); do "$SECRET" delete "$name"; done
+    for name in $("$SECRET" list | grep -E '^(c|n)-'); do "$SECRET" delete "$name"; done
     for user in itadmin itoperator; do userdel -r "$user" 2>/dev/null; done
     [ -f "$CONFIG.it-backup" ] && mv "$CONFIG.it-backup" "$CONFIG"
     rm -rf /srv/fleet-it /var/lib/cockpit-fleet/runs/* /var/lib/cockpit-fleet/projects/* /var/lib/cockpit-fleet/cache

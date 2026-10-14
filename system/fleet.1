@@ -29,6 +29,9 @@ fleet \- drive Ansible through cockpit-fleet from a terminal
 .B fleet secret
 .I credential field
 .br
+.B fleet secret \-\-channel
+.I channel
+.br
 .B fleet help
 .RI [ area " [" verb ]]
 .SH DESCRIPTION
@@ -93,8 +96,10 @@ How a run went, per host and task by task;
 waits for its end.
 .TP
 .B secret
-Sets a secret of a credential (administrators only), asked for twice at the
-terminal or read from the standard input. It cannot be read back.
+Sets a secret of a credential, or with
+.B \-\-channel
+the secret of a notification channel (administrators only), asked for twice at
+the terminal or read from the standard input. It cannot be read back.
 .SH OPTIONS
 .TP
 .B \-\-json
@@ -112,6 +117,7 @@ fleet log \-f r3c9d2e1f0a4b
 fleet file write p1a2b3c4d5e6 \-\-path site.yml \-\-content @site.yml \e
     \-\-expected SHA256_OF_THE_VERSION_READ
 printf '%s' "$TOKEN" | fleet secret git\-token token
+fleet secret \-\-channel telegram
 .fi
 .SH SEE ALSO
 .BR sudo (8),

@@ -15,6 +15,7 @@ override_dh_auto_test:
 override_dh_auto_install:
 	$(MAKE) install-files DESTDIR=$(CURDIR)/debian/cockpit-fleet
 
-# Only the timer is enabled and started; its service runs when the timer says.
+# Only the timer and the path unit are enabled and started; their services
+# run when they say.
 override_dh_installsystemd:
-	dh_installsystemd cockpit-fleet-scheduler.timer
+	dh_installsystemd cockpit-fleet-scheduler.timer cockpit-fleet-notify.path

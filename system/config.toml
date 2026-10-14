@@ -17,8 +17,14 @@
 #max_upload_mb = 20
 
 [network]
-# Proxy for outgoing connections (git, ansible-galaxy, notifications).
+# Proxy for outgoing connections (git, ansible-galaxy, notifications over
+# HTTP; mail goes straight to its server).
 #proxy = "http://proxy.example.org:3128"
+
+[notifications]
+# Where the web console is reached, for the links in the messages. Empty
+# means https://<the name of this machine>:9090.
+#url = "https://fleet.example.org:9090"
 
 [adhoc]
 # Modules an administrator may run as an ad-hoc command, by their full name.

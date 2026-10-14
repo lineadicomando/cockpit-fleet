@@ -253,6 +253,54 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE runs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
         "CREATE INDEX runs_schedule ON runs (schedule_id)",
     ],
+    [
+        # Notifications: where they go, which runs they are about, and the
+        # outbox that cockpit-fleet-notify.service delivers from.
+        """
+        CREATE TABLE channels (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL UNIQUE,
+            kind          TEXT NOT NULL,
+            settings      TEXT NOT NULL DEFAULT '{}',
+            language      TEXT NOT NULL DEFAULT 'en',
+            enabled       INTEGER NOT NULL DEFAULT 1,
+            group_window  INTEGER NOT NULL DEFAULT 0,
+            max_per_hour  INTEGER NOT NULL DEFAULT 20,
+            created_at    REAL NOT NULL,
+            updated_at    REAL NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE notify_rules (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL UNIQUE,
+            channel_id  TEXT NOT NULL REFERENCES channels (id) ON DELETE CASCADE,
+            events      TEXT NOT NULL DEFAULT '[]',
+            scope       TEXT NOT NULL DEFAULT 'all',
+            scope_id    TEXT,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            created_at  REAL NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE notifications (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id  TEXT NOT NULL REFERENCES channels (id) ON DELETE CASCADE,
+            event       TEXT NOT NULL,
+            run_id      TEXT REFERENCES runs (id) ON DELETE SET NULL,
+            payload     TEXT NOT NULL DEFAULT '{}',
+            state       TEXT NOT NULL DEFAULT 'pending',
+            attempts    INTEGER NOT NULL DEFAULT 0,
+            next_at     REAL NOT NULL,
+            message     INTEGER,
+            error       TEXT NOT NULL DEFAULT '',
+            created_at  REAL NOT NULL,
+            sent_at     REAL
+        )
+        """,
+        "CREATE INDEX notifications_due ON notifications (state, channel_id, next_at)",
+        "CREATE INDEX notifications_created ON notifications (created_at)",
+    ],
 ]
 
 

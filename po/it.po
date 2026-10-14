@@ -1453,3 +1453,230 @@ msgid "minutes_count"
 msgid_plural "minutes_count_plural"
 msgstr[0] "{{count}} minuto"
 msgstr[1] "{{count}} minuti"
+
+msgid "A channel is where notifications go: a Telegram chat, a webhook, a mail address, a Matrix room. Its token or password is encrypted and never shown again."
+msgstr "Un canale è dove vanno le notifiche: una chat Telegram, un webhook, un indirizzo di posta, una stanza Matrix. Il suo token o la sua password vengono cifrati e non si vedono più."
+
+msgid "A rule says which runs to tell about, and through which channel: for example, every failed run, or the runs of one schedule with changes."
+msgstr "Una regola dice di quali run dare notizia e con quale canale: per esempio ogni run fallita, o le run di una pianificazione con modifiche."
+
+msgid "A run with changes is also successful: choose both and it is told once, as with changes."
+msgstr "Una run con modifiche è anche riuscita: scegliendo entrambe se ne dà notizia una volta sola, come run con modifiche."
+
+msgid "A test message is on its way to {{name}}: see how it went below."
+msgstr "Un messaggio di prova sta partendo verso {{name}}: com'è andata si vede qui sotto."
+
+msgid "Beyond it, events wait and leave together in the next message."
+msgstr "Oltre, gli eventi aspettano e partono insieme nel messaggio successivo."
+
+msgid "Body"
+msgstr "Corpo"
+
+msgid "Bot API server"
+msgstr "Server della Bot API"
+
+msgid "Bot token"
+msgstr "Token del bot"
+
+msgid "Channel"
+msgstr "Canale"
+
+msgid "Channels"
+msgstr "Canali"
+
+msgid "Chat"
+msgstr "Chat"
+
+msgid "Choose…"
+msgstr "Scegli…"
+
+msgid "Destination"
+msgstr "Destinazione"
+
+msgid "Edit channel"
+msgstr "Modifica canale"
+
+msgid "Edit rule"
+msgstr "Modifica regola"
+
+msgid "Empty for the usual port of the security chosen."
+msgstr "Vuota per la porta abituale della sicurezza scelta."
+
+msgid "Empty when the server takes mail without logging in."
+msgstr "Vuoto se il server accetta posta senza accesso."
+
+msgid "Encrypted on this machine and never shown again, not even to administrators."
+msgstr "Cifrato su questa macchina e mai più mostrato, nemmeno agli amministratori."
+
+msgid "Event"
+msgstr "Evento"
+
+msgid "Every run"
+msgstr "Ogni run"
+
+msgid "From"
+msgstr "Mittente"
+
+msgid "Given up"
+msgstr "Abbandonata"
+
+msgid "Group events over"
+msgstr "Raggruppa gli eventi in"
+
+msgid "Header for the secret"
+msgstr "Intestazione per il segreto"
+
+msgid "Homeserver"
+msgstr "Homeserver"
+
+msgid "JSON. In its strings, $title, $text, $link and $count are replaced; a string that is just \"$events\" becomes the list of events."
+msgstr "JSON. Nelle sue stringhe vengono sostituiti $title, $text, $link e $count; una stringa che è solo \"$events\" diventa l'elenco degli eventi."
+
+msgid "Language of the messages"
+msgstr "Lingua dei messaggi"
+
+msgid "Leave as it is unless you run your own Bot API server."
+msgstr "Lascialo com'è, a meno di avere un proprio server della Bot API."
+
+msgid "Mail (SMTP)"
+msgstr "Posta (SMTP)"
+
+msgid "Mail server"
+msgstr "Server di posta"
+
+msgid "Matrix"
+msgstr "Matrix"
+
+msgid "Messages an hour at most"
+msgstr "Messaggi all'ora al massimo"
+
+msgid "Method"
+msgstr "Metodo"
+
+msgid "minutes"
+msgstr "minuti"
+
+msgid "New channel"
+msgstr "Nuovo canale"
+
+msgid "New rule"
+msgstr "Nuova regola"
+
+msgid "No channels"
+msgstr "Nessun canale"
+
+msgid "No notifications yet"
+msgstr "Ancora nessuna notifica"
+
+msgid "No rules"
+msgstr "Nessuna regola"
+
+msgid "None (port 25, only on a trusted network)"
+msgstr "Nessuna (porta 25, solo su una rete fidata)"
+
+msgid "Notifications"
+msgstr "Notifiche"
+
+msgid "One address per line, at most 20."
+msgstr "Un indirizzo per riga, al massimo 20."
+
+msgid "Ready"
+msgstr "Pronto"
+
+msgid "Recent notifications"
+msgstr "Notifiche recenti"
+
+msgid "Room"
+msgstr "Stanza"
+
+msgid "Rules"
+msgstr "Regole"
+
+msgid "Runs of a job template"
+msgstr "Run di un template"
+
+msgid "Runs of a project"
+msgstr "Run di un progetto"
+
+msgid "Runs of a schedule"
+msgstr "Run di una pianificazione"
+
+msgid "Runs that end within this time of the first one are told in one message. 0 sends each one at once."
+msgstr "Le run che finiscono entro questo tempo dalla prima arrivano in un solo messaggio. Con 0 ognuna parte subito."
+
+msgid "Secret not set"
+msgstr "Segreto non impostato"
+
+msgid "Security"
+msgstr "Sicurezza"
+
+msgid "Send a test"
+msgstr "Invia una prova"
+
+msgid "Sent"
+msgstr "Inviata"
+
+msgid "STARTTLS (port 587)"
+msgstr "STARTTLS (porta 587)"
+
+msgid "State"
+msgstr "Stato"
+
+msgid "Telegram"
+msgstr "Telegram"
+
+msgid "Test"
+msgstr "Prova"
+
+msgid "The address of the homeserver's client API, like https://matrix.example.org."
+msgstr "L'indirizzo della API client dell'homeserver, come https://matrix.example.org."
+
+msgid "The channel, its secret, its rules and its notifications are deleted. This cannot be undone."
+msgstr "Vengono eliminati il canale, il suo segreto, le sue regole e le sue notifiche. Non si può annullare."
+
+msgid "The identifier of the room, like !abcdef:example.org, which the account of the token has joined."
+msgstr "L'identificativo della stanza, come !abcdef:example.org, in cui è entrato l'account del token."
+
+msgid "The number of the chat or group (negative for a group), or the @name of a channel. The bot must be a member."
+msgstr "Il numero della chat o del gruppo (negativo per un gruppo), o il @nome di un canale. Il bot deve farne parte."
+
+msgid "The rule is deleted. What it already sent stays in the list."
+msgstr "La regola viene eliminata. Ciò che ha già inviato resta nell'elenco."
+
+msgid "TLS (port 465)"
+msgstr "TLS (porta 465)"
+
+msgid "To"
+msgstr "Destinatari"
+
+msgid "To be tried again"
+msgstr "Da ritentare"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Webhook"
+msgstr "Webhook"
+
+msgid "What the rules send appears here: when it was sent, or why it was not."
+msgstr "Qui compare ciò che le regole inviano: quando è partito, o perché no."
+
+msgid "When a run ends"
+msgstr "Quando una run finisce"
+
+msgid "When the secret is not in the URL, it is sent in this header, as it is: write \"Bearer …\" if the service wants that."
+msgstr "Se il segreto non è nell'URL, viene inviato così com'è in questa intestazione: scrivi \"Bearer …\" se il servizio lo vuole."
+
+msgid "Where the message is sent. Write $secret where the secret goes when the service wants it in the address, as Slack and Discord do."
+msgstr "Dove viene inviato il messaggio. Scrivi $secret dove va il segreto, se il servizio lo vuole nell'indirizzo come fanno Slack e Discord."
+
+msgid "Which runs"
+msgstr "Quali run"
+
+msgid "With changes"
+msgstr "Con modifiche"
+
+msgid "given_up_count"
+msgid_plural "given_up_count_plural"
+msgstr[0] "{{count}} abbandonata"
+msgstr[1] "{{count}} abbandonate"

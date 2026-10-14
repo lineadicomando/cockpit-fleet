@@ -13,9 +13,10 @@ import re
 import shutil
 import stat
 import subprocess
+import traceback
 from pathlib import Path
 
-from . import journal, paths, store
+from . import journal, notify, paths, store
 from .errors import BadRequest, Conflict, FleetError, Unavailable
 from .names import check_id
 
@@ -295,6 +296,11 @@ def _finish(ctx, run_id: str, status: str, rc: int | None, error: str = "",
     store.update(ctx.conn, "runs", run_id, values, "run")
     journal.send(f"run {run_id}: {status}", 6 if status == "successful" else 4,
                  FLEET_RUN=run_id, FLEET_STATUS=status)
+    try:
+        notify.run_ended(ctx, run_id)
+    except Exception:  # noqa: BLE001  (a rule must not keep a run from being recorded)
+        journal.send(f"run {run_id}: cannot queue its notifications", 3, FLEET_RUN=run_id,
+                     FLEET_TRACEBACK=traceback.format_exc())
 
 
 def _collect(ctx, run) -> None:

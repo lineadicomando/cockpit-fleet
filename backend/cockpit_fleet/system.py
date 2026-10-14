@@ -130,6 +130,14 @@ def _check_scheduler() -> tuple[str, str]:
     return "ok", paths.SCHEDULER_TIMER
 
 
+def _check_notify() -> tuple[str, str]:
+    result = subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", paths.NOTIFY_PATH_UNIT],
+                            check=False, stdin=subprocess.DEVNULL)
+    if result.returncode != 0:
+        return "warn", f"{paths.NOTIFY_PATH_UNIT} is not active: notifications are not sent"
+    return "ok", paths.NOTIFY_PATH_UNIT
+
+
 def _check_collection() -> tuple[str, str]:
     plugin = (paths.COLLECTIONS_DIR / "ansible_collections" / "lineadicomando" / "fleet"
               / "plugins" / "callback" / "events.py")
@@ -153,6 +161,7 @@ def selfcheck(ctx: Context, params: Values) -> dict:
         ("secrets_dir", _check_secrets_dir()),
         ("run_unit", _check_run_unit()),
         ("scheduler", _check_scheduler()),
+        ("notify", _check_notify()),
         ("collection", _check_collection()),
         ("git", _check_tool("git", "fail")),
         # Only needed for SSH logins with a password.

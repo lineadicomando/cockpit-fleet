@@ -111,6 +111,7 @@ export function SystemPage() {
         secrets_dir: t("Secret store"),
         run_unit: t("Run unit"),
         scheduler: t("Scheduler"),
+        notify: t("Notifications"),
         collection: t("Bundled Ansible collection"),
         git: t("Git"),
         sshpass: t("sshpass, for SSH logins with a password"),

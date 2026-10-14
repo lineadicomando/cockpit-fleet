@@ -1,0 +1,13 @@
+[Unit]
+Description=Deliver the notifications of Cockpit Fleet when there are some
+Documentation=https://github.com/lineadicomando/cockpit-fleet
+
+[Path]
+# The backend writes this file when it puts something in the outbox, and the
+# tick of the scheduler when something is to be tried again. Written while
+# the delivery runs, it starts it once more when it ends.
+PathModified=/var/lib/cockpit-fleet/notify.wake
+Unit=cockpit-fleet-notify.service
+
+[Install]
+WantedBy=paths.target

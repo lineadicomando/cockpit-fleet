@@ -11,10 +11,14 @@ Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface)
 and 4 (schedules) are closed, the last on 14 October 2026. The same day
 `fleet` was written, the backend for a person at a terminal
 (`docs/architecture.md`, "The terminal"); the rest of what the terminal
-could give is under "The terminal" below.
+could give is under "The terminal" below. Phase 5 (notifications) was
+written on 14 October and met its criterion with stand-ins of the four
+services; what keeps it open is below.
 
-**Next step: phase 5** (notifications). Nothing of it is written; the ideas
-left for the terminal are an alternative the user may pick first.
+**Next step: close phase 5** with the checks the user does by hand, listed
+under phase 5, and whatever they find; **then phase 6** (data collection
+and checks). The ideas left for the terminal are an alternative the user
+may pick first. Nothing of phase 5 was looked at in a browser yet.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
@@ -30,24 +34,25 @@ differences and the outcome per host; help on modules, export and import of
 the configuration; roles from Unix groups and the audit trail; agents through
 `fleet-mcp`, under a role ceiling, and a chat page that starts one for the
 user; schedules of templates (`OnCalendar` with a time zone, overlap,
-catching up, priority in the queue); a self-check of the controller; the
-command `fleet` for a terminal. Tried on Linux nodes (containers)
-and on Windows over SSH.
+catching up, priority in the queue); notifications of the end of runs to
+Telegram, webhooks, mail and Matrix, with rules, retries, grouping and a
+limit; a self-check of the controller; the command `fleet` for a terminal.
+Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): the package with `fleet`,
-the agent of the chat installed by the role and named in `config.toml`,
-`[mcp] enabled = true`; an empty database (`schedules.sh` wiped it). No
-test account, no login to Claude (logged out and removed on 14 October).
-On 14 October a `wipe` put back an old `config.toml` (of 8 October, from a
-`.it-backup` left by an earlier session): it was written again by hand, as
-the packaged file with `[mcp] enabled = true` and `[chat.agents.claude]`.
-Its `config.toml` differs from the packaged one (the agent and `[mcp]`), so
-`make vm-deb-deploy` stops at dpkg's question: finish with `dpkg
---force-confold --configure -a` on the VM, or put the packaged file back
-first. Going back to `baseline_fleet` removes all of it. To try the chat
-again: a test account in a role group, and the user logs it in to Claude at
-Cockpit's terminal (`/opt/cockpit-fleet-agent/bin/claude /login`); log it
-out (`claude auth logout`) before removing the account.
+State of the test VM `deb13-samba-dc` (shut off): the package as of the
+notifications, but without the last change (a user name for mail without
+TLS is refused): run `make vm-deb-deploy` before testing again. The agent of
+the chat installed by the role and named in `config.toml`, `[mcp] enabled =
+true`; an empty database (`notify.sh` wiped it); no test account, no login
+to Claude. Its `config.toml` differs from the packaged one (the agent and
+`[mcp]`), so `make vm-deb-deploy` stops at dpkg's question: finish with
+`dpkg --force-confold --configure -a` on the VM, or install with
+`apt-get install -o Dpkg::Options::=--force-confold`; the packaged file is
+beside it as `config.toml.dpkg-dist`. Going back to `baseline_fleet` removes
+all of it. To try the chat again: a test account in a role group, and the
+user logs it in to Claude at Cockpit's terminal
+(`/opt/cockpit-fleet-agent/bin/claude /login`); log it out (`claude auth
+logout`) before removing the account.
 
 The snapshot `baseline_fleet` (redone on 13 October, a child of `baseline`) is
 where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` as of commit
@@ -58,6 +63,7 @@ vm-deb-deploy` installs the current code.
 
 Integration tests, all passing when last run:
 
+- on the code with notifications (14 October): `notify.sh`;
 - on the code with schedules (14 October): `schedules.sh`, and a reboot by
   hand (see phase 4);
 - on the code with `fleet` (14 October): `cli.sh`, `mcp.sh`, `chat.sh`,
@@ -104,6 +110,11 @@ Integration tests, all passing when last run:
 | Editor | CodeMirror 6 in a shadow root (Cockpit's CSP stays as it is) |
 | Syntax check | A sandboxed job when a playbook is saved; `ansible-lint` reports, it does not fail the check |
 | Notifications | Telegram, generic webhook, SMTP, Matrix |
+| Delivery of notifications | `cockpit-fleet-notify.service`, started by a path unit on `notify.wake`, which the backend writes; retries woken by the tick of the scheduler. No root code: `fleet-unit` was not extended |
+| Secrets of channels | One per channel, `n-<id>-token`, kept by `fleet-secret` in `secrets/notify/`, the only directory the delivery unit has decrypted |
+| What is told about | Playbook runs and ad-hoc commands that end failed (or in error), with changes, successful or canceled; scope: every run, a project, a template or a schedule. Not the jobs of projects |
+| Group as scope of a rule | Not now: a run has no group. Groups of hosts come with the checks (phase 6) |
+| Approval requested | An event of phase 9, when approvals exist |
 | Data from the nodes | Health checks, CMDB, updates, drift |
 | Checks | Built-in catalog + user playbooks with a result contract |
 | History | SQLite: state, state changes, time series with downsampling |
@@ -189,8 +200,7 @@ None now.
   built-in plugins were tried.
 - Masking: other encodings of a secret are not recognised, and secrets the
   run decrypts by itself (a vaulted variable of the inventory) are not known.
-- Export and import: nothing is updated or deleted by an import; notification
-  rules will have to join the document when they exist.
+- Export and import: nothing is updated or deleted by an import.
 - Help on modules: like the completion, only what is installed on the
   controller.
 - Agents: every `tools/list` while agents are not enabled leaves a denial in
@@ -224,7 +234,7 @@ None now.
   the schedule with no next time until it is saved or switched again; the
   tick runs `fleetctl` every minute even with no schedule (it also collects
   runs and starts queued ones, which is what makes a reboot lose nothing).
-  A failed scheduled run notifies nobody until phase 5.
+  A failed scheduled run is told about only through a rule.
 
 ## Phase 3 — Complete runner (closed on 13 October)
 
@@ -317,20 +327,56 @@ schedule that catches up once and recorded the other as missed; both were
 planned for the next day. The page was looked at in the browser: the list,
 the builder, the preview and the conversion of a cron line.
 
-## Phase 5 — Notifications
+## Phase 5 — Notifications (written on 14 October)
 
-- [ ] Outbox in SQLite with retries and backoff; `cockpit-fleet-notify.service`
-      sandboxed with outgoing network only
-- [ ] Channels Telegram, webhook (JSON template), SMTP, Matrix; standard library
-      only
-- [ ] Tokens as secrets; a "send a test" button; proxy support
-- [ ] Rules: kind of event × scope (project, template, group) × channel
-- [ ] Events: run succeeded, failed, with changes, cancelled, approval requested
-- [ ] Messages in Italian and English with a link to the Cockpit page
-- [ ] Grouping by time window and rate limit
+Outbox, the unit and its path unit, the four channels, secrets, test
+message, proxy, rules, events, messages in two languages with a link,
+grouping and limit, export and import, `fleet secret --channel`: described
+in `docs/architecture.md` ("Notifications").
 
 Done when: a failed run reaches the four channels and an unreachable channel is
-retried without blocking the others.
+retried without blocking the others. **Met on 14 October** on the VM, with
+stand-ins (`notify.sh`, `notify-sinks.py`): one failed run reached the
+Telegram Bot API, the webhook, the mail server and the Matrix homeserver in
+one delivery; a fifth channel, refused, was tried again by the tick and got
+it once its server was up, about 90 s later; the tokens were in neither the
+database nor the journal.
+
+Left before closing it, checks the user does by hand (deploy first with
+`make vm-deb-deploy`, then log in to Cockpit as an account of
+`cockpit-fleet-admin`; set `[notifications] url` in `config.toml` to the
+address the links must open, `https://VM:9090` on the VM):
+
+- [ ] The page "Notifications" (Italian too): create, edit and delete a
+      channel of each kind, its secret shown as set and never again; a
+      rule with each scope; "Send a test" and its line in "Recent
+      notifications"; a refused test (wrong token) shown as "To be tried
+      again" with its reason, and "Try again" on a given-up one
+- [ ] The same page as an operator and as a viewer: lists only, no buttons
+- [ ] The tab "System": the check "Notifications" is OK
+- [ ] A real Telegram bot: token from @BotFather, the chat id from
+      `https://api.telegram.org/bot<TOKEN>/getUpdates` after writing to the
+      bot (a group's id is negative); a failed run arrives, and its link
+      opens the run in Cockpit (the form `/fleet#/runs/ID` was never
+      opened in a browser)
+- [ ] A real Matrix room: an access token of an account (Element:
+      Settings, Help & About), the room id (`!…:server`, Settings,
+      Advanced), the account joined to the room
+- [ ] Optionally a real mail server with STARTTLS and a real webhook
+      (Slack, Discord or ntfy, with `$secret` in the URL)
+- [ ] `fleet secret --channel NAME` at a terminal, and `fleet notification
+      list`
+- [ ] Confirm the decisions taken alone (table above): a path unit and no
+      change to `fleet-unit`; no "group" scope until phase 6; the area
+      names `channel`, `rule`, `notification` of the commands
+
+What it leaves to be desired: one message per run, never per host; the
+message is plain text (no Markdown or HTML for Telegram, Matrix or mail);
+mail cannot go through the proxy (a user name without TLS is refused, so a
+password never travels in clear); channels are tried one after
+the other, so a dozen that do not answer delay the rest by 15 s each; the
+list of notifications has no filter in the page (the command has one);
+no notification when a schedule misses a time or cannot launch.
 
 ## Phase 6 — Data collection and checks
 

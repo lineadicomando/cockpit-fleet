@@ -11,7 +11,7 @@ its stdin: never on a command line.
     fleet launch TEMPLATE [-a NAME=VALUE]...
     fleet log RUN [-f]
     fleet result RUN [--wait]
-    fleet secret CREDENTIAL FIELD
+    fleet secret CREDENTIAL FIELD | --channel CHANNEL
     fleet help [AREA [VERB]]
 
 The commands are read from the registry of the installed package, so that
@@ -46,7 +46,7 @@ SHORTCUTS = {
     "launch": "Launch a job template and follow its run",
     "log": "The output of a run, or follow it with -f",
     "result": "How a run went, host by host and task by task",
-    "secret": "Set the secret of a credential (admin)",
+    "secret": "Set the secret of a credential or a notification channel (admin)",
     "help": "What a command does and the parameters it takes",
 }
 # The columns a table shows first, when its rows have them.
@@ -57,7 +57,8 @@ _MAX_COLUMNS = 6
 _MAX_CELL = 40
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # Commands made for other programs: they work, they are not listed.
-_UNLISTED = ("chat.start", "mcp.tools", "run.reconcile", "scheduler.tick")
+_UNLISTED = ("chat.start", "mcp.tools", "run.reconcile", "scheduler.tick",
+             "notification.deliver")
 
 
 class Usage(Exception):
@@ -565,19 +566,32 @@ def _result(term: Terminal, args: list[str]) -> int:
 
 
 def _secret(term: Terminal, args: list[str]) -> int:
-    parser = _parser("secret", "Set the secret of a credential: asked for at the terminal,"
-                     " or read from stdin. It cannot be read back.")
+    parser = _parser("secret", "Set the secret of a credential, or of a notification channel:"
+                     " asked for at the terminal, or read from stdin. It cannot be read back.")
     parser.add_argument("credential", help="its name or its id")
-    parser.add_argument("field", help="which secret: private_key, password, vault_password…")
+    parser.add_argument("field", nargs="?",
+                        help="which secret: private_key, password, vault_password…")
+    parser.add_argument("--channel", action="store_true",
+                        help="a notification channel, which has one secret, not a credential")
     options = parser.parse_args(args)
-    credential = _one(term("credential.list")["credentials"], options.credential, "credential",
-                      "fleet credential list")
-    names = credential["secret_names"]
-    if options.field not in names:
-        raise Usage(f"{credential['name']!r} has no secret {options.field!r}"
-                    f" (it has: {', '.join(names)})")
+    if options.channel:
+        if options.field:
+            raise Usage("a channel has one secret: give no field")
+        channel = _one(term("channel.list")["channels"], options.credential, "channel",
+                       "fleet channel list")
+        name, label = channel["secret_name"], f"secret of {channel['name']}"
+    else:
+        if not options.field:
+            raise Usage("which secret of the credential? (or --channel for a channel)")
+        credential = _one(term("credential.list")["credentials"], options.credential,
+                          "credential", "fleet credential list")
+        names = credential["secret_names"]
+        if options.field not in names:
+            raise Usage(f"{credential['name']!r} has no secret {options.field!r}"
+                        f" (it has: {', '.join(names)})")
+        name, label = names[options.field], f"{options.field} of {credential['name']}"
     if term.interactive:
-        value = term.ask(f"{options.field} of {credential['name']}", True)
+        value = term.ask(label, True)
         if "\n" not in value and value != term.ask("Again, to confirm", True):
             raise Usage("the two do not match")
     else:
@@ -586,9 +600,9 @@ def _secret(term: Terminal, args: list[str]) -> int:
             value = value[:-1]  # one line, as echo writes it; a key keeps its last newline
     if not value:
         raise Usage("empty value")
-    term.secret(["set", names[options.field]], value)
+    term.secret(["set", name], value)
     if not term.as_json:
-        term.say(f"{options.field} of {credential['name']} is set")
+        term.say(f"{label} is set")
     return OK
 
 

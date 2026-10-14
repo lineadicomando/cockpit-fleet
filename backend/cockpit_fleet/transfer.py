@@ -1,8 +1,9 @@
 """Export and import of the configuration: credentials, projects, inventories,
-trusted host keys, job templates and schedules, as one JSON document.
+trusted host keys, job templates, schedules, notification channels and their
+rules, as one JSON document.
 
-No secret is in it: a credential travels as its name and its kind, and its
-secrets are entered again where it is imported. Neither are the files of a
+No secret is in it: a credential or a channel travels without its secrets,
+which are entered again where it is imported. Neither are the files of a
 project that has no source elsewhere (written in the interface, uploaded).
 Things refer to each other by name, since identifiers differ between two
 installations.
@@ -14,7 +15,10 @@ from .errors import BadRequest, FleetError
 
 FORMAT = "cockpit-fleet-config"
 VERSION = 1
-SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates", "schedules")
+SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates", "schedules",
+            "channels", "rules")
+# What the scope of a rule names, by table.
+_SCOPES = {"project": "projects", "template": "templates", "schedule": "schedules"}
 _MAX_ITEMS = 2000
 _MAX_IMPORT = 8 * 1024 * 1024
 
@@ -72,6 +76,19 @@ def config_export(ctx: Context, params: Values) -> dict:
          "catch_up": bool(row["catch_up"]), "priority": row["priority"],
          "random_delay": row["random_delay"]}
         for row in conn.execute("SELECT * FROM schedules ORDER BY name COLLATE NOCASE")]
+    document["channels"] = [
+        {"name": row["name"], "kind": row["kind"], "settings": store.loads(row["settings"], {}),
+         "language": row["language"], "enabled": bool(row["enabled"]),
+         "window": row["group_window"], "max_per_hour": row["max_per_hour"]}
+        for row in conn.execute("SELECT * FROM channels ORDER BY name COLLATE NOCASE")]
+    channels = _names(ctx, "channels")
+    scopes = {scope: _names(ctx, table) for scope, table in _SCOPES.items()}
+    document["rules"] = [
+        {"name": row["name"], "channel": channels.get(row["channel_id"], ""),
+         "events": store.loads(row["events"], []), "scope": row["scope"],
+         "scope_name": scopes.get(row["scope"], {}).get(row["scope_id"], ""),
+         "enabled": bool(row["enabled"])}
+        for row in conn.execute("SELECT * FROM notify_rules ORDER BY name COLLATE NOCASE")]
     return document
 
 
@@ -195,6 +212,22 @@ class _Importer:
                 params[key] = item[key]
         self._create("schedule.create", params)
 
+    def channel(self, item: dict) -> None:
+        self._create("channel.create", {key: item[key] for key in
+                                        ("name", "kind", "settings", "language", "enabled",
+                                         "window", "max_per_hour") if key in item})
+
+    def rule(self, item: dict) -> None:
+        scope = item.get("scope") or "all"
+        params = {"name": item.get("name"), "scope": scope,
+                  "channel_id": self._id("channels", item.get("channel"), "channel", True)}
+        if scope in _SCOPES:
+            params["scope_id"] = self._id(_SCOPES[scope], item.get("scope_name"), scope, True)
+        for key in ("events", "enabled"):
+            if key in item:
+                params[key] = item[key]
+        self._create("rule.create", params)
+
 
 @command("config.import", role="admin", mutating=True, redact=("document",),
          max_input=_MAX_IMPORT,
@@ -219,6 +252,8 @@ def config_import(ctx: Context, params: Values) -> dict:
     work._each("host_keys", document.get("host_keys", []), None, work.host_key)
     work._each("templates", document.get("templates", []), "templates", work.template)
     work._each("schedules", document.get("schedules", []), "schedules", work.schedule)
+    work._each("channels", document.get("channels", []), "channels", work.channel)
+    work._each("rules", document.get("rules", []), "notify_rules", work.rule)
     counts = {outcome: sum(1 for entry in work.report if entry["outcome"] == outcome)
               for outcome in ("created", "exists", "failed")}
     return {"report": work.report, **counts}

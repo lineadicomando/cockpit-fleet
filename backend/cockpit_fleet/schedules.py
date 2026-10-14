@@ -18,7 +18,7 @@ import unicodedata
 import zoneinfo
 from datetime import UTC, datetime
 
-from . import jobs, journal, paths, runs, store, survey
+from . import jobs, journal, notify, paths, runs, store, survey
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError, Unavailable
 from .validators import check_limit
@@ -452,6 +452,8 @@ def tick(ctx: Context) -> dict:
             return {"busy": True, "schedules": []}
         # What ended or was left queued, by a reboot too, is taken care of first.
         jobs.reconcile(ctx)
+        # Notifications whose time to be tried again has come.
+        notify.wake_if_due(ctx)
         now = store.now()
         due = ctx.conn.execute(
             "SELECT * FROM schedules WHERE enabled = 1 AND next_at IS NOT NULL AND next_at <= ?"

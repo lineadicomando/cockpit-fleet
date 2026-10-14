@@ -308,3 +308,53 @@ export interface Chunk {
     offset: number;
     more: boolean;
 }
+
+export type ChannelKind = "telegram" | "webhook" | "smtp" | "matrix";
+export type NotifyEvent = "failed" | "changed" | "succeeded" | "canceled";
+export type RuleScope = "all" | "project" | "template" | "schedule";
+export type NotificationState = "pending" | "sent" | "failed";
+
+export interface Channel {
+    id: string;
+    name: string;
+    kind: ChannelKind;
+    // What the kind needs, never the secret: see src/lib/notify.ts.
+    settings: Record<string, unknown>;
+    language: "en" | "it";
+    enabled: boolean;
+    // Seconds to wait for more events, to send them as one message.
+    window: number;
+    max_per_hour: number;
+    secret: boolean;
+    secret_name: string;
+    secret_required: boolean;
+    pending: number;
+    failed: number;
+}
+
+export interface NotifyRule {
+    id: string;
+    name: string;
+    channel_id: string;
+    channel: string;
+    events: NotifyEvent[];
+    scope: RuleScope;
+    scope_id: string | null;
+    scope_name: string;
+    enabled: boolean;
+}
+
+export interface Notification {
+    id: number;
+    channel_id: string;
+    channel: string;
+    event: NotifyEvent | "test";
+    run_id: string | null;
+    title: string;
+    state: NotificationState;
+    attempts: number;
+    next_at: number;
+    error: string;
+    created_at: number;
+    sent_at: number | null;
+}

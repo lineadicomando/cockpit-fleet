@@ -1,0 +1,47 @@
+[Unit]
+Description=Deliver the notifications of Cockpit Fleet
+Documentation=https://github.com/lineadicomando/cockpit-fleet
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cockpit-fleet
+Group=cockpit-fleet
+# The backend itself, which reads and writes the outbox in the database.
+ExecStart=/usr/libexec/cockpit-fleet/fleetctl notification.deliver
+StandardInput=null
+StandardOutput=null
+UMask=0077
+# A channel that does not answer takes 15 s at most; this bounds the rest.
+TimeoutStartSec=10min
+
+# The secrets of the notification channels and nothing else: fleet-secret
+# keeps them in a directory of their own, which PID 1 decrypts for this unit.
+LoadCredentialEncrypted=notify:/etc/cockpit-fleet/secrets/notify
+
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cockpit-fleet
+InaccessiblePaths=-/var/lib/cockpit-fleet/runs -/var/lib/cockpit-fleet/projects
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+# Outgoing connections, and the journal's socket.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service

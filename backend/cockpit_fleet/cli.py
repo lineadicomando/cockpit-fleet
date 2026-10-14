@@ -392,6 +392,7 @@ def load_commands() -> dict[str, Command]:
         chat,
         files,
         moduledocs,
+        notify,
         resources,
         runs,
         schedules,
