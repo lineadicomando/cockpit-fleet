@@ -29,7 +29,9 @@ cancellation, live output with the secrets masked, a view by task, the
 differences and the outcome per host; help on modules, export and import of
 the configuration; roles from Unix groups and the audit trail; agents through
 `fleet-mcp`, under a role ceiling, and a chat page that starts one for the
-user; the command `fleet` for a terminal. Tried on Linux nodes (containers)
+user; schedules of templates (`OnCalendar` with a time zone, overlap,
+catching up, priority in the queue); a self-check of the controller; the
+command `fleet` for a terminal. Tried on Linux nodes (containers)
 and on Windows over SSH.
 
 State of the test VM `deb13-samba-dc` (shut off): the package with `fleet`,
@@ -94,7 +96,7 @@ Integration tests, all passing when last run:
 | Sources of projects | Git, local directory, written in the interface, uploaded archive |
 | Collections from Galaxy | For every kind of project; installed by a sandboxed job next to the tree (`projects/<id>/collections/<sha256 of the requirements file>`), never inside it; copied into every run; without them a playbook does not start |
 | Uploaded archive | Travels as base64 in the JSON on the stdin of `fleetctl` (20 MB, at most 50); extracted in the sandbox; revision = sha256; links out of the tree, hard links and devices make the whole archive refused |
-| Ad-hoc commands | Admin only; one module by its full name, among those in `[adhoc] modules` of `config.toml` (default: ping, facts, `command`, `shell` and their Windows counterparts; empty turns them off); run as a generated playbook, so module and arguments are in a file and events work as for any run |
+| Ad-hoc commands | Admin only; one module by its full name, among those in `[adhoc] modules` of `config.toml` (default: ping, facts, `service_facts`, `package_facts`, `command`, `shell`, and on Windows ping, facts, `win_command`, `win_shell`, `win_powershell`; empty turns them off); run as a generated playbook, so module and arguments are in a file and events work as for any run |
 | Inventory sources | A file, a directory of sources or the YAML file of a plugin, always of a project and read in the sandbox; executable scripts off unless `[inventories] scripts = true`; an inventory nothing can read fails the job |
 | Masking | The secrets handed to a run are replaced in its output, in the journal and in the events, as they are and as JSON escapes them; a net, not a guarantee |
 | Export and import | One JSON document, by name, with no secret and no project files; import creates what is missing through the usual commands and replaces nothing |
@@ -127,7 +129,7 @@ Integration tests, all passing when last run:
 | Permissions in the chat | Read-only tools of `fleet-mcp` go without a question, everything else is confirmed; "always" lasts a conversation and is kept by the page, never written in the agent's settings |
 | Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
 | Name of the command for the terminal | `fleet`, confirmed on 14 October. No Debian package (trixie, sid) installs `bin/fleet`, its completion or its manual; the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
-| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`); tables for a person, `--json` for a program |
+| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`, `help`); four commands meant for programs are not listed and still answer; tables for a person, `--json` for a program |
 | Secrets at the terminal | Never on the command line: asked for with no echo, or read from stdin, and handed to `fleet-secret` on its stdin |
 | Scheduling | A single static timer that runs `fleetctl scheduler.tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions read by `systemd-analyze`, with a time zone |
 | Who manages schedules | As templates: an administrator creates, changes and deletes; an operator turns one on or off and runs it now; a viewer sees them (confirmed on 14 October) |
@@ -146,7 +148,8 @@ None now.
 
 - A git token over https was never tried against a real private repository (it
   needs a dedicated token); public https and ssh with a key are tried.
-- Run directories (`stdout.log`, `events.jsonl`) are never deleted: the cleanup
+- The directories of runs that started (`stdout.log`, `events.jsonl`) are
+  never deleted: the cleanup
   comes with retention (phase 8).
 - Whoever enters with Cockpit's administrative access without being in a group
   appears in the audit trail as `root`.
@@ -191,9 +194,9 @@ None now.
 - Help on modules: like the completion, only what is installed on the
   controller.
 - Agents: every `tools/list` while agents are not enabled leaves a denial in
-  the audit trail; `run.result` holds a `fleetctl` process for up to 50 s; the
-  descriptions of the parameters are still few (only the types and bounds
-  reach the schema); the user manual for setting up an agent is the section
+  the audit trail; `run.result` holds a `fleetctl` process for up to 50 s; most
+  parameters (150 of 175) have no description, so only their type and
+  bounds reach the schema; the user manual for setting up an agent is the section
   of `docs/architecture.md`, there is no page for it in the interface.
 - Chat: answers are plain text, Markdown is not rendered; a conversation
   cannot be deleted or renamed from the page; the model and the effort of
@@ -289,7 +292,8 @@ in the order they were weighed, none decided:
 
 What `fleet` leaves to be desired: completion knows commands and options,
 not the names of templates, runs or credentials; `project upload` wants
-base64 pieces, so an archive is not uploaded from it; answers to a survey
+the archive as one base64 string (`--data @-` after `base64 -w0`, not tried),
+there is no option that takes the file itself; answers to a survey
 are typed by `-a` as the questions say, but a choice is not offered as a
 list to pick from; English only.
 

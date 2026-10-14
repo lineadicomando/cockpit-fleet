@@ -720,9 +720,9 @@ read from a file or stdin). Its help is its docstring and its parameters,
 the same that describe it to an agent: a command added to the backend is in
 `fleet` with no work, phase 4 included. The registry is read from the
 installed package, so `fleet help AREA VERB` and the completion for bash need
-no call; `fleet help` asks `whoami` which commands the role has. Three
+no call; `fleet help` asks `whoami` which commands the role has. Four
 commands meant for other programs (`run.reconcile`, `mcp.tools`,
-`chat.start`) are not listed, and still answer.
+`chat.start`, `scheduler.tick`) are not listed, and still answer.
 
 **Shortcuts** for what is done most often: `launch` takes a template by name
 or id and answers to its survey as `-a NAME=VALUE`, follows the output and
