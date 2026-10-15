@@ -19,6 +19,12 @@ class VersionTest(unittest.TestCase):
         self.assertIsNotNone(match, first_line)
         self.assertEqual(match.group(1), cockpit_fleet.__version__)
 
+    def test_rpm_spec_matches(self):
+        spec = (ROOT / "packaging" / "cockpit-fleet.spec").read_text()
+        match = re.search(r"^Version:\s*(\S+)$", spec, re.MULTILINE)
+        self.assertIsNotNone(match, "no Version in the spec")
+        self.assertEqual(match.group(1), cockpit_fleet.__version__)
+
 
 if __name__ == "__main__":
     unittest.main()

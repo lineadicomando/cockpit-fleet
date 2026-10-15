@@ -28,8 +28,12 @@ CONTAINERFILE
 }
 
 start() {  # start INDEX AUTHORIZED_KEYS_FILE
+    # sshd writes an audit record for a session with a terminal, and closes it
+    # when it cannot: the podman of the Enterprise Linux family does not grant
+    # that by default, and ansible-core before 2.19 asks for a terminal. z lets
+    # the node read the key file where SELinux is enforcing.
     podman run -d --quiet --name "fleet-node-$1" --hostname "node$1" --ip "$(address "$1")" \
-        -v "$2:/home/ansible/.ssh/authorized_keys:ro" "$IMAGE" >/dev/null
+        --cap-add AUDIT_WRITE -v "$2:/home/ansible/.ssh/authorized_keys:ro,z" "$IMAGE" >/dev/null
 }
 
 case "${1:-}" in

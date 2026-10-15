@@ -15,8 +15,8 @@
       chat_agent_node_archives[ansible_facts['architecture']].name }}/claude
 
 - name: Install what unpacks the archive
-  ansible.builtin.apt:
-    name: xz-utils
+  ansible.builtin.package:
+    name: "{{ 'xz-utils' if ansible_facts['os_family'] == 'Debian' else 'xz' }}"
     state: present
 
 - name: Create the directories
@@ -103,7 +103,7 @@
   when: chat_agent_packages is changed or not chat_agent_claude_stat.stat.exists
 
 # The lockfile does not say which C library a package is for, so npm brings
-# the build for musl next to the one for glibc: 236 MB that Debian never runs.
+# the build for musl next to the one for glibc: 236 MB that the controller never runs.
 - name: Remove the build for another C library
   ansible.builtin.file:
     path: "{{ chat_agent_claude | dirname }}-musl"

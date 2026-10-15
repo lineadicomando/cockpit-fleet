@@ -26,7 +26,7 @@ Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 `backend/tests/` unit tests, `collection/` the bundled Ansible collection
 (the callback of the runs, and roles an administrator runs on the controller),
 `system/` units, sudoers, sysusers, tmpfiles and the default config,
-`debian/` packaging, `test/` frontend tests, `test/integration/` scripts for
+`debian/` and `packaging/` (the RPM spec) packaging, `test/` frontend tests, `test/integration/` scripts for
 the VM, `po/` translations.
 
 ## Non-negotiable rules
@@ -65,13 +65,16 @@ them needs the user's explicit agreement.
   `../cockpit-samba-dc` for layout, build, i18n, test
   setup and code style (4-space indent, `.ts` import extensions, comments only
   where the reason is not obvious).
-- Backend: Python 3.13, standard library only at runtime (it ships in a `.deb` that
-  depends on `ansible-core`). Tests use `unittest`, so they run with no extra
+- Backend: Python 3.12 or later (AlmaLinux 10 has 3.12), standard library only
+  at runtime (it ships in a `.deb` and an `.rpm` that depend on `ansible-core`). Tests use `unittest`, so they run with no extra
   package. `ruff` is not installed on the host: run it in a container, as CI does
   (`pip install ruff && ruff check backend collection`).
-- Controller target: Debian 13 only (systemd 257, Cockpit 337). The development
-  host is Fedora with ansible-core 2.20, newer than Debian's: anything involving
-  Ansible, systemd or packaging must be verified on the VM, not locally.
+- Controller targets: Debian 13 (systemd 257, Cockpit 337), Fedora 44 and
+  AlmaLinux 10 (ansible-core 2.16, Python 3.12, SELinux enforcing). Debian is
+  the main one; the other two are tried with the integration scripts after a
+  change to the unit, the helpers, sudoers or packaging, and AlmaLinux at
+  every phase, because ansible-core 2.16 is the minimum and only it has that. Anything involving
+  Ansible, systemd or packaging must be verified on a VM, not locally.
 - User-visible strings are English in source, translated in `po/it.po`.
 - Code, comments, commit messages and docs (`TODO.md` included) in English;
   conversation with the user in Italian.
@@ -115,6 +118,7 @@ matching group, log in to Cockpit with it, and delete it afterwards.
 make build | watch              # frontend bundle, watch mode
 make check                      # frontend (node --test) and backend (unittest) tests
 make deb                        # .deb built in a Debian 13 container (podman), into deb/
+make rpm                        # .rpm for Fedora 44 and AlmaLinux 10, in containers, into rpm/
 make vm-deploy                  # frontend only, into ~maint/.local/share/cockpit
 make vm-deb-deploy              # full package on the VM; needs SSHPASS exported
 ```
@@ -163,6 +167,15 @@ same run can be launched from the interface.
   reverting deletes whatever was on the VM since, with no way back.
 - Windows nodes over SSH: `teacher` .10, `student01` .11, `student02` .12, from
   `../ansible-win_edulab/inventories/school`.
+- RPM controllers: `fed44-fleet` (Fedora 44, `maint@VM`) and
+  `alma10-fleet` (AlmaLinux 10.2, `maint@VM`), same password as
+  `deb13-samba-dc`, 2 GB each. Snapshot `baseline`: the OS with `cockpit`,
+  `podman`, `sshpass` and `git`, no `cockpit-fleet`; `baseline_fleet`, its
+  child, adds the package as of 15 October (and `ansible-lint` on Fedora) and
+  the `fleet-node` image. Install with `dnf install
+  ./cockpit-fleet-*.fc44.noarch.rpm` (`.el10` on Alma); the integration scripts
+  run there as on Debian. Both are set up from scratch with kickstart; the
+  Fedora installer needs 4 GB while it runs.
 - Linux nodes: containers on the controller VM (podman is installed there;
   `test/integration/nodes.sh` starts them on 10.88.0.101 onwards), or a clone of
   `debian13-base`.

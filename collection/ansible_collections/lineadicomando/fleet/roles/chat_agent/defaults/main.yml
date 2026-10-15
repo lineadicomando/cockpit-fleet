@@ -8,7 +8,7 @@ chat_agent_state: present
 chat_agent_dir: /opt/cockpit-fleet-agent
 
 # Node.js, from the official archive: the adapter wants 22 or later, which
-# Debian 13 does not have. The checksums are those published with the release.
+# Debian 13 and the Enterprise Linux 10 family do not have. The checksums are those published with the release.
 chat_agent_node_version: 22.23.3
 chat_agent_node_url: https://nodejs.org/dist
 chat_agent_node_archives:

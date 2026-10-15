@@ -10,3 +10,4 @@ debian/*.substvars
 debian/*.debhelper*
 debian/debhelper-build-stamp
 deb/
+rpm/

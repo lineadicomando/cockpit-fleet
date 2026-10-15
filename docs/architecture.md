@@ -1064,7 +1064,58 @@ because the package build has no network. The package creates the account and
 the role groups (`sysusers.d`), the state and secret directories
 (`tmpfiles.d`), and installs the units, the helpers, the sudoers line, the
 bundled collection, and `fleet` with its completion for bash and its manual.
-Of the units only `cockpit-fleet-scheduler.timer` is enabled and started.
+Of the units only `cockpit-fleet-scheduler.timer` and `cockpit-fleet-notify.path`
+are enabled and started.
+
+The `.rpm` for Fedora 44 and AlmaLinux 10 comes from `packaging/cockpit-fleet.spec`,
+built in a container of each (`make rpm`, output in `rpm/`) and checked with
+rpmlint, whose exceptions are in `packaging/cockpit-fleet.rpmlintrc`, each with
+its reason; `scripts/build-rpm.sh --native` builds on the system it runs on. It
+installs the same files through the same `make install-files`. rpm 4.19 creates
+the account and the groups from the `sysusers.d` file before it installs the
+files that belong to them. The package also owns the directories that
+`tmpfiles.d` creates, with the same modes. A preset file
+(`system/cockpit-fleet.preset`) enables `cockpit-fleet-scheduler.timer` and
+`cockpit-fleet-notify.path`, and `%post` starts them on the first install, as
+the `.deb` does.
+
+### Other distributions
+
+The same code runs on the three controllers; what differs:
+
+| | Debian 13 | Fedora 44 | AlmaLinux 10.2 |
+|---|---|---|---|
+| ansible-core | 2.19 | 2.20 | 2.16 (AppStream); no `ansible`, no `ansible-lint` |
+| Python | 3.13 | 3.14 | 3.12, so the code keeps to 3.12 (ruff's `target-version`) |
+| systemd, Cockpit | 257, 337 | 259, 368 | 257, 356 |
+| SELinux | none | enforcing | enforcing |
+
+Checked on 15 October on Fedora 44 and AlmaLinux 10.2, both enforcing, with
+every integration script but `windows.sh` and `measure-events.sh`: all pass,
+and the audit log has no denial. The units, the helpers and sudo need no
+policy of their own: what systemd starts from `/usr/libexec` runs unconfined,
+and `LoadCredentialEncrypted`, the tmpfs over the state and `PrivatePIDs`
+behave as on Debian. ansible-core 2.16 passed everything that 2.19 passes,
+`multihost.sh` included, so it is the minimum of both packages and of
+`selfcheck` (`_MIN_ANSIBLE` in `system.py`). 2.16 is no longer supported
+upstream: the integration scripts run on AlmaLinux at every phase.
+
+Found on the way:
+
+- `module.list` decides when to list the modules again from the package
+  database: `/var/lib/dpkg/status` or the directory of rpm's SQLite database,
+  whose writes go to a write-ahead log, and the collections of the `ansible`
+  package, in `dist-packages` or in `site-packages` of the Python Ansible runs on.
+- AlmaLinux's `nsswitch.conf` asks DNS before `myhostname`. If the controller's
+  name is not in DNS, `socket.getfqdn()` takes seconds (14 on the test VM).
+  The link in a notification asked for it once per channel, so a webhook came
+  20 seconds late. The name is now looked up once per delivery. Setting
+  `[notifications] url` avoids the lookup.
+- The test nodes of `nodes.sh` need the key file relabelled (`:z`) where
+  SELinux is enforcing, and `CAP_AUDIT_WRITE`, which the podman of EL does
+  not give: Debian's sshd closes a session with a terminal when it cannot
+  write its audit record, and ansible-core 2.16 asks for a terminal (`-tt`).
+  Real nodes are not concerned.
 
 ## Tests
 
@@ -1092,5 +1143,5 @@ Of the units only `cockpit-fleet-scheduler.timer` is enabled and started.
 
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors
-and warnings. The integration scripts need the package installed on a
+and warnings. The `.rpm` is not built in CI: the runner is Debian. The integration scripts need the package installed on a
 controller and are not part of CI yet.

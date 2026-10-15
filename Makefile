@@ -11,7 +11,7 @@ COLLECTION := ansible_collections/lineadicomando/fleet
 
 -include Makefile.local
 
-.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb pot po-compile help
+.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm pot po-compile help
 
 all: build
 
@@ -89,6 +89,9 @@ check-py: ## Run backend unit tests
 
 deb: build ## Build the .deb in a Debian 13 container, into deb/
 	scripts/build-deb.sh
+
+rpm: build ## Build the .rpm for Fedora 44 and AlmaLinux 10 in containers, into rpm/
+	scripts/build-rpm.sh
 
 pot: ## Extract translatable strings from src/ into src/locales/*/translation.json
 	npm run pot

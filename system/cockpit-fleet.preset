@@ -1,0 +1,3 @@
+# Only the timer and the path unit are enabled; their services run when they say.
+enable cockpit-fleet-scheduler.timer
+enable cockpit-fleet-notify.path

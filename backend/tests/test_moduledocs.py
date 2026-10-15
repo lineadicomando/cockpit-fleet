@@ -37,7 +37,7 @@ class ModuleDocsTest(Base):
         self.status.write_text("1")
         for patch in (mock.patch.object(paths, "CACHE_DIR", self.root / "cache"),
                       mock.patch.object(moduledocs, "_ansible_doc", ansible_doc),
-                      mock.patch.object(moduledocs, "_DPKG_STATUS", self.status),
+                      mock.patch.object(moduledocs, "_PACKAGE_DBS", (self.status,)),
                       mock.patch.object(moduledocs, "_COLLECTION_ROOTS", (self.root / "none",))):
             patch.start()
             self.addCleanup(patch.stop)

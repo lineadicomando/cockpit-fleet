@@ -20,10 +20,16 @@ from .cli import Context, Str, Values, command
 from .errors import BadRequest, NotFound, Unavailable
 
 _NAME_RE = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+){0,4}")
-# Collections installed for the whole machine, by a package or by root.
+# Collections installed for the whole machine, by root or by a package: the
+# ansible package puts them next to Python's own, dist-packages on Debian and
+# site-packages of the version Ansible runs on for RPM distributions.
+_SHARED_COLLECTIONS = Path("/usr/share/ansible/collections")
 _COLLECTION_ROOTS = (Path("/usr/lib/python3/dist-packages/ansible_collections"),
-                     Path("/usr/share/ansible/collections/ansible_collections"))
-_DPKG_STATUS = Path("/var/lib/dpkg/status")
+                     *sorted(Path("/usr/lib").glob("python3*/site-packages/ansible_collections")),
+                     _SHARED_COLLECTIONS / "ansible_collections")
+# The package database, which changes with every install or removal. rpm's is
+# SQLite with a write-ahead log, so the whole directory is watched.
+_PACKAGE_DBS = (Path("/var/lib/dpkg/status"), Path("/usr/lib/sysimage/rpm"))
 _MAX_TEXT = 400
 
 
@@ -33,7 +39,7 @@ def _ansible_doc(*args: str) -> dict:
         env = {
             "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": home,
             "ANSIBLE_HOME": f"{home}/.ansible", "ANSIBLE_LOCAL_TEMP": f"{home}/scratch",
-            "ANSIBLE_COLLECTIONS_PATH": str(_COLLECTION_ROOTS[1].parent),
+            "ANSIBLE_COLLECTIONS_PATH": str(_SHARED_COLLECTIONS),
             "ANSIBLE_NOCOLOR": "1",
         }
         try:
@@ -56,7 +62,7 @@ def _ansible_doc(*args: str) -> dict:
 def _installed() -> str:
     """Changes whenever the set of installed modules may have changed."""
     seen = []
-    for path in (_DPKG_STATUS, *_COLLECTION_ROOTS):
+    for path in (*_PACKAGE_DBS, *_COLLECTION_ROOTS):
         entries = [path, *sorted(path.iterdir())] if path.is_dir() else [path]
         for entry in entries:
             try:

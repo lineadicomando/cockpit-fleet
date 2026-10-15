@@ -3,9 +3,15 @@ galaxy_info:
   author: Alessandro Gagliano
   description: Install the agent of the chat page of cockpit-fleet on a controller
   license: LGPL-2.1-or-later
-  min_ansible_version: "2.19"
+  min_ansible_version: "2.16"
   platforms:
     - name: Debian
       versions:
         - trixie
+    - name: Fedora
+      versions:
+        - "44"
+    - name: EL
+      versions:
+        - "10"
 dependencies: []

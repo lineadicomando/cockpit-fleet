@@ -10,6 +10,7 @@ scheduler writes notify.wake again when something is due.
 """
 
 import fcntl
+import functools
 import json
 import os
 import socket
@@ -64,9 +65,16 @@ _WORDS = {
 }
 
 
+@functools.cache
+def _fqdn() -> str:
+    # Asked once per process: where the name is not in DNS, as on the Enterprise
+    # Linux family, whose nsswitch asks DNS first, each lookup can take seconds.
+    return socket.getfqdn()
+
+
 def base_url(ctx: Context) -> str:
     """Where the web console is reached: config.toml, or Cockpit's own port here."""
-    return ctx.config.notify_url or f"https://{socket.getfqdn()}:9090"
+    return ctx.config.notify_url or f"https://{_fqdn()}:9090"
 
 
 def _link(base: str, run_id: str | None) -> str:

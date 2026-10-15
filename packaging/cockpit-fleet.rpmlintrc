@@ -1,0 +1,12 @@
+# Checks of rpmlint that do not apply to this package, each with the reason.
+
+# sudo ignores a file in sudoers.d that others can read or write: 0440 is required.
+addFilter(r"non-readable /etc/sudoers\.d/cockpit-fleet 440")
+# The license text is the one published by the FSF, with the address it has.
+addFilter(r"incorrect-fsf-address /usr/share/licenses/cockpit-fleet/LICENSE")
+# English, but not in rpmlint's dictionary.
+addFilter(r"spelling-error .*sandboxed")
+# The state, the secrets and the survey answers belong to the service account
+# and are closed to others on purpose: see the security model.
+addFilter(r"non-standard-(uid|gid) .* cockpit-fleet$")
+addFilter(r"non-standard-dir-perm /(etc/cockpit-fleet/secrets|var/lib/cockpit-fleet|run/cockpit-fleet/answers)")

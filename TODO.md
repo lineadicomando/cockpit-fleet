@@ -15,6 +15,12 @@ could give is under "The terminal" below. Phase 5 (notifications) was
 written on 14 October and met its criterion with stand-ins of the four
 services; what keeps it open is below.
 
+On 15 October the controller was extended to Fedora 44 and AlmaLinux 10:
+an `.rpm` (`make rpm`) and two test VMs, every integration script passing
+on both (`docs/architecture.md`, "Other distributions"). What is left of it
+is under "Open points" and in phase 10.
+The minimum of ansible-core is now 2.16 for every package and `selfcheck`.
+
 **Next step: close phase 5** with the checks the user does by hand, listed
 under phase 5, and whatever they find; **then phase 6** (data collection
 and checks). The ideas left for the terminal are an alternative the user
@@ -39,11 +45,10 @@ Telegram, webhooks, mail and Matrix, with rules, retries, grouping and a
 limit; a self-check of the controller; the command `fleet` for a terminal.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): the package as of the
-notifications, but without the last change (a user name for mail without
-TLS is refused): run `make vm-deb-deploy` before testing again. The agent of
+State of the test VM `deb13-samba-dc` (shut off): the package as of 15
+October (the RPM work), installed with `--force-confold`. The agent of
 the chat installed by the role and named in `config.toml`, `[mcp] enabled =
-true`; an empty database (`notify.sh` wiped it); no test account, no login
+true`; an empty database (`multihost.sh` wiped it); no test account, no login
 to Claude. Its `config.toml` differs from the packaged one (the agent and
 `[mcp]`), so `make vm-deb-deploy` stops at dpkg's question: finish with
 `dpkg --force-confold --configure -a` on the VM, or install with
@@ -61,24 +66,14 @@ image already built; no data and no test accounts, and no Samba AD DC. It has
 neither Node.js nor an agent for the chat. After a revert, `make
 vm-deb-deploy` installs the current code.
 
-Integration tests, all passing when last run:
-
-- on the code with notifications (14 October): `notify.sh`;
-- on the code with schedules (14 October): `schedules.sh`, and a reboot by
-  hand (see phase 4);
-- on the code with `fleet` (14 October): `cli.sh`, `mcp.sh`, `chat.sh`,
-  `roles.sh`;
-- on the code with the chat (13 October): `privileges.sh`, `files.sh`,
-  `upload.sh`, `inventories.sh`. The role that installs the chat's agent has
-  no script: it was tried by hand, on 13 and 14 October, as
-  `docs/architecture.md` tells;
-- on the code of `afc2f06`, not since: `sandbox.sh`, `runs.sh` (without the
-  git part: `IT_GIT_URL` not set), `adhoc.sh`, `galaxy.sh` (with
-  `IT_GALAXY_NET=yes`) and `multihost.sh`. The chat touched none of what they
-  try, but run them again before changing the unit, the helpers or `fleetctl`;
-- `windows.sh` was last run before phase 3 and wants the secret `it-win-key`
-  made again (see `CLAUDE.md`); Windows was tried by the two acceptance tests
-  instead.
+Integration tests, all passing when last run, on 15 October on Debian 13,
+Fedora 44 and AlmaLinux 10.2 alike: every script but `windows.sh` and
+`measure-events.sh`; `runs.sh` without the git part (`IT_GIT_URL` not set)
+and `galaxy.sh` without the network (`IT_GALAXY_NET` not set). `windows.sh`
+was last run before phase 3 and wants the secret `it-win-key` made again
+(see `CLAUDE.md`); Windows was tried by the two acceptance tests instead. The
+role that installs the chat's agent has no script: it was tried by hand on
+Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 
 `runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`) and
 `IT_SSH_PASSWORD`.
@@ -97,7 +92,7 @@ Integration tests, all passing when last run:
 | Operator | Launches templates; may narrow the hosts and ask for a dry run, not widen the limit; gives variables only by answering the survey |
 | Secrets | `systemd-creds`; only PID 1 decrypts them, for the single run |
 | Secrets in a survey | The operator hands them to `fleet-secret answer`, which chooses the name and returns a single-use ticket; the run consumes it |
-| Ansible | Debian package `ansible-core`; extra collections in the project |
+| Ansible | The distribution's package `ansible-core`, 2.16 or later (AlmaLinux 10 has 2.16, unsupported upstream but kept by Red Hat), decided on 15 October: the integration scripts are run on AlmaLinux at every phase; extra collections in the project |
 | A project's `ansible.cfg` | Not used directly: only the keys in an allowlist pass |
 | Sources of projects | Git, local directory, written in the interface, uploaded archive |
 | Collections from Galaxy | For every kind of project; installed by a sandboxed job next to the tree (`projects/<id>/collections/<sha256 of the requirements file>`), never inside it; copied into every run; without them a playbook does not start |
@@ -120,7 +115,7 @@ Integration tests, all passing when last run:
 | History | SQLite: state, state changes, time series with downsampling |
 | Scale | Over 200 nodes: intervals of 5-15 min, one connection per host, sharding |
 | Managed nodes | Anything Ansible supports; Windows over SSH only |
-| Controller | Debian 13 only |
+| Controller | Debian 13 (`.deb`), Fedora 44 and AlmaLinux 10 (`.rpm`, one spec), decided on 15 October; SELinux enforcing, with no policy of ours |
 | External triggers | Out of scope, future development |
 | Agents (MCP) | `fleet-mcp` on stdio, launched by the user (also over ssh): every tool is a call to `fleetctl`, so roles and audit stay the same; no HTTP; standard library only |
 | Secrets and agents | No tool for `fleet-secret`: the agent creates the credential, a person enters the value from the interface |
@@ -153,7 +148,8 @@ Integration tests, all passing when last run:
 
 ## Open points (a default applies, to be confirmed before the phase named)
 
-None now.
+- **The chat's agent on Fedora and AlmaLinux** (before phase 10): the role
+  installs `xz` there instead of `xz-utils`, but was not run on either.
 
 ## Leftovers of the closed phases
 
@@ -454,7 +450,8 @@ approved by another user and completes.
       reading of secrets (many already exist in `test/integration/`)
 - [ ] Accessibility; complete Italian translation
 - [ ] Documentation: installation, security model, writing a check, backup
-- [ ] Upgrade and removal of the package tried, `purge` included
+- [ ] Upgrade and removal of the package tried, `purge` included; for the `.rpm` too
+- [ ] The `.rpm` built in CI (the runner is Debian: rpmbuild there, or a second runner)
 - [ ] Screenshots, `CHANGELOG`, tag `v0.1.0`
 - [ ] Workflow for GitHub Actions (the current one is for Gitea only)
 - [ ] Publication on GitHub: license confirmed again, history with no secrets and
@@ -465,4 +462,5 @@ approved by another user and completes.
 External triggers (git webhooks, auto-remediation on state change); pull mode
 (`ansible-pull`) for very large fleets; secrets on external backends (OpenBao,
 Bitwarden); export to Prometheus or InfluxDB; execution environments in
-containers; controller on other distributions.
+containers; controller on other distributions than Debian 13, Fedora 44 and
+AlmaLinux 10.

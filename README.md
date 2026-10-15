@@ -36,15 +36,18 @@ the security model in [SECURITY.md](SECURITY.md).
 
 ## Requirements
 
-- Controller: Debian 13 with Cockpit ≥ 337, `ansible-core` ≥ 2.19, systemd ≥ 257
-- Development machine: Node.js ≥ 22, npm, Make, Python ≥ 3.13, podman (to build the package)
+- Controller: Debian 13, Fedora 44 or AlmaLinux 10, with Cockpit ≥ 337,
+  `ansible-core` ≥ 2.16, systemd ≥ 257, Python ≥ 3.12
+- Development machine: Node.js ≥ 22, npm, Make, Python ≥ 3.12, podman (to build the packages)
 
 ## Build and install
 
 ```bash
 npm install
 make deb                                    # builds deb/cockpit-fleet_<version>_all.deb
-sudo apt install ./deb/cockpit-fleet_*.deb  # on the controller
+sudo apt install ./deb/cockpit-fleet_*.deb  # on a Debian controller
+make rpm                                    # builds rpm/cockpit-fleet-<version>-1.{fc44,el10}.noarch.rpm
+sudo dnf install ./rpm/cockpit-fleet-*.fc44.noarch.rpm  # on Fedora; .el10 on AlmaLinux
 ```
 
 The package creates the `cockpit-fleet` account and three role groups:

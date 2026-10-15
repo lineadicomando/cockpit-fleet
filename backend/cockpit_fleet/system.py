@@ -10,7 +10,8 @@ from .auth import role_at_least
 from .cli import COMMANDS, Context, Int, Values, command
 from .errors import FleetError
 
-_MIN_ANSIBLE = (2, 19)
+# AlmaLinux 10 has 2.16; Debian 13 has 2.19.
+_MIN_ANSIBLE = (2, 16)
 _MIN_SYSTEMD = 257
 
 
