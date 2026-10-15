@@ -17,9 +17,10 @@ services; what keeps it open is below.
 
 On 15 October the controller was extended to Fedora 44 and AlmaLinux 10:
 an `.rpm` (`make rpm`) and two test VMs, every integration script passing
-on both (`docs/architecture.md`, "Other distributions"). What is left of it
-is under "Open points" and in phase 10.
-The minimum of ansible-core is now 2.16 for every package and `selfcheck`.
+on both (`docs/architecture.md`, "Other distributions"), and the minimum of
+ansible-core went down to 2.16, AlmaLinux's, for both packages and
+`selfcheck`. What is left of it is under "Open points", in the leftovers and
+in phase 10.
 
 **Next step: close phase 5** with the checks the user does by hand, listed
 under phase 5, and whatever they find; **then phase 6** (data collection
@@ -65,6 +66,13 @@ where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` as of commit
 image already built; no data and no test accounts, and no Samba AD DC. It has
 neither Node.js nor an agent for the chat. After a revert, `make
 vm-deb-deploy` installs the current code.
+
+The two RPM controllers, `fed44-fleet` and `alma10-fleet` (shut off, see
+`CLAUDE.md`), have the package of the RPM work (Alma that of commit `8888816`,
+Fedora one built just before the minimum went to 2.16, which changes
+nothing there), the `fleet-node` image and no data. On Alma the package in
+`baseline_fleet` predates that minimum, so its `selfcheck` reports
+`ansible`: after a revert, install the current `.rpm`.
 
 Integration tests, all passing when last run, on 15 October on Debian 13,
 Fedora 44 and AlmaLinux 10.2 alike: every script but `windows.sh` and
@@ -126,7 +134,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Run output for agents | The tool gives the outcome per host and the view by task; the raw output only when asked for explicitly |
 | Audit of agents | `fleet-mcp` declares `via` (and the name of the client) in the JSON on stdin; `fleetctl` records it in the audit trail and in the journal and, when it is there, applies the ceiling. Declaring it can only restrict. Over ssh it binds only with a dedicated key and a forced command on `fleet-mcp` in `authorized_keys`; otherwise it is a declaration, not a control. A stricter variant, with no code: a Unix account for the agent |
 | Switch of the chat | Naming an agent in `[chat.agents.NAME]` of `config.toml`, apart from `[mcp] enabled`, which the chat also needs: enabling `fleet-mcp` sends data to nobody, the chat does. The tab is shown only when an agent is named |
-| Agent of the chat | Not in the `.deb`, which downloads nothing by itself: Node.js 22 cannot come from Debian packages and the `claude` binary is not ours to redistribute. The package carries a role and a playbook (`lineadicomando.fleet.chat_agent`) that an administrator of the machine runs once, as root, in a terminal: Node.js by checksum, the adapter from a lockfile with the hash of every package. `config.toml` names the command (`[chat.agents.NAME]`), which the playbook writes only when asked; any ACP agent can be named there. No program of ours runs as root for this and sudoers does not change. Discarded: an installation per user driven by the page, a second Debian package, a third-party apt repository, driving `claude` without ACP, a shell recipe in the documentation (it was the first form) |
+| Agent of the chat | Not in the packages, which download nothing by themselves: Node.js 22 is not in Debian 13 nor in AlmaLinux 10 and the `claude` binary is not ours to redistribute. The package carries a role and a playbook (`lineadicomando.fleet.chat_agent`) that an administrator of the machine runs once, as root, in a terminal: Node.js by checksum, the adapter from a lockfile with the hash of every package. `config.toml` names the command (`[chat.agents.NAME]`), which the playbook writes only when asked; any ACP agent can be named there. No program of ours runs as root for this and sudoers does not change. Discarded: an installation per user driven by the page, a second package, a third-party apt repository, driving `claude` without ACP, a shell recipe in the documentation (it was the first form) |
 | Name of the chat in the interface | "Assistant": "Chat" reads as a chat between people, and "agent" already means two other things here. Only what the user reads: `[chat]`, `fleet-chat` and the `chat.*` commands keep their names |
 | Terminal for the chat | Cockpit's own, which is in `cockpit-system` and runs as the user of the page: the page shows the command to install the agent, or to log in, with a copy button and one that opens it. No terminal of ours in the page |
 | Start of the chat's agent | The page names the agent; `fleet-chat`, a packaged program with no privilege, gets the command line from `chat.start` and runs it. No command line reaches the browser |
@@ -134,8 +142,8 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Sessions of the chat | `[chat] max_sessions`, 2 by default, for the whole controller; counted from the running `fleet-chat` processes, a bound on memory and not a control |
 | Permissions in the chat | Read-only tools of `fleet-mcp` go without a question, everything else is confirmed; "always" lasts a conversation and is kept by the page, never written in the agent's settings |
 | Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
-| Name of the command for the terminal | `fleet`, confirmed on 14 October. No Debian package (trixie, sid) installs `bin/fleet`, its completion or its manual; the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
-| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`, `help`); four commands meant for programs are not listed and still answer; tables for a person, `--json` for a program |
+| Name of the command for the terminal | `fleet`, confirmed on 14 October. No package of Debian (trixie, sid), Fedora 44 or AlmaLinux 10 (with EPEL) installs `bin/fleet`, its completion or its manual (Fedora and Alma checked on 15 October); the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
+| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`, `help`); five commands meant for programs are not listed and still answer; tables for a person, `--json` for a program |
 | Secrets at the terminal | Never on the command line: asked for with no echo, or read from stdin, and handed to `fleet-secret` on its stdin |
 | Scheduling | A single static timer that runs `fleetctl scheduler.tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions read by `systemd-analyze`, with a time zone |
 | Who manages schedules | As templates: an administrator creates, changes and deletes; an operator turns one on or off and runs it now; a viewer sees them (confirmed on 14 October) |
@@ -143,8 +151,8 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Schedule of a template with a survey | The answers are stored with the schedule and checked when it is saved and at each launch; never a secret, so a template with a required secret question cannot be scheduled (confirmed on 14 October) |
 | Missed times | More than 5 minutes late is missed; per schedule, either recorded as missed or launched once for all the times lost |
 | Overlap | Per schedule: skip (default), queue, cancel the previous run |
-| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days |
-| Who approves | Group `cockpit-fleet-approver` |
+| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days; to be made in phase 8: nothing is pruned yet but the outbox of notifications |
+| Who approves | Group `cockpit-fleet-approver`, to be added in phase 9 |
 
 ## Open points (a default applies, to be confirmed before the phase named)
 
@@ -201,7 +209,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
   controller.
 - Agents: every `tools/list` while agents are not enabled leaves a denial in
   the audit trail; `run.result` holds a `fleetctl` process for up to 50 s; most
-  parameters (150 of 175) have no description, so only their type and
+  parameters (171 of 210, counted on 15 October) have no description, so only their type and
   bounds reach the schema; the user manual for setting up an agent is the section
   of `docs/architecture.md`, there is no page for it in the interface.
 - Chat: answers are plain text, Markdown is not rendered; a conversation
@@ -220,6 +228,12 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
   nothing about the chat; no integration script runs the playbook, which
   downloads the whole agent; the role used from a project, on a controller
   reached over ssh, and the installation behind a proxy were not tried.
+- AlmaLinux 10 has neither `ansible` nor `ansible-lint`, even with EPEL
+  (which has some single collections, `ansible-collection-*`): the syntax
+  check runs without lint there, and a project brings in its requirements
+  file any collection beyond `ansible.builtin`, `ansible.windows` included.
+  SELinux was tried in enforcing mode by the scripts only, not by a person
+  at the interface.
 - `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible` behind (`ansible
   --version` with the account's home).
 - Schedules: the builder of the interface knows a few shapes (every few
@@ -300,8 +314,8 @@ What `fleet` leaves to be desired: completion knows commands and options,
 not the names of templates, runs or credentials; `project upload` wants
 the archive as one base64 string (`--data @-` after `base64 -w0`, not tried),
 there is no option that takes the file itself; answers to a survey
-are typed by `-a` as the questions say, but a choice is not offered as a
-list to pick from; English only.
+are typed by `-a` as the questions say; the prompt shows the choices of a
+question, but they cannot be picked from a list nor completed; English only.
 
 ## Phase 4 — Scheduling (closed on 14 October)
 
@@ -368,9 +382,13 @@ address the links must open, `https://VM:9090` on the VM):
 
 What it leaves to be desired: one message per run, never per host; the
 message is plain text (no Markdown or HTML for Telegram, Matrix or mail);
-mail cannot go through the proxy (a user name without TLS is refused, so a
-password never travels in clear); channels are tried one after
-the other, so a dozen that do not answer delay the rest by 15 s each; the
+mail never goes through the proxy; a user name for mail without TLS is
+refused, so a password never travels in clear; channels are tried one after
+the other in a delivery, so one that does not answer delays the rest by at
+least 15 s (a timeout per step: connection, STARTTLS and login for mail;
+the lookup of a name has none); the link's host name is looked up once per
+delivery when `[notifications] url` is not set, which can take seconds
+where the name is not in DNS (AlmaLinux); the
 list of notifications has no filter in the page (the command has one);
 no notification when a schedule misses a time or cannot launch.
 

@@ -150,6 +150,11 @@ test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WI
 test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
 ```
 
+To run them, copy the directory to the VM and start one as root, e.g.
+`tar -C test -cf - integration | sshpass -e ssh maint@VM 'rm -rf /tmp/it &&
+mkdir /tmp/it && tar -C /tmp/it -xf -'`, then `sudo env IT_WIPE=yes
+IT_SSH_USER=maint IT_SSH_PASSWORD=... sh /tmp/it/integration/runs.sh` (the
+password through `sudo -S` on stdin). The same works on the RPM VMs.
 Run these after any change to the unit, the helpers, `fleetctl` or sudoers. The
 tests that go through `fleetctl` share helpers in `lib.sh` (`admin`, `get`,
 `expect_run`, `wipe`, `prepare`). A failed `expect_run` prints the end of the

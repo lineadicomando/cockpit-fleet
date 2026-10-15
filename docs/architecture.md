@@ -640,8 +640,10 @@ secret goes in a header the channel names.
 
 **The outbox.** One row per run and channel, however many rules match; a
 run with changes that a rule wants as `changed` and another as `succeeded`
-is told once, as `changed`. Each channel is handled on its own, and a
-request waits 15 s at most, so one that does not answer holds up no other.
+is told once, as `changed`. Channels are tried one after the other in a
+delivery, each step of a request waiting 15 s at most, so one that does not
+answer delays those after it by that much, and is not tried again in the
+same delivery.
 A failure is tried again after 1, 2, 4 … minutes, at most an hour apart,
 for a day, then given up (`failed`), which an administrator can try again.
 Matrix gets the same transaction identifier when the same message is tried
@@ -1109,7 +1111,7 @@ Found on the way:
 - AlmaLinux's `nsswitch.conf` asks DNS before `myhostname`. If the controller's
   name is not in DNS, `socket.getfqdn()` takes seconds (14 on the test VM).
   The link in a notification asked for it once per channel, so a webhook came
-  20 seconds late. The name is now looked up once per delivery. Setting
+  20 seconds late. The name is now looked up once per process, that is once per delivery. Setting
   `[notifications] url` avoids the lookup.
 - The test nodes of `nodes.sh` need the key file relabelled (`:z`) where
   SELinux is enforcing, and `CAP_AUDIT_WRITE`, which the podman of EL does
