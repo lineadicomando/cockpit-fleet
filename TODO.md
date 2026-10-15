@@ -8,8 +8,8 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 ## Status
 
 Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
-4 (schedules) and 5 (notifications) are closed, the last on 15 October 2026. The same day
-`fleet` was written, the backend for a person at a terminal
+4 (schedules) and 5 (notifications) are closed, the last on 15 October
+2026. On 14 October `fleet` was written, the backend for a person at a terminal
 (`docs/architecture.md`, "The terminal"); the rest of what the terminal
 could give is under "The terminal" below.
 
@@ -39,18 +39,29 @@ the configuration; roles from Unix groups and the audit trail; agents through
 user; schedules of templates (`OnCalendar` with a time zone, overlap,
 catching up, priority in the queue); notifications of the end of runs to
 Telegram, webhooks, mail and Matrix, with rules, retries, grouping and a
-limit; a self-check of the controller; the command `fleet` for a terminal.
+limit; a self-check of the controller; an overview, the audit trail as a
+page; the interface in English and Italian; the command `fleet` for a
+terminal, with completion for bash and a manual.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc`: the package as of the checks of
-phase 5 (15 October). Its `config.toml` is the packaged one plus `[mcp]
-enabled = true`, `[notifications] url` and the chat's agent, so a later
-deploy stops at dpkg's question: install with `apt-get install -o
-Dpkg::Options::=--force-confold`. Throwaway accounts `tadmin`, `toperator`
-and `tviewer` (one per role group) and the data of those checks: the
-project `notify-demo`, the templates `fail-demo` and `ok-demo`, the
-schedule `nightly-fail`, three channels pointing at `notify-sinks.py` in
-`/tmp` (gone at the next boot) and their rules. Going back to `baseline_fleet` removes
+State of the test VM `deb13-samba-dc` (shut off): the package as of commit
+`7e5a0fb` (the close of phase 5). Its `config.toml` is the packaged one plus
+`[mcp] enabled = true`, `[notifications] url = "https://VM:9090"`
+and the chat's agent, so a later deploy stops at dpkg's question: install
+with `apt-get install -o Dpkg::Options::=--force-confold`. Throwaway
+accounts `tadmin`, `toperator` and `tviewer`, one per role group (their
+password was random and is lost: set a new one with `chpasswd` as root).
+The data of those checks: the project `notify-demo` (written in the
+interface, `fail.yml` and `ok.yml` on localhost), the inventory `local`,
+the templates `fail-demo` and `ok-demo`, the schedule `nightly-fail`
+(daily). Channels: three to stand-ins (`hook-renamed`, `mail-test`,
+`matrix-test`, on ports 8025 and 2525 of `notify-sinks.py`, which is not
+running after a boot, so they end given up) and three to real services of
+the user, kept on purpose for the checks of phase 6: one for mail (
+an account of its own), `telegram` and `matrix` (a bot and an account of
+their own). Rules on every failed run send to all of them: **a failed run
+on this VM reaches the user's phone and mailbox**; turn the rules off
+before tests that fail on purpose. Going back to `baseline_fleet` removes
 all of it. To try the chat again: a test account in a role group, and the
 user logs it in to Claude at Cockpit's terminal
 (`/opt/cockpit-fleet-agent/bin/claude /login`); log it out (`claude auth
@@ -401,6 +412,20 @@ wants the name again even to change only the settings.
 
 ## Phase 6 — Data collection and checks
 
+To decide first, with the user (nothing is settled; no code exists yet:
+no tables for hosts or results in `db.py`, no `plugins/modules` in the
+collection):
+
+- How a check cycle is a job: a new kind for `fleet-run`, and how it shares
+  `[runs] max_concurrent` and the queue with playbook runs
+- What starts the cycles: the tick of `cockpit-fleet-scheduler.timer`, a
+  timer of its own, or schedules
+- How the host registry is filled: parsing the inventories (the
+  `inventory` job) or a run that gathers facts
+- The tables of hosts, checks, assignments, states and results, and their
+  migrations
+- Who sees, acknowledges and assigns checks (viewer, operator, admin)
+
 - [ ] **Host registry** from the inventories, identity `(inventory, hostname)`,
       platform from the facts
 - [ ] **Result contract**: `check`, `state` (0-3), `summary`, `metrics[]`
@@ -479,7 +504,8 @@ approved by another user and completes.
 - [ ] Documentation: installation, security model, writing a check, backup
 - [ ] Upgrade and removal of the package tried, `purge` included; for the `.rpm` too
 - [ ] The `.rpm` built in CI (the runner is Debian: rpmbuild there, or a second runner)
-- [ ] Screenshots, `CHANGELOG`, tag `v0.1.0`
+- [ ] Screenshots, `CHANGELOG`, tag `v0.1.0`; the version is still `0.0.1`
+      in `package.json`, `debian/changelog` and the spec
 - [ ] Workflow for GitHub Actions (the current one is for Gitea only)
 - [ ] Publication on GitHub: license confirmed again, history with no secrets and
       no details of real environments
