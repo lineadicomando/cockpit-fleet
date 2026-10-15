@@ -88,7 +88,8 @@ class ChannelTest(NotifyBase):
                 ("smtp", {"host": "mail", "sender": "f@b.c", "recipients": ["a@b.c"],
                           "security": "none", "username": "fleet"}),
                 ("matrix", {"homeserver": "https://m.org", "room_id": "#alias:m.org"}),
-                ("matrix", {"homeserver": "https://m.org", "room_id": "!a:m.org", "x": 1})):
+                ("matrix", {"homeserver": "https://m.org", "room_id": "!a:m.org", "x": 1}),
+                ("matrix", {"homeserver": "https://m.org", "room_id": "!a b"})):
             self.assertEqual(self.code("channel.create", {"name": "c", "kind": kind,
                                                           "settings": settings}),
                              "bad_request", (kind, settings))
@@ -97,6 +98,10 @@ class ChannelTest(NotifyBase):
             "recipients": ["ops@example.org"], "security": "tls"}})
         self.assertEqual(mail["settings"]["port"], 465)
         self.assertFalse(mail["secret_required"])
+        # A room of version 12 or later has no server in its id.
+        self.ok("channel.create", {"name": "room", "kind": "matrix", "settings": {
+            "homeserver": "https://matrix.org",
+            "room_id": "!Qx7Tz2dPfL0aWm_9RkVbN4sYc8HuJe3oGi5XnUt6Ay1"}})
         hook = self.ok("channel.create", {"name": "hook", "kind": "webhook", "settings": {
             "url": "https://hooks.slack.com/services/$secret"}})
         self.assertEqual(hook["settings"]["template"], channels.DEFAULT_TEMPLATE)

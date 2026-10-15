@@ -7,13 +7,11 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 ## Status
 
-Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface)
-and 4 (schedules) are closed, the last on 14 October 2026. The same day
+Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
+4 (schedules) and 5 (notifications) are closed, the last on 15 October 2026. The same day
 `fleet` was written, the backend for a person at a terminal
 (`docs/architecture.md`, "The terminal"); the rest of what the terminal
-could give is under "The terminal" below. Phase 5 (notifications) was
-written on 14 October and met its criterion with stand-ins of the four
-services; what keeps it open is below.
+could give is under "The terminal" below.
 
 On 15 October the controller was extended to Fedora 44 and AlmaLinux 10:
 an `.rpm` (`make rpm`) and two test VMs, every integration script passing
@@ -22,10 +20,8 @@ ansible-core went down to 2.16, AlmaLinux's, for both packages and
 `selfcheck`. What is left of it is under "Open points", in the leftovers and
 in phase 10.
 
-**Next step: close phase 5** with the checks the user does by hand, listed
-under phase 5, and whatever they find; **then phase 6** (data collection
-and checks). The ideas left for the terminal are an alternative the user
-may pick first. Nothing of phase 5 was looked at in a browser yet.
+**Next step: phase 6** (data collection and checks). The ideas left for
+the terminal are an alternative the user may pick first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
@@ -46,15 +42,15 @@ Telegram, webhooks, mail and Matrix, with rules, retries, grouping and a
 limit; a self-check of the controller; the command `fleet` for a terminal.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): the package as of 15
-October (the RPM work), installed with `--force-confold`. The agent of
-the chat installed by the role and named in `config.toml`, `[mcp] enabled =
-true`; an empty database (`multihost.sh` wiped it); no test account, no login
-to Claude. Its `config.toml` differs from the packaged one (the agent and
-`[mcp]`), so `make vm-deb-deploy` stops at dpkg's question: finish with
-`dpkg --force-confold --configure -a` on the VM, or install with
-`apt-get install -o Dpkg::Options::=--force-confold`; the packaged file is
-beside it as `config.toml.dpkg-dist`. Going back to `baseline_fleet` removes
+State of the test VM `deb13-samba-dc`: the package as of the checks of
+phase 5 (15 October). Its `config.toml` is the packaged one plus `[mcp]
+enabled = true`, `[notifications] url` and the chat's agent, so a later
+deploy stops at dpkg's question: install with `apt-get install -o
+Dpkg::Options::=--force-confold`. Throwaway accounts `tadmin`, `toperator`
+and `tviewer` (one per role group) and the data of those checks: the
+project `notify-demo`, the templates `fail-demo` and `ok-demo`, the
+schedule `nightly-fail`, three channels pointing at `notify-sinks.py` in
+`/tmp` (gone at the next boot) and their rules. Going back to `baseline_fleet` removes
 all of it. To try the chat again: a test account in a role group, and the
 user logs it in to Claude at Cockpit's terminal
 (`/opt/cockpit-fleet-agent/bin/claude /login`); log it out (`claude auth
@@ -169,6 +165,15 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 - Whoever enters with Cockpit's administrative access without being in a group
   appears in the audit trail as `root`.
 - Integration tests only run by hand on the VM, not in CI.
+- A run that fails leaves its unit `cockpit-fleet-run@ID` failed in systemd
+  (`fleet-run` exits with the playbook's code): Cockpit marks "Services" red
+  and the system is `degraded` until a reboot or `reset-failed`. The outcome
+  is already in `result.json`. Kept on 15 October as coherent with systemd;
+  what may change it: a monitor of the controller that alerts on a
+  `degraded` system or failed units (Icinga's `check_systemd`), and units
+  piling up with a schedule that fails often. `CollectMode=inactive-or-failed`
+  on the unit would unload them once finished, keeping the failure in the
+  journal (the backend only asks `is-active`); untried.
 - An inventory has one vault credential only (templates have more than one).
 - Editor: files are renamed and deleted one at a time, not a directory; changing
   tab with unsaved changes loses them without warning; the syntax check gets no
@@ -337,7 +342,7 @@ schedule that catches up once and recorded the other as missed; both were
 planned for the next day. The page was looked at in the browser: the list,
 the builder, the preview and the conversion of a cron line.
 
-## Phase 5 — Notifications (written on 14 October)
+## Phase 5 — Notifications (closed on 15 October)
 
 Outbox, the unit and its path unit, the four channels, secrets, test
 message, proxy, rules, events, messages in two languages with a link,
@@ -352,33 +357,27 @@ one delivery; a fifth channel, refused, was tried again by the tick and got
 it once its server was up, about 90 s later; the tokens were in neither the
 database nor the journal.
 
-Left before closing it, checks the user does by hand (deploy first with
-`make vm-deb-deploy`, then log in to Cockpit as an account of
-`cockpit-fleet-admin`; set `[notifications] url` in `config.toml` to the
-address the links must open, `https://VM:9090` on the VM):
+Done on 15 October in the browser, in Italian, with the stand-ins of
+`notify-sinks.py` on the VM and Telegram's real API with a wrong token: the
+page as an administrator (a channel of each kind created, edited with its
+secret kept, tested and deleted with its rules; a rule of each scope created,
+edited, turned off and deleted; a refused test shown as "To be tried again"
+with `HTTP 401`, and "Try again" on one marked given up by hand), as an
+operator and as a viewer (lists only); the check "Notifications" in
+"System"; a failed run and a scheduled one reaching the channels their rules
+name, in the channel's language, with a link `/fleet#/runs/ID` that opens
+the run; `fleet secret --channel` and `fleet notification list` (which now
+shows state, event and channel). No token in the database or the journal.
+The same day, real services: a Telegram bot (a test and a failed run
+reached the phone; plain text is enough for now) and Mailu, with an account
+of its own, over TLS on 465 (587 is closed from outside), and a Matrix room
+on matrix.org with an account of its own (a room of version 12, whose id
+has no server: the check of the id was too strict and was fixed).
 
-- [ ] The page "Notifications" (Italian too): create, edit and delete a
-      channel of each kind, its secret shown as set and never again; a
-      rule with each scope; "Send a test" and its line in "Recent
-      notifications"; a refused test (wrong token) shown as "To be tried
-      again" with its reason, and "Try again" on a given-up one
-- [ ] The same page as an operator and as a viewer: lists only, no buttons
-- [ ] The tab "System": the check "Notifications" is OK
-- [ ] A real Telegram bot: token from @BotFather, the chat id from
-      `https://api.telegram.org/bot<TOKEN>/getUpdates` after writing to the
-      bot (a group's id is negative); a failed run arrives, and its link
-      opens the run in Cockpit (the form `/fleet#/runs/ID` was never
-      opened in a browser)
-- [ ] A real Matrix room: an access token of an account (Element:
-      Settings, Help & About), the room id (`!…:server`, Settings,
-      Advanced), the account joined to the room
-- [ ] Optionally a real mail server with STARTTLS and a real webhook
-      (Slack, Discord or ntfy, with `$secret` in the URL)
-- [ ] `fleet secret --channel NAME` at a terminal, and `fleet notification
-      list`
-- [ ] Confirm the decisions taken alone (table above): a path unit and no
-      change to `fleet-unit`; no "group" scope until phase 6; the area
-      names `channel`, `rule`, `notification` of the commands
+The decisions taken alone were confirmed on 15 October (a path unit and no
+change to `fleet-unit`; no "group" scope until phase 6; the area names
+`channel`, `rule`, `notification`); a real webhook was skipped, the
+stand-in is enough.
 
 What it leaves to be desired: one message per run, never per host; the
 message is plain text (no Markdown or HTML for Telegram, Matrix or mail);
@@ -390,7 +389,15 @@ the lookup of a name has none); the link's host name is looked up once per
 delivery when `[notifications] url` is not set, which can take seconds
 where the name is not in DNS (AlmaLinux); the
 list of notifications has no filter in the page (the command has one);
-no notification when a schedule misses a time or cannot launch.
+no notification when a schedule misses a time or cannot launch. Seen in
+the browser on 15 October: a test refused for good (a wrong token, HTTP
+401) is tried again for 24 hours like any notification; the default body
+of a webhook has `$text` only, not the title, so a run's message there does
+not say it failed; `fleet channel list` does not show whether the secret is
+set; the SMTP form shows the password field with no security too (the
+backend refuses it). A mail channel with a user name and no password
+is `secret_required: no`, so it looks complete; `fleet channel update`
+wants the name again even to change only the settings.
 
 ## Phase 6 — Data collection and checks
 
@@ -466,7 +473,9 @@ approved by another user and completes.
 - [ ] Security review: root helpers, sandbox, sudoers, archive extraction, git
 - [ ] Automated negative tests: injection, path traversal, role escalation,
       reading of secrets (many already exist in `test/integration/`)
-- [ ] Accessibility; complete Italian translation
+- [ ] Accessibility; complete Italian translation (seen on 15 October: the
+      number inputs of PatternFly are named "Input", the menus of rows
+      "Kebab toggle", in English)
 - [ ] Documentation: installation, security model, writing a check, backup
 - [ ] Upgrade and removal of the package tried, `purge` included; for the `.rpm` too
 - [ ] The `.rpm` built in CI (the runner is Debian: rpmbuild there, or a second runner)

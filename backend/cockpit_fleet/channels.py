@@ -29,7 +29,8 @@ _MAX_TEMPLATE = 16 * 1024
 DEFAULT_TEMPLATE = '{"text": "$text"}'
 
 _CHAT_RE = re.compile(r"-?[0-9]{1,20}|@[A-Za-z][A-Za-z0-9_]{4,31}")
-_ROOM_RE = re.compile(r"![A-Za-z0-9._=/+-]{1,128}:[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?")
+# Since room version 12 an id has no server: "!" and a hash in URL-safe base64.
+_ROOM_RE = re.compile(r"![A-Za-z0-9._=/+-]{1,255}(:[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?)?")
 _HEADER_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
 _HOST_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]{0,252})")
 _ADDRESS_RE = re.compile(r"[^@\s<>,;:\"()\[\]\\]{1,64}@[A-Za-z0-9.-]{1,253}")
@@ -150,7 +151,7 @@ def check_settings(kind: str, settings: dict) -> dict:
     homeserver = check_url(_text(settings, "homeserver", limit=512), "homeserver")
     room = _text(settings, "room_id", limit=400)
     if not _ROOM_RE.fullmatch(room):
-        raise BadRequest("room_id must be the identifier of a room, like !abc:example.org")
+        raise BadRequest("room_id must be the identifier of a room, like !abc:example.org or !abc")
     return {"homeserver": homeserver.rstrip("/"), "room_id": room}
 
 

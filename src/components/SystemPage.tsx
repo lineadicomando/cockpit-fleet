@@ -68,7 +68,7 @@ function Transfer() {
                         onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) load(file); }} />
                 </Flex>
             </Flex>
-            <Content component="p">{t("Credentials, projects, inventories, trusted host keys and job templates, as one file. It holds no secret: after an import, enter the secrets of the credentials again. The files of a project written here or uploaded are not in it.")}</Content>
+            <Content component="p">{t("Credentials, projects, inventories, trusted host keys, job templates, schedules, notification channels and their rules, as one file. It holds no secret: after an import, enter the secrets of the credentials and of the channels again. The files of a project written here or uploaded are not in it.")}</Content>
             {error && <Alert variant="danger" isInline title={error} />}
             {report && (
                 <>

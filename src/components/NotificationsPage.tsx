@@ -131,7 +131,7 @@ function KindFields({ kind, form, set }: { kind: ChannelKind; form: ChannelForm;
     return (
         <>
             {text("homeserver", t("Homeserver"), t("The address of the homeserver's client API, like https://matrix.example.org."), true)}
-            {text("room_id", t("Room"), t("The identifier of the room, like !abcdef:example.org, which the account of the token has joined."), true, true)}
+            {text("room_id", t("Room"), t("The identifier of the room, like !abcdef:example.org (or !abcdef in newer rooms), which the account of the token has joined."), true, true)}
         </>
     );
 }

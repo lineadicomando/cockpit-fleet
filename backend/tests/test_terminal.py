@@ -93,6 +93,14 @@ class RenderTest(unittest.TestCase):
         more = terminal.render({"runs": [{"id": "r1", "cursor": 7}], "more": True})
         self.assertTrue(more.startswith("more: yes, --before 7 for the next page\n"), more)
 
+    def test_notifications_show_their_state_and_channel(self):
+        text = terminal.table([{"id": 3, "channel_id": "n1", "event": "failed", "run_id": "r1",
+                                "state": "pending", "attempts": 2, "next_at": 0, "error": "HTTP 401",
+                                "created_at": 0, "sent_at": None, "channel": "ops",
+                                "title": "deploy"}])
+        self.assertEqual(text.splitlines()[0].split(),
+                         ["ID", "STATE", "TITLE", "EVENT", "CHANNEL", "NEXT", "AT"])
+
     def test_a_table_fits_the_width(self):
         text = terminal.table([{"id": "r1", "title": "a long title"}], width=8)
         self.assertTrue(all(len(line) <= 8 for line in text.splitlines()))

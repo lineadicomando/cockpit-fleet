@@ -1092,8 +1092,8 @@ msgstr "Creato"
 msgid "Created {{created}}, already there {{exists}}, not created {{failed}}"
 msgstr "Creati {{created}}, già presenti {{exists}}, non creati {{failed}}"
 
-msgid "Credentials, projects, inventories, trusted host keys and job templates, as one file. It holds no secret: after an import, enter the secrets of the credentials again. The files of a project written here or uploaded are not in it."
-msgstr "Credenziali, progetti, inventari, chiavi host attendibili e template, in un solo file. Non contiene segreti: dopo un'importazione vanno reinseriti i segreti delle credenziali. I file di un progetto scritto qui o caricato non ne fanno parte."
+msgid "Credentials, projects, inventories, trusted host keys, job templates, schedules, notification channels and their rules, as one file. It holds no secret: after an import, enter the secrets of the credentials and of the channels again. The files of a project written here or uploaded are not in it."
+msgstr "Credenziali, progetti, inventari, chiavi host attendibili, template, pianificazioni, canali di notifica e le loro regole, in un solo file. Non contiene segreti: dopo un'importazione vanno reinseriti i segreti delle credenziali e dei canali. I file di un progetto scritto qui o caricato non ne fanno parte."
 
 msgid "Default: {{value}}"
 msgstr "Predefinito: {{value}}"
@@ -1634,8 +1634,8 @@ msgstr "L'indirizzo della API client dell'homeserver, come https://matrix.exampl
 msgid "The channel, its secret, its rules and its notifications are deleted. This cannot be undone."
 msgstr "Vengono eliminati il canale, il suo segreto, le sue regole e le sue notifiche. Non si può annullare."
 
-msgid "The identifier of the room, like !abcdef:example.org, which the account of the token has joined."
-msgstr "L'identificativo della stanza, come !abcdef:example.org, in cui è entrato l'account del token."
+msgid "The identifier of the room, like !abcdef:example.org (or !abcdef in newer rooms), which the account of the token has joined."
+msgstr "L'identificativo della stanza, come !abcdef:example.org (o !abcdef nelle stanze più recenti), in cui è entrato l'account del token."
 
 msgid "The number of the chat or group (negative for a group), or the @name of a channel. The bot must be a member."
 msgstr "Il numero della chat o del gruppo (negativo per un gruppo), o il @nome di un canale. Il bot deve farne parte."

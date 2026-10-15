@@ -50,9 +50,10 @@ SHORTCUTS = {
     "help": "What a command does and the parameters it takes",
 }
 # The columns a table shows first, when its rows have them.
-_COLUMNS = ("id", "name", "status", "title", "kind", "user", "role", "command", "outcome",
-            "via", "playbook", "path", "host", "template", "calendar", "enabled", "next_at",
-            "created_by", "created_at", "finished_at", "ts", "rc", "revision", "url", "username")
+_COLUMNS = ("id", "name", "status", "state", "title", "event", "channel", "kind", "user",
+            "role", "command", "outcome", "via", "playbook", "path", "host", "template",
+            "calendar", "enabled", "next_at", "created_by", "created_at", "finished_at", "ts",
+            "rc", "revision", "url", "username")
 _MAX_COLUMNS = 6
 _MAX_CELL = 40
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
