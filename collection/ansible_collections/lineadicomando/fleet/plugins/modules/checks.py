@@ -11,8 +11,12 @@ description:
   - The same module exists for Windows, M(lineadicomando.fleet.win_checks),
     with the same parameters and the same results; the action of the same
     name as this module chooses between the two by the shell of the host.
-  - It only reads. Thresholds are not applied here but on the controller,
-    when the results are taken in.
+  - It only reads, but for the C(updates) check with C(refresh), which
+    refreshes the package metadata. Thresholds are not applied here but on
+    the controller, when the results are taken in.
+  - The C(cmdb) check returns what the host is made of in C(cmdb), the
+    C(updates) check the updates it lacks in C(updates), beside the rest of
+    their result.
 options:
   checks:
     description:
@@ -46,6 +50,12 @@ fleet_results:
     summary: {description: One line for a person., type: str}
     metrics: {description: "C(name), C(instance), C(value), C(unit), C(min), C(max).", type: list}
     details: {description: Anything else the check found., type: dict}
+    cmdb:
+      description: "For C(cmdb): C(hardware), C(disks), C(interfaces), C(packages), C(services)."
+      type: dict
+    updates:
+      description: "For C(updates): the C(manager) and the C(updates), each with C(security)."
+      type: dict
 fleet_host:
   description: What the node is, and its clock when the checks ended.
   type: dict
@@ -54,11 +64,13 @@ fleet_host:
 
 import base64
 import calendar
+import json
 import os
 import platform
 import shutil
 import subprocess
 import time
+import xml.etree.ElementTree as ElementTree
 
 from ansible.module_utils.basic import AnsibleModule
 
@@ -354,6 +366,305 @@ def check_certificates(params):
                 f" {soonest[1]} days"), metrics, details
 
 
+# --- the inventory of the host ---------------------------------------------------
+
+def _run(argv, timeout=600):
+    """The output of a command, in the C locale; None if it cannot run."""
+    if not shutil.which(argv[0]):
+        return None
+    env = dict(os.environ, LC_ALL="C", LANG="C")
+    try:
+        result = subprocess.run([shutil.which(argv[0])] + argv[1:], stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+                                universal_newlines=True, timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result
+
+
+def _read(path):
+    try:
+        with open(path) as source:
+            return source.read().strip().replace("\x00", "")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def _hardware():
+    cpu_model = ""
+    try:
+        with open("/proc/cpuinfo") as source:
+            for line in source:
+                key, _, value = line.partition(":")
+                if key.strip() in ("model name", "Model", "Hardware", "cpu model") \
+                        and value.strip():
+                    cpu_model = value.strip()
+                    break
+    except OSError:
+        pass
+    memory = None
+    try:
+        with open("/proc/meminfo") as source:
+            for line in source:
+                if line.startswith("MemTotal:"):
+                    memory = int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    dmi = "/sys/class/dmi/id/"
+    model = _read(dmi + "product_name") or _read("/proc/device-tree/model")
+    virtual = ""
+    found = _run(["systemd-detect-virt"], 30)
+    if found is not None and found.returncode == 0:
+        virtual = found.stdout.strip()
+    with open("/proc/uptime") as source:
+        boot = time.time() - float(source.read().split()[0])
+    return {"vendor": _read(dmi + "sys_vendor"), "model": model,
+            # Readable by root only: empty without become.
+            "serial": _read(dmi + "product_serial"),
+            "bios": _read(dmi + "bios_version"), "virtual": virtual, "cpu_model": cpu_model,
+            "cpus": os.cpu_count(), "memory": memory, "boot_time": round(boot)}
+
+
+_DISKS = ("sd", "vd", "xvd", "hd", "nvme", "mmcblk")
+
+
+def _disks():
+    disks = []
+    try:
+        names = sorted(os.listdir("/sys/block"))
+    except OSError:
+        return disks
+    for name in names:
+        if not name.startswith(_DISKS):
+            continue
+        try:
+            size = int(_read("/sys/block/%s/size" % name) or 0) * 512
+        except ValueError:
+            size = 0
+        disks.append({"name": name, "size": size,
+                      "model": _read("/sys/block/%s/device/model" % name)})
+    return disks
+
+
+def _interfaces():
+    addresses = {}
+    found = _run(["ip", "-j", "address", "show"], 30)
+    if found is not None and found.returncode == 0:
+        try:
+            for link in json.loads(found.stdout):
+                addresses[link.get("ifname")] = [
+                    "%s/%s" % (entry.get("local"), entry.get("prefixlen"))
+                    for entry in link.get("addr_info", []) if entry.get("scope") != "link"]
+        except (ValueError, AttributeError, TypeError):
+            pass
+    interfaces = []
+    try:
+        names = sorted(os.listdir("/sys/class/net"))
+    except OSError:
+        return interfaces
+    for name in names:
+        if name == "lo":
+            continue
+        interfaces.append({"name": name, "mac": _read("/sys/class/net/%s/address" % name),
+                           "addresses": addresses.get(name, [])})
+    return interfaces
+
+
+def _packages():
+    """The installed packages, and the manager that knows them."""
+    found = _run(["dpkg-query", "-W", "-f",
+                  "${db:Status-Abbrev}\t${Package}\t${Version}\t${Architecture}\n"])
+    if found is not None and found.returncode == 0:
+        packages = []
+        for line in found.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) == 4 and parts[0].startswith("ii"):
+                packages.append({"name": parts[1], "version": parts[2], "arch": parts[3]})
+        return "dpkg", packages
+    found = _run(["rpm", "-qa", "--qf",
+                  "%{NAME}\t%|EPOCH?{%{EPOCH}:}:{}|%{VERSION}-%{RELEASE}\t%{ARCH}\n"])
+    if found is not None and found.returncode == 0:
+        packages = []
+        for line in found.stdout.splitlines():
+            parts = line.split("\t")
+            # The keys rpm trusts are listed as packages: they are not software.
+            if len(parts) == 3 and parts[0] != "gpg-pubkey":
+                packages.append({"name": parts[0], "version": parts[1],
+                                 "arch": "" if parts[2] == "(none)" else parts[2]})
+        return "rpm", packages
+    found = _run(["pacman", "-Q"])
+    if found is not None and found.returncode == 0:
+        return "pacman", [{"name": name, "version": version, "arch": ""}
+                          for name, _, version in (line.partition(" ")
+                                                   for line in found.stdout.splitlines())]
+    return "", None
+
+
+def _services():
+    if not os.path.isdir("/run/systemd/system"):
+        return None
+    files = _run(["systemctl", "list-unit-files", "--type=service", "--no-legend", "--no-pager"])
+    units = _run(["systemctl", "list-units", "--type=service", "--all", "--no-legend",
+                  "--no-pager", "--plain"])
+    if files is None or units is None or files.returncode != 0 or units.returncode != 0:
+        return None
+    services = {}
+    for line in files.stdout.splitlines():
+        parts = line.split()
+        # A template is not a service of its own; its instances are listed below.
+        if len(parts) >= 2 and "@." not in parts[0]:
+            services[parts[0]] = {"name": parts[0], "state": "stopped", "enabled": parts[1]}
+    states = {"active": "running", "inactive": "stopped", "failed": "failed"}
+    for line in units.stdout.splitlines():
+        parts = line.lstrip("● ").split()
+        if len(parts) >= 3 and parts[1] != "not-found":
+            entry = services.setdefault(parts[0], {"name": parts[0], "enabled": ""})
+            entry["state"] = states.get(parts[2], parts[2])
+    return sorted(services.values(), key=lambda entry: entry["name"])
+
+
+def check_cmdb(params):
+    hardware = _hardware()
+    manager, packages = _packages()
+    services = _services()
+    data = {"hardware": hardware, "disks": _disks(), "interfaces": _interfaces(),
+            "package_manager": manager, "packages": packages, "services": services}
+    metrics = [metric("cpus", hardware["cpus"] or 0),
+               metric("memory", hardware["memory"] or 0, "B")]
+    parts = ["%s CPUs" % hardware["cpus"], "%.1f GiB" % ((hardware["memory"] or 0) / 2.0 ** 30)]
+    if packages is not None:
+        metrics.append(metric("packages", len(packages)))
+        parts.append("%d packages" % len(packages))
+    if services is not None:
+        metrics.append(metric("services", len(services)))
+        parts.append("%d services" % len(services))
+    state = OK if packages is not None else UNKNOWN
+    if packages is None:
+        parts.append("no package manager known")
+    return state, ", ".join(parts), metrics, {"package_manager": manager}, {"cmdb": data}
+
+
+# --- updates ----------------------------------------------------------------------------
+
+def _apt_updates(refresh):
+    if refresh:
+        found = _run(["apt-get", "update", "-qq"])
+        if found is None or found.returncode != 0:
+            raise RuntimeError("apt-get update failed: %s" % (found.stderr.strip()[-300:]
+                                                             if found else "not run"))
+    found = _run(["apt-get", "-s", "-q", "-o", "Debug::NoLocking=true", "dist-upgrade"])
+    if found is None or found.returncode != 0:
+        raise RuntimeError("apt-get -s dist-upgrade failed: %s"
+                           % (found.stderr.strip()[-300:] if found else "not run"))
+    updates = []
+    for line in found.stdout.splitlines():
+        # Inst NAME [CURRENT] (NEW ORIGINS [ARCH]); without [CURRENT] it is a new package.
+        if not line.startswith("Inst ") or " [" not in line.split("(")[0]:
+            continue
+        name = line.split()[1]
+        current = line.split("[", 1)[1].split("]", 1)[0]
+        rest = line.split("(", 1)[1].rsplit(")", 1)[0] if "(" in line else ""
+        words = rest.split()
+        available = words[0] if words else ""
+        source = " ".join(word for word in words[1:] if not word.startswith("["))
+        updates.append({"name": name, "current": current, "available": available,
+                        "security": "security" in source.lower(), "source": source})
+    return updates
+
+
+def _nevra_name(text):
+    """The name of a package in name-version-release.arch."""
+    base = text.rsplit(".", 1)[0]
+    parts = base.rsplit("-", 2)
+    return parts[0] if len(parts) == 3 else ""
+
+
+def _dnf_updates(refresh):
+    dnf = "dnf" if shutil.which("dnf") else "yum"
+    found = _run([dnf, "-q"] + (["--refresh"] if refresh else []) + ["check-update"])
+    if found is None or found.returncode not in (0, 100):
+        raise RuntimeError("%s check-update failed: %s"
+                           % (dnf, found.stderr.strip()[-300:] if found else "not run"))
+    installed = {}
+    listing = _run(["rpm", "-qa", "--qf", "%{NAME}.%{ARCH}\t%{VERSION}-%{RELEASE}\n"])
+    for line in (listing.stdout.splitlines() if listing else []):
+        key, _, version = line.partition("\t")
+        installed[key] = version
+    updates = []
+    for line in found.stdout.splitlines():
+        # What replaces what follows, and is not an update of its own.
+        if line.lower().startswith("obsoleting"):
+            break
+        parts = line.split()
+        # name.arch version repository; anything else is a heading or a note.
+        if len(parts) != 3 or "." not in parts[0] or line.startswith(" "):
+            continue
+        updates.append({"name": parts[0], "current": installed.get(parts[0], ""),
+                        "available": parts[1], "security": False, "source": parts[2]})
+    if updates:
+        security = set()
+        advisories = _run([dnf, "-q", "updateinfo", "list", "--security", "--updates"])
+        if advisories is None or advisories.returncode != 0:
+            advisories = _run([dnf, "-q", "updateinfo", "list", "--security"])
+        for line in (advisories.stdout.splitlines() if advisories else []):
+            for word in line.split():
+                name = _nevra_name(word)
+                if name:
+                    security.add(name)
+        for update in updates:
+            update["security"] = update["name"].rsplit(".", 1)[0] in security
+    return updates
+
+
+def _zypper_updates(refresh):
+    if refresh:
+        found = _run(["zypper", "--non-interactive", "--quiet", "refresh"])
+        if found is None or found.returncode != 0:
+            raise RuntimeError("zypper refresh failed")
+    found = _run(["zypper", "--non-interactive", "--xmlout", "list-updates"])
+    if found is None or found.returncode != 0:
+        raise RuntimeError("zypper list-updates failed")
+    updates = []
+    # The output of zypper on this host, not data from elsewhere.
+    for node in ElementTree.fromstring(found.stdout).iter("update"):  # noqa: S314
+        if node.get("kind", "package") != "package":
+            continue
+        source = node.find("source")
+        updates.append({"name": node.get("name", ""), "current": node.get("edition-old", ""),
+                        "available": node.get("edition", ""), "security": False,
+                        "source": source.get("alias", "") if source is not None else ""})
+    patches = _run(["zypper", "--non-interactive", "--xmlout", "list-patches", "--category",
+                    "security"])
+    security = 0
+    if patches is not None and patches.returncode == 0:
+        listing = ElementTree.fromstring(patches.stdout)  # noqa: S314
+        security = sum(1 for node in listing.iter("update") if node.get("kind") == "patch")
+    return updates, security
+
+
+def check_updates(params):
+    refresh = params.get("refresh") is True
+    if refresh and os.geteuid() != 0:
+        return UNKNOWN, "refresh needs become", [], {}, {}
+    security_patches = None
+    if shutil.which("apt-get"):
+        manager, updates = "apt", _apt_updates(refresh)
+    elif shutil.which("dnf") or shutil.which("yum"):
+        manager, updates = "dnf", _dnf_updates(refresh)
+    elif shutil.which("zypper"):
+        manager = "zypper"
+        updates, security_patches = _zypper_updates(refresh)
+    else:
+        return UNKNOWN, "no package manager known", [], {}, {}
+    security = sum(1 for update in updates if update["security"])
+    if security_patches is not None:
+        security = security_patches
+    metrics = [metric("updates", len(updates)), metric("security_updates", security)]
+    summary = "%d updates, %d for security (%s)" % (len(updates), security, manager)
+    return OK, summary, metrics, {"manager": manager}, {"updates": {"manager": manager,
+                                                                    "updates": updates}}
+
+
 def check_reachability(params):
     return OK, "reachable", [], {}
 
@@ -372,6 +683,8 @@ CHECKS = {
     "uptime": check_uptime,
     "certificates": check_certificates,
     "clock": check_clock,
+    "cmdb": check_cmdb,
+    "updates": check_updates,
 }
 
 
@@ -403,11 +716,14 @@ def main():
         try:
             if implementation is None:
                 raise ValueError("no such check on this platform")
-            state, summary, metrics, details = implementation(params)
+            state, summary, metrics, details, *extra = implementation(params)
         except Exception as error:  # noqa: BLE001 - one check must not stop the others
             state, summary = UNKNOWN, f"{type(error).__name__}: {error}"
-            metrics, details = [], {}
+            metrics, details, extra = [], {}, []
         found.update(state=state, summary=summary, metrics=metrics, details=details)
+        # What the slow kinds collect beyond a state: cmdb or updates.
+        for more in extra:
+            found.update(more)
         results.append(found)
     info = host_info()
     info["time"] = time.time()

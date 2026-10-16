@@ -85,7 +85,9 @@ def config_export(ctx: Context, params: Values) -> dict:
          "params": store.loads(row["params"], {}),
          "thresholds": store.loads(row["thresholds"], {}),
          "machine_credential": credentials.get(row["machine_credential_id"], ""),
-         "become": bool(row["become"]), "enabled": bool(row["enabled"])}
+         "become": bool(row["become"]), "enabled": bool(row["enabled"]),
+         **({"project": projects.get(row["project_id"], ""), "playbook": row["playbook"]}
+            if row["project_id"] else {})}
         for row in conn.execute("SELECT * FROM checks ORDER BY name COLLATE NOCASE")]
     document["channels"] = [
         {"name": row["name"], "kind": row["kind"], "settings": store.loads(row["settings"], {}),
@@ -229,9 +231,11 @@ class _Importer:
                   "machine_credential_id": self._id("credentials", item.get("machine_credential"),
                                                     "credential")}
         for key in ("group", "interval", "retry_interval", "max_attempts", "params", "thresholds",
-                    "become", "enabled"):
+                    "become", "enabled", "playbook"):
             if key in item:
                 params[key] = item[key]
+        if item.get("project"):
+            params["project_id"] = self._id("projects", item.get("project"), "project", True)
         self._create("check.create", params)
 
     def channel(self, item: dict) -> None:

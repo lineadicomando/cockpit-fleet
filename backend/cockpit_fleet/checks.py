@@ -7,6 +7,9 @@ credential and become, in shards of hosts, each shard one job of the kind
 ends, reconcile() hands its events to ingest(), which turns the results into
 states: soft until a problem has been seen max_attempts times, then hard,
 and a hard change is what notifications are about.
+
+The slow kinds (the CMDB, updates, compliance) go in cycles of their own,
+with a longer time limit; what they collect beyond a state is kept by cmdb.
 """
 
 import json
@@ -14,8 +17,8 @@ import shutil
 import traceback
 from collections import defaultdict
 
-from . import catalog, jobs, journal, notify, store
-from .catalog import CRITICAL, OK, STATE_NAMES, UNKNOWN
+from . import catalog, cmdb, jobs, journal, notify, store
+from .catalog import COMPLIANCE, CRITICAL, OK, OWN_KINDS, PLAYBOOK, STATE_NAMES, UNKNOWN, WARNING
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
 from .resources import credential_of_kind, place_inventory
@@ -30,9 +33,6 @@ _FLAP_START = 0.5
 _FLAP_END = 0.25
 # Inventories with checks are listed again this often, for hosts that came or went.
 REFRESH = 3600
-# The kind of a check of the user: a playbook of a project that ends with
-# lineadicomando.fleet.fleet_result.
-PLAYBOOK = "playbook"
 # Check cycles are kept this long, then removed with their directory.
 KEEP_CYCLES = 24 * 3600
 # A check due this little after a tick goes with it: the next time is counted
@@ -104,23 +104,25 @@ def _flapping(history: list[int], was: bool) -> bool:
 
 
 def apply(ctx: Context, row, state: int, summary: str, metrics: list, details: dict,
-          now: float, suppressed: bool = False, since: float | None = None) -> None:
+          now: float, suppressed: bool = False, since: float | None = None,
+          at_once: bool = False) -> None:
     """Record one result of a check on a host. row is its state joined with
     the check (interval, retry_interval, max_attempts).
 
     A problem is soft until it has been seen max_attempts times in a row,
     and is checked again at the retry interval meanwhile; a recovery is hard
     at once. A result suppressed because the host could not be reached
-    changes neither the hard state nor the count.
+    changes neither the hard state nor the count. A problem at_once is hard
+    at once: one that lasts a single cycle, such as a change of hardware.
     """
     hard, kind, attempt = row["hard_state"], row["state_type"], row["attempt"]
     if suppressed:
         pass
     elif state == OK:
         hard, kind, attempt = OK, "hard", 0
-    elif hard != OK and kind == "hard":
+    elif (hard != OK and kind == "hard") or at_once:
         # Already a problem: a change between problems is hard at once.
-        hard, attempt = state, row["max_attempts"]
+        hard, kind, attempt = state, "hard", row["max_attempts"]
     else:
         attempt = min(attempt + 1, row["max_attempts"])
         if attempt >= row["max_attempts"]:
@@ -234,6 +236,64 @@ def _playbook_events(directory, check_id: str) -> dict[str, dict]:
     return found
 
 
+def _compliance_events(directory, check_id: str) -> dict[str, dict]:
+    """What each host answered to a compliance playbook run in --check --diff:
+    the tasks that would change something, with their diffs, unless a task
+    failed on it or it could not be reached."""
+    found: dict[str, dict] = {}
+    tasks: dict[str, str] = {}
+    items: dict[tuple, list[str]] = defaultdict(list)
+    try:
+        with open(directory / "events.jsonl", encoding="utf-8", errors="replace") as source:
+            lines = source.readlines()
+    except OSError:
+        return found
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind, host = event.get("event"), str(event.get("host"))
+        uuid = str(event.get("task_uuid", ""))
+        if kind == "task_start":
+            tasks[uuid] = catalog.clean_text(event.get("task"), 200)
+            continue
+        if kind not in ("host_ok", "host_skipped", "host_failed", "host_unreachable",
+                        "item_ok"):
+            continue
+        if found.get(host, {}).get("event") in ("host_unreachable", "host_failed"):
+            continue
+        diff = event.get("diff") if isinstance(event.get("diff"), str) else ""
+        diff = "".join(char for char in diff[:64 * 1024] if ord(char) >= 32 or char in "\t\n")
+        if kind == "item_ok":
+            if event.get("changed") is True and diff:
+                items[(host, uuid)].append(diff)
+            continue
+        result = event.get("result") if isinstance(event.get("result"), dict) else {}
+        if kind == "host_unreachable" or (kind == "host_failed" and not event.get("ignored")):
+            found[host] = {"event": kind, "ts": event.get("ts"), "result": result}
+            continue
+        entry = found.setdefault(host, {"event": "host_ok", "ts": event.get("ts"),
+                                        "changes": []})
+        if kind == "host_ok" and event.get("changed") is True:
+            text = "\n".join([*items.pop((host, uuid), []), diff]).strip("\n")
+            entry["changes"].append({"task": tasks.get(uuid, ""), "diff": text})
+    for entry in found.values():
+        if entry["event"] != "host_ok":
+            continue
+        changes = entry["changes"]
+        count = len(changes)
+        summary = (f"{count} task{'s' if count != 1 else ''} would change"
+                   if count else "compliant: nothing would change")
+        entry["result"] = {"fleet_results": [{
+            "id": check_id, "state": OK, "summary": summary,
+            "metrics": [{"name": "changed", "value": count, "unit": ""}],
+            "details": {"tasks": [change["task"] for change in changes][:100]}}]}
+    return found
+
+
 def ingest(ctx: Context, run, directory, error: str = "") -> None:
     """Turn what a check cycle left into states. Only the checks planned for
     a host in this cycle are taken, and the host is the one Ansible names in
@@ -248,7 +308,8 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
     plan = spec.get("plan", {}) if isinstance(spec, dict) else {}
     if spec.get("playbook"):
         ids = {entry.get("id") for entries in plan.values() for entry in entries}
-        events = _playbook_events(directory, next(iter(ids))) if len(ids) == 1 else {}
+        read = _compliance_events if spec.get("compliance") else _playbook_events
+        events = read(directory, next(iter(ids))) if len(ids) == 1 else {}
     else:
         events = _events(directory)
     hosts = {row["name"]: row for row in conn.execute(
@@ -288,9 +349,17 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
             if row is None:
                 continue  # changed or removed while the cycle ran
             if status == "host_ok" and entry["id"] in answers:
-                outcome = judge(row["kind"], store.loads(row["thresholds"], {}),
-                                answers[entry["id"]], info.get("time"), event.get("ts"))
-                apply(ctx, row, *outcome, now, since=since)
+                answer = answers[entry["id"]]
+                state, summary, metrics, details = judge(
+                    row["kind"], store.loads(row["thresholds"], {}), answer, info.get("time"),
+                    event.get("ts"))
+                changed = _keep(ctx, row, host["id"], answer, event, now)
+                if changed:
+                    state = catalog.worst(state, WARNING)
+                    summary = "hardware changed: " + "; ".join(changed)[:400] + \
+                        (f" ({summary})" if summary else "")
+                apply(ctx, row, state, summary, metrics, details, now, since=since,
+                      at_once=bool(changed))
             elif status == "host_ok":
                 missing = ("the playbook gave no result: it ends with"
                            " lineadicomando.fleet.fleet_result" if row["kind"] == PLAYBOOK
@@ -311,22 +380,41 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
     notify_states(ctx, now)
 
 
+def _keep(ctx: Context, row, host_id: str, answer: dict, event: dict, now: float) -> list[str]:
+    """Keep what a slow kind collected beyond its state; returns what changed
+    of the hardware, if anything."""
+    if row["kind"] == "cmdb" and isinstance(answer.get("cmdb"), dict):
+        return cmdb.store_cmdb(ctx, host_id, answer["cmdb"], now)
+    if row["kind"] == "updates" and isinstance(answer.get("updates"), dict):
+        cmdb.store_updates(ctx, host_id, answer["updates"], now)
+    elif row["kind"] == COMPLIANCE:
+        cmdb.store_drift(ctx, host_id, row["check_id"], event.get("changes", []), now)
+    return []
+
+
 # --- planning ---------------------------------------------------------------------
 
 def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: bool,
                  plan: dict[str, list[dict]], check=None) -> str:
     """Prepare and queue one check cycle; returns its run. With check, a
-    check of the user: its playbook, from its project."""
+    check of the user: its playbook, from its project. A cycle of a slow
+    kind has a longer time limit and a lane of the dispatch of its own."""
     project = None
     if check is not None:
         project = store.fetch(ctx.conn, "projects", check["project_id"], "project")
     elif inventory["kind"] == "file":
         project = store.fetch(ctx.conn, "projects", inventory["project_id"], "project")
-    spec: dict = {"kind": "check", "plan": plan, "timeout": ctx.config.checks_timeout,
+    kinds = {entry["check"] for entries in plan.values() for entry in entries}
+    slow = any(catalog.slow(kind) for kind in kinds)
+    spec: dict = {"kind": "check", "plan": plan,
+                  "timeout": ctx.config.checks_slow_timeout if slow
+                  else ctx.config.checks_timeout,
                   "forks": min(ctx.config.checks_forks, ctx.config.max_forks), "become": become,
                   "vaults": []}
     if check is not None:
         spec["playbook"] = check["playbook"]
+        if check["kind"] == COMPLIANCE:
+            spec["compliance"] = True
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
     try:
@@ -359,7 +447,7 @@ def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: boo
                      "title": f"{what}: {count} host{'s' if count != 1 else ''}",
                      "inventory_id": inventory["id"],
                      "project_id": project["id"] if project else None,
-                     "options": json.dumps({"hosts": count,
+                     "options": json.dumps({"hosts": count, "slow": slow,
                                             "checks": sum(len(e) for e in plan.values())})},
                spec, directory)
     return run_id
@@ -386,15 +474,18 @@ def plan(ctx: Context, now: float) -> list[str]:
                                  (row["host_id"], row["check_id"])).fetchone()
             apply(ctx, state, UNKNOWN, "a host by this name cannot be checked", [], {}, now)
             continue
-        # A check of the user is a playbook of its own: it goes alone.
-        key = (row["inventory_id"], row["machine_credential_id"], bool(row["become"]),
-               row["check_id"] if row["kind"] == PLAYBOOK else None)
+        # A check of the user is a playbook of its own: it goes alone; a slow
+        # kind goes with its own kind only.
+        own = row["check_id"] if row["kind"] in OWN_KINDS \
+            else row["kind"] if catalog.slow(row["kind"]) else None
+        key = (row["inventory_id"], row["machine_credential_id"], bool(row["become"]), own)
         groups[key][row["host"]].append(row)
     queued = []
     size = ctx.config.checks_shard_size
     for (inventory_id, credential_id, become, own), by_host in groups.items():
         inventory = store.fetch(conn, "inventories", inventory_id, "inventory")
-        check = store.fetch(conn, "checks", own, "check") if own else None
+        check = store.fetch(conn, "checks", own, "check") \
+            if own and own not in catalog.KINDS else None
         names = sorted(by_host)
         for start in range(0, len(names), size):
             shard = {name: by_host[name] for name in names[start:start + size]}
@@ -456,6 +547,7 @@ def cycle(ctx: Context) -> dict:
     try:
         out["queued"] = plan(ctx, now)
         out["pruned"] = _prune(ctx, now)
+        cmdb.prune(ctx, now)
     except Exception:  # noqa: BLE001
         journal.send("checks: planning failed", 3, FLEET_TRACEBACK=traceback.format_exc())
     jobs.dispatch(ctx)
@@ -571,16 +663,17 @@ _CHECK_PARAMS = {
                                 required=False),
     "become": Bool(),
     "enabled": Bool(default=True),
-    "project_id": Id("For a check of the kind playbook: the project of the playbook",
-                     required=False),
+    "project_id": Id("For a check of the kind playbook or compliance: the project of the"
+                     " playbook", required=False),
     "playbook": Str("For a check of the kind playbook: its path in the project, a playbook"
-                    " that ends with lineadicomando.fleet.fleet_result", max_length=1024),
+                    " that ends with lineadicomando.fleet.fleet_result; for one of the kind"
+                    " compliance, a playbook run in --check --diff", max_length=1024),
 }
 
 
 def _playbook_values(ctx: Context, params: Values, kind: str, inventory) -> dict:
     """Where the playbook of a check of the user is; nothing for the catalog."""
-    if kind != PLAYBOOK:
+    if kind not in OWN_KINDS:
         params.unused("project_id", "playbook")
         return {"project_id": None, "playbook": ""}
     project = store.fetch(ctx.conn, "projects", params.need("project_id"), "project")
@@ -624,11 +717,13 @@ def _after_change(ctx: Context, inventory_id: str) -> None:
 
 
 @command("check.create", role="admin", mutating=True,
-         params={"kind": Choice((*catalog.KINDS, PLAYBOOK)), **_CHECK_PARAMS})
+         params={"kind": Choice((*catalog.KINDS, *OWN_KINDS)), **_CHECK_PARAMS})
 def check_create(ctx: Context, params: Values) -> dict:
-    """Apply a check to a group of an inventory: one of the catalog, or a
-    playbook of a project that ends with lineadicomando.fleet.fleet_result.
-    Its hosts are checked from the next tick of the scheduler."""
+    """Apply a check to a group of an inventory: one of the catalog, a
+    playbook of a project that ends with lineadicomando.fleet.fleet_result,
+    or one of the kind compliance, a playbook run in --check --diff whose
+    hosts are non-compliant when a task would change something. Its hosts
+    are checked from the next tick of the scheduler."""
     values = _check_values(ctx, params, params["kind"])
     check_id = store.new_id("k")
     store.insert(ctx.conn, "checks", {"id": check_id, "kind": params["kind"],

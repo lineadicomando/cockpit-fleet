@@ -248,17 +248,21 @@ def _fleet_unit(verb: str, run_id: str) -> None:
 def dispatch(ctx) -> None:
     """Start queued runs while fewer than the configured maximum are running:
     those of a higher priority first, then the oldest. Check cycles have a
-    limit of their own, and do not count against that of the other runs."""
+    limit of their own, and do not count against that of the other runs;
+    cycles of the slow kinds have another, so as not to hold the others back."""
     conn = ctx.conn
+    slow = "coalesce(json_extract(options, '$.slow'), 0)"
     conn.execute("BEGIN IMMEDIATE")
     try:
         chosen = []
-        for test, limit in (("!=", ctx.config.max_concurrent_runs),
-                            ("=", ctx.config.checks_max_concurrent)):
+        for lane, limit in (("kind != 'check'", ctx.config.max_concurrent_runs),
+                            (f"kind = 'check' AND {slow} = 0", ctx.config.checks_max_concurrent),
+                            (f"kind = 'check' AND {slow} != 0",
+                             ctx.config.checks_max_concurrent)):
             running = conn.execute(f"SELECT count(*) FROM runs WHERE status = 'running'"  # noqa: S608
-                                   f" AND kind {test} 'check'").fetchone()[0]
+                                   f" AND {lane}").fetchone()[0]
             chosen += [row["id"] for row in conn.execute(
-                f"SELECT id FROM runs WHERE status = 'queued' AND kind {test} 'check'"  # noqa: S608
+                f"SELECT id FROM runs WHERE status = 'queued' AND {lane}"  # noqa: S608
                 " ORDER BY priority DESC, created_at LIMIT ?", (max(limit - running, 0),))]
         for run_id in chosen:
             conn.execute("UPDATE runs SET status = 'running', started_at = ? WHERE id = ?",

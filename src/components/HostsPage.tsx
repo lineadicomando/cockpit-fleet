@@ -29,6 +29,7 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CheckState, FleetHost, HostDetail, Inventory, StateCounts } from "../lib/types.ts";
+import { HostInventory } from "./AssetsPage.tsx";
 import { MaintenanceModal, StateCountLabels, StateLabel, useStateNames } from "./ChecksPage.tsx";
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
 
@@ -412,6 +413,10 @@ export function HostDetailPage({ id }: { id: string }) {
                             })}
                         </Table>
                     )}
+                </FlexItem>
+                <FlexItem>
+                    <Title headingLevel="h3" size="md" style={{ marginBlockEnd: "0.5rem" }}>{t("What it is made of")}</Title>
+                    <HostInventory hostId={id} />
                 </FlexItem>
                 <FlexItem>
                     <Title headingLevel="h3" size="md" style={{ marginBlockEnd: "0.5rem" }}>{t("Changes of state")}</Title>

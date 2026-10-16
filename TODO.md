@@ -25,9 +25,8 @@ ansible-core went down to 2.16, AlmaLinux's, for both packages and
 `selfcheck`. What is left of it is under "Open points", in the leftovers and
 in phase 10.
 
-**Next step: phase 7** (CMDB, updates, drift): it starts with the
-questions in its section, to be put to the user before any code. The ideas
-left for the terminal are an alternative the user may pick first.
+**Next step: phase 7** (CMDB, updates, drift), under way: its questions
+were answered on 16 October, the design is in its section.
 
 To resume:
 
@@ -125,6 +124,9 @@ script: it was tried by hand on Debian, on 13 and 14 October, as
 | Results of the nodes | Taken only for the checks planned for a host in that cycle, the host being the one Ansible names; an unreachable host suppresses its other checks and is told about once, by `reachability` (confirmed on 16 October) |
 | Metrics | `name`, `value`, `unit`, an optional `instance` (`/var`, `C:`), `min`, `max`; names in lowercase, digits and `_` (confirmed on 16 October) |
 | Flapping | Half of the last 20 results changing, with 10 at least; ends under a quarter (confirmed on 16 October) |
+| CMDB and updates | Kinds `cmdb` and `updates` of the catalog, in the task of the checks, in cycles of their own at a longer interval; written to tables of their own (decided on 16 October with the user) |
+| Drift | A check of the kind `compliance`: a playbook of a project run in `--check --diff`, a host non-compliant when a task would change; it inherits states, notifications, acknowledgement and maintenance (16 October, with the user) |
+| Who sees the CMDB | A viewer sees hardware, packages, services and updates; the diffs of drift, which may hold the content of files, are for operators and administrators, like the output of runs (16 October, with the user) |
 | Approval requested | An event of phase 9, when approvals exist |
 | Data from the nodes | Health checks, CMDB, updates, drift |
 | Checks | Built-in catalog + user playbooks with a result contract |
@@ -452,37 +454,52 @@ through a vault or a passphrase-protected key (the code is that of runs);
 a cycle of more than one shard on real nodes (the unit tests do it);
 checks of Windows from Fedora or AlmaLinux (`windows.sh` ran from Debian).
 
-## Phase 7 — Inventory, updates, drift
+## Phase 7 — Inventory, updates, drift (started on 16 October)
 
-To decide first, with the user (nothing exists yet; what can be built on:
-the check cycles and their one task per host, the `hosts` table with its
-`facts` column, schedules, the diff that the events of a run already carry,
-and notifications by rule):
+Decided with the user on 16 October (see "Decisions"): the CMDB and the
+updates are kinds of the catalog, drift a kind of check that runs a
+playbook in `--check --diff`, and a viewer sees the CMDB but not the diffs.
+What follows from it:
 
-- How the CMDB is collected: a kind of the catalog in the same task as the
-  checks (facts, packages, services through `checks.py` and
-  `win_checks.ps1`), or a job of its own at a longer interval
-- Where it is kept: the last snapshot per host in normalised tables, and
-  the history as changes only (what came and went), with what retention
-- Updates: a kind of the catalog (counts as metrics, the list as details)
-  or part of the CMDB; on Linux the package cache must be refreshed, which
-  needs `become`; Windows Update searched through its COM interface can
-  take minutes, longer than `[checks] timeout`
-- Drift: a template marked as "compliance" launched by a schedule in
-  `--check --diff`, a host non-compliant when a task would change, the
-  diff kept per host; or a kind of check that runs a template
-- Who sees the CMDB: a viewer sees runs' outcome but not their output
-  (packages and services may say more than an outcome)
+- Kinds `cmdb` and `updates` in `checks.py` and `win_checks.ps1`; their
+  data travel in the result beside `fleet_results` (a node's packages do
+  not fit in `details`), and are written to tables of their own at ingest,
+  read as untrusted like every result.
+- They, and `compliance`, are slow: each goes in cycles of its own, with a
+  longer time limit (`[checks] slow_timeout`), in a lane of the dispatch
+  apart from the other checks, so that a Windows Update search does not
+  hold back a disk check.
+- CMDB: the last snapshot per host in normalised tables (hardware,
+  packages, services, updates), the history as changes only (what came,
+  went or changed), kept for a year until phase 8 decides retention. The
+  first snapshot of a host records no change.
+- A change of hardware makes the `cmdb` check warning for that cycle, which
+  the existing rules tell about.
+- Updates: on Linux the package cache is refreshed only when the check asks
+  (`refresh`, which needs `become`); Windows Update searched through its COM
+  interface, which over SSH needs `become`. Metrics `updates` and
+  `security_updates`, warning from one security update.
+- Drift: a check of the kind `compliance` names a playbook of a project,
+  run alone in `--check --diff`; metric `changed` (tasks that would change),
+  warning from one; the diffs of the last cycle kept per host, shown to
+  operators and administrators only.
 
-- [ ] **CMDB**: facts, packages, services; last snapshot per host, normalised
-      columns, history of changes
-- [ ] CMDB interface: filterable table, host detail, distribution by OS, CSV/JSON
-      export
-- [ ] **Updates**: apt, dnf, zypper, Windows Update in search-only mode; security
-      ones kept apart; a link to a template that applies them
-- [ ] **Drift**: a "compliance" template in `--check --diff` at intervals; the diff
-      is kept
-- [ ] Notifications: security updates, non-compliant host, hardware change
+Built on 16 October, not committed yet (see `docs/architecture.md`, "The
+inventory of hosts"): the three kinds, the slow lane, the tables, the
+commands `cmdb.*` and `drift.get`, the page "Assets" and the inventory on the
+page of a host, `cmdb.sh`. Left:
+
+- [ ] Windows: `cmdb` and `updates` of `win_checks.ps1` never ran; try them
+      with `windows.sh` (extended) on `win11-pc00`, with and without `become`
+- [ ] The three kinds on machines at the close of the phase, with the
+      interface in a browser (in containers on 16 October: `cmdb.sh` on the
+      three distributions, `checks.sh` on Debian and AlmaLinux, the whole
+      suite on Debian, all passing)
+- [ ] Updates: a link from the updates of a host to a template that applies
+      them; zypper never had an update to find; dnf without `become` fetches
+      metadata into the account's cache on every search
+- [ ] Notifications: security updates, drift and hardware go through the
+      states and the rules as they are; try them end to end
 
 Done when: the CMDB shows Linux and Windows together and a manual change to a
 managed file appears as drift at the next cycle.

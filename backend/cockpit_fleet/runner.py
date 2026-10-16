@@ -420,8 +420,12 @@ def build_adhoc_argv(
 CHECKS_MODULE = "lineadicomando.fleet.checks"
 # A cycle every minute must not fill the journal: what a host answers is in
 # the events, the output only says which task ran and which host failed.
+# The packages and services of a node are lists of thousands: the events of
+# a cycle keep them whole.
 CHECK_ENV = {"ANSIBLE_STDOUT_CALLBACK": "ansible.builtin.default",
-             "ANSIBLE_DISPLAY_OK_HOSTS": "False", "ANSIBLE_DISPLAY_SKIPPED_HOSTS": "False"}
+             "ANSIBLE_DISPLAY_OK_HOSTS": "False", "ANSIBLE_DISPLAY_SKIPPED_HOSTS": "False",
+             "FLEET_EVENTS_MAX_ITEMS": "50000"}
+CHECK_MAX_TIMEOUT = 3600
 # ansible-playbook's status when some hosts failed (2) or could not be
 # reached (4): for a cycle that is an outcome of the hosts, which their
 # states record, not a failure of the cycle.
@@ -488,7 +492,7 @@ def check_playbook(timeout: int) -> str:
 def check_env(spec: dict) -> dict[str, str]:
     """What a "check" job adds to the environment: little output, and the
     time limit of each task, for a playbook of the user too."""
-    timeout = check_int(spec.get("timeout", 60), "timeout", 5, 600)
+    timeout = check_int(spec.get("timeout", 60), "timeout", 5, CHECK_MAX_TIMEOUT)
     return {**CHECK_ENV, "ANSIBLE_TASK_TIMEOUT": str(timeout)}
 
 
@@ -498,9 +502,10 @@ def build_check_argv(
     """ansible-playbook for a "check" job: the catalog in one task written
     here, or a playbook of the project that ends with fleet_result. The plan
     is a variables file and the hosts a file given to --limit, so neither is
-    in the command line."""
+    in the command line. A compliance check runs its playbook in --check
+    --diff: what would change is the drift."""
     plan = check_plan(spec.get("plan"))
-    timeout = check_int(spec.get("timeout", 60), "timeout", 5, 600)
+    timeout = check_int(spec.get("timeout", 60), "timeout", 5, CHECK_MAX_TIMEOUT)
     if spec.get("playbook"):
         playbook = resolve_inside(run_dir / "project", spec["playbook"], "playbook")
     else:
@@ -512,6 +517,8 @@ def build_check_argv(
     hosts.write_text("".join(f"{host}\n" for host in plan))
     clean = {key: spec[key] for key in ("inventory", "inventory_source", "forks", "user",
                                          "become", "vaults") if key in spec}
+    if spec.get("playbook") and spec.get("compliance") is True:
+        clean.update(check=True, diff=True)
     argv = _playbook_argv(clean, run_dir, runtime_dir, credentials_dir, playbook)
     return [*argv[:-1], "--limit", f"@{hosts}", "--extra-vars", f"@{plan_file}", argv[-1]]
 

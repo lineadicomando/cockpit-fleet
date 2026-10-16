@@ -175,6 +175,131 @@ function Test-Certificates($Params) {
         $metrics $details
 }
 
+function Get-Prop($Object, $Name) {
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -ne $property) { $property.Value } else { $null }
+}
+
+function Get-Virtual($Text) {
+    switch -Regex ($Text) {
+        'Virtual Machine|Hyper-V' { return 'microsoft' }
+        'VMware' { return 'vmware' }
+        'VirtualBox' { return 'oracle' }
+        'KVM|QEMU|Standard PC' { return 'kvm' }
+        'Xen|HVM domU' { return 'xen' }
+    }
+    ''
+}
+
+function Test-Cmdb($Params) {
+    $system = Get-CimInstance -ClassName Win32_ComputerSystem
+    $bios = Get-CimInstance -ClassName Win32_BIOS
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem
+    $cpu = @(Get-CimInstance -ClassName Win32_Processor)[0]
+    $hardware = @{
+        vendor = [string]$system.Manufacturer
+        model = [string]$system.Model
+        serial = [string]$bios.SerialNumber
+        bios = [string]$bios.SMBIOSBIOSVersion
+        virtual = Get-Virtual ("{0} {1}" -f $system.Manufacturer, $system.Model)
+        cpu_model = ([string]$cpu.Name).Trim()
+        cpus = [Environment]::ProcessorCount
+        memory = [int64]$system.TotalPhysicalMemory
+        boot_time = ([DateTimeOffset]$os.LastBootUpTime).ToUnixTimeSeconds()
+    }
+    $disks = @(Get-CimInstance -ClassName Win32_DiskDrive | Sort-Object -Property Index | ForEach-Object {
+        @{ name = "PhysicalDrive$($_.Index)"; size = [int64]$_.Size; model = [string]$_.Model }
+    })
+    $interfaces = [System.Collections.Generic.List[object]]::new()
+    foreach ($adapter in @(Get-NetAdapter -ErrorAction SilentlyContinue | Sort-Object -Property Name)) {
+        $addresses = @(Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -notlike 'fe80*' -and $_.IPAddress -notlike '169.254.*' } |
+            ForEach-Object { "{0}/{1}" -f $_.IPAddress, $_.PrefixLength })
+        $interfaces.Add(@{ name = [string]$adapter.Name; mac = ([string]$adapter.MacAddress).Replace('-', ':').ToLower()
+            addresses = $addresses })
+    }
+    # What "Apps and features" lists: the uninstall keys, 64 and 32 bits.
+    $packages = [System.Collections.Generic.List[object]]::new()
+    $seen = @{}
+    $hives = @(
+        @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'x64'),
+        @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall', 'x86')
+    )
+    foreach ($hive in $hives) {
+        if (-not (Test-Path -LiteralPath $hive[0])) { continue }
+        foreach ($key in Get-ChildItem -LiteralPath $hive[0] -ErrorAction SilentlyContinue) {
+            $entry = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
+            if ($null -eq $entry) { continue }
+            $name = [string](Get-Prop $entry 'DisplayName')
+            if (-not $name -or (Get-Prop $entry 'SystemComponent') -eq 1 -or (Get-Prop $entry 'ParentKeyName')) { continue }
+            $id = "{0}|{1}" -f $name.Trim(), $hive[1]
+            if ($seen.ContainsKey($id)) { continue }
+            $seen[$id] = $true
+            $packages.Add(@{ name = $name.Trim(); version = [string](Get-Prop $entry 'DisplayVersion'); arch = $hive[1] })
+        }
+    }
+    $states = @{ Running = 'running'; Stopped = 'stopped' }
+    $modes = @{ Auto = 'enabled'; Manual = 'manual'; Disabled = 'disabled' }
+    $services = @(Get-CimInstance -ClassName Win32_Service | Sort-Object -Property Name | ForEach-Object {
+        $state = if ($states.ContainsKey([string]$_.State)) { $states[[string]$_.State] } else { ([string]$_.State).ToLower() }
+        $mode = if ($modes.ContainsKey([string]$_.StartMode)) { $modes[[string]$_.StartMode] } else { ([string]$_.StartMode).ToLower() }
+        @{ name = [string]$_.Name; state = $state; enabled = $mode }
+    })
+    $metrics = @(
+        (New-Metric 'cpus' $hardware.cpus),
+        (New-Metric 'memory' $hardware.memory 'B'),
+        (New-Metric 'packages' $packages.Count),
+        (New-Metric 'services' $services.Count)
+    )
+    $summary = "{0} CPUs, {1:N1} GiB, {2} packages, {3} services" -f $hardware.cpus,
+        ($hardware.memory / 1GB), $packages.Count, $services.Count
+    $result = New-Result $OK $summary $metrics @{ package_manager = 'registry' }
+    $result.cmdb = @{
+        hardware = $hardware; disks = $disks; interfaces = $interfaces
+        package_manager = 'registry'; packages = $packages; services = $services
+    }
+    $result
+}
+
+# Classifications of Windows Update that are about security.
+$SECURITY_CLASSES = @(
+    '0fa1201d-4330-4fa8-8ae9-b877473b6441',  # Security Updates
+    'e6cf1350-c01b-414d-a61f-263d14d133b4'   # Critical Updates
+)
+
+function Test-Updates($Params) {
+    # Search only: nothing is downloaded or installed. The search asks the
+    # server each time, so there is nothing to refresh.
+    try {
+        $session = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $session.CreateUpdateSearcher()
+        $found = $searcher.Search("IsInstalled=0 and IsHidden=0 and Type='Software'")
+    } catch {
+        $failure = $_.Exception
+        if ($null -ne $failure.InnerException) { $failure = $failure.InnerException }
+        if ($failure.HResult -eq -2147024891) {
+            return New-Result $UNKNOWN 'Windows Update cannot be searched from a network logon: turn become on' @() @{}
+        }
+        return New-Result $UNKNOWN ("Windows Update: {0}" -f $failure.Message) @() @{}
+    }
+    $updates = [System.Collections.Generic.List[object]]::new()
+    $security = 0
+    foreach ($update in $found.Updates) {
+        $classes = @($update.Categories | Where-Object { $_.Type -eq 'UpdateClassification' })
+        $isSecurity = [bool]@($classes | Where-Object { $SECURITY_CLASSES -contains ([string]$_.CategoryID).ToLower() }) -or
+            [bool]$update.MsrcSeverity
+        if ($isSecurity) { $security++ }
+        $kb = @($update.KBArticleIDs | ForEach-Object { "KB$_" }) -join ' '
+        $updates.Add(@{ name = [string]$update.Title; current = ''; available = $kb; security = $isSecurity
+            source = (@($classes | ForEach-Object { [string]$_.Name }) -join ', ') })
+    }
+    $metrics = @((New-Metric 'updates' $updates.Count), (New-Metric 'security_updates' $security))
+    $result = New-Result $OK ("{0} updates, {1} for security (Windows Update)" -f $updates.Count, $security) `
+        $metrics @{ manager = 'windows_update' }
+    $result.updates = @{ manager = 'windows_update'; updates = $updates }
+    $result
+}
+
 $checks = @{
     reachability = { param($p) New-Result $OK 'reachable' @() @{} }
     disk = { param($p) Test-Disk $p }
@@ -185,6 +310,8 @@ $checks = @{
     certificates = { param($p) Test-Certificates $p }
     # The offset is computed on the controller, from fleet_host.time.
     clock = { param($p) New-Result $OK '' @() @{} }
+    cmdb = { param($p) Test-Cmdb $p }
+    updates = { param($p) Test-Updates $p }
 }
 
 $results = [System.Collections.Generic.List[object]]::new()

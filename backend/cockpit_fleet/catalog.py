@@ -77,9 +77,40 @@ CATALOG: dict[str, dict] = {
         "params": {},
         "thresholds": {"offset": {"warning": 10, "critical": 60}},
     },
+    "cmdb": {
+        "description": "What the host is made of: hardware, installed packages and services,"
+                       " kept in the inventory of hosts with their changes. Warning for one"
+                       " cycle when the hardware changed.",
+        "params": {},
+        "thresholds": {},
+        "slow": True,
+        "interval": 6 * 3600,
+    },
+    "updates": {
+        "description": "Updates available, security ones apart: apt, dnf, zypper, or Windows"
+                       " Update searched without installing (which over SSH needs become).",
+        "params": {"refresh": ("flag", "Refresh the package metadata first; needs become")},
+        "thresholds": {"security_updates": {"warning": 1, "critical": None},
+                       "updates": {"warning": None, "critical": None}},
+        "slow": True,
+        "interval": 6 * 3600,
+    },
 }
 
 KINDS = tuple(CATALOG)
+# Kinds that are not in the catalog: a playbook of the user that ends with
+# fleet_result, and one run in --check --diff, whose changes are the drift.
+PLAYBOOK = "playbook"
+COMPLIANCE = "compliance"
+OWN_KINDS = (PLAYBOOK, COMPLIANCE)
+# What a compliance check measures: the tasks that would change something.
+_COMPLIANCE_THRESHOLDS = {"changed": {"warning": 1, "critical": None}}
+
+
+def slow(kind: str) -> bool:
+    """Whether a kind goes in cycles of its own, with a longer time limit and
+    a lane of the dispatch of its own, so as not to hold back the others."""
+    return kind == COMPLIANCE or bool(CATALOG.get(kind, {}).get("slow"))
 
 
 def catalog() -> list[dict]:
@@ -88,7 +119,8 @@ def catalog() -> list[dict]:
              "params": {key: {"kind": kind, "help": text}
                         for key, (kind, text) in entry["params"].items()},
              "required": list(entry.get("required", ())),
-             "thresholds": entry["thresholds"]}
+             "thresholds": entry["thresholds"], "slow": bool(entry.get("slow")),
+             "interval": entry.get("interval", 300)}
             for name, entry in CATALOG.items()]
 
 
@@ -106,7 +138,7 @@ def check_params(kind: str, params: object) -> dict:
     """The parameters of a check of the catalog, checked. They reach the node
     as data, never in a command line of the controller."""
     entry = CATALOG.get(kind)
-    if kind == "playbook":
+    if kind in OWN_KINDS:
         # A check of the user takes what its playbook needs from the inventory.
         entry = {"params": {}}
     if entry is None:
@@ -118,6 +150,13 @@ def check_params(kind: str, params: object) -> dict:
         raise BadRequest(f"unknown parameter of a {kind} check: {', '.join(unknown)}")
     out: dict = {}
     for name, (item_kind, _text) in entry["params"].items():
+        if item_kind == "flag":
+            value = params.get(name, False)
+            if not isinstance(value, bool):
+                raise BadRequest(f"params.{name} must be true or false")
+            if value:
+                out[name] = True
+            continue
         value = params.get(name, [])
         if not isinstance(value, list) or len(value) > 100:
             raise BadRequest(f"params.{name} must be a list of at most 100 entries")
@@ -157,7 +196,9 @@ def check_thresholds(kind: str | None, thresholds: object) -> dict:
 
 def effective_thresholds(kind: str, own: dict) -> dict:
     """The catalog's defaults, with what the check sets in their place."""
-    return {**CATALOG.get(kind, {}).get("thresholds", {}), **own}
+    defaults = _COMPLIANCE_THRESHOLDS if kind == COMPLIANCE \
+        else CATALOG.get(kind, {}).get("thresholds", {})
+    return {**defaults, **own}
 
 
 def worst(*states: int) -> int:

@@ -391,6 +391,7 @@ def load_commands() -> dict[str, Command]:
         agents,
         chat,
         checks,
+        cmdb,
         files,
         moduledocs,
         notify,

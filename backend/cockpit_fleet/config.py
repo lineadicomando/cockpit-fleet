@@ -65,12 +65,14 @@ class Config:
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""
     # Check cycles: how many at once (apart from runs), hosts per cycle,
-    # forks within one, the time limit of the task on a host, and how often a
-    # problem nobody acknowledged is told again (0: never).
+    # forks within one, the time limit of the task on a host (and that of the
+    # slow kinds: the CMDB, updates, compliance), and how often a problem
+    # nobody acknowledged is told again (0: never).
     checks_max_concurrent: int = 1
     checks_shard_size: int = 50
     checks_forks: int = 20
     checks_timeout: int = 60
+    checks_slow_timeout: int = 900
     checks_reminder_hours: int = 24
 
     def as_dict(self) -> dict:
@@ -200,7 +202,7 @@ def parse(text: str) -> Config:
                           " URL")
 
     checks = _section(data, "checks", {"max_concurrent", "shard_size", "forks", "timeout",
-                                       "reminder_hours"})
+                                       "slow_timeout", "reminder_hours"})
 
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
@@ -222,6 +224,8 @@ def parse(text: str) -> Config:
         checks_shard_size=_int(checks, "checks", "shard_size", Config.checks_shard_size, 1, 1000),
         checks_forks=_int(checks, "checks", "forks", Config.checks_forks, 1, 200),
         checks_timeout=_int(checks, "checks", "timeout", Config.checks_timeout, 5, 600),
+        checks_slow_timeout=_int(checks, "checks", "slow_timeout", Config.checks_slow_timeout,
+                                 5, 3600),
         checks_reminder_hours=_int(checks, "checks", "reminder_hours",
                                    Config.checks_reminder_hours, 0, 24 * 30),
     )

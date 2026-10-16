@@ -368,7 +368,8 @@ export interface Notification {
 
 // --- checks ---------------------------------------------------------------------
 
-export type CheckKind = "reachability" | "disk" | "cpu" | "memory" | "services" | "uptime" | "certificates" | "clock" | "playbook";
+export type CheckKind = "reachability" | "disk" | "cpu" | "memory" | "services" | "uptime" | "certificates" | "clock" | "cmdb" | "updates"
+    | "playbook" | "compliance";
 export type StateName = "ok" | "warning" | "critical" | "unknown";
 
 export interface Thresholds {
@@ -378,10 +379,13 @@ export interface Thresholds {
 export interface CatalogEntry {
     name: CheckKind;
     description: string;
-    // Each parameter is a list: of paths or of names.
-    params: Record<string, { kind: "paths" | "names"; help: string }>;
+    // Each parameter is a list, of paths or of names, or a flag.
+    params: Record<string, { kind: "paths" | "names" | "flag"; help: string }>;
     required: string[];
     thresholds: Thresholds;
+    // In cycles of its own, with a longer time limit; and the interval it suggests.
+    slow: boolean;
+    interval: number;
 }
 
 export interface StateCounts {
@@ -403,12 +407,12 @@ export interface CheckDef {
     interval: number;
     retry_interval: number;
     max_attempts: number;
-    params: Record<string, string[]>;
+    params: Record<string, string[] | boolean>;
     // What the check sets, and those with the defaults of the catalog.
     thresholds: Thresholds;
     effective_thresholds: Thresholds;
     machine_credential_id: string | null;
-    // A check of the kind playbook: where its playbook is.
+    // A check of the kind playbook or compliance: where its playbook is.
     project_id: string | null;
     playbook: string;
     become: boolean;
@@ -496,4 +500,107 @@ export interface Maintenance {
     ends_at: number;
     comment: string;
     created_by: string;
+}
+
+// --- the inventory of hosts (CMDB) -------------------------------------------------
+
+export interface Disk {
+    name: string;
+    size: number;
+    model: string;
+}
+
+export interface NetworkInterface {
+    name: string;
+    mac: string;
+    addresses: string[];
+}
+
+// Empty until a cmdb or updates check has reported on the host.
+export interface Hardware {
+    vendor?: string;
+    model?: string;
+    serial?: string;
+    bios?: string;
+    virtual?: string;
+    cpu_model?: string;
+    cpus?: number | null;
+    memory?: number | null;
+    boot_at?: number | null;
+    collected_at?: number | null;
+    package_manager?: string;
+    updates_at?: number | null;
+    update_manager?: string;
+    disks?: Disk[];
+    interfaces?: NetworkInterface[];
+}
+
+export interface CmdbHost {
+    id: string;
+    name: string;
+    inventory_id: string;
+    inventory: string;
+    groups: string[];
+    platform: string;
+    os: string;
+    os_id: string;
+    os_version: string;
+    kernel: string;
+    arch: string;
+    reachable: boolean | null;
+    hardware: Hardware;
+    packages: number;
+    services: number;
+    updates: number;
+    security_updates: number;
+    // Null when no compliance check has a result for it.
+    compliant: boolean | null;
+}
+
+export interface Package {
+    name: string;
+    version: string;
+    arch: string;
+}
+
+export interface Service {
+    name: string;
+    state: string;
+    enabled: string;
+}
+
+export interface Update {
+    name: string;
+    current: string;
+    available: string;
+    security: boolean;
+    source: string;
+}
+
+export interface CmdbChange {
+    ts: number;
+    area: "hardware" | "network" | "package" | "service";
+    name: string;
+    before: string;
+    after: string;
+}
+
+export interface CmdbDetail extends CmdbHost {
+    package_list: Package[];
+    service_list: Service[];
+    update_list: Update[];
+    changes: CmdbChange[];
+}
+
+export interface PackageHit extends Package {
+    host_id: string;
+    host: string;
+    inventory: string;
+}
+
+export interface Drift {
+    check_id: string;
+    check: string;
+    ts: number;
+    changes: { task: string; diff: string; note?: string }[];
 }

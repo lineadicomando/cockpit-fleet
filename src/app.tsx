@@ -17,6 +17,7 @@ import type { Session } from "./lib/types.ts";
 import { AccessProblemPage } from "./components/AccessProblemPage.tsx";
 import { AuditPage } from "./components/AuditPage.tsx";
 import { ChatPage } from "./components/ChatPage.tsx";
+import { AssetsPage } from "./components/AssetsPage.tsx";
 import { ChecksPage } from "./components/ChecksPage.tsx";
 import { HostDetailPage, HostsPage } from "./components/HostsPage.tsx";
 import { OverviewPage } from "./components/OverviewPage.tsx";
@@ -32,7 +33,7 @@ import { SchedulesPage } from "./components/SchedulesPage.tsx";
 import { TemplatesPage } from "./components/TemplatesPage.tsx";
 import { SessionContext } from "./lib/session.tsx";
 
-const TABS = ["overview", "hosts", "checks", "runs", "templates", "schedules", "notifications", "inventories", "projects", "credentials", "hostkeys", "chat", "system", "audit"];
+const TABS = ["overview", "hosts", "assets", "checks", "runs", "templates", "schedules", "notifications", "inventories", "projects", "credentials", "hostkeys", "chat", "system", "audit"];
 
 // A refusal by the backend itself means the same as one by sudo.
 function accessProblem(error: Error): AccessProblem {
@@ -73,7 +74,7 @@ export function App() {
         const section = tabs.includes(location.path[0]) ? location.path[0] : "overview";
         const go = (tab: string) => cockpit.location.go(tab === "overview" ? [] : [tab]);
         const titles: Record<string, string> = {
-            overview: t("Overview"), hosts: t("Hosts"), checks: t("Checks"), runs: t("Runs"), templates: t("Job templates"), schedules: t("Schedules"), notifications: t("Notifications"), inventories: t("Inventories"),
+            overview: t("Overview"), hosts: t("Hosts"), assets: t("Assets"), checks: t("Checks"), runs: t("Runs"), templates: t("Job templates"), schedules: t("Schedules"), notifications: t("Notifications"), inventories: t("Inventories"),
             projects: t("Projects"), credentials: t("Credentials"), hostkeys: t("Host keys"), system: t("System"),
             audit: t("Audit log"), chat: t("Assistant"),
         };
@@ -92,6 +93,7 @@ export function App() {
                     {section === "hosts" && (location.path[1]
                         ? <HostDetailPage key={location.path[1]} id={location.path[1]} />
                         : <HostsPage />)}
+                    {section === "assets" && <AssetsPage />}
                     {section === "checks" && <ChecksPage />}
                     {section === "runs" && (location.path[1]
                         ? <RunDetailPage key={location.path[1]} id={location.path[1]} />

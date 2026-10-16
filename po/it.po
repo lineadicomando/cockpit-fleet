@@ -2094,3 +2094,202 @@ msgstr "Per le metriche che il playbook passa a fleet_result, per nome: lettere 
 
 msgid "Name of a metric"
 msgstr "Nome di una metrica"
+
+msgid "{{shown}} of {{total}} shown: filter to find the others."
+msgstr "{{shown}} di {{total}} mostrati: filtra per trovare gli altri."
+
+msgid "A playbook of a project that describes how the hosts should be, run in check mode: a host on which a task would change something has drifted. The differences are kept, for operators."
+msgstr "Un playbook di un progetto che descrive come devono essere gli host, eseguito in modalità di prova: un host su cui un task cambierebbe qualcosa si è discostato. Le differenze vengono conservate, per gli operatori."
+
+msgid "A task"
+msgstr "Un task"
+
+msgid "Addresses"
+msgstr "Indirizzi"
+
+msgid "After"
+msgstr "Dopo"
+
+msgid "Architecture"
+msgstr "Architettura"
+
+msgid "Assets"
+msgstr "Asset"
+
+msgid "At boot"
+msgstr "All'avvio"
+
+msgid "Available"
+msgstr "Disponibile"
+
+msgid "Before"
+msgstr "Prima"
+
+msgid "BIOS"
+msgstr "BIOS"
+
+msgid "Booted"
+msgstr "Avviato"
+
+msgid "Collected"
+msgstr "Raccolto"
+
+msgid "Compliance"
+msgstr "Conformità"
+
+msgid "Compliance of a playbook"
+msgstr "Conformità a un playbook"
+
+msgid "Compliant"
+msgstr "Conforme"
+
+msgid "CPUs"
+msgstr "CPU"
+
+msgid "Disks"
+msgstr "Dischi"
+
+msgid "Drift"
+msgstr "Scostamenti"
+
+msgid "Drifted"
+msgstr "Non conforme"
+
+msgid "Export CSV"
+msgstr "Esporta CSV"
+
+msgid "Export JSON"
+msgstr "Esporta JSON"
+
+msgid "Filter"
+msgstr "Filtra"
+
+msgid "Find a package"
+msgstr "Cerca un pacchetto"
+
+msgid "Hardware"
+msgstr "Hardware"
+
+msgid "Hardware and software"
+msgstr "Hardware e software"
+
+msgid "Interface"
+msgstr "Interfaccia"
+
+msgid "It gives no difference."
+msgstr "Non fornisce differenze."
+
+msgid "MAC address"
+msgstr "Indirizzo MAC"
+
+msgid "Name of a package, or part of it"
+msgstr "Nome di un pacchetto, o una sua parte"
+
+msgid "Name, system, model, address…"
+msgstr "Nome, sistema, modello, indirizzo…"
+
+msgid "Network"
+msgstr "Rete"
+
+msgid "Network interfaces"
+msgstr "Interfacce di rete"
+
+msgid "No change since the first collection."
+msgstr "Nessuna modifica dalla prima raccolta."
+
+msgid "No compliance check has run on this host yet."
+msgstr "Nessun controllo di conformità è ancora stato eseguito su questo host."
+
+msgid "No host has a package by that name."
+msgstr "Nessun host ha un pacchetto con questo nome."
+
+msgid "Not read (it needs become)"
+msgstr "Non letto (serve become)"
+
+msgid "Nothing collected yet: apply a check of the kind Hardware and software to the hosts, in Checks."
+msgstr "Ancora nulla di raccolto: applica agli host un controllo del tipo Hardware e software, in Controlli."
+
+msgid "Nothing collected yet: apply a check of the kind Hardware and software to this host, in Checks."
+msgstr "Ancora nulla di raccolto: applica a questo host un controllo del tipo Hardware e software, in Controlli."
+
+msgid "Nothing would change."
+msgstr "Non cambierebbe nulla."
+
+msgid "Only the first 5000 are shown: be more precise."
+msgstr "Sono mostrati solo i primi 5000: sii più preciso."
+
+msgid "Package"
+msgstr "Pacchetto"
+
+msgid "Packages"
+msgstr "Pacchetti"
+
+msgid "Packages ({{n}})"
+msgstr "Pacchetti ({{n}})"
+
+msgid "Packages found"
+msgstr "Pacchetti trovati"
+
+msgid "Packages from"
+msgstr "Pacchetti da"
+
+msgid "Refresh the package metadata first (needs become)"
+msgstr "Aggiorna prima i metadati dei pacchetti (serve become)"
+
+msgid "Security updates"
+msgstr "Aggiornamenti di sicurezza"
+
+msgid "Serial number"
+msgstr "Numero di serie"
+
+msgid "Service"
+msgstr "Servizio"
+
+msgid "Services ({{n}})"
+msgstr "Servizi ({{n}})"
+
+msgid "Tasks that would change"
+msgstr "Task che cambierebbero"
+
+msgid "The hosts of an inventory are listed here once it has been read. What they are made of comes from a check of the kind Hardware and software, their updates from one of the kind Updates."
+msgstr "Gli host di un inventario compaiono qui una volta letto. Di cosa sono fatti viene da un controllo del tipo Hardware e software, i loro aggiornamenti da uno del tipo Aggiornamenti."
+
+msgid "Up to date"
+msgstr "Aggiornato"
+
+msgid "Up to date."
+msgstr "Aggiornato."
+
+msgid "Update"
+msgstr "Aggiornamento"
+
+msgid "Updates"
+msgstr "Aggiornamenti"
+
+msgid "Updates ({{n}})"
+msgstr "Aggiornamenti ({{n}})"
+
+msgid "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything. On Windows over SSH it needs become."
+msgstr "Aggiornamenti disponibili, quelli di sicurezza a parte: apt, dnf e zypper, o Windows Update, cercati senza installare nulla. Su Windows via SSH serve become."
+
+msgid "Vendor and model"
+msgstr "Produttore e modello"
+
+msgid "What it is made of"
+msgstr "Di cosa è fatto"
+
+msgid "What the host is made of: hardware, installed packages and services, kept in Assets with their changes. A change of hardware is a warning for one cycle."
+msgstr "Di cosa è fatto l'host: hardware, pacchetti e servizi installati, conservati in Asset con le loro modifiche. Una modifica dell'hardware è un avviso per un ciclo."
+
+msgid "Without it the metadata the host already has is used. Not needed on Windows."
+msgstr "Senza, si usano i metadati che l'host ha già. Non serve su Windows."
+
+msgid "updates_count"
+msgid_plural "updates_count_plural"
+msgstr[0] "{{count}} aggiornamento"
+msgstr[1] "{{count}} aggiornamenti"
+
+msgid "security_updates_count"
+msgid_plural "security_updates_count_plural"
+msgstr[0] "{{count}} di sicurezza"
+msgstr[1] "{{count}} di sicurezza"

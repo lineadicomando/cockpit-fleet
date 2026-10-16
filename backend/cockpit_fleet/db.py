@@ -404,6 +404,82 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE notifications ADD COLUMN check_id TEXT"
         " REFERENCES checks (id) ON DELETE SET NULL",
     ],
+    [
+        # The inventory of hosts: the last snapshot of each, its history as
+        # changes only, the updates it lacks, and the drift of compliance checks.
+        """
+        CREATE TABLE cmdb_hosts (
+            host_id          TEXT PRIMARY KEY REFERENCES hosts (id) ON DELETE CASCADE,
+            collected_at     REAL,
+            vendor           TEXT NOT NULL DEFAULT '',
+            model            TEXT NOT NULL DEFAULT '',
+            serial           TEXT NOT NULL DEFAULT '',
+            bios             TEXT NOT NULL DEFAULT '',
+            virtual          TEXT NOT NULL DEFAULT '',
+            cpu_model        TEXT NOT NULL DEFAULT '',
+            cpus             INTEGER,
+            memory           INTEGER,
+            boot_at          REAL,
+            disks            TEXT NOT NULL DEFAULT '[]',
+            interfaces       TEXT NOT NULL DEFAULT '[]',
+            package_manager  TEXT NOT NULL DEFAULT '',
+            updates_at       REAL,
+            update_manager   TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        """
+        CREATE TABLE cmdb_packages (
+            host_id  TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            name     TEXT NOT NULL,
+            arch     TEXT NOT NULL DEFAULT '',
+            version  TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (host_id, name, arch)
+        )
+        """,
+        "CREATE INDEX cmdb_packages_name ON cmdb_packages (name)",
+        """
+        CREATE TABLE cmdb_services (
+            host_id  TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            name     TEXT NOT NULL,
+            state    TEXT NOT NULL DEFAULT '',
+            enabled  TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (host_id, name)
+        )
+        """,
+        """
+        CREATE TABLE cmdb_updates (
+            host_id    TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            name       TEXT NOT NULL,
+            current    TEXT NOT NULL DEFAULT '',
+            available  TEXT NOT NULL DEFAULT '',
+            security   INTEGER NOT NULL DEFAULT 0,
+            source     TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (host_id, name)
+        )
+        """,
+        """
+        CREATE TABLE cmdb_changes (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            host_id  TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            ts       REAL NOT NULL,
+            area     TEXT NOT NULL,
+            name     TEXT NOT NULL,
+            before   TEXT NOT NULL DEFAULT '',
+            after    TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        "CREATE INDEX cmdb_changes_of ON cmdb_changes (host_id, id)",
+        "CREATE INDEX cmdb_changes_ts ON cmdb_changes (ts)",
+        """
+        CREATE TABLE drift (
+            host_id   TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            check_id  TEXT NOT NULL REFERENCES checks (id) ON DELETE CASCADE,
+            ts        REAL NOT NULL,
+            changes   TEXT NOT NULL DEFAULT '[]',
+            PRIMARY KEY (host_id, check_id)
+        )
+        """,
+    ],
 ]
 
 

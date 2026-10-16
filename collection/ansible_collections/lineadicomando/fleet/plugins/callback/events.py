@@ -33,6 +33,15 @@ options:
     ini:
       - section: callback_fleet_events
         key: max_string
+  max_items:
+    description: Longer lists and mappings in results are cut to this many entries.
+    type: int
+    default: 200
+    env:
+      - name: FLEET_EVENTS_MAX_ITEMS
+    ini:
+      - section: callback_fleet_events
+        key: max_items
   max_diff:
     description: A longer diff of one result is cut to this many characters.
     type: int
@@ -174,6 +183,7 @@ class CallbackModule(CallbackBase):
         super().__init__()
         self._out = None
         self._max_string = 2048
+        self._max_items = _MAX_ITEMS
         self._max_diff = 16384
         self._keep_facts = False
         self._secrets = []
@@ -181,6 +191,7 @@ class CallbackModule(CallbackBase):
     def set_options(self, task_keys=None, var_options=None, direct=None):
         super().set_options(task_keys=task_keys, var_options=var_options, direct=direct)
         self._max_string = self.get_option("max_string")
+        self._max_items = self.get_option("max_items")
         self._max_diff = self.get_option("max_diff")
         self._keep_facts = self.get_option("keep_facts")
         self._secrets = read_secrets(self.get_option("secrets_dir"))
@@ -203,12 +214,12 @@ class CallbackModule(CallbackBase):
         if isinstance(value, dict):
             return {
                 str(key): self._trim(item, depth + 1)
-                for key, item in list(value.items())[:_MAX_ITEMS]
+                for key, item in list(value.items())[: self._max_items]
                 if not str(key).startswith("_ansible_")
                 and (key not in _DROPPED_KEYS or (key == "ansible_facts" and self._keep_facts))
             }
         if isinstance(value, (list, tuple)):
-            return [self._trim(item, depth + 1) for item in value[:_MAX_ITEMS]]
+            return [self._trim(item, depth + 1) for item in value[: self._max_items]]
         return value
 
     def _diff(self, data):

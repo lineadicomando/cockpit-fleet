@@ -69,7 +69,8 @@ export function useKindNames(): Record<CheckKind, string> {
     return {
         reachability: t("Reachability"), disk: t("Disk space"), cpu: t("Processor"), memory: t("Memory"),
         services: t("Services"), uptime: t("Uptime and reboot"), certificates: t("Certificate expiry"), clock: t("Clock"),
-        playbook: t("A playbook of a project"),
+        cmdb: t("Hardware and software"), updates: t("Updates"),
+        playbook: t("A playbook of a project"), compliance: t("Compliance of a playbook"),
     };
 }
 
@@ -83,8 +84,16 @@ function Help({ children }: { children: React.ReactNode }) {
 
 const MINUTE = 60;
 
-// A check of the user has no entry in the catalog: no parameter, no default threshold.
-const OWN: CatalogEntry = { name: "playbook", description: "", params: {}, required: [], thresholds: {} };
+// A check of the user has no entry in the catalog: no parameter, and no default
+// threshold but that of compliance, on the tasks that would change.
+const OWN: CatalogEntry = { name: "playbook", description: "", params: {}, required: [], thresholds: {}, slow: false, interval: 300 };
+const COMPLIANCE: CatalogEntry = {
+    ...OWN, name: "compliance", slow: true, interval: 3600, thresholds: { changed: { warning: 1, critical: null } },
+};
+
+function entryOf(catalog: CatalogEntry[], kind: CheckKind): CatalogEntry {
+    return catalog.find(item => item.name === kind) ?? (kind === "compliance" ? COMPLIANCE : OWN);
+}
 
 function CheckModal({ check, catalog, inventories, credentials, hosts, projects, onClose, onDone }: {
     check?: CheckDef;
@@ -99,8 +108,8 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
     const { t } = useTranslation();
     const kindNames = useKindNames();
     const [kind, setKind] = useState<CheckKind>(check?.kind ?? "disk");
-    const entry = catalog.find(item => item.name === kind) ?? OWN;
-    const own = kind === "playbook";
+    const entry = entryOf(catalog, kind);
+    const own = kind === "playbook" || kind === "compliance";
     const [projectId, setProjectId] = useState(check?.project_id ?? projects[0]?.id ?? "");
     const [playbook, setPlaybook] = useState(check?.playbook ?? "");
     const [newMetric, setNewMetric] = useState("");
@@ -114,23 +123,30 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
     const [become, setBecome] = useState(check?.become ?? false);
     const [enabled, setEnabled] = useState(check?.enabled ?? true);
     const [params, setParams] = useState<Record<string, string>>(() =>
-        Object.fromEntries(Object.entries(check?.params ?? {}).map(([key, value]) => [key, value.join("\n")])));
+        Object.fromEntries(Object.entries(check?.params ?? {}).filter(([, value]) => Array.isArray(value))
+            .map(([key, value]) => [key, (value as string[]).join("\n")])));
+    const [flags, setFlags] = useState<Record<string, boolean>>(() =>
+        Object.fromEntries(Object.entries(check?.params ?? {}).filter(([, value]) => value === true)) as Record<string, boolean>);
     const [fields, setFields] = useState<Record<string, ThresholdField>>(() =>
         thresholdFields(check?.effective_thresholds ?? entry.thresholds));
     const groups = [...new Set(hosts.filter(host => host.inventory_id === inventoryId).flatMap(host => host.groups))].sort();
     const missing = entry.required.some(param => linesOf(params[param] ?? "").length === 0);
 
     function changeKind(value: CheckKind) {
+        const next = entryOf(catalog, value);
         setKind(value);
         setParams({});
-        setFields(thresholdFields((catalog.find(item => item.name === value) ?? OWN).thresholds));
+        setFlags({});
+        setFields(thresholdFields(next.thresholds));
+        setInterval(String(next.interval / MINUTE));
     }
 
     async function submit() {
         const values = {
             name: name.trim(), inventory_id: inventoryId, group, interval: Math.round(Number(interval) * MINUTE),
             retry_interval: Number(retry), max_attempts: Number(attempts), become, enabled,
-            params: Object.fromEntries(Object.keys(entry.params).map(key => [key, linesOf(params[key] ?? "")])),
+            params: Object.fromEntries(Object.entries(entry.params).map(([key, param]) =>
+                [key, param.kind === "flag" ? flags[key] ?? false : linesOf(params[key] ?? "")])),
             thresholds: ownThresholds(entry.thresholds, fields),
             ...(credentialId ? { machine_credential_id: credentialId } : {}),
             ...(own ? { project_id: projectId, playbook: playbook.trim() } : {}),
@@ -144,6 +160,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
         used_pct: t("Space used (%)"), inodes_used_pct: t("Inodes used (%)"), cpu_pct: t("Processor busy (%)"),
         memory_used_pct: t("Memory used (%)"), swap_used_pct: t("Swap used (%)"), not_running: t("Services not running"),
         reboot_required: t("Reboot required (1 = yes)"), days_left: t("Days before expiry"), offset: t("Offset (seconds)"),
+        security_updates: t("Security updates"), updates: t("Updates"), changed: t("Tasks that would change"),
     };
     const descriptions: Record<CheckKind, string> = {
         reachability: t("Whether Ansible reaches the host. A host it does not reach has its other checks unknown, and only this one is told about: apply it to every host."),
@@ -154,17 +171,21 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
         uptime: t("Time since the last boot, and whether updates wait for a reboot."),
         certificates: t("Days before certificates expire: files, directories of them, or a Windows store."),
         clock: t("How far the clock of the host is from the controller's, network delay included."),
+        cmdb: t("What the host is made of: hardware, installed packages and services, kept in Assets with their changes. A change of hardware is a warning for one cycle."),
+        updates: t("Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything. On Windows over SSH it needs become."),
         playbook: t("A check of your own: a playbook of a project whose last task, lineadicomando.fleet.fleet_result, gives a state, a summary and metrics for each host."),
+        compliance: t("A playbook of a project that describes how the hosts should be, run in check mode: a host on which a task would change something has drifted. The differences are kept, for operators."),
     };
     const paramHelp: Record<string, string> = {
         mounts: t("All of them when empty; C: and D: on Windows."),
         exclude_types: t("Beyond the pseudo filesystems, which are always left out."),
         names: t("Unit names on Linux (ssh, cron), service names on Windows (sshd, W32Time)."),
         paths: t("Files in PEM or DER, directories of them, or a store such as Cert:\\LocalMachine\\My."),
+        refresh: t("Without it the metadata the host already has is used. Not needed on Windows."),
     };
     const paramNames: Record<string, string> = {
         mounts: t("Only these mount points"), exclude_types: t("Leave out these filesystem types"),
-        names: t("Services"), paths: t("Certificates"),
+        names: t("Services"), paths: t("Certificates"), refresh: t("Refresh the package metadata first (needs become)"),
     };
 
     return (
@@ -176,6 +197,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
                         <FormSelect id="chk-kind" value={kind} onChange={(_e, value) => changeKind(value as CheckKind)} isDisabled={!!check}>
                             {catalog.map(item => <FormSelectOption key={item.name} value={item.name} label={kindNames[item.name] ?? item.name} />)}
                             <FormSelectOption value="playbook" label={kindNames.playbook} />
+                            <FormSelectOption value="compliance" label={kindNames.compliance} />
                         </FormSelect>
                         <Help>{descriptions[kind]}</Help>
                     </FormGroup>
@@ -213,12 +235,20 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
                     </GridItem>
                     <GridItem>
                         <FormGroup label={t("Playbook")} isRequired fieldId="chk-playbook">
-                            <TextInput id="chk-playbook" value={playbook} onChange={(_e, value) => setPlaybook(value)} placeholder="checks/mail_queue.yml" />
+                            <TextInput id="chk-playbook" value={playbook} onChange={(_e, value) => setPlaybook(value)}
+                                placeholder={kind === "compliance" ? "baseline.yml" : "checks/mail_queue.yml"} />
                         </FormGroup>
                     </GridItem>
                 </Grid>
             )}
-            {Object.keys(entry.params).map(key => (
+            {Object.entries(entry.params).filter(([, param]) => param.kind === "flag").map(([key]) => (
+                <FormGroup key={key} fieldId={`chk-param-${key}`}>
+                    <Checkbox id={`chk-param-${key}`} label={paramNames[key] ?? key} isChecked={flags[key] ?? false}
+                        onChange={(_e, value) => setFlags(current => ({ ...current, [key]: value }))} />
+                    <Help>{paramHelp[key] ?? ""}</Help>
+                </FormGroup>
+            ))}
+            {Object.entries(entry.params).filter(([, param]) => param.kind !== "flag").map(([key]) => (
                 <FormGroup key={key} label={paramNames[key] ?? key} isRequired={entry.required.includes(key)} fieldId={`chk-param-${key}`}>
                     <TextArea id={`chk-param-${key}`} value={params[key] ?? ""} rows={3} resizeOrientation="vertical"
                         onChange={(_e, value) => setParams(current => ({ ...current, [key]: value }))} />
@@ -261,7 +291,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
                             ))}
                         </Tbody>
                     </Table>
-                    {own && (
+                    {kind === "playbook" && (
                         <InputGroupFlex>
                             <TextInput aria-label={t("Name of a metric")} value={newMetric} placeholder="queued" style={{ maxWidth: "16rem" }}
                                 onChange={(_e, value) => setNewMetric(value.trim())} />
@@ -271,7 +301,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
                             </Button>
                         </InputGroupFlex>
                     )}
-                    <Help>{own
+                    <Help>{kind === "playbook"
                         ? t("For the metrics the playbook gives to fleet_result, by name: lowercase letters, digits and _. The state it gives itself counts too: the worse of the two is kept.")
                         : t("Empty means no threshold. When the critical one is below the warning, lower is worse, as for the days before a certificate expires.")}</Help>
                 </FormGroup>

@@ -148,6 +148,7 @@ test/integration/cli.sh              # fleet at a terminal: setup, launch, exit 
 test/integration/schedules.sh        # the timer, ten schedules on one minute, missed times, overlap (about 5 min); WIPES
 test/integration/notify.sh           # notifications to stand-ins of the four channels, a retry by the tick (about 3 min); WIPES
 test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about (about 6 min); WIPES
+test/integration/cmdb.sh             # the CMDB, updates and drift of container nodes, changes by hand (about 4 min); WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
