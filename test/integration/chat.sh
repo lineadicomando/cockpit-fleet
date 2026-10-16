@@ -1,8 +1,9 @@
 #!/bin/sh
 # The chat: fleet-chat starts the agent config.toml names, as the user of the
 # page, and nothing else; the limit on open sessions; what the agent reaches
-# through fleet-mcp. The agent is fake-agent.py, which speaks the protocol
-# with no model behind it.
+# through fleet-mcp; fleet assistant, which runs the agent's program for a
+# terminal. The agent is fake-agent.py, which speaks the protocol with no model
+# behind it, and its program for a terminal fake-terminal.py.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -10,6 +11,7 @@ require_root
 require_wipe
 CHAT=/usr/libexec/cockpit-fleet/fleet-chat
 AGENT=/usr/local/lib/fleet-it/fake-agent
+TERMINAL=/usr/local/lib/fleet-it/fake-terminal
 
 wipe
 cleanup() {
@@ -23,6 +25,7 @@ prepare
 useradd -m -G cockpit-fleet-viewer itviewer
 useradd -m itnobody
 install -D -m 755 "$(dirname "$0")/fake-agent.py" "$AGENT"
+install -D -m 755 "$(dirname "$0")/fake-terminal.py" "$TERMINAL"
 
 INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}'
 NEW='{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/tmp","mcpServers":[{"name":"cockpit-fleet","command":"/usr/libexec/cockpit-fleet/fleet-mcp","args":[],"env":[]}],"_meta":{"testSessionId":"it"}}}'
@@ -71,7 +74,7 @@ talk() {
 expect_eq "no chat tab by default" "$(get "$(ctl itoperator whoami)" 'a["data"]["chat"]')" False
 out=$(chat itoperator fake "$INIT")
 expect_eq "nothing starts while no agent is named" "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" unavailable
-printf '[chat]\nmax_sessions = 2\n[chat.agents.fake]\ncommand = ["%s"]\nlabel = "Fake"\nlogin = "fake login"\n[chat.agents.gone]\ncommand = ["/nowhere/agent"]\n' "$AGENT" >> "$CONFIG"
+printf '[chat]\nmax_sessions = 2\n[chat.agents.fake]\ncommand = ["%s"]\nlabel = "Fake"\nlogin = "fake login"\nterminal = ["%s", "--mcp-config", "{mcp_config}", "--tools", "", "--append-system-prompt", "{instructions}"]\n[chat.agents.gone]\ncommand = ["/nowhere/agent"]\n' "$AGENT" "$TERMINAL" >> "$CONFIG"
 expect_eq "the tab is there once one is" "$(get "$(ctl itviewer whoami)" 'a["data"]["chat"]')" True
 out=$(ctl itviewer chat.agents)
 expect_eq "but the chat needs agents enabled" "$(get "$out" '"[mcp]" in a["data"]["unavailable"]')" True
@@ -100,6 +103,24 @@ expect_eq "with the role of the user, held to the ceiling" \
     "$(line "$out" 'm.get("params", {}).get("update", {}).get("status") == "completed"' 'json.loads(m["params"]["update"]["content"][0]["content"]["text"])["role"]')" operator
 out=$(talk itadmin 'call whoami' "$NO")
 expect_eq "and does not when refused" "$(said "$out")" "whoami was not allowed."
+
+# --- at a terminal: fleet assistant ---------------------------------------------------------
+# A pseudo-terminal, which the assistant needs (not every system has script).
+assistant() {
+    sudo -u "$1" -H python3 -c 'import os, pty, sys; sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))' \
+        fleet assistant ${2:-} </dev/null 2>&1 | tr -d '\r'
+}
+out=$(assistant itadmin)
+expect_eq "fleet assistant runs the agent's program for a terminal, on the terminal" \
+    "$(printf '%s' "$out" | grep -o 'servers=.*')" \
+    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin told=True"
+expect_eq "it is a session as those of the page" \
+    "$(get "$(admin audit.list)" '[(e["user"], e["params"]) for e in a["data"]["entries"] if e["command"] == "chat.start"][0]')" \
+    "('itadmin', '{\"agent\": \"fake\", \"terminal\": true}')"
+expect_eq "its configuration is gone with it" "$(ls -d /tmp/fleet-assistant-* 2>/dev/null | wc -l)" 0
+expect_eq "an agent with no such program is said" "$(assistant itadmin gone | grep -c 'no agent')" 1
+expect_eq "and nothing for a user with no role" "$(assistant itnobody | grep -c 'servers=')" 0
+expect_eq "it wants a terminal" "$(sudo -u itadmin fleet assistant </dev/null 2>&1 | grep -c 'needs a terminal')" 1
 
 # --- what cannot be started -------------------------------------------------------------
 out=$(chat itoperator nope "$INIT")

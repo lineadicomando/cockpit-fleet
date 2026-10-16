@@ -144,3 +144,24 @@ class JournalTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectRootTest(unittest.TestCase):
+    def test_a_directory_of_local_projects_is_written_by_administrators_only(self):
+        import grp
+        import os
+        mine = grp.getgrgid(os.getgid()).gr_name
+        # The modes are what is being judged, on a directory of the test's own.
+        with tempfile.TemporaryDirectory() as root:
+            os.chmod(root, 0o750)  # noqa: S103
+            self.assertEqual(system.check_project_root(root), ("ok", root))
+            os.chmod(root, 0o755)  # noqa: S103
+            self.assertIn("every account of this machine may read",
+                          system.check_project_root(root)[1])
+            os.chmod(root, 0o770)  # noqa: S103
+            status, detail = system.check_project_root(root)
+            expected = "ok" if mine == "cockpit-fleet-admin" else "warn"
+            self.assertEqual(status, expected, detail)
+            os.chmod(root, 0o757)  # noqa: S103
+            self.assertEqual(system.check_project_root(root)[0], "fail")
+        self.assertEqual(system.check_project_root("/nonexistent/fleet")[0], "fail")

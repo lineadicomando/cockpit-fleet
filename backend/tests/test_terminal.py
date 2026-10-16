@@ -76,6 +76,38 @@ class CompleteTest(unittest.TestCase):
         self.assertIn("--detach", complete(COMMANDS, ["launch", "x", "--"]))
         self.assertEqual(complete(COMMANDS, ["help", "temp"]), ["template"])
 
+    def test_names_and_choices_come_from_the_backend(self):
+        listed = {"template.list": {"templates": [{"id": "t1", "name": "Say hello"},
+                                                 {"id": "t2", "name": "Patch"}]},
+                  "run.list": {"runs": [{"id": "r9"}, {"id": "r8"}]},
+                  "credential.list": {"credentials": [{"id": "c1", "name": "nodes",
+                                                       "secret_names": {"private_key": "c-x",
+                                                                        "password": "c-y"}}]}}
+        asked = []
+
+        def lookup(name, params):
+            asked.append(name)
+            return listed[name]
+        complete = terminal.complete
+        self.assertEqual(complete(COMMANDS, ["launch", "S"], lookup), ["Say hello"])
+        self.assertEqual(complete(COMMANDS, ["launch", "'Say h"], lookup), ["Say hello"])
+        self.assertEqual(complete(COMMANDS, ["launch", "Say\\ h"], lookup), ["Say hello"])
+        self.assertEqual(complete(COMMANDS, ["log", ""], lookup), ["r9", "r8"])
+        self.assertEqual(complete(COMMANDS, ["secret", "nodes", ""], lookup),
+                         ["password", "private_key"])
+        self.assertEqual(complete(COMMANDS, ["template", "update", ""], lookup), ["Patch", "Say hello"])
+        self.assertEqual(complete(COMMANDS, ["run", "start", "--template-id", "P"], lookup), ["Patch"])
+        self.assertEqual(complete(COMMANDS, ["check", "create", "--kind", "comp"], lookup),
+                         ["compliance"])
+        self.assertEqual(complete(COMMANDS, ["run", "start", "--limit", ""], lookup), [])
+        self.assertIn("--archive", complete(COMMANDS, ["project", "upload", "x", "--a"], lookup))
+        # Without the backend, or when it refuses, there is nothing to offer.
+        self.assertEqual(complete(COMMANDS, ["launch", ""]), [])
+
+        def refusing(name, params):
+            raise Failure("forbidden")
+        self.assertEqual(complete(COMMANDS, ["launch", ""], refusing), [])
+
 
 class RenderTest(unittest.TestCase):
     def test_records_become_a_table_with_the_known_columns_first(self):
@@ -267,6 +299,38 @@ class ErrorsTest(unittest.TestCase):
         self.assertIn("--template-id id  required", t.out.getvalue())
 
 
+class AssistantTest(unittest.TestCase):
+    AGENTS = {"agents": [{"name": "claude", "label": "Claude", "login": "claude /login",
+                          "installed": True, "terminal": True, "setup": ""},
+                         {"name": "acp-only", "label": "", "login": "", "installed": True,
+                          "terminal": False, "setup": ""}],
+              "unavailable": "", "max_role": "operator", "max_sessions": 2, "open_sessions": 0}
+
+    def test_the_agent_with_a_terminal_program_runs_through_fleet_chat(self):
+        ran = []
+        t = term(Fake({"chat.agents": self.AGENTS}), interactive=True)
+        t.execute = lambda argv: ran.append(argv) or 0
+        self.assertEqual(terminal.run(t, COMMANDS, ["assistant"]), terminal.OK)
+        self.assertEqual(ran, [["/usr/libexec/cockpit-fleet/fleet-chat", "--terminal", "claude"]])
+        t.execute = lambda argv: 1
+        self.assertEqual(terminal.run(t, COMMANDS, ["assistant", "claude"]), 1)
+        self.assertIn("claude /login", t.err.getvalue())
+
+    def test_what_stops_it_is_said(self):
+        t = term(Fake({"chat.agents": self.AGENTS}), interactive=False)
+        with self.assertRaises(Usage):
+            terminal.run(t, COMMANDS, ["assistant"])
+        t = term(Fake({"chat.agents": self.AGENTS}), interactive=True)
+        with self.assertRaisesRegex(Failure, "acp-only"):
+            terminal.run(t, COMMANDS, ["assistant", "acp-only"])
+        off = {**self.AGENTS, "unavailable": "no agent is named in [chat] of config.toml"}
+        with self.assertRaisesRegex(Failure, "no agent is named"):
+            terminal.run(term(Fake({"chat.agents": off}), interactive=True), COMMANDS,
+                         ["assistant"])
+        self.assertEqual(terminal.complete(COMMANDS, ["assistant", ""],
+                                           lambda name, params: self.AGENTS), ["claude"])
+
+
 class BackendTest(Base):
     """Through the real dispatch, as the caller would reach it through sudo."""
 
@@ -293,6 +357,33 @@ class BackendTest(Base):
         t = self.terminal("admin")
         terminal.run(t, COMMANDS, ["credential", "create", "--name", "x", "--kind", "vault"])
         self.assertIn("name: x", t.out.getvalue())
+
+    def test_a_name_stands_for_an_id(self):
+        template = self.template()
+        t = self.terminal("admin")
+        terminal.run(t, COMMANDS, ["template", "update", "deploy", "--name", "deploy",
+                                   "--project-id", "site", "--playbook", "site.yml",
+                                   "--inventory-id", template["inventory_id"]])
+        row = self.ctx().conn.execute("SELECT params FROM audit WHERE command = 'template.update'"
+                                      " ORDER BY id DESC").fetchone()
+        self.assertEqual(json.loads(row["params"])["id"], template["id"])
+        with self.assertRaises(Failure) as caught:
+            terminal.run(t, COMMANDS, ["template", "delete", "nothing"])
+        self.assertIn("no template 'nothing'", str(caught.exception))
+
+    def test_an_archive_is_read_from_a_file(self):
+        with tempfile.NamedTemporaryFile(suffix=".tar.gz") as archive:
+            archive.write(b"\x1f\x8b not really")
+            archive.flush()
+            rest, params = terminal.archive_params(["p1", "--archive", archive.name],
+                                                   io.StringIO())
+        self.assertEqual(rest, ["p1"])
+        self.assertEqual(params["data"], "H4sgbm90IHJlYWxseQ==")
+        self.assertTrue(params["filename"].endswith(".tar.gz"))
+        rest, params = terminal.archive_params(["--archive=-"], io.StringIO("abc"))
+        self.assertEqual((rest, params), ([], {"data": "YWJj"}))
+        with self.assertRaises(Usage):
+            terminal.archive_params(["--archive", "/nonexistent/x.tgz"], io.StringIO())
 
     def test_json_is_the_answer_as_given(self):
         t = self.terminal("viewer")

@@ -73,7 +73,47 @@ A text or JSON value is read from a file with
 from the standard input with
 .BR @\- ;
 .B @@
-is a plain @. A command that takes an id also takes it alone.
+is a plain @. A command that takes an id also takes it alone, and the id of
+a template, project, inventory, credential, check, host, schedule, channel or
+rule may be given by its name.
+.B project upload
+takes the archive from a file with
+.BI \-\-archive " path"\fR,
+or from the standard input with
+.BR "\-\-archive \-" .
+The completion for bash offers commands and options, the choices of an
+option, and the names of what the backend lists for the caller's role.
+.SH PROJECTS AT A TERMINAL
+An administrator works on projects at the terminal in two ways.
+.PP
+A project written in the interface is cloned with
+.BI "fleet project clone " "project " \fR[\fIdirectory\fR],
+changed and committed there with git, and sent back with
+.BR "fleet project push" ,
+which the backend takes only on top of the revision the project still has,
+as a line of commits whose files the editor could have written; its
+playbooks are then checked as when saved in the interface.
+.B fleet project pull
+brings into the clone what was written in the interface meanwhile.
+.PP
+A project may also be a directory under
+.B [projects] local_roots
+of config.toml, written by the administrators of Fleet and read by the
+service. The convention, which the self-check verifies (setfacl is in the
+package acl):
+.PP
+.nf
+sudo install \-d \-m 2770 \-g cockpit\-fleet\-admin /srv/ansible
+sudo setfacl \-m u:cockpit\-fleet:rX \-m d:u:cockpit\-fleet:rX /srv/ansible
+# in /etc/cockpit\-fleet/config.toml: [projects] local_roots = ["/srv/ansible"]
+.fi
+.PP
+then, with a umask that lets the group read (022 or 002):
+.PP
+.nf
+git clone https://git.example.org/site.git /srv/ansible/site
+fleet project create \-\-name site \-\-kind local \-\-path /srv/ansible/site
+.fi
 .SH SHORTCUTS
 .TP
 .B launch
@@ -100,6 +140,12 @@ Sets a secret of a credential, or with
 .B \-\-channel
 the secret of a notification channel (administrators only), asked for twice at
 the terminal or read from the standard input. It cannot be read back.
+.TP
+.B assistant
+Talks to the agent of the chat in this terminal, its only tools those of
+fleet\-mcp with the caller's role under the ceiling set for agents; with more
+than one agent, its name chooses. It needs an agent with a program for a
+terminal in config.toml.
 .SH OPTIONS
 .TP
 .B \-\-json
@@ -114,6 +160,8 @@ not be reached.
 fleet run list \-\-status failed
 fleet launch "Say hello" \-a greeting=ciao \-\-limit web01 \-\-check
 fleet log \-f r3c9d2e1f0a4b
+fleet check run disk \-\-host\-id web01
+fleet project upload shipped \-\-archive site.tar.gz
 fleet file write p1a2b3c4d5e6 \-\-path site.yml \-\-content @site.yml \e
     \-\-expected SHA256_OF_THE_VERSION_READ
 printf '%s' "$TOKEN" | fleet secret git\-token token

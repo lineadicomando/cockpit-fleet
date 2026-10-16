@@ -143,4 +143,5 @@
       - "command = [\"{{ chat_agent_dir }}/bin/claude-agent-acp\"]"
       - "label = \"{{ chat_agent_label }}\""
       - "login = \"{{ chat_agent_dir }}/bin/claude /login\""
+      - "terminal = [\"{{ chat_agent_dir }}/bin/claude\", \"--mcp-config\", \"{mcp_config}\", \"--strict-mcp-config\", \"--tools\", \"\", \"--setting-sources\", \"\", \"--append-system-prompt\", \"{instructions}\"]"
       - "Each user then logs in once, in a terminal: {{ chat_agent_dir }}/bin/claude /login"

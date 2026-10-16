@@ -10,7 +10,7 @@ these commands say what may be started and count what is.
 import os
 from pathlib import Path
 
-from .cli import Context, Str, Values, command
+from .cli import Bool, Context, Str, Values, command
 from .errors import Conflict, NotFound, Unavailable
 from .paths import LIBEXEC_DIR
 
@@ -63,7 +63,7 @@ def chat_agents(ctx: Context, params: Values) -> dict:
         installed = os.access(program, os.X_OK)
         agents.append({
             "name": agent.name, "label": agent.label or agent.name, "login": agent.login,
-            "installed": installed,
+            "installed": installed, "terminal": bool(agent.terminal),
             # How to install it, when it is the one the package knows how to.
             "setup": SETUP if not installed and program.startswith(AGENT_DIR) else "",
         })
@@ -78,10 +78,13 @@ def chat_agents(ctx: Context, params: Values) -> dict:
 
 @command("chat.start", role="viewer", mutating=True, tool=False,
          params={"agent": Str("The name of the agent, as in config.toml.", required=True,
-                              max_length=32)})
+                              max_length=32),
+                 "terminal": Bool("Its program for a terminal, for fleet assistant")})
 def chat_start(ctx: Context, params: Values) -> dict:
     """The command line of an agent, for fleet-chat, which is about to run it
-    as the caller. Refused when the sessions open are as many as allowed."""
+    as the caller: the one that speaks the protocol with the page, or with
+    terminal the one for a terminal. Refused when the sessions open are as
+    many as allowed."""
     problem = _needs_agents(ctx)
     if problem:
         raise Unavailable(problem)
@@ -89,9 +92,13 @@ def chat_start(ctx: Context, params: Values) -> dict:
                  None)
     if agent is None:
         raise NotFound(f"no such agent: {params['agent']}")
+    if params["terminal"] and not agent.terminal:
+        raise Conflict(f"the agent {agent.name} has no program for a terminal"
+                       " (terminal in [chat.agents] of config.toml)")
     # The fleet-chat that is asking is one of them already.
     limit = ctx.config.chat_max_sessions
     if open_sessions() > limit:
         raise Conflict(f"{limit} chat sessions are open already, the most this controller"
                        " allows ([chat] max_sessions in config.toml)")
-    return {"agent": agent.name, "command": list(agent.command)}
+    return {"agent": agent.name,
+            "command": list(agent.terminal if params["terminal"] else agent.command)}

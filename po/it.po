@@ -2299,3 +2299,9 @@ msgstr "Applica su questo host…"
 
 msgid "To apply them from here, make a job template on the inventory {{inventory}}."
 msgstr "Per applicarli da qui, crea un template sull'inventario {{inventory}}."
+
+msgid "At a terminal"
+msgstr "Al terminale"
+
+msgid "Directories of local projects"
+msgstr "Directory dei progetti locali"

@@ -9,7 +9,8 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Credential, Project } from "../lib/types.ts";
 import { uploadArchive } from "../lib/upload.ts";
-import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { uploadCommand } from "../lib/terminal.ts";
 
 interface ProjectList {
     projects: Project[];
@@ -50,6 +51,7 @@ function UploadModal({ project, maxMb, onClose }: { project: Project; maxMb: num
                     </HelperText>
                 </FormHelperText>
             </FormGroup>
+            <AtTerminal text={uploadCommand(project.name, file?.name ?? "")} />
         </FormModal>
     );
 }

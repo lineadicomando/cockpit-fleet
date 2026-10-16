@@ -4,7 +4,7 @@ FROM registry.fedoraproject.org/fedora:44
 RUN sed -i '/^tsflags=nodocs/d' /etc/dnf/dnf.conf \
  && dnf install -y \
       systemd sudo openssh-server openssh-clients procps-ng iproute passwd \
-      python3 git-core ansible-core sshpass cockpit-bridge cockpit-ws \
+      python3 git-core acl ansible-core sshpass cockpit-bridge cockpit-ws \
       podman nftables \
  && dnf clean all
 COPY make-rshared.service /etc/systemd/system/

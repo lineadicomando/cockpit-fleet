@@ -13,7 +13,8 @@ import { formatTime, runDuration } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Chunk, HostStats, Run, RunStatus } from "../lib/types.ts";
-import { ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { AtTerminal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 
@@ -316,6 +317,9 @@ export function RunDetailPage({ id }: { id: string }) {
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             {data.error && <Alert variant="danger" isInline title={data.error} style={{ marginBottom: "1rem" }} />}
             <Flex direction={{ default: "column" }} gap={{ default: "gapLg" }}>
+                <FlexItem>
+                    <AtTerminal text={runCommand(data.id, active && mayRead)} />
+                </FlexItem>
                 <FlexItem>
                     <DescriptionList isHorizontal isCompact columnModifier={{ default: "2Col" }}>
                         <DescriptionListGroup>

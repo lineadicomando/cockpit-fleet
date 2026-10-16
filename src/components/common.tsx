@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
+import cockpit from "cockpit";
 import {
     Alert,
     Button,
+    ClipboardCopy,
     Content,
     EmptyState,
     EmptyStateBody,
+    ExpandableSection,
     Flex,
     FlexItem,
     Form,
@@ -17,7 +20,9 @@ import {
     Spinner,
     Title,
 } from "@patternfly/react-core";
+import { ExternalLinkAltIcon } from "@patternfly/react-icons";
 import type { Loaded } from "../lib/hooks.ts";
+import { shellPage } from "../lib/shell.ts";
 import type { RunStatus } from "../lib/types.ts";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { Label } from "@patternfly/react-core";
@@ -153,5 +158,44 @@ export function RunStatusLabel({ status }: { status: RunStatus }) {
             icon={status === "running" ? <Spinner size="sm" aria-hidden /> : undefined}>
             {text[status]}
         </Label>
+    );
+}
+
+function terminalUrl(): string {
+    try {
+        return window.top && window.top !== window ? shellPage(window.top.location.pathname, window.location.pathname, "/system/terminal") : "";
+    } catch {
+        return "";
+    }
+}
+
+// A command to run in a terminal: it can be copied, and Cockpit's own
+// terminal, which runs as the user of this page, is one click away. In a new
+// tab: leaving the page would lose what was being done there, such as the
+// agent the chat has started.
+export function TerminalCommand({ text }: { text: string }) {
+    const { t } = useTranslation();
+    const url = terminalUrl();
+    return (
+        <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} flexWrap={{ default: "nowrap" }}>
+            <FlexItem grow={{ default: "grow" }}>
+                <ClipboardCopy isReadOnly isCode hoverTip={t("Copy")} clickTip={t("Copied")} aria-label={t("Command")}>{text}</ClipboardCopy>
+            </FlexItem>
+            {url
+                ? <Button variant="secondary" component="a" href={url} target="_blank" rel="noopener noreferrer"
+                    icon={<ExternalLinkAltIcon />} iconPosition="end">{t("Open the terminal")}</Button>
+                : <Button variant="secondary" onClick={() => cockpit.jump("/system/terminal")}>{t("Open the terminal")}</Button>}
+        </Flex>
+    );
+}
+
+// What the page does, as the fleet command that does it at a terminal.
+export function AtTerminal({ text }: { text: string }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    return (
+        <ExpandableSection toggleText={t("At a terminal")} isExpanded={open} onToggle={(_e, value) => setOpen(value)}>
+            <TerminalCommand text={text} />
+        </ExpandableSection>
     );
 }

@@ -9,7 +9,8 @@ import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers, secretAnswers, toDraft } from "../lib/survey.ts";
 import type { Credential, Inventory, Project, Run, Template } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
+import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 
 const words = (text: string) => text.split(/[\s,]+/).filter(Boolean);
@@ -206,6 +207,7 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
             <FormGroup fieldId="launch-check">
                 <Checkbox id="launch-check" label={t("Dry run: show what would change, change nothing")} isChecked={check} onChange={(_e, value) => setCheck(value)} />
             </FormGroup>
+            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check)} />
         </FormModal>
     );
 }

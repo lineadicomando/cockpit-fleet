@@ -88,6 +88,63 @@ EOF2
 expect_eq "an operator cannot" "$code" 3
 expect_eq "the value is in no record" "$(journalctl --since -10min -o cat | grep -c it-secret-value)$(grep -c it-secret-value "$DB")" "00"
 
+# --- names, completion, an archive from a file -------------------------------------------------
+fleet_as itoperator inventory get local --json
+expect_eq "a name stands for an id" "$code $(get "$out" 'a["name"]')" "0 local"
+fleet_as itoperator inventory get nothing
+expect_eq "a name nothing has is said" "$code $(printf '%s' "$out" | grep -c "no inventory 'nothing'")" "3 1"
+expect_eq "completion offers the names of templates" \
+    "$(sudo -u itoperator fleet --complete launch gr)" greet
+expect_eq "and nothing to whoever has no role" "$(sudo -u itnobody fleet --complete launch gr)" ""
+mkdir -p /tmp/fleet-it-archive
+printf -- '- hosts: all\n  gather_facts: false\n  tasks: []\n' > /tmp/fleet-it-archive/site.yml
+tar -C /tmp/fleet-it-archive -czf /tmp/fleet-it-archive.tar.gz site.yml
+chmod a+r /tmp/fleet-it-archive.tar.gz
+fleet_as itadmin project create --name shipped --kind archive
+fleet_as itadmin project upload shipped --archive /tmp/fleet-it-archive.tar.gz --json
+expect_eq "an archive goes up from a file" "$code" 0
+upload_run=$(get "$out" 'a["run_id"]')
+expect_run "and is unpacked" "$upload_run" 60 successful
+rm -rf /tmp/fleet-it-archive /tmp/fleet-it-archive.tar.gz
+
+# --- projects at a terminal --------------------------------------------------------------
+# A project written in the interface, cloned, changed with git and pushed back.
+cd /tmp
+sudo -u itadmin -H git config --global user.name itadmin
+sudo -u itadmin -H git config --global user.email itadmin@localhost
+fleet_as itadmin project clone cli /tmp/fleet-it-clone
+expect_eq "a managed project is cloned" "$code $([ "$(cat /tmp/fleet-it-clone/site.yml)" = "$(cat /tmp/fleet-it-site.yml)" ] && echo same)" "0 same"
+printf -- '- hosts: all\n  gather_facts: false\n  tasks:\n    - ansible.builtin.debug: msg=pushed\n' > /tmp/fleet-it-clone/pushed.yml
+chown -R itadmin /tmp/fleet-it-clone
+sudo -u itadmin -H git -C /tmp/fleet-it-clone add pushed.yml
+sudo -u itadmin -H git -C /tmp/fleet-it-clone commit -q -m "Add pushed.yml"
+fleet_as itadmin project push /tmp/fleet-it-clone
+expect_eq "its commits are pushed back" "$code $(printf '%s' "$out" | grep -c 'pushed: the project is at')" "0 1"
+expect_eq "as if written in the interface" "$(get "$(admin file.history "{\"id\": \"$project\"}")" 'a["data"]["commits"][0]["subject"]')" "Add pushed.yml"
+fleet_as itoperator project clone cli /tmp/fleet-it-other
+expect_eq "an operator does not clone" "$code" 3
+fleet_as itadmin file write "$project" --path later.yml --expected "" --content 'x: 1'
+fleet_as itadmin project pull /tmp/fleet-it-clone
+expect_eq "what the interface wrote is pulled" "$code $(test -f /tmp/fleet-it-clone/later.yml && echo here)" "0 here"
+rm -rf /tmp/fleet-it-clone /tmp/fleet-it-other
+
+# A directory of local projects as the guide says: written by the
+# administrators, read by the service through an ACL, by nobody else.
+install -d -m 2770 -g cockpit-fleet-admin /srv/fleet-it/roots
+setfacl -m u:cockpit-fleet:rX -m d:u:cockpit-fleet:rX /srv/fleet-it/roots
+sed -i 's|^local_roots = .*|local_roots = ["/srv/fleet-it", "/srv/fleet-it/roots"]|' "$CONFIG"
+sudo -u itadmin sh -c 'umask 022 && mkdir /srv/fleet-it/roots/mine && printf -- "- hosts: all\n  gather_facts: false\n  tasks: []\n" > /srv/fleet-it/roots/mine/site.yml'
+fleet_as itadmin project create --name mine --kind local --path /srv/fleet-it/roots/mine --json
+mine=$(get "$out" 'a["id"]')
+fleet_as itadmin template create --name mine --project-id mine --playbook site.yml --inventory-id local --json
+fleet_as itoperator launch mine
+expect_eq "a playbook written there is launched" "$code" 0
+expect_eq "the self-check knows the convention" \
+    "$(get "$(admin selfcheck)" '[c["status"] for c in a["data"]["checks"] if c["id"] == "project_roots"][0]')" warn
+expect_eq "and says what is not as it should be" \
+    "$(get "$(admin selfcheck)" '"/srv/fleet-it:" in [c["detail"] for c in a["data"]["checks"] if c["id"] == "project_roots"][0]')" True
+expect_denied "nobody else reads it" sudo -u itnobody ls /srv/fleet-it/roots/mine
+
 # --- what is installed beside it ---------------------------------------------------------
 expect_eq "completion knows the commands" "$(fleet --complete run sta)" start
 expect_ok "completion is installed for bash" test -f /usr/share/bash-completion/completions/fleet

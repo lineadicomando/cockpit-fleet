@@ -132,3 +132,29 @@ started stays as it is: once logged in, send the message again.
 - The agent runs while the page is open and ends when it is closed or
   reloaded. Conversations are kept by the agent in the user's home and can be
   continued from the page.
+
+## At a terminal
+
+`fleet assistant` starts the same agent in a terminal on the controller (an
+SSH session, or Cockpit's terminal), for a user who works at the command
+line. It runs the agent's own program for a terminal, which the playbook
+names in `config.toml` beside the one of the page:
+
+```toml
+terminal = ["/opt/cockpit-fleet-agent/bin/claude", "--mcp-config", "{mcp_config}",
+            "--strict-mcp-config", "--tools", "", "--setting-sources", "",
+            "--append-system-prompt", "{instructions}"]
+```
+
+`{mcp_config}` becomes a file, private to the session and deleted at its
+end, that names `fleet-mcp` as the only server; `{instructions}` a few lines
+on where the agent is. The options keep the agent to the tools of
+`fleet-mcp`, with none of its own and none of the user's settings, as in the
+page. What the user gets is the same: the role under `[mcp] max_role`, the
+start in the audit log (`chat.start`, with `terminal`), a session counted in
+`[chat] max_sessions`. The agent asks before every call, in its own way; the
+answers are not kept. With more than one agent, `fleet assistant NAME`
+chooses; an agent without `terminal` is for the page only. When it is
+installed by hand, add the line to its section; a controller set up before
+this line existed gets it by running the playbook again with
+`chat_agent_configure=true`, once the section it wrote is removed.

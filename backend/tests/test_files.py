@@ -1,5 +1,6 @@
 """Projects written in the interface: files, commits and syntax checks."""
 
+import io
 import json
 import os
 import sqlite3
@@ -18,8 +19,9 @@ from cockpit_fleet.validators import check_file_path
 PLAYBOOK = "- hosts: all\n  tasks: []\n"
 
 
-@unittest.skipUnless(os.path.exists("/usr/bin/git"), "needs git")
-class ManagedProjectTest(Base):
+class Managed(Base):
+    """A project written in the interface, and how its repository is looked at."""
+
     def setUp(self):
         super().setUp()
         self.project = self.ok("project.create", {"name": "edited", "kind": "managed"})
@@ -35,6 +37,10 @@ class ManagedProjectTest(Base):
         argv = ["/usr/bin/git", f"--git-dir={home / 'repo.git'}", f"--work-tree={self.tree}", *args]
         return subprocess.run(argv, capture_output=True, text=True, check=True).stdout
 
+
+
+@unittest.skipUnless(os.path.exists("/usr/bin/git"), "needs git")
+class ManagedProjectTest(Managed):
     def test_a_new_project_is_an_empty_tree_with_its_repository_beside_it(self):
         self.assertEqual((self.project["kind"], self.project["revision"]), ("managed", ""))
         self.assertEqual(list(self.tree.iterdir()), [])
@@ -313,3 +319,100 @@ class RebuildMigrationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(os.path.exists("/usr/bin/git"), "needs git")
+class TerminalCloneTest(Managed):
+    """fleet project clone, pull and push, through the real dispatch and git."""
+
+    def setUp(self):
+        super().setUp()
+        self.write("site.yml", PLAYBOOK)
+        self.work = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.clone = str(self.work / "edited")
+        env = mock.patch.dict(os.environ, {"GIT_AUTHOR_NAME": "anna", "GIT_AUTHOR_EMAIL": "a@x",
+                                           "GIT_COMMITTER_NAME": "anna",
+                                           "GIT_COMMITTER_EMAIL": "a@x",
+                                           "GIT_CONFIG_GLOBAL": "/dev/null",
+                                           "GIT_CONFIG_NOSYSTEM": "1"})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def fleet(self, *words):
+        from cockpit_fleet import cli, terminal
+
+        def call(name, params):
+            return cli.dispatch(name, json.dumps(params).encode(), self.ctx("admin"))
+        term = terminal.Terminal(call=call, out=io.StringIO(), err=io.StringIO(),
+                                 stdin=io.StringIO())
+        code = terminal.run(term, cli.load_commands(), list(words))
+        return code, term.out.getvalue()
+
+    def commit(self, path, content, message="change"):
+        target = Path(self.clone) / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+        subprocess.run(["/usr/bin/git", "-C", self.clone, "add", "--all"], check=True)
+        subprocess.run(["/usr/bin/git", "-C", self.clone, "commit", "--quiet", "-m", message], check=True)
+
+    def test_clone_commit_push_as_if_written_in_the_interface(self):
+        self.assertEqual(self.fleet("project", "clone", "edited", self.clone)[0], 0)
+        self.assertEqual((Path(self.clone) / "site.yml").read_text(), PLAYBOOK)
+        self.commit("roles/web/tasks/main.yml", "- debug: msg=hi\n")
+        self.commit("deploy.yml", PLAYBOOK, "add deploy")
+        code, said = self.fleet("project", "push", self.clone)
+        self.assertEqual(code, 0, said)
+        self.assertIn("2 files changed", said)
+        head = subprocess.run(["/usr/bin/git", "-C", self.clone, "rev-parse", "HEAD"], capture_output=True,
+                              text=True, check=True).stdout.strip()
+        self.assertEqual(self.ok("project.list")["projects"][0]["revision"], head)
+        self.assertEqual((self.tree / "deploy.yml").read_text(), PLAYBOOK)
+        self.assertIn("add deploy", self.git("log", "--format=%s"))
+        checks = [run for run in self.ok("run.list")["runs"] if run["kind"] == "syntax"]
+        self.assertEqual(sorted(run["options"]["path"] for run in checks), ["deploy.yml", "site.yml"])
+        row = self.ctx().conn.execute("SELECT params FROM audit WHERE command = 'file.push'").fetchone()
+        self.assertEqual(json.loads(row["params"])["bundle"], "***")
+        self.assertIn("nothing to push", self.fleet("project", "push", self.clone)[1])
+
+    def test_a_project_that_changed_meanwhile_is_pulled_first(self):
+        self.fleet("project", "clone", "edited", self.clone)
+        self.commit("a.yml", "a: 1\n")
+        self.write("b.yml", "b: 1\n")
+        with self.assertRaisesRegex(terminal_failure(), "changed since your clone"):
+            self.fleet("project", "push", self.clone)
+        with self.assertRaisesRegex(terminal_failure(), "git rebase fleet/main"):
+            self.fleet("project", "pull", self.clone)
+        subprocess.run(["/usr/bin/git", "-C", self.clone, "rebase", "--quiet", "fleet/main"], check=True)
+        self.assertEqual(self.fleet("project", "push", self.clone)[0], 0)
+        self.assertEqual(sorted(path.name for path in self.tree.iterdir()),
+                         ["a.yml", "b.yml", "site.yml"])
+
+    def test_what_the_editor_would_not_write_is_refused_whole(self):
+        self.fleet("project", "clone", "edited", self.clone)
+        before = self.ok("project.list")["projects"][0]["revision"]
+        os.symlink("/etc/shadow", Path(self.clone) / "shadow")
+        subprocess.run(["/usr/bin/git", "-C", self.clone, "add", "--all"], check=True)
+        subprocess.run(["/usr/bin/git", "-C", self.clone, "commit", "--quiet", "-m", "link"], check=True)
+        with self.assertRaisesRegex(terminal_failure(), "only regular files"):
+            self.fleet("project", "push", self.clone)
+        subprocess.run(["/usr/bin/git", "-C", self.clone, "reset", "--quiet", "--hard", "HEAD~1"], check=True)
+        self.commit("big.bin", "x" * (files.MAX_FILE + 1))
+        with self.assertRaisesRegex(terminal_failure(), "larger than"):
+            self.fleet("project", "push", self.clone)
+        self.assertEqual(self.ok("project.list")["projects"][0]["revision"], before)
+        self.assertFalse((self.tree / "shadow").exists())
+        self.assertEqual(self.git("for-each-ref", "refs/fleet"), "")
+
+    def test_only_a_clone_and_only_a_managed_project(self):
+        from cockpit_fleet.terminal import Usage
+        with self.assertRaises(Usage):
+            self.fleet("project", "push", str(self.work))
+        self.local_project()
+        with self.assertRaisesRegex(Usage, "not written in the interface"):
+            self.fleet("project", "clone", "site", str(self.work / "x"))
+        self.assertEqual(self.code("file.bundle", {"id": self.id}, role="operator"), "forbidden")
+
+
+def terminal_failure():
+    from cockpit_fleet.terminal import Failure
+    return Failure

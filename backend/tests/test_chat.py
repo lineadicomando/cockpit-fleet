@@ -15,7 +15,9 @@ from cockpit_fleet import chat, chat_agent, cli
 from cockpit_fleet.config import ChatAgent, Config, ConfigError, parse
 from cockpit_fleet.mcp import Unreachable
 
-AGENT = ChatAgent("claude", ("/opt/agent/bin/acp", "--stdio"), "Claude", "claude /login")
+AGENT = ChatAgent("claude", ("/opt/agent/bin/acp", "--stdio"), "Claude", "claude /login",
+                  ("/opt/agent/bin/claude", "--mcp-config", "{mcp_config}", "--tools", "",
+                   "--append-system-prompt", "{instructions}"))
 
 
 class ConfigTest(unittest.TestCase):
@@ -31,6 +33,8 @@ class ConfigTest(unittest.TestCase):
             command = ["/opt/agent/bin/acp", "--stdio"]
             label = "Claude"
             login = "claude /login"
+            terminal = ["/opt/agent/bin/claude", "--mcp-config", "{mcp_config}", "--tools", "",
+                        "--append-system-prompt", "{instructions}"]
             [chat.agents.other-1]
             command = ["/usr/local/bin/other"]
         """)
@@ -54,6 +58,8 @@ class ConfigTest(unittest.TestCase):
             "[chat.agents.a]\ncommand = [\"/x\"]\nargs = []": "unknown key in \\[chat.agents.a\\]",
             "[chat.agents.a]\ncommand = [\"/x\"]\nlabel = \"a\\nb\"": "chat.agents.a.label",
             "[chat.agents.a]\ncommand = [\"/x\"]\nlogin = 3": "chat.agents.a.login",
+            "[chat.agents.a]\ncommand = [\"/x\"]\nterminal = [\"claude\"]": "absolute path",
+            "[chat.agents.a]\ncommand = [\"/x\"]\nterminal = [\"\"]": "chat.agents.a.terminal",
         }
         for text, message in cases.items():
             with self.assertRaisesRegex(ConfigError, message, msg=text):
@@ -94,7 +100,7 @@ class CommandsTest(Base):
         data = self.ok("chat.agents", role="viewer")
         self.assertEqual(data["agents"],
                          [{"name": "claude", "label": "Claude", "login": "claude /login",
-                           "installed": False, "setup": ""}])
+                           "installed": False, "terminal": True, "setup": ""}])
         self.assertEqual((data["unavailable"], data["max_sessions"], data["open_sessions"],
                           data["max_role"]), ("", 2, 1, "operator"))
         self.assertNotIn("/opt/agent", json.dumps(data))
@@ -123,6 +129,12 @@ class CommandsTest(Base):
         row = self.ctx().conn.execute("SELECT * FROM audit").fetchone()
         self.assertEqual((row["command"], row["outcome"], row["user"]),
                          ("chat.start", "ok", "anna"))
+
+    def test_its_program_for_a_terminal_when_it_has_one(self):
+        data = self.ok("chat.start", {"agent": "claude", "terminal": True}, role="viewer")
+        self.assertEqual(data["command"][0], "/opt/agent/bin/claude")
+        self.config = replace(self.config, chat_agents=(ChatAgent("plain", ("/bin/sh",)),))
+        self.assertEqual(self.code("chat.start", {"agent": "plain", "terminal": True}), "conflict")
 
     def test_unknown_agent(self):
         self.assertEqual(self.code("chat.start", {"agent": "nope"}), "not_found")
@@ -203,3 +215,45 @@ class LauncherTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TerminalLauncherTest(unittest.TestCase):
+    def test_the_program_gets_fleet_mcp_alone_in_a_file_that_goes_away(self):
+        seen = {}
+
+        def call(name, params):
+            seen["asked"] = (name, params)
+            return {"ok": True, "data": {"agent": "claude", "command": list(AGENT.terminal)}}
+
+        class Done:
+            returncode = 0
+
+        def run(argv, env, check):
+            config = Path(argv[2])
+            seen.update(argv=argv, env=env, config=json.loads(config.read_text()), path=config,
+                        mode=config.parent.stat().st_mode & 0o777)
+            return Done()
+
+        with mock.patch.object(chat_agent.signal, "signal"):
+            status = chat_agent.main(["fleet-chat", "--terminal", "claude"], call=call, run=run)
+        self.assertEqual(status, 0)
+        self.assertEqual(seen["asked"], ("chat.start", {"agent": "claude", "terminal": True,
+                                                        "via": "cli"}))
+        self.assertEqual(seen["argv"][3:5], ["--tools", ""])
+        self.assertEqual(seen["argv"][-1], chat_agent.INSTRUCTIONS)
+        self.assertEqual(seen["config"], {"mcpServers": {"cockpit-fleet": {
+            "type": "stdio", "command": "/usr/libexec/cockpit-fleet/fleet-mcp", "args": []}}})
+        self.assertEqual(seen["mode"], 0o700)
+        self.assertFalse(seen["path"].exists())
+        self.assertEqual(seen["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"], "false")
+
+    def test_a_refusal_is_said_and_nothing_runs(self):
+        def run(argv, env, check):
+            raise AssertionError("started")
+
+        refused = {"ok": False, "error": {"code": "conflict", "message": "no program"}}
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as said:
+            status = chat_agent.main(["fleet-chat", "--terminal", "x"],
+                                     call=lambda name, params: refused, run=run)
+        self.assertEqual(status, 3)
+        self.assertIn("no program", said.getvalue())

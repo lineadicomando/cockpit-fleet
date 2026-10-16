@@ -1041,8 +1041,24 @@ a repeated option for a list, JSON for an object, `@path` or `@-` for a text
 read from a file or stdin). Its help is its docstring and its parameters,
 the same that describe it to an agent: a command added to the backend is in
 `fleet` with no work, phase 4 included. The registry is read from the
-installed package, so `fleet help AREA VERB` and the completion for bash need
-no call; `fleet help` asks `whoami` which commands the role has. Four
+installed package, so `fleet help AREA VERB` needs no call; `fleet help`
+asks `whoami` which commands the role has. Where a command takes the id of
+something that has a name (a template, project, inventory, credential,
+check, host, schedule, channel, rule), the name may be given: `fleet` asks
+the list for it and passes the id, and says so when two have that name.
+The completion for bash offers commands, options and their choices from the
+registry, and asks the backend, as the user, for the names of what an id
+names, the last runs and the secrets of a credential: nothing to whoever has
+no role. `project upload --archive PATH` reads the archive from a file, or
+from stdin with `-`, and sends it as the base64 the backend takes.
+
+**From the page to the terminal.** The launch of a template, the page of a
+run and the upload of an archive show, under "At a terminal", the `fleet`
+command that does the same (`fleet launch` with the answers typed so far,
+never the secret ones, which `fleet` asks for; `fleet log -f` or `fleet
+result`; `fleet project upload --archive`), quoted for a POSIX shell, with a
+button to copy it and one that opens Cockpit's terminal in a new tab:
+Cockpit's terminal cannot be handed a command, so it is pasted. Four
 commands meant for other programs (`run.reconcile`, `mcp.tools`,
 `chat.start`, `scheduler.tick`) are not listed, and still answer.
 
@@ -1072,8 +1088,37 @@ backend gives it, for a program. English only, like the backend's messages.
 (`/var/lib/cockpit-fleet` is the service account's), the credentials, or an
 `ansible-playbook` of their own: the secrets are decrypted only by PID 1 for
 a run, and a run outside the unit would have neither the sandbox nor the
-audit trail. Who wants to work on a project's files at a terminal uses a
-local-directory project under `[projects] local_roots`.
+audit trail.
+
+**Projects at a terminal** (decided with the user on 16 October). Two ways,
+for administrators only, since files are theirs in the interface too:
+
+- A directory of local projects under `[projects] local_roots`, by a
+  convention that `selfcheck` (`project_roots`) checks on the directory
+  itself: group `cockpit-fleet-admin`, mode 2770, and an ACL that lets the
+  service account read (`u:cockpit-fleet:rX`, and the same by default for
+  what is created there). Administrators write with their own editor and
+  git, the service reads, no other account sees the files. Writable by
+  another group is a warning (what is there is what operators launch),
+  readable by everyone a warning, writable by everyone a failure. The ACL
+  mask follows the group bits of a new file: who writes there keeps a umask
+  that leaves the group read (022 or 002). The manual, fleet(1), has the
+  three commands.
+- A project written in the interface is cloned with `fleet project clone`:
+  `file.bundle` gives its repository as a git bundle (recorded in the audit
+  trail, as a copy of every file), which `fleet` clones as the user, keeping
+  the project's id in the clone's configuration and the revision it knows
+  as `refs/remotes/fleet/main`. `fleet project push` sends a bundle of the
+  commits of `main` since that revision to `file.push`, which takes them only
+  if the project is still at that revision, as a line of commits (no merge),
+  and if every file of the result is one the editor could have written
+  (regular files of at most 512 kB, the names `check_file_path` takes: no
+  link, no submodule, nothing called `.git`); then a fast forward, and what
+  a write in the interface does: a syntax check of each playbook changed,
+  the collections when the requirements changed. The authors are those of
+  the commits; who pushed is in the audit trail. `fleet project pull`
+  fetches the same way and fast-forwards; a clone whose commits diverge is
+  told to rebase on `fleet/main`.
 
 Checked on Debian 13 (`cli.sh`): a project, an inventory and a template set
 up by an administrator, a file written from a file and from stdin, an
@@ -1153,6 +1198,17 @@ the options of the adapter (none of the user's own settings for the agent,
 which could add servers or rules that allow a call without asking), and a
 few lines added to the agent's instructions. The client offers neither files
 nor a terminal. The session's directory is the user's home.
+
+**At a terminal.** `fleet assistant` runs `fleet-chat --terminal NAME`,
+which asks `chat.start` with `terminal` for the agent's program for a
+terminal (`terminal` in `[chat.agents.NAME]`), writes a private MCP
+configuration naming `fleet-mcp` alone, fills `{mcp_config}` and
+`{instructions}` in that command line, and runs it on the user's terminal,
+ignoring ^C, which is the agent's. Being a `fleet-chat`, it is counted as a
+session; the configuration is deleted when the agent ends. For Claude the
+role names `--strict-mcp-config`, `--tools ""` and `--setting-sources ""`,
+what `_meta` does for a session of the page. Tried with a stand-in program
+(`chat.sh`), and the options with the CLI of Claude by hand.
 
 **Permissions.** The agent asks before each call to a tool
 (`session/request_permission`). The page answers by itself for a tool of

@@ -1,8 +1,10 @@
 """Commands about the installation itself: identity, self-check, audit trail."""
 
+import grp
 import os
 import re
 import shutil
+import stat
 import subprocess
 
 from . import __version__, audit, db, paths
@@ -145,6 +147,48 @@ def _check_collection() -> tuple[str, str]:
     return ("ok", "lineadicomando.fleet") if plugin.is_file() else ("fail", f"{plugin} is missing")
 
 
+# Who writes in a directory of local projects: the administrators of Fleet, as
+# docs/architecture.md says ("Projects at a terminal").
+_WRITERS = "cockpit-fleet-admin"
+
+
+def _group(gid: int) -> str:
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return str(gid)
+
+
+def check_project_root(root: str) -> tuple[str, str]:
+    """A directory of local projects: readable by the service, written only by
+    the administrators of Fleet, since what is there is what operators launch."""
+    try:
+        status = os.stat(root)
+    except OSError as error:
+        return "fail", f"{root}: {error.strerror}"
+    if not os.access(root, os.R_OK | os.X_OK):
+        return "fail", f"{root} is not readable by the service account"
+    if status.st_mode & stat.S_IWOTH:
+        return "fail", f"{root}: every account may write there"
+    if status.st_mode & stat.S_IWGRP and _group(status.st_gid) != _WRITERS:
+        return "warn", (f"{root}: the group {_group(status.st_gid)} may write there, and what it"
+                        f" writes is what operators launch ({_WRITERS} is the convention)")
+    if status.st_mode & stat.S_IROTH:
+        return "warn", f"{root}: every account of this machine may read the projects"
+    return "ok", root
+
+
+def _check_project_roots(ctx: Context) -> tuple[str, str]:
+    roots = ctx.config.local_project_roots
+    if not roots:
+        return "ok", "none: local-directory projects are off"
+    found = [check_project_root(root) for root in roots]
+    order = ("fail", "warn", "ok")
+    worst = min((status for status, _detail in found), key=order.index)
+    return worst, "; ".join(detail for status, detail in found if status == worst) \
+        if worst != "ok" else ", ".join(roots)
+
+
 def _check_tool(name: str, missing: str) -> tuple[str, str]:
     path = shutil.which(name, path="/usr/bin:/bin")
     return ("ok", path) if path else (missing, "not installed")
@@ -164,6 +208,7 @@ def selfcheck(ctx: Context, params: Values) -> dict:
         ("scheduler", _check_scheduler()),
         ("notify", _check_notify()),
         ("collection", _check_collection()),
+        ("project_roots", _check_project_roots(ctx)),
         ("git", _check_tool("git", "fail")),
         # Only needed for SSH logins with a password.
         ("sshpass", _check_tool("sshpass", "warn")),

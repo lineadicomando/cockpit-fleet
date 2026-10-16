@@ -1,7 +1,12 @@
-# bash completion of fleet (cockpit-fleet): commands and their options, from
-# the installed package, with no call to the backend.
+# bash completion of fleet (cockpit-fleet): commands and their options from
+# the installed package, the names of templates, credentials and the like
+# from the backend, for the role of the user.
 _fleet() {
-    local IFS=$'\n'
-    COMPREPLY=($(fleet --complete "${COMP_WORDS[@]:1:COMP_CWORD}" 2>/dev/null))
+    local IFS=$'\n' candidate
+    COMPREPLY=()
+    for candidate in $(fleet --complete "${COMP_WORDS[@]:1:COMP_CWORD}" 2>/dev/null); do
+        # A name may hold spaces: it goes in quoted.
+        COMPREPLY+=("$(printf '%q' "$candidate")")
+    done
 }
 complete -o default -F _fleet fleet

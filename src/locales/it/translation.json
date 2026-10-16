@@ -770,5 +770,7 @@
   "security_updates_count_many": "{{count}} di sicurezza",
   "security_updates_count_other": "{{count}} di sicurezza",
   "Apply on this host…": "Applica su questo host…",
-  "To apply them from here, make a job template on the inventory {{inventory}}.": "Per applicarli da qui, crea un template sull'inventario {{inventory}}."
+  "To apply them from here, make a job template on the inventory {{inventory}}.": "Per applicarli da qui, crea un template sull'inventario {{inventory}}.",
+  "At a terminal": "Al terminale",
+  "Directories of local projects": "Directory dei progetti locali"
 }

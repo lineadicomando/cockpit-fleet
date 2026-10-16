@@ -318,25 +318,29 @@ outcome read, a conversation resumed after a reload.
 ## The terminal (started on 14 October)
 
 Done: the command `fleet` (point 1 of the brainstorm), with completion for
-bash and a manual, tried by `cli.sh` and by hand at a terminal. Ideas left,
-in the order they were weighed, none decided:
+bash and a manual, tried by `cli.sh` and by hand at a terminal. The user
+wants all of what follows (16 October), in this order: names and
+completion, `fleet assistant`, the command from the page, then projects
+at the terminal, whose question about operators comes first. Ideas left:
 
-- [ ] Projects at the terminal: a convention for `[projects] local_roots`
-      (a group that writes, `cockpit-fleet` that reads) and its guide; for
-      a managed project, a read-only clone of `repo.git` for administrators
-      (it touches "an operator does not read files": decide first)
-- [ ] `fleet assistant`: the chat's agent at a terminal, with `fleet-mcp` as
-      its only tools and the same ceiling
-- [ ] From the page to the terminal: next to a run, a template or a project,
+- [x] Projects at the terminal (16 October, decided with the user): the
+      convention for `[projects] local_roots` (`cockpit-fleet-admin` writes,
+      an ACL lets the service read), checked by `selfcheck`, its guide in
+      fleet(1); `fleet project clone`, `pull` and `push` for a managed
+      project, as git bundles through `file.bundle` and `file.push`
+- [x] `fleet assistant`: the chat's agent at a terminal, with `fleet-mcp` as
+      its only tools and the same ceiling (16 October; tried with a stand-in
+      in `chat.sh`, not yet with Claude logged in on a controller)
+- [x] From the page to the terminal: next to a run, a template or a project,
       the `fleet` command that does the same, to copy, with the button to
-      Cockpit's terminal (which cannot be handed a command to run)
+      Cockpit's terminal (16 October; not yet looked at in a browser)
 
-What `fleet` leaves to be desired: completion knows commands and options,
-not the names of templates, runs or credentials; `project upload` wants
-the archive as one base64 string (`--data @-` after `base64 -w0`, not tried),
-there is no option that takes the file itself; answers to a survey
+Names for ids, completion of names, and `project upload --archive` were
+added on 16 October. What `fleet` leaves to be desired: answers to a survey
 are typed by `-a` as the questions say; the prompt shows the choices of a
-question, but they cannot be picked from a list nor completed; English only.
+question, but they cannot be picked from a list nor completed. English only,
+as the interface is beyond Italian: other languages after a version tried
+in the field by the user (decided on 16 October).
 
 ## Phase 4 — Scheduling (closed on 14 October)
 

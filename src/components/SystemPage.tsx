@@ -114,6 +114,7 @@ export function SystemPage() {
         scheduler: t("Scheduler"),
         notify: t("Notifications"),
         collection: t("Bundled Ansible collection"),
+        project_roots: t("Directories of local projects"),
         git: t("Git"),
         sshpass: t("sshpass, for SSH logins with a password"),
     };

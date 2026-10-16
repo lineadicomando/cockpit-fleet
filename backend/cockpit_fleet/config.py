@@ -46,6 +46,10 @@ class ChatAgent:
     label: str = ""
     # What a user types in a terminal to log the agent in to its model.
     login: str = ""
+    # The agent's own program for a terminal, which fleet assistant runs; in
+    # its words {mcp_config} is a file naming fleet-mcp as the only server and
+    # {instructions} what the agent is told of where it is. Empty: none.
+    terminal: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -130,19 +134,24 @@ def _agent(name: str, section: object) -> ChatAgent:
         raise ConfigError(f"{table}: the name of an agent is made of a-z, 0-9, - and _")
     if not isinstance(section, dict):
         raise ConfigError(f"[{table}] must be a table")
-    unknown = sorted(set(section) - {"command", "label", "login"})
+    unknown = sorted(set(section) - {"command", "label", "login", "terminal"})
     if unknown:
         raise ConfigError(f"unknown key in [{table}]: {', '.join(unknown)}")
-    command = section.get("command")
+    command = _argv(section.get("command"), f"{table}.command")
+    terminal = _argv(section["terminal"], f"{table}.terminal") if "terminal" in section else ()
+    return ChatAgent(name, command, _text(section, table, "label", 60),
+                     _text(section, table, "login", 200), terminal)
+
+
+def _argv(command: object, what: str) -> tuple[str, ...]:
+    # An empty word is an argument too, such as the empty list of tools.
     if (not isinstance(command, list) or not 1 <= len(command) <= 32
-            or not all(isinstance(word, str) and word and "\x00" not in word and len(word) <= 1024
-                       for word in command)):
-        raise ConfigError(f"{table}.command must be a list of strings: a program and its"
-                          " arguments")
+            or not all(isinstance(word, str) and "\x00" not in word and len(word) <= 1024
+                       for word in command) or not command[0]):
+        raise ConfigError(f"{what} must be a list of strings: a program and its arguments")
     if not command[0].startswith("/"):
-        raise ConfigError(f"{table}.command must begin with the absolute path of a program")
-    return ChatAgent(name, tuple(command), _text(section, table, "label", 60),
-                     _text(section, table, "login", 200))
+        raise ConfigError(f"{what} must begin with the absolute path of a program")
+    return tuple(command)
 
 
 def parse(text: str) -> Config:

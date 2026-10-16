@@ -4,7 +4,7 @@ FROM docker.io/library/almalinux:10
 RUN dnf install -y epel-release \
  && dnf install -y \
       systemd sudo openssh-server openssh-clients procps-ng iproute passwd \
-      python3 git-core ansible-core sshpass cockpit-bridge cockpit-ws \
+      python3 git-core acl ansible-core sshpass cockpit-bridge cockpit-ws \
       podman nftables \
  && dnf clean all
 COPY make-rshared.service /etc/systemd/system/

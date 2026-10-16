@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       systemd systemd-sysv dbus sudo openssh-server openssh-client procps iproute2 \
-      ca-certificates python3 git ansible-core sshpass cockpit-bridge cockpit-ws \
+      ca-certificates python3 git acl ansible-core sshpass cockpit-bridge cockpit-ws \
       podman crun netavark aardvark-dns passt nftables fuse-overlayfs \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY make-rshared.service /etc/systemd/system/

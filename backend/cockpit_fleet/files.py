@@ -9,8 +9,13 @@ git runs here, outside the sandbox, which a fetched project never gets: the
 difference is that this repository is created by the backend and only holds
 what administrators wrote. It reads no configuration but its own, and its
 hooks are off.
+
+At a terminal an administrator clones it, as a git bundle, and pushes back
+commits made on top of it, in another bundle: they are taken only as a fast
+forward of what the project has, file by file under the rules of the editor.
 """
 
+import base64
 import fcntl
 import hashlib
 import json
@@ -20,11 +25,13 @@ import shutil
 import socket
 import stat
 import subprocess
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 from . import jobs, paths, store
 from .cli import Context, Id, Int, Str, Values, command
+from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
 from .validators import check_file_path
@@ -35,6 +42,11 @@ MAX_LISTED = 5000
 MAX_DIFF = 256 * 1024
 
 _REVISION_RE = re.compile(r"[0-9a-f]{7,64}")
+# A bundle, either way, as the base64 of at most an upload.
+MAX_BUNDLE = MAX_UPLOAD_MB * 1024 * 1024
+_MAX_BUNDLE_TEXT = MAX_BUNDLE * 4 // 3 + 4
+# Where pushed commits wait while they are looked at.
+_INCOMING = "refs/fleet/incoming"
 # A play among the top-level items of a list: this is what tells a playbook
 # from a file of tasks or of variables.
 _PLAY_RE = re.compile(r"^(- | {2})(hosts|(ansible\.builtin\.)?import_playbook) *:", re.MULTILINE)
@@ -399,3 +411,110 @@ def file_check(ctx: Context, params: Values) -> dict:
     project = _project(ctx, params)
     path = check_file_path(params["path"])
     return {"run_id": _queue_check(ctx, project, path)}
+
+
+# --- at a terminal: clone and push --------------------------------------------------------
+
+@command("file.bundle", role="admin", mutating=True, tool=False,
+         params={
+             "id": Id(),
+         })
+def file_bundle(ctx: Context, params: Values) -> dict:
+    """The repository of a managed project as a git bundle, in base64, for
+    fleet project clone and pull; recorded in the audit trail, as a copy of
+    every file of the project is."""
+    project = _project(ctx, params, managed=True)
+    with _locked(project["id"]), tempfile.TemporaryDirectory(dir=_home(project["id"])) as work:
+        target = Path(work) / "project.bundle"
+        if _git(project["id"], "rev-parse", "--verify", "--quiet", "HEAD", check=False) is None:
+            raise Conflict("nothing was written in this project yet")
+        _git(project["id"], "bundle", "create", "--quiet", str(target), "main")
+        data = target.read_bytes()
+    if len(data) > MAX_BUNDLE:
+        raise Conflict(f"the project is larger than {MAX_UPLOAD_MB} MB as a bundle")
+    return {"revision": project["revision"], "bundle": base64.b64encode(data).decode("ascii")}
+
+
+def _incoming_files(project_id: str, base: str) -> list[str]:
+    """The paths the pushed commits change, after checking that every file of
+    their last tree is one the editor could have written, and that they are a
+    line of commits on top of base."""
+    if _git(project_id, "merge-base", "--is-ancestor", base, _INCOMING, check=False) is None:
+        raise Conflict("the commits pushed do not follow the revision of the project")
+    if (_git(project_id, "rev-list", "--merges", f"{base}..{_INCOMING}") or "").strip():
+        raise BadRequest("the commits pushed hold a merge: push a line of commits")
+    listing = _git(project_id, "ls-tree", "-r", "-l", "-z", "--full-tree", _INCOMING) or ""
+    count = 0
+    for entry in listing.split("\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition("\t")
+        mode, kind, _object, size = meta.split()
+        count += 1
+        if kind != "blob" or mode not in ("100644", "100755"):
+            raise BadRequest(f"{path}: only regular files are taken, not links or submodules")
+        check_file_path(path)
+        if int(size) > MAX_FILE:
+            raise BadRequest(f"{path} is larger than {MAX_FILE // 1024} kB")
+    if count > MAX_LISTED:
+        raise BadRequest(f"more than {MAX_LISTED} files")
+    changed = _git(project_id, "diff", "--name-only", "-z", "--no-renames", base, _INCOMING) or ""
+    return [path for path in changed.split("\0") if path]
+
+
+@command("file.push", role="admin", mutating=True, redact=("bundle",), tool=False,
+         max_input=_MAX_BUNDLE_TEXT + 64 * 1024,
+         params={
+             "id": Id(),
+             "expected": Str("The revision the commits were made on top of", required=True,
+                             max_length=64),
+             "bundle": Str("A git bundle of the commits, in base64", required=True,
+                           max_length=_MAX_BUNDLE_TEXT),
+         })
+def file_push(ctx: Context, params: Values) -> dict:
+    """Take commits made in a clone of a managed project, for fleet project
+    push: only on top of the revision the project still has, as a line of
+    commits whose files the editor could have written. Playbooks they change
+    are checked, as when written in the interface."""
+    project = _project(ctx, params, managed=True)
+    expected = params["expected"]
+    if not _REVISION_RE.fullmatch(expected):
+        raise BadRequest("expected must be a commit id")
+    try:
+        data = base64.b64decode(params["bundle"], validate=True)
+    except ValueError as error:
+        raise BadRequest("bundle is not valid base64") from error
+    project_id = project["id"]
+    with _locked(project_id), tempfile.TemporaryDirectory(dir=_home(project_id)) as work:
+        project = store.fetch(ctx.conn, "projects", project_id, "project")
+        if project["revision"] != expected:
+            raise Conflict("the project changed since your clone: fleet project pull, then push")
+        bundle = Path(work) / "incoming.bundle"
+        bundle.write_bytes(data)
+        if _git(project_id, "bundle", "verify", "--quiet", str(bundle), check=False) is None:
+            raise BadRequest("this is not a bundle of commits on top of the project")
+        _git(project_id, "fetch", "--quiet", "--no-tags", str(bundle),
+             f"+main:{_INCOMING}")
+        try:
+            changed = _incoming_files(project_id, expected)
+            _git(project_id, "merge", "--quiet", "--ff-only", _INCOMING)
+        finally:
+            _git(project_id, "update-ref", "-d", _INCOMING, check=False)
+        revision = _git(project_id, "rev-parse", "HEAD").strip()
+        store.update(ctx.conn, "projects", project_id,
+                     {"revision": revision, "synced_at": store.now()}, "project")
+    project = store.fetch(ctx.conn, "projects", project_id, "project")
+    tree = jobs.project_tree(project, ctx.config)
+    checks = []
+    for path in changed:
+        target = tree / path
+        try:
+            content = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if looks_like_playbook(path, content):
+            checks.append(_queue_check(ctx, project, PurePosixPath(path)))
+    collections = jobs.install_missing(ctx, project_id) \
+        if any(path in jobs.REQUIREMENTS for path in changed) else None
+    return {"revision": revision, "files": changed, "check_run_ids": checks,
+            "collections_run_id": collections}

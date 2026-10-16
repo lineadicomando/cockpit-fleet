@@ -12,19 +12,25 @@ its stdin: never on a command line.
     fleet log RUN [-f]
     fleet result RUN [--wait]
     fleet secret CREDENTIAL FIELD | --channel CHANNEL
+    fleet assistant [AGENT]
+    fleet project clone PROJECT [DIR] | pull [DIR] | push [DIR]
     fleet help [AREA [VERB]]
 
 The commands are read from the registry of the installed package, so that
-help and completion need no call; what a role may do is the backend's to say.
+help needs no call; what a role may do is the backend's to say. Where a
+command takes the id of something that has a name, the name may be given
+instead, and completion offers the names, which it asks the backend for.
 """
 
 import argparse
+import base64
 import getpass
 import json
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -47,6 +53,7 @@ SHORTCUTS = {
     "log": "The output of a run, or follow it with -f",
     "result": "How a run went, host by host and task by task",
     "secret": "Set the secret of a credential or a notification channel (admin)",
+    "assistant": "Talk to the agent of the chat here, with the tools of fleet-mcp only",
     "help": "What a command does and the parameters it takes",
 }
 # The columns a table shows first, when its rows have them.
@@ -60,6 +67,44 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 # Commands made for other programs: they work, they are not listed.
 _UNLISTED = ("chat.start", "mcp.tools", "run.reconcile", "scheduler.tick",
              "notification.deliver")
+
+
+# What the id of an area names, for the areas whose things have a name: the
+# command that lists them and the key of the list.
+_NAMED = {
+    "template": ("template.list", "templates"), "project": ("project.list", "projects"),
+    "inventory": ("inventory.list", "inventories"),
+    "credential": ("credential.list", "credentials"), "check": ("check.list", "checks"),
+    "host": ("host.list", "hosts"), "schedule": ("schedule.list", "schedules"),
+    "channel": ("channel.list", "channels"), "rule": ("rule.list", "rules"),
+}
+# Parameters that hold the id of another area; "id" is of the command's own
+# area, but for the files, which are of a project.
+_ID_PARAMS = {
+    "template_id": "template", "project_id": "project", "inventory_id": "inventory",
+    "credential_id": "credential", "machine_credential_id": "credential",
+    "vault_credential_id": "credential", "check_id": "check", "host_id": "host",
+    "schedule_id": "schedule", "channel_id": "channel",
+}
+_ID_OF_AREA = {"file": "project"}
+
+
+def id_area(command: Command, param: str) -> str | None:
+    """The area whose id a parameter of a command holds, if it is known."""
+    if param == "id":
+        area = command.name.split(".")[0]
+        return _ID_OF_AREA.get(area, area)
+    return _ID_PARAMS.get(param)
+
+
+def _run_git(args: list[str], cwd: str | None = None) -> tuple[int, str, str]:
+    """git as the user, in a clone of theirs."""
+    try:
+        done = subprocess.run(["/usr/bin/git", *args], cwd=cwd, capture_output=True, text=True,
+                              check=False, stdin=subprocess.DEVNULL)
+    except OSError as error:
+        return 127, "", f"cannot run git: {error}"
+    return done.returncode, done.stdout, done.stderr
 
 
 class Usage(Exception):
@@ -99,6 +144,9 @@ class Terminal:
     call: Callable[[str, dict], dict] = fleetctl
     secret: Callable[[list[str], str], str] = _fleet_secret
     ask: Callable[[str, bool], str] = _ask
+    git: Callable[[list[str], str | None], tuple[int, str, str]] = _run_git
+    # Runs a program on this terminal and gives its exit status.
+    execute: Callable[[list[str]], int] = lambda argv: subprocess.run(argv, check=False).returncode
     sleep: Callable[[float], None] = time.sleep
     out: TextIO = field(default_factory=lambda: sys.stdout)
     err: TextIO = field(default_factory=lambda: sys.stderr)
@@ -303,6 +351,51 @@ def parse_params(command: Command, args: list[str], stdin: TextIO) -> dict:
     return params
 
 
+def resolve_names(term: "Terminal", command: Command, params: dict) -> dict:
+    """The parameters with the names given for ids replaced by those ids."""
+    out = dict(params)
+    for key, value in params.items():
+        spec = command.params.get(key)
+        area = id_area(command, key) if spec is not None and spec.kind == "id" else None
+        if area not in _NAMED or not isinstance(value, str):
+            continue
+        lister, listed = _NAMED[area]
+        found = _one(term(lister)[listed], value, area, f"fleet {lister.replace('.', ' ')}")
+        out[key] = found["id"]
+    return out
+
+
+def archive_params(args: list[str], stdin: TextIO) -> tuple[list[str], dict]:
+    """--archive PATH of project upload: the file, or - for stdin, as the
+    base64 the backend takes, and its name; the other arguments as they are."""
+    rest: list[str] = []
+    found: dict = {}
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        index += 1
+        if arg != "--archive" and not arg.startswith("--archive="):
+            rest.append(arg)
+            continue
+        if "=" in arg:
+            path = arg.partition("=")[2]
+        elif index < len(args):
+            path, index = args[index], index + 1
+        else:
+            raise Usage("--archive needs a file, or - for stdin")
+        try:
+            content = (getattr(stdin, "buffer", stdin).read() if path == "-"
+                       else Path(path).read_bytes())
+        except OSError as error:
+            raise Usage(f"cannot read {path}: {error}") from error
+        if isinstance(content, str):
+            content = content.encode()
+        found = {"data": base64.b64encode(content).decode("ascii")}
+        if path != "-":
+            found["filename"] = Path(path).name
+    return rest, found
+
+
 def _kind(spec: Field) -> str:
     if spec.kind == "choice":
         return "|".join(spec.choices)
@@ -332,6 +425,12 @@ def describe(command: Command) -> str:
             lines.append(f"  {option}" + (f"  {'; '.join(notes)}" if notes else ""))
         if "id" in command.params:
             lines += ["", "The id may also be given alone, without --id."]
+        if any(spec.kind == "id" and id_area(command, name) in _NAMED
+               for name, spec in command.params.items()):
+            lines += ["An id may be given by the name of what it names."]
+        if command.name == "project.upload":
+            lines += ["--archive PATH reads the archive from a file (- for stdin) in place of"
+                      " --data."]
     lines += ["", "A text or JSON value may be read from a file: @path, or @- for stdin.",
               "--json prints the answer as the backend gives it."]
     return "\n".join(lines) + "\n"
@@ -358,28 +457,113 @@ def overview(commands: dict[str, Command], allowed: list[str] | None) -> str:
     return "\n".join(lines) + "\n"
 
 
-def complete(commands: dict[str, Command], words: list[str]) -> list[str]:
-    """Candidates for the last of the words after "fleet", for the shell."""
-    current = words[-1] if words else ""
+def _names(lookup: Callable[[str, dict], dict] | None, area: str | None) -> list[str]:
+    """What completion offers for an id of an area: names, or recent runs."""
+    if lookup is None or area is None:
+        return []
+    try:
+        if area == "run":
+            return [run["id"] for run in lookup("run.list", {"limit": 30})["runs"]]
+        if area in _NAMED:
+            lister, listed = _NAMED[area]
+            return sorted({row["name"] for row in lookup(lister, {})[listed]})
+    except (Failure, KeyError, TypeError):
+        pass
+    return []
+
+
+def _value_candidates(command: Command, option: str,
+                      lookup: Callable[[str, dict], dict] | None) -> list[str] | None:
+    """What may follow an option of a command; None if it takes no value."""
+    spec = command.params.get(option[2:].replace("-", "_"))
+    if spec is None or spec.kind == "boolean":
+        return None
+    if spec.kind == "choice":
+        return list(spec.choices)
+    if spec.kind == "id":
+        return _names(lookup, id_area(command, option[2:].replace("-", "_")))
+    return []
+
+
+def _shortcut_candidates(before: list[str], current: str, areas: list[str],
+                         commands: dict[str, Command],
+                         lookup: Callable[[str, dict], dict] | None) -> list[str]:
+    name, given = before[0], before[1:]
+    positional = [word for word in given if not word.startswith("-")]
+    if name == "help":
+        if not given:
+            return areas
+        if len(given) == 1:
+            return sorted(name.split(".")[1] for name in commands
+                          if name.startswith(f"{given[0]}."))
+        return []
+    if current.startswith("-"):
+        return {"launch": ["--answer", "--limit", "--check", "--diff", "--detach"],
+                "log": ["--follow"], "result": ["--wait"], "secret": ["--channel"]}.get(name, [])
+    if given and given[-1] in ("--answer", "-a", "--limit"):
+        return []
+    if name == "launch" and not positional:
+        return _names(lookup, "template")
+    if name in ("log", "result") and not positional:
+        return _names(lookup, "run")
+    if name == "assistant" and not positional and lookup is not None:
+        try:
+            return [agent["name"] for agent in lookup("chat.agents", {})["agents"]
+                    if agent["terminal"]]
+        except (Failure, KeyError, TypeError):
+            return []
+    if name == "secret":
+        if "--channel" in given:
+            return _names(lookup, "channel") if not positional else []
+        if not positional:
+            return _names(lookup, "credential")
+        if len(positional) == 1 and lookup is not None:
+            try:
+                rows = lookup("credential.list", {})["credentials"]
+                return sorted({field for row in rows if positional[0] in (row["id"], row["name"])
+                               for field in row["secret_names"]})
+            except (Failure, KeyError, TypeError):
+                return []
+    return []
+
+
+def complete(commands: dict[str, Command], words: list[str],
+             lookup: Callable[[str, dict], dict] | None = None) -> list[str]:
+    """Candidates for the last of the words after "fleet", for the shell. With
+    lookup, the names of what the ids name, asked for to the backend."""
+    # What is typed of a name is still quoted or escaped as the shell takes it.
+    current = re.sub(r"\\(.)", r"\1", (words[-1] if words else "").lstrip("'\""))
     before = words[:-1]
     commands = {name: spec for name, spec in commands.items() if name not in _UNLISTED}
     areas = sorted({name.split(".")[0] for name in commands})
     if not before:
         candidates = [*SHORTCUTS, *areas]
     elif before[0] in SHORTCUTS:
-        candidates = {"launch": ["--answer", "--limit", "--check", "--diff", "--detach"],
-                      "log": ["--follow"], "result": ["--wait"],
-                      "help": areas if len(before) == 1 else []}.get(before[0], [])
-        if before[0] == "help" and len(before) == 2:
-            candidates = sorted(name.split(".")[1] for name in commands
-                                if name.startswith(f"{before[1]}."))
+        candidates = _shortcut_candidates(before, current, areas, commands, lookup)
     elif len(before) == 1 and any(name.startswith(f"{before[0]}.") for name in commands):
         candidates = sorted(name.split(".", 1)[1] for name in commands
                             if name.startswith(f"{before[0]}."))
+        if before[0] == "project":
+            candidates = sorted([*candidates, *LOCAL_VERBS])
+    elif before[:1] == ["project"] and before[1] in LOCAL_VERBS:
+        candidates = _names(lookup, "project") if before[1] == "clone" and len(before) == 2 \
+            and not current.startswith("-") else []
     else:
         found = find_command(commands, before)
-        candidates = [] if found is None else [
-            f"--{name.replace('_', '-')}" for name in found[0].params]
+        candidates = []
+        if found is not None:
+            command, given = found
+            values = _value_candidates(command, given[-1], lookup) \
+                if given and given[-1].startswith("--") and "=" not in given[-1] else None
+            if values is not None:
+                candidates = values
+            elif current.startswith("-") or "id" not in command.params or any(
+                    not word.startswith("-") for word in given):
+                candidates = [f"--{name.replace('_', '-')}" for name in command.params]
+                if command.name == "project.upload":
+                    candidates.append("--archive")
+            else:
+                candidates = _names(lookup, id_area(command, "id"))
     if before:
         candidates = [*candidates, "--json"] if current.startswith("-") else candidates
     return [candidate for candidate in candidates if candidate.startswith(current)]
@@ -607,6 +791,145 @@ def _secret(term: Terminal, args: list[str]) -> int:
     return OK
 
 
+def _assistant(term: Terminal, args: list[str]) -> int:
+    parser = _parser("assistant", "Talk to the agent of the chat in this terminal. Its only"
+                     " tools are those of fleet-mcp, with your role under the ceiling set for"
+                     " agents; what you write goes to the provider of its model.")
+    parser.add_argument("agent", nargs="?", help="which agent, when there is more than one")
+    options = parser.parse_args(args)
+    if not term.interactive:
+        raise Usage("the assistant needs a terminal")
+    found = term("chat.agents")
+    if found["unavailable"]:
+        raise Failure(found["unavailable"])
+    agents = [agent for agent in found["agents"] if agent["terminal"]]
+    if options.agent:
+        agents = [agent for agent in agents if agent["name"] == options.agent]
+    if not agents:
+        raise Failure("no agent has a program for a terminal (terminal in [chat.agents] of"
+                      " config.toml)" if not options.agent else
+                      f"no agent {options.agent!r} with a program for a terminal")
+    if len(agents) > 1:
+        raise Usage("which agent? " + ", ".join(agent["name"] for agent in agents))
+    agent = agents[0]
+    if not agent["installed"]:
+        raise Failure(f"the agent {agent['name']} is not installed"
+                      + (f": {agent['setup']}" if agent["setup"] else ""))
+    code = term.execute([str(LIBEXEC_DIR / "fleet-chat"), "--terminal", agent["name"]])
+    if code not in (OK, 130) and agent["login"]:
+        term.err.write(f"If the agent is not logged in to its model: {agent['login']}\n")
+    return code
+
+
+# --- projects written in the interface, at a terminal ----------------------------------------
+
+# Verbs of the area "project" that fleet does itself, with the bundles of the backend.
+LOCAL_VERBS = {
+    "clone": "Clone a project written in the interface, to work on it with git",
+    "pull": "Bring into a clone what was written in the interface since",
+    "push": "Send the commits of a clone to its project, as if written in the interface",
+}
+# The last revision of the project a clone knows: what a push builds on.
+_BASE = "refs/remotes/fleet/main"
+
+
+def _git(term: Terminal, args: list[str], cwd: str | None = None) -> str:
+    code, out, err = term.git(args, cwd)
+    if code != 0:
+        raise Failure(f"git {args[0]}: {err.strip()[-300:] or 'failed'}")
+    return out
+
+
+def _clone_of(term: Terminal, directory: str) -> str:
+    code, out, _err = term.git(["config", "--get", "fleet.project"], directory)
+    if code != 0 or not out.strip():
+        raise Usage(f"{directory} is not a clone made by fleet project clone")
+    return out.strip()
+
+
+def _fetch(term: Terminal, project_id: str, directory: str) -> str:
+    """The project's repository fetched into the clone; its revision."""
+    data = term("file.bundle", {"id": project_id})
+    with tempfile.TemporaryDirectory(prefix="fleet-bundle-") as work:
+        bundle = Path(work) / "project.bundle"
+        bundle.write_bytes(base64.b64decode(data["bundle"]))
+        _git(term, ["fetch", "--quiet", "--no-tags", str(bundle), f"+main:{_BASE}"], directory)
+    return data["revision"]
+
+
+def _project_clone(term: Terminal, args: list[str]) -> int:
+    parser = _parser("project clone", "Clone a project written in the interface, to work on"
+                     " it with git and push the commits back with fleet project push.")
+    parser.add_argument("project", help="its name or its id")
+    parser.add_argument("directory", nargs="?", help="where; the name of the project by default")
+    options = parser.parse_args(args)
+    project = _one(term("project.list")["projects"], options.project, "project",
+                   "fleet project list")
+    if project["kind"] != "managed":
+        raise Usage(f"{project['name']} is not written in the interface: only such a project"
+                    " is cloned here (a git project is cloned from its URL)")
+    directory = options.directory or project["name"]
+    if Path(directory).exists():
+        raise Usage(f"{directory} exists already")
+    _git(term, ["init", "--quiet", "--initial-branch=main", directory])
+    _git(term, ["config", "fleet.project", project["id"]], directory)
+    revision = _fetch(term, project["id"], directory)
+    _git(term, ["reset", "--quiet", "--hard", _BASE], directory)
+    if not term.as_json:
+        term.say(f"{project['name']} is in {directory}, at {revision[:12]}: commit there, then"
+                 " fleet project push")
+    else:
+        term.show({"project": project["id"], "directory": directory, "revision": revision})
+    return OK
+
+
+def _project_pull(term: Terminal, args: list[str]) -> int:
+    parser = _parser("project pull", "Bring into a clone what was written in the interface"
+                     " since it was cloned or last pulled.")
+    parser.add_argument("directory", nargs="?", default=".", help="the clone; here by default")
+    options = parser.parse_args(args)
+    project_id = _clone_of(term, options.directory)
+    revision = _fetch(term, project_id, options.directory)
+    code, _out, _err = term.git(["merge", "--quiet", "--ff-only", _BASE], options.directory)
+    if code != 0:
+        raise Failure("the project changed and so did your commits: git rebase fleet/main,"
+                      " then fleet project push")
+    if not term.as_json:
+        term.say(f"up to date with the project, at {revision[:12]}")
+    return OK
+
+
+def _project_push(term: Terminal, args: list[str]) -> int:
+    parser = _parser("project push", "Send the commits of the branch main of a clone to its"
+                     " project, as if written in the interface. Taken only on top of what the"
+                     " project has: when it changed meanwhile, pull first.")
+    parser.add_argument("directory", nargs="?", default=".", help="the clone; here by default")
+    options = parser.parse_args(args)
+    directory = options.directory
+    project_id = _clone_of(term, directory)
+    base = _git(term, ["rev-parse", "--verify", f"{_BASE}^{{commit}}"], directory).strip()
+    head = _git(term, ["rev-parse", "--verify", "main^{commit}"], directory).strip()
+    if head == base:
+        term.say("nothing to push: main is where the project is")
+        return OK
+    if _git(term, ["status", "--porcelain"], directory).strip():
+        term.err.write("fleet: what is not committed stays here\n")
+    with tempfile.TemporaryDirectory(prefix="fleet-bundle-") as work:
+        bundle = Path(work) / "push.bundle"
+        _git(term, ["bundle", "create", "--quiet", str(bundle), f"{base}..main"], directory)
+        data = base64.b64encode(bundle.read_bytes()).decode("ascii")
+    answer = term("file.push", {"id": project_id, "expected": base, "bundle": data})
+    _git(term, ["update-ref", _BASE, answer["revision"]], directory)
+    if term.as_json:
+        term.show(answer)
+        return OK
+    term.say(f"pushed: the project is at {answer['revision'][:12]},"
+             f" {len(answer['files'])} file{'s' if len(answer['files']) != 1 else ''} changed")
+    for run_id in answer["check_run_ids"]:
+        term.say(f"syntax check: fleet result {run_id}")
+    return OK
+
+
 def _help(term: Terminal, commands: dict[str, Command], args: list[str]) -> int:
     if args and args[0] in SHORTCUTS and args[0] != "help":
         return run(term, commands, [args[0], "--help"])
@@ -614,11 +937,16 @@ def _help(term: Terminal, commands: dict[str, Command], args: list[str]) -> int:
     if found is not None:
         term.out.write(describe(found[0]))
         return OK
+    if args[:1] == ["project"] and len(args) == 2 and args[1] in LOCAL_VERBS:
+        return run(term, commands, ["project", args[1], "--help"])
     if len(args) == 1 and any(name.startswith(f"{args[0]}.") for name in commands):
         names = sorted(name for name in commands
                        if name.startswith(f"{args[0]}.") and name not in _UNLISTED)
         for name in names:
             term.say(f"fleet {name.replace('.', ' '):<24}{summary(commands[name])}")
+        if args[0] == "project":
+            for verb, text in LOCAL_VERBS.items():
+                term.say(f"fleet {'project ' + verb:<24}{text}")
         return OK
     if args:
         raise Usage(f"no command {' '.join(args)}: fleet help lists them")
@@ -634,11 +962,18 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
     """One command line, without "fleet"."""
     if not words or words[0] in ("help", "-h", "--help"):
         return _help(term, commands, words[1:])
-    shortcut = {"launch": _launch, "log": _log, "result": _result, "secret": _secret}
+    shortcut = {"launch": _launch, "log": _log, "result": _result, "secret": _secret,
+                "assistant": _assistant}
     if words[0] in shortcut:
         try:
             return shortcut[words[0]](term, words[1:])
         except SystemExit as done:  # --help of a shortcut
+            return int(done.code or 0)
+    if words[:1] == ["project"] and len(words) >= 2 and words[1] in LOCAL_VERBS:
+        verb = {"clone": _project_clone, "pull": _project_pull, "push": _project_push}[words[1]]
+        try:
+            return verb(term, words[2:])
+        except SystemExit as done:  # --help
             return int(done.code or 0)
     found = find_command(commands, words)
     if found is None:
@@ -647,7 +982,11 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
     if "-h" in rest or "--help" in rest:
         term.out.write(describe(command))
         return OK
-    term.show(term(command.name, parse_params(command, rest, term.stdin)))
+    extra: dict = {}
+    if command.name == "project.upload":
+        rest, extra = archive_params(rest, term.stdin)
+    params = {**extra, **parse_params(command, rest, term.stdin)}
+    term.show(term(command.name, resolve_names(term, command, params)))
     return OK
 
 
@@ -655,7 +994,15 @@ def main(argv: list[str]) -> int:
     commands = load_commands()
     words = argv[1:]
     if words[:1] == ["--complete"]:
-        print("\n".join(complete(commands, words[1:])))
+        def lookup(name: str, params: dict) -> dict:
+            try:
+                answer = fleetctl(name, {**params, "via": VIA})
+            except Unreachable as error:
+                raise Failure(str(error)) from error
+            if not answer["ok"]:
+                raise Failure(answer["error"]["message"])
+            return answer["data"]
+        print("\n".join(complete(commands, words[1:], lookup)))
         return OK
     as_json = "--json" in words
     words = [word for word in words if word != "--json"]
