@@ -9,7 +9,11 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
 4 (schedules), 5 (notifications) and 6 (checks) are closed, the last on
-16 October 2026 with commit `3dc0e38`, pushed, CI green. On 14 October
+16 October 2026 with commit `3dc0e38`, pushed with `409148c`, CI green.
+After them, on 16 October and **not pushed yet**: `d7708be` (schedules on
+a controller in UTC, a bug the containers found), `5c85947` (tracked files
+made generic, the details of a developer's machines moved out) and
+`30424cd` (integration scripts in containers, `make ct-test`). On 14 October
 `fleet` was written, the backend for a person at a terminal
 (`docs/architecture.md`, "The terminal"); the rest of what the terminal
 could give is under "The terminal" below.
@@ -25,9 +29,20 @@ in phase 10.
 questions in its section, to be put to the user before any code. The ideas
 left for the terminal are an alternative the user may pick first.
 
-To resume: read `CLAUDE.md` (rules, commands, test environment), then
-`docs/architecture.md` (what exists and why). This file only says what is
-missing. `docs/chat.md` is the administrator's guide to the chat. The
+To resume:
+
+1. Read `CLAUDE.md` (rules, commands, test environment), and
+   `CLAUDE.local.md` if there is one (the developer's own machines and their
+   state; not tracked). Then `docs/architecture.md` (what exists and why).
+   This file only says what is missing. `docs/chat.md` is the
+   administrator's guide to the chat.
+2. `git status` and `git log origin/main..` for work not pushed; push only
+   when the user asks.
+3. `make check` for the unit tests; `make ct-test DISTRO=debian` (then
+   `fedora` and `alma`) for the integration scripts, before and after a
+   change that needs them.
+
+The
 checks are in `backend/cockpit_fleet/checks.py` (commands, planning,
 ingest, states) and `catalog.py` (kinds, parameters, thresholds), the
 modules and actions in `collection/.../plugins/`, the pages in
@@ -52,19 +67,21 @@ the audit trail as a page; the interface in English and Italian; the command `fl
 terminal, with completion for bash and a manual.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-Integration tests, all passing when last run, on 16 October on Debian 13,
-Fedora 44 and AlmaLinux 10.2 alike (SELinux enforcing, no denial): every
-script but `windows.sh` and `measure-events.sh`; `runs.sh` without the git
-part (`IT_GIT_URL` not set) and `galaxy.sh` without the network
-(`IT_GALAXY_NET` not set). `windows.sh` was run on Debian the same day,
-against a Windows 11 node, with a key made for it. The same day every
-script but those two passed in containers of the three (`make ct-test`),
-about 8 minutes for each distribution, two scripts at a time. The
-role that installs the chat's agent has no script: it was tried by hand on
-Debian, on 13 and 14 October, as `docs/architecture.md` tells.
+Integration tests, all passing when last run, on 16 October. On machines
+of Debian 13, Fedora 44 and AlmaLinux 10.2 (SELinux enforcing, no denial),
+with commit `3dc0e38`: every script but `windows.sh` and
+`measure-events.sh`; `runs.sh` without the git part (`IT_GIT_URL` not set)
+and `galaxy.sh` without the network (`IT_GALAXY_NET` not set). `windows.sh`
+on Debian the same day, against a Windows 11 node, with a key made for it.
+In containers of the three (`make ct-test`), with commit `30424cd`: every
+script but those two, about 8 minutes for each distribution, two scripts
+at a time; the changes since `3dc0e38` (the schedules, `checks.sh`) were
+not tried on machines. The role that installs the chat's agent has no
+script: it was tried by hand on Debian, on 13 and 14 October, as
+`docs/architecture.md` tells.
 
 `runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` and
-`IT_SSH_PASSWORD`.
+`IT_SSH_PASSWORD`, which `make ct-test` sets.
 
 ## Decisions
 
@@ -137,13 +154,13 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Name of the command for the terminal | `fleet`, confirmed on 14 October. No package of Debian (trixie, sid), Fedora 44 or AlmaLinux 10 (with EPEL) installs `bin/fleet`, its completion or its manual (Fedora and Alma checked on 15 October); the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
 | Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`, `help`); five commands meant for programs are not listed and still answer; tables for a person, `--json` for a program |
 | Secrets at the terminal | Never on the command line: asked for with no echo, or read from stdin, and handed to `fleet-secret` on its stdin |
-| Scheduling | A single static timer that runs `fleetctl scheduler.tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions read by `systemd-analyze`, with a time zone |
+| Scheduling | A single timer, shipped and enabled by the package, that runs `fleetctl scheduler.tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions read by `systemd-analyze`, with a time zone |
 | Who manages schedules | As templates: an administrator creates, changes and deletes; an operator turns one on or off and runs it now; a viewer sees them (confirmed on 14 October) |
 | Whose a scheduled run is | The schedule's: `created_by` is `schedule:NAME`, the tick runs as `system`; the audit trail has who made, changed, switched or ran a schedule, not one record per tick. "Run now" is the operator's (confirmed on 14 October) |
 | Schedule of a template with a survey | The answers are stored with the schedule and checked when it is saved and at each launch; never a secret, so a template with a required secret question cannot be scheduled (confirmed on 14 October) |
 | Missed times | More than 5 minutes late is missed; per schedule, either recorded as missed or launched once for all the times lost |
 | Overlap | Per schedule: skip (default), queue, cancel the previous run |
-| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days; to be made in phase 8: nothing is pruned yet but the outbox of notifications (90 days) and check cycles (a day). Changes of state of checks are kept for ever for now |
+| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days; to be made in phase 8: nothing is pruned yet but the outbox of notifications (90 days, what is no longer pending) and check cycles (a day). Changes of state of checks and the audit trail are kept for ever for now |
 | Who approves | Group `cockpit-fleet-approver`, to be added in phase 9 |
 
 ## Open points (a default applies, to be confirmed before the phase named)
@@ -480,8 +497,8 @@ managed file appears as drift at the next cycle.
 - [ ] A cycle that does not end before the next one is skipped and reported
 - [ ] "System health" page: duration of cycles, queue, size of the database
 - [ ] Load tests with 200, 500, 1000 simulated hosts. **Measured constraint**:
-      about 0.6 s per host on 2 vCPUs, the limit is the controller's CPU. The VM
-      has 2 GB: bring it to 4 for these tests
+      about 0.6 s per host on 2 vCPUs, the limit is the controller's CPU. It
+      was measured on a controller of 2 GB: give these tests 4
 
 Done when: 500 simulated hosts with 10 checks every 10 minutes run for 24 hours
 with no backlog and a responsive interface.
