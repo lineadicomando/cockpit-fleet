@@ -1246,7 +1246,11 @@ and `LoadCredentialEncrypted`, the tmpfs over the state and `PrivatePIDs`
 behave as on Debian. ansible-core 2.16 passed everything that 2.19 passes,
 `multihost.sh` included, so it is the minimum of both packages and of
 `selfcheck` (`_MIN_ANSIBLE` in `system.py`). 2.16 is no longer supported
-upstream: the integration scripts run on AlmaLinux at every phase.
+upstream: the integration scripts run on AlmaLinux at every phase. They did
+again on 16 October, `checks.sh` included, on the three controllers: the
+modules of the checks run on the Debian nodes from ansible-core 2.16 as from
+2.20. Checking Windows should need nothing that AlmaLinux lacks, since the
+module uses ansible-core only, but `windows.sh` was run from Debian only.
 
 Found on the way:
 

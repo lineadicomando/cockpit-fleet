@@ -9,7 +9,8 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 
 Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
 4 (schedules), 5 (notifications) and 6 (checks) are closed, the last on
-16 October 2026. On 14 October `fleet` was written, the backend for a person at a terminal
+16 October 2026 with commit `3dc0e38`, pushed, CI green. On 14 October
+`fleet` was written, the backend for a person at a terminal
 (`docs/architecture.md`, "The terminal"); the rest of what the terminal
 could give is under "The terminal" below.
 
@@ -20,12 +21,17 @@ ansible-core went down to 2.16, AlmaLinux's, for both packages and
 `selfcheck`. What is left of it is under "Open points", in the leftovers and
 in phase 10.
 
-**Next step: phase 7** (CMDB, updates, drift). The ideas left for the terminal are an alternative the
-user may pick first.
+**Next step: phase 7** (CMDB, updates, drift): it starts with the
+questions in its section, to be put to the user before any code. The ideas
+left for the terminal are an alternative the user may pick first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
-missing. `docs/chat.md` is the administrator's guide to the chat.
+missing. `docs/chat.md` is the administrator's guide to the chat. The
+checks are in `backend/cockpit_fleet/checks.py` (commands, planning,
+ingest, states) and `catalog.py` (kinds, parameters, thresholds), the
+modules and actions in `collection/.../plugins/`, the pages in
+`src/components/HostsPage.tsx` and `ChecksPage.tsx`.
 
 What works today: projects (git, a local directory, written in the interface
 with git history and syntax checks, uploaded as an archive), collections
@@ -46,11 +52,15 @@ the audit trail as a page; the interface in English and Italian; the command `fl
 terminal, with completion for bash and a manual.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): the package of the work
-of phase 6 (16 October, not committed yet), with the data of phase 5 put
-back after the integration scripts (a backup of `/var/lib/cockpit-fleet`
-and `/etc/cockpit-fleet` taken that morning, kept in
-`/root/phase5-backup.tar`). Its `config.toml` is the packaged one of phase 5
+State of the test VM `deb13-samba-dc` (shut off): the package as of commit
+`3dc0e38` (the close of phase 6), with the data of phase 5 put back after
+the integration scripts, from a backup of `/var/lib/cockpit-fleet` and
+`/etc/cockpit-fleet` kept in `/root/phase5-backup.tar` (taken with the
+database already at schema 10, the one of phase 6). To run a script that
+wipes and keep that data: stop the timer and the path unit, `tar -C / -cpf`
+those two directories, run the script, then empty them (and
+`/etc/cockpit-fleet/secrets/*`) and `tar -C / -xpf` the backup back, as on
+16 October. Its `config.toml` is the packaged one of phase 5
 plus `[mcp] enabled = true`, `[notifications] url =
 "https://VM:9090"` and the chat's agent, with no `[checks]`
 section, so a later deploy stops at dpkg's question: install with `apt-get
@@ -84,7 +94,8 @@ The two RPM controllers, `fed44-fleet` and `alma10-fleet` (shut off, see
 `CLAUDE.md`), were installed again on 16 October on this host (the workstation)
 and their `baseline_fleet` has the package as of commit `b660213`, the
 `fleet-node` image, no data and no test accounts. On 16 October they got the
-package of phase 6 for its scripts.
+package of commit `3dc0e38` for its scripts, which left no data (the
+summaries are in `/root/it-results`); their snapshots were not redone.
 
 Integration tests, all passing when last run, on 16 October on Debian 13,
 Fedora 44 and AlmaLinux 10.2 alike (SELinux enforcing, no denial): every
@@ -128,7 +139,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Notifications | Telegram, generic webhook, SMTP, Matrix |
 | Delivery of notifications | `cockpit-fleet-notify.service`, started by a path unit on `notify.wake`, which the backend writes; retries woken by the tick of the scheduler. No root code: `fleet-unit` was not extended |
 | Secrets of channels | One per channel, `n-<id>-token`, kept by `fleet-secret` in `secrets/notify/`, the only directory the delivery unit has decrypted |
-| What is told about | Playbook runs and ad-hoc commands that end failed (or in error), with changes, successful or canceled; scope: every run, a project, a template or a schedule. Not the jobs of projects |
+| What is told about | Playbook runs and ad-hoc commands that end failed (or in error), with changes, successful or canceled; a check whose hard state becomes a problem, recovers, or stays a problem nobody acknowledged (a reminder). Not the jobs of projects nor check cycles as runs |
 | Scope of a rule | Every run or check; a project, a template or a schedule (runs); an inventory (runs and checks); a group of an inventory or one check (checks). Events of runs and of checks are not mixed in a scope that has only one of them |
 | Check cycles | A job of the kind `check`, in the run unit, with a limit of its own (`[checks] max_concurrent`); started by the tick of the scheduler; decided on 16 October with the user |
 | Hosts | From the `inventory` job, identity `(inventory, name)`; what a host is from the first cycle (16 October, with the user) |
@@ -175,7 +186,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Schedule of a template with a survey | The answers are stored with the schedule and checked when it is saved and at each launch; never a secret, so a template with a required secret question cannot be scheduled (confirmed on 14 October) |
 | Missed times | More than 5 minutes late is missed; per schedule, either recorded as missed or launched once for all the times lost |
 | Overlap | Per schedule: skip (default), queue, cancel the previous run |
-| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days; to be made in phase 8: nothing is pruned yet but the outbox of notifications |
+| Retention | Raw data 14 days, hourly 90 days, daily 2 years, run logs 90 days; to be made in phase 8: nothing is pruned yet but the outbox of notifications (90 days) and check cycles (a day). Changes of state of checks are kept for ever for now |
 | Who approves | Group `cockpit-fleet-approver`, to be added in phase 9 |
 
 ## Open points (a default applies, to be confirmed before the phase named)
@@ -188,7 +199,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 - A git token over https was never tried against a real private repository (it
   needs a dedicated token); public https and ssh with a key are tried.
 - The directories of runs that started (`stdout.log`, `events.jsonl`) are
-  never deleted: the cleanup
+  never deleted, but those of check cycles (after a day): the cleanup
   comes with retention (phase 8).
 - Whoever enters with Cockpit's administrative access without being in a group
   appears in the audit trail as `root`.
@@ -205,7 +216,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 - An inventory has one vault credential only (templates have more than one).
 - Editor: files are renamed and deleted one at a time, not a directory; changing
   tab with unsaved changes loses them without warning; the syntax check gets no
-  vault password; every check appears in the list of runs.
+  vault password; every syntax check appears in the list of runs.
 - Completion: it only suggests the modules installed on the controller, not
   those of the collections inside the project or installed for it (`ansible-doc`
   must run in the sandbox: the `galaxy` job can do it, leaving the list next to
@@ -242,8 +253,8 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
   controller.
 - Agents: every `tools/list` while agents are not enabled leaves a denial in
   the audit trail; `run.result` holds a `fleetctl` process for up to 50 s; most
-  parameters (171 of 210, counted on 15 October) have no description, so only their type and
-  bounds reach the schema; the user manual for setting up an agent is the section
+  parameters (193 of 261, counted on 16 October) have no description, so
+  only their type and bounds reach the schema; the user manual for setting up an agent is the section
   of `docs/architecture.md`, there is no page for it in the interface.
 - Chat: answers are plain text, Markdown is not rendered; a conversation
   cannot be deleted or renamed from the page; the model and the effort of
@@ -459,10 +470,36 @@ no override per host; `state.list` answers with every state at once;
 maintenance windows are not exported; the overview page and `selfcheck` say
 nothing of checks; `fleet_result` is taken last per host, so a playbook
 gives one result; the inventories that checks use are read again every
-hour, and each reading is a run in the list of runs. The decisions of the last two items of "Data from the
-nodes" in the table (CMDB, updates, drift) are phase 7.
+hour, and each reading is a run in the list of runs.
+Not tried: the pages as a viewer (only the roles' unit tests and
+`checks.sh` for the operator); a problem of a check reaching the real
+channels kept on `deb13-samba-dc` (only the webhook stand-in); `fleet` for
+checks beyond `state list` and `help check`; checks on hosts reached
+through a vault or a passphrase-protected key (the code is that of runs);
+a cycle of more than one shard on real nodes (the unit tests do it);
+checks of Windows from Fedora or AlmaLinux (`windows.sh` ran from Debian).
 
 ## Phase 7 — Inventory, updates, drift
+
+To decide first, with the user (nothing exists yet; what can be built on:
+the check cycles and their one task per host, the `hosts` table with its
+`facts` column, schedules, the diff that the events of a run already carry,
+and notifications by rule):
+
+- How the CMDB is collected: a kind of the catalog in the same task as the
+  checks (facts, packages, services through `checks.py` and
+  `win_checks.ps1`), or a job of its own at a longer interval
+- Where it is kept: the last snapshot per host in normalised tables, and
+  the history as changes only (what came and went), with what retention
+- Updates: a kind of the catalog (counts as metrics, the list as details)
+  or part of the CMDB; on Linux the package cache must be refreshed, which
+  needs `become`; Windows Update searched through its COM interface can
+  take minutes, longer than `[checks] timeout`
+- Drift: a template marked as "compliance" launched by a schedule in
+  `--check --diff`, a host non-compliant when a task would change, the
+  diff kept per host; or a kind of check that runs a template
+- Who sees the CMDB: a viewer sees runs' outcome but not their output
+  (packages and services may say more than an outcome)
 
 - [ ] **CMDB**: facts, packages, services; last snapshot per host, normalised
       columns, history of changes
