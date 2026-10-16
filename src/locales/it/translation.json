@@ -758,7 +758,7 @@
   "Update": "Aggiornamento",
   "Updates": "Aggiornamenti",
   "Updates ({{n}})": "Aggiornamenti ({{n}})",
-  "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything. On Windows over SSH it needs become.": "Aggiornamenti disponibili, quelli di sicurezza a parte: apt, dnf e zypper, o Windows Update, cercati senza installare nulla. Su Windows via SSH serve become.",
+  "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything.": "Aggiornamenti disponibili, quelli di sicurezza a parte: apt, dnf e zypper, o Windows Update, cercati senza installare nulla.",
   "Vendor and model": "Produttore e modello",
   "What it is made of": "Di cosa è fatto",
   "What the host is made of: hardware, installed packages and services, kept in Assets with their changes. A change of hardware is a warning for one cycle.": "Di cosa è fatto l'host: hardware, pacchetti e servizi installati, conservati in Asset con le loro modifiche. Una modifica dell'hardware è un avviso per un ciclo.",

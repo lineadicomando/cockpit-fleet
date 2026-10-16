@@ -660,7 +660,8 @@ def check_updates(params):
     if security_patches is not None:
         security = security_patches
     metrics = [metric("updates", len(updates)), metric("security_updates", security)]
-    summary = "%d updates, %d for security (%s)" % (len(updates), security, manager)
+    summary = "%d update%s, %d for security (%s)" % (len(updates), "" if len(updates) == 1 else "s",
+                                                   security, manager)
     return OK, summary, metrics, {"manager": manager}, {"updates": {"manager": manager,
                                                                     "updates": updates}}
 

@@ -172,7 +172,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
         certificates: t("Days before certificates expire: files, directories of them, or a Windows store."),
         clock: t("How far the clock of the host is from the controller's, network delay included."),
         cmdb: t("What the host is made of: hardware, installed packages and services, kept in Assets with their changes. A change of hardware is a warning for one cycle."),
-        updates: t("Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything. On Windows over SSH it needs become."),
+        updates: t("Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything."),
         playbook: t("A check of your own: a playbook of a project whose last task, lineadicomando.fleet.fleet_result, gives a state, a summary and metrics for each host."),
         compliance: t("A playbook of a project that describes how the hosts should be, run in check mode: a host on which a task would change something has drifted. The differences are kept, for operators."),
     };

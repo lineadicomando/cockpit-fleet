@@ -2,7 +2,9 @@
 # A run against a Windows node over SSH, through fleetctl: credential with a
 # private key, inventory, host key, template, launch. Prints what each task took.
 # Then the checks of the catalog on the same node, in cycles of the timer,
-# with the results Linux nodes give (checks.sh): about two minutes more.
+# with the results Linux nodes give (checks.sh), what the node is made of and
+# its updates, searched in Windows Update: a few minutes more, as long as
+# Windows Update takes.
 #   IT_WIN_HOST=192.0.2.10 IT_WIN_USER=admin IT_WIN_KEY=secret-name windows.sh
 # IT_WIN_KEY names an existing secret holding a key authorised on the node.
 # The ansible.windows collection is downloaded into the project when the
@@ -106,8 +108,10 @@ for kind in reachability disk cpu memory uptime clock; do
 done
 admin check.create "{\"name\": \"services\", \"kind\": \"services\", $base, \"params\": {\"names\": [\"sshd\", \"NoSuchService\"]}}" >/dev/null
 admin check.create "{\"name\": \"certificates\", \"kind\": \"certificates\", $base, \"params\": {\"paths\": [\"Cert:\\\\LocalMachine\\\\Root\"]}}" >/dev/null
+admin check.create "{\"name\": \"cmdb\", \"kind\": \"cmdb\", $base}" >/dev/null
+admin check.create "{\"name\": \"updates\", \"kind\": \"updates\", $base}" >/dev/null
 n=0
-while [ "$n" -lt 180 ] && [ "$(db "SELECT count(*) FROM check_states WHERE state IS NULL")" != 0 ]; do
+while [ "$n" -lt 900 ] && [ "$(db "SELECT count(*) FROM check_states WHERE state IS NULL")" != 0 ]; do
     sleep 3; n=$((n + 3))
 done
 expect_eq "the timer checked the node" "$(db "SELECT count(*) FROM check_states WHERE state IS NULL")" 0
@@ -123,7 +127,19 @@ expect_eq "the disk is measured as on Linux, C: for a mount point" \
     "used_pct:%,free:B"
 expect_ok "a service that is not there counts as not running" sh -c "echo '$(summary services)' | grep -q 'not running: NoSuchService'"
 expect_eq "a store of certificates is read" "$(db "SELECT json_array_length(s.metrics) > 0 FROM check_states s JOIN checks c ON c.id = s.check_id WHERE c.name = 'certificates'")" 1
-cycle=$(db "SELECT id FROM runs WHERE kind = 'check' AND status = 'successful' ORDER BY created_at LIMIT 1")
+expect_eq "what the node is made of is collected" "$(state cmdb)" 0
+host_id=$(db "SELECT id FROM hosts")
+detail=$(admin cmdb.get "{\"host_id\": \"$host_id\"}")
+expect_eq "its packages, from the registry" "$(get "$detail" 'a["data"]["hardware"]["package_manager"]')" registry
+expect_ok "some of them ($(get "$detail" 'len(a["data"]["package_list"])'))" test "$(get "$detail" 'len(a["data"]["package_list"]) > 0')" = True
+expect_ok "its services, sshd running ($(get "$detail" '[s for s in a["data"]["service_list"] if s["name"] == "sshd"]'))" \
+    test "$(get "$detail" '[s["state"] for s in a["data"]["service_list"] if s["name"] == "sshd"]')" = "['running']"
+expect_ok "its processors, memory and disks" test \
+    "$(get "$detail" 'all((a["data"]["hardware"]["cpus"], a["data"]["hardware"]["memory"], a["data"]["hardware"]["disks"]))')" = True
+expect_ok "and an address" test "$(get "$detail" 'any(n["addresses"] for n in a["data"]["hardware"]["interfaces"])')" = True
+echo "  $(get "$detail" 'a["data"]["hardware"]["vendor"], a["data"]["hardware"]["model"], a["data"]["hardware"]["virtual"], a["data"]["hardware"]["cpu_model"]')"
+expect_ok "Windows Update is searched over SSH, without become ($(summary updates))" sh -c "echo '$(summary updates)' | grep -q '(Windows Update)'"
+cycle=$(db "SELECT id FROM runs WHERE kind = 'check' AND status = 'successful' AND json_extract(options, '\$.slow') IS NOT 1 ORDER BY created_at LIMIT 1")
 python3 - "/var/lib/cockpit-fleet/runs/$cycle/events.jsonl" <<'PY'
 import json, sys
 events = [json.loads(line) for line in open(sys.argv[1])]

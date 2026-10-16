@@ -705,7 +705,7 @@
   "Updated": "Updated",
   "Updates": "Updates",
   "Updates ({{n}})": "Updates ({{n}})",
-  "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything. On Windows over SSH it needs become.": "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything. On Windows over SSH it needs become.",
+  "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything.": "Updates available, security ones apart: apt, dnf and zypper, or Windows Update, searched without installing anything.",
   "updates_count_one": "{{count}} update",
   "updates_count_other": "{{count}} updates",
   "Upload": "Upload",

@@ -477,7 +477,7 @@ What follows from it:
   the existing rules tell about.
 - Updates: on Linux the package cache is refreshed only when the check asks
   (`refresh`, which needs `become`); Windows Update searched through its COM
-  interface, which over SSH needs `become`. Metrics `updates` and
+  interface, which over SSH with a key needs no `become`. Metrics `updates` and
   `security_updates`, warning from one security update.
 - Drift: a check of the kind `compliance` names a playbook of a project,
   run alone in `--check --diff`; metric `changed` (tasks that would change),
@@ -489,8 +489,11 @@ inventory of hosts"): the three kinds, the slow lane, the tables, the
 commands `cmdb.*` and `drift.get`, the page "Assets" and the inventory on the
 page of a host, `cmdb.sh`. Left:
 
-- [ ] Windows: `cmdb` and `updates` of `win_checks.ps1` never ran; try them
-      with `windows.sh` (extended) on `win11-pc00`, with and without `become`
+- [ ] Windows: `cmdb` and `updates` pass `windows.sh` on `win11-pc00` (16
+      October), Windows Update with no `become`. A check with `become`
+      (runas SYSTEM) failed before the module ran: the exec wrapper did not
+      find its temporary file under `ansible_remote_tmp`
+      (`C:\Windows\Temp\ansible`); find out whether it is that setting
 - [ ] The three kinds on machines at the close of the phase, with the
       interface in a browser (in containers on 16 October: `cmdb.sh` on the
       three distributions, `checks.sh` on Debian and AlmaLinux, the whole

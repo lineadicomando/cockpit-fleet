@@ -865,8 +865,8 @@ bits), `Get-NetAdapter`. Services are normalised to `running`, `stopped`,
 so), dnf by `check-update` and `updateinfo list --security`, zypper by its XML
 output and the security patches; the metadata the node has is used, and
 `refresh` (which needs `become`) updates it first. Windows Update is searched
-through its COM interface without downloading anything; from an SSH logon it
-answers access denied, so on Windows the check needs `become`. The node
+through its COM interface without downloading anything, from the SSH logon
+with a key, with no `become` (`windows.sh`, Windows 11, 16 October). The node
 reports the metrics `updates` and `security_updates`; the default threshold
 is a warning from one security update.
 

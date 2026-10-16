@@ -278,7 +278,7 @@ function Test-Updates($Params) {
         $failure = $_.Exception
         if ($null -ne $failure.InnerException) { $failure = $failure.InnerException }
         if ($failure.HResult -eq -2147024891) {
-            return New-Result $UNKNOWN 'Windows Update cannot be searched from a network logon: turn become on' @() @{}
+            return New-Result $UNKNOWN 'Windows Update refused the search to this logon (access denied)' @() @{}
         }
         return New-Result $UNKNOWN ("Windows Update: {0}" -f $failure.Message) @() @{}
     }
@@ -294,7 +294,7 @@ function Test-Updates($Params) {
             source = (@($classes | ForEach-Object { [string]$_.Name }) -join ', ') })
     }
     $metrics = @((New-Metric 'updates' $updates.Count), (New-Metric 'security_updates' $security))
-    $result = New-Result $OK ("{0} updates, {1} for security (Windows Update)" -f $updates.Count, $security) `
+    $result = New-Result $OK ("{0} update{1}, {2} for security (Windows Update)" -f $updates.Count, $(if ($updates.Count -eq 1) { '' } else { 's' }), $security) `
         $metrics @{ manager = 'windows_update' }
     $result.updates = @{ manager = 'windows_update'; updates = $updates }
     $result

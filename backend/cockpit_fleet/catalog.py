@@ -88,7 +88,7 @@ CATALOG: dict[str, dict] = {
     },
     "updates": {
         "description": "Updates available, security ones apart: apt, dnf, zypper, or Windows"
-                       " Update searched without installing (which over SSH needs become).",
+                       " Update searched without installing anything.",
         "params": {"refresh": ("flag", "Refresh the package metadata first; needs become")},
         "thresholds": {"security_updates": {"warning": 1, "critical": None},
                        "updates": {"warning": None, "critical": None}},
