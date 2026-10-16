@@ -53,6 +53,7 @@ function Transfer() {
     const outcomes = { created: t("Created"), exists: t("Already there"), failed: t("Not created") };
     const sections: Record<string, string> = {
         credentials: t("Credential"), projects: t("Project"), inventories: t("Inventory"), host_keys: t("Host key"), templates: t("Job template"),
+        schedules: t("Schedule"), checks: t("Which check"), channels: t("Channel"), rules: t("Rule"),
     };
 
     return (

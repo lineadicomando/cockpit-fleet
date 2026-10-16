@@ -19,6 +19,7 @@ from pathlib import Path
 from . import journal, notify, paths, store
 from .errors import BadRequest, Conflict, FleetError, Unavailable
 from .names import check_id
+from .runner import CHECK_RCS
 
 MAX_PROJECT_FILES = 20_000
 MAX_PROJECT_BYTES = 500 * 1024 * 1024
@@ -200,7 +201,7 @@ def queue_collections(ctx, project, created_by: str | None = None, start: bool =
     if created_by:
         run["created_by"] = created_by
     spec = {"kind": "galaxy", "requirements": path, "proxy": ctx.config.proxy}
-    (enqueue if start else _queue)(ctx, run, spec, directory)
+    (enqueue if start else queue)(ctx, run, spec, directory)
     return run_id
 
 
@@ -223,14 +224,15 @@ def write_known_hosts(conn, directory: Path) -> None:
     (directory / "known_hosts").write_text(text)
 
 
-def _queue(ctx, run: dict, spec: dict, directory: Path) -> None:
+def queue(ctx, run: dict, spec: dict, directory: Path) -> None:
+    """Record a job as queued, without starting anything: dispatch() will."""
     (directory / "spec.json").write_text(json.dumps(spec))
     store.insert(ctx.conn, "runs", {"created_by": ctx.caller.user, **run, "status": "queued",
                                     "created_at": store.now()}, "run")
 
 
 def enqueue(ctx, run: dict, spec: dict, directory: Path) -> None:
-    _queue(ctx, run, spec, directory)
+    queue(ctx, run, spec, directory)
     dispatch(ctx)
 
 
@@ -245,15 +247,19 @@ def _fleet_unit(verb: str, run_id: str) -> None:
 
 def dispatch(ctx) -> None:
     """Start queued runs while fewer than the configured maximum are running:
-    those of a higher priority first, then the oldest."""
+    those of a higher priority first, then the oldest. Check cycles have a
+    limit of their own, and do not count against that of the other runs."""
     conn = ctx.conn
     conn.execute("BEGIN IMMEDIATE")
     try:
-        running = conn.execute("SELECT count(*) FROM runs WHERE status = 'running'").fetchone()[0]
-        free = max(ctx.config.max_concurrent_runs - running, 0)
-        chosen = [row["id"] for row in conn.execute(
-            "SELECT id FROM runs WHERE status = 'queued' ORDER BY priority DESC, created_at"
-            " LIMIT ?", (free,))]
+        chosen = []
+        for test, limit in (("!=", ctx.config.max_concurrent_runs),
+                            ("=", ctx.config.checks_max_concurrent)):
+            running = conn.execute(f"SELECT count(*) FROM runs WHERE status = 'running'"  # noqa: S608
+                                   f" AND kind {test} 'check'").fetchone()[0]
+            chosen += [row["id"] for row in conn.execute(
+                f"SELECT id FROM runs WHERE status = 'queued' AND kind {test} 'check'"  # noqa: S608
+                " ORDER BY priority DESC, created_at LIMIT ?", (max(limit - running, 0),))]
         for run_id in chosen:
             conn.execute("UPDATE runs SET status = 'running', started_at = ? WHERE id = ?",
                          (store.now(), run_id))
@@ -321,10 +327,11 @@ def _collect(ctx, run) -> None:
         return
 
     rc = result.get("rc")
+    done = CHECK_RCS if run["kind"] == "check" else (0,)
     if run["cancel_requested"] and (rc != 0 or result.get("terminated")):
         status = "canceled"
     else:
-        status = "successful" if rc == 0 else "failed"
+        status = "successful" if rc in done and not result.get("error") else "failed"
     extra = {"stats": json.dumps(_stats(directory))}
     error = str(result.get("error", ""))
     if run["kind"] == "syntax" and "lint_rc" in result:
@@ -348,6 +355,9 @@ def _collect(ctx, run) -> None:
         elif run["kind"] in ("sync", "unpack") and run["project_id"]:
             store.update(ctx.conn, "projects", run["project_id"],
                          {"sync_error": _log_tail(directory)}, "project")
+        if run["kind"] == "check":
+            from . import checks  # it builds on this module
+            checks.ingest(ctx, run, directory, error)
         if status == "successful" and run["kind"] == "galaxy":
             _store_collections(ctx, run, directory)
         elif run["kind"] == "galaxy" and run["project_id"]:
@@ -385,10 +395,12 @@ def _log_tail(directory: Path, limit: int = 2000) -> str:
 
 
 def _store_inventory(ctx, run, directory: Path) -> None:
+    from . import checks  # it builds on this module
     hosts = parse_inventory(json.loads((directory / "inventory.json").read_text()))
     store.update(ctx.conn, "inventories", run["inventory_id"],
                  {"hosts": json.dumps(hosts), "parsed_at": store.now(), "parse_error": ""},
                  "inventory")
+    checks.sync_hosts(ctx, run["inventory_id"], hosts)
 
 
 def parse_inventory(listing: dict) -> list[dict]:

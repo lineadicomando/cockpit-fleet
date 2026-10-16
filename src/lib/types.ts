@@ -230,7 +230,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy";
+    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -310,8 +310,11 @@ export interface Chunk {
 }
 
 export type ChannelKind = "telegram" | "webhook" | "smtp" | "matrix";
-export type NotifyEvent = "failed" | "changed" | "succeeded" | "canceled";
-export type RuleScope = "all" | "project" | "template" | "schedule";
+export type RunEvent = "failed" | "changed" | "succeeded" | "canceled";
+// What the states of checks give.
+export type CheckEvent = "problem" | "recovery" | "reminder";
+export type NotifyEvent = RunEvent | CheckEvent;
+export type RuleScope = "all" | "project" | "template" | "schedule" | "inventory" | "group" | "check";
 export type NotificationState = "pending" | "sent" | "failed";
 
 export interface Channel {
@@ -341,6 +344,8 @@ export interface NotifyRule {
     scope: RuleScope;
     scope_id: string | null;
     scope_name: string;
+    // The group of the inventory, for the scope group.
+    group: string;
     enabled: boolean;
 }
 
@@ -350,6 +355,8 @@ export interface Notification {
     channel: string;
     event: NotifyEvent | "test";
     run_id: string | null;
+    host_id: string | null;
+    check_id: string | null;
     title: string;
     state: NotificationState;
     attempts: number;
@@ -357,4 +364,136 @@ export interface Notification {
     error: string;
     created_at: number;
     sent_at: number | null;
+}
+
+// --- checks ---------------------------------------------------------------------
+
+export type CheckKind = "reachability" | "disk" | "cpu" | "memory" | "services" | "uptime" | "certificates" | "clock" | "playbook";
+export type StateName = "ok" | "warning" | "critical" | "unknown";
+
+export interface Thresholds {
+    [metric: string]: { warning: number | null; critical: number | null };
+}
+
+export interface CatalogEntry {
+    name: CheckKind;
+    description: string;
+    // Each parameter is a list: of paths or of names.
+    params: Record<string, { kind: "paths" | "names"; help: string }>;
+    required: string[];
+    thresholds: Thresholds;
+}
+
+export interface StateCounts {
+    ok: number;
+    warning: number;
+    critical: number;
+    unknown: number;
+    // Not checked yet.
+    pending: number;
+}
+
+export interface CheckDef {
+    id: string;
+    name: string;
+    kind: CheckKind;
+    inventory_id: string;
+    inventory: string;
+    group: string;
+    interval: number;
+    retry_interval: number;
+    max_attempts: number;
+    params: Record<string, string[]>;
+    // What the check sets, and those with the defaults of the catalog.
+    thresholds: Thresholds;
+    effective_thresholds: Thresholds;
+    machine_credential_id: string | null;
+    // A check of the kind playbook: where its playbook is.
+    project_id: string | null;
+    playbook: string;
+    become: boolean;
+    enabled: boolean;
+    states: StateCounts;
+}
+
+export interface Metric {
+    name: string;
+    value: number;
+    unit: string;
+    instance?: string;
+    min?: number;
+    max?: number;
+}
+
+export interface CheckState {
+    host_id: string;
+    check_id: string;
+    host: string;
+    check: string;
+    kind: CheckKind;
+    inventory_id: string;
+    // The last result; null until the first.
+    state: StateName | null;
+    hard_state: StateName;
+    state_type: "soft" | "hard";
+    attempt: number;
+    max_attempts: number;
+    summary: string;
+    metrics: Metric[];
+    details: Record<string, unknown>;
+    checked_at: number | null;
+    changed_at: number | null;
+    next_at: number | null;
+    running: boolean;
+    flapping: boolean;
+    acknowledged: boolean;
+    ack_by: string;
+    ack_at: number | null;
+    ack_comment: string;
+    in_maintenance: boolean;
+    // Unknown because the host could not be reached: not told about.
+    suppressed: boolean;
+}
+
+export interface FleetHost {
+    id: string;
+    inventory_id: string;
+    inventory: string;
+    name: string;
+    address: string;
+    groups: string[];
+    platform: string;
+    os: string;
+    facts: Record<string, string>;
+    facts_at: number | null;
+    reachable: boolean | null;
+    states: StateCounts;
+}
+
+export interface StateChange {
+    check_id: string;
+    check: string;
+    ts: number;
+    state: StateName;
+    state_type: "soft" | "hard";
+    summary: string;
+}
+
+export interface HostDetail extends FleetHost {
+    checks: CheckState[];
+    changes: StateChange[];
+    in_maintenance: boolean;
+}
+
+export interface Maintenance {
+    id: string;
+    inventory_id: string;
+    inventory: string;
+    host_id: string | null;
+    host: string;
+    group: string;
+    starts_at: number;
+    ends_at: number;
+    comment: string;
+    created_by: string;
 }

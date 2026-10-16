@@ -61,6 +61,20 @@ def check_host(value: object) -> str:
     return _match(_HOST_RE, value, "host name or address")
 
 
+# A group of an inventory, and a host as a line of a file given to --limit:
+# nothing that reads as a pattern, but an IPv6 address.
+_GROUP_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+_INVENTORY_HOST_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}|[0-9A-Fa-f:]{2,45}")
+
+
+def check_group(value: object) -> str:
+    return _match(_GROUP_RE, value, "group name")
+
+
+def check_inventory_host(value: object) -> str:
+    return _match(_INVENTORY_HOST_RE, value, "host name")
+
+
 _VAULT_ID_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}")
 
 

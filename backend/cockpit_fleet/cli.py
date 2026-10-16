@@ -390,6 +390,7 @@ def load_commands() -> dict[str, Command]:
     from . import (  # noqa: F401  (register the commands)
         agents,
         chat,
+        checks,
         files,
         moduledocs,
         notify,

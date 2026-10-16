@@ -1,11 +1,12 @@
 """Turn a stored job specification into the commands a run unit executes.
 
-A job is one of seven kinds: "playbook" (ansible-playbook), "adhoc" (one
+A job is one of eight kinds: "playbook" (ansible-playbook), "adhoc" (one
 module, as a playbook written for the job), "inventory" (ansible-inventory, to
 list hosts and groups), "sync" (fetch a git project), "syntax" (check a
 playbook without running it), "unpack" (extract an uploaded archive, which
-runs no command: see archive.py) and "galaxy" (install the collections a
-project asks for). Nothing from the frontend reaches a
+runs no command: see archive.py), "galaxy" (install the collections a
+project asks for) and "check" (a cycle of the checks of the catalog, one
+task per host, as a playbook written for the job). Nothing from the frontend reaches a
 command line without going through the functions here.
 """
 
@@ -22,6 +23,7 @@ from .validators import (
     check_git_ref,
     check_git_url,
     check_int,
+    check_inventory_host,
     check_limit,
     check_module,
     check_tag,
@@ -30,7 +32,7 @@ from .validators import (
     resolve_inside,
 )
 
-KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy")
+KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy", "check")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"
@@ -413,6 +415,105 @@ def build_adhoc_argv(
     playbook = runtime_dir / "adhoc.yml"
     playbook.write_text(adhoc_playbook(spec))
     return _playbook_argv(spec, run_dir, runtime_dir, credentials_dir, playbook)
+
+
+CHECKS_MODULE = "lineadicomando.fleet.checks"
+# A cycle every minute must not fill the journal: what a host answers is in
+# the events, the output only says which task ran and which host failed.
+CHECK_ENV = {"ANSIBLE_STDOUT_CALLBACK": "ansible.builtin.default",
+             "ANSIBLE_DISPLAY_OK_HOSTS": "False", "ANSIBLE_DISPLAY_SKIPPED_HOSTS": "False"}
+# ansible-playbook's status when some hosts failed (2) or could not be
+# reached (4): for a cycle that is an outcome of the hosts, which their
+# states record, not a failure of the cycle.
+CHECK_RCS = (0, 2, 4)
+_CHECK_ID_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+_CHECK_NAME_RE = re.compile(r"[a-z][a-z0-9_]{0,31}")
+
+
+def unsafe_yaml(value: object, depth: int = 0) -> str:
+    """A value as YAML in flow style, every string tagged !unsafe: Ansible
+    uses it as it is written, and renders no template in it."""
+    if depth > 8:
+        raise BadRequest("the plan of a check cycle is too deep")
+    if isinstance(value, str):
+        return f"!unsafe {_yaml_string(value)}"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float) and math.isfinite(value):
+        text = repr(value)
+        # YAML 1.1 reads "1e+16" as a string: a float needs its dot.
+        return text.replace("e", ".0e") if "e" in text and "." not in text else text
+    if isinstance(value, list):
+        return "[" + ", ".join(unsafe_yaml(item, depth + 1) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{_yaml_string(str(key))}: {unsafe_yaml(item, depth + 1)}"
+                               for key, item in value.items()) + "}"
+    raise BadRequest("the plan of a check cycle holds a value that is not data")
+
+
+def check_plan(plan: object) -> dict[str, list[dict]]:
+    """The checks of a cycle, by host: what fleetctl planned, checked again."""
+    if not isinstance(plan, dict) or not 1 <= len(plan) <= 1000:
+        raise BadRequest("plan must name between 1 and 1000 hosts")
+    out = {}
+    for host, entries in plan.items():
+        check_inventory_host(host)
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 100:
+            raise BadRequest("each host of the plan has between 1 and 100 checks")
+        out[host] = []
+        for entry in entries:
+            if (not isinstance(entry, dict) or set(entry) != {"id", "check", "params"}
+                    or not isinstance(entry["id"], str) or not _CHECK_ID_RE.fullmatch(entry["id"])
+                    or not isinstance(entry["check"], str)
+                    or not _CHECK_NAME_RE.fullmatch(entry["check"])
+                    or not isinstance(entry["params"], dict)):
+                raise BadRequest("invalid entry in the plan of a check cycle")
+            out[host].append(entry)
+    return out
+
+
+def check_playbook(timeout: int) -> str:
+    """The playbook of a "check" job: every check of a host in one task, which
+    Ansible answers with checks.py or, for a PowerShell shell, checks.ps1."""
+    task = {"name": "Checks", CHECKS_MODULE: {"checks": "{{ fleet_plan[inventory_hostname] }}"},
+            "timeout": timeout}
+    return json.dumps([{"name": "Checks", "hosts": "all", "gather_facts": False,
+                        "strategy": "free", "tasks": [task]}])
+
+
+def check_env(spec: dict) -> dict[str, str]:
+    """What a "check" job adds to the environment: little output, and the
+    time limit of each task, for a playbook of the user too."""
+    timeout = check_int(spec.get("timeout", 60), "timeout", 5, 600)
+    return {**CHECK_ENV, "ANSIBLE_TASK_TIMEOUT": str(timeout)}
+
+
+def build_check_argv(
+    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
+) -> list[str]:
+    """ansible-playbook for a "check" job: the catalog in one task written
+    here, or a playbook of the project that ends with fleet_result. The plan
+    is a variables file and the hosts a file given to --limit, so neither is
+    in the command line."""
+    plan = check_plan(spec.get("plan"))
+    timeout = check_int(spec.get("timeout", 60), "timeout", 5, 600)
+    if spec.get("playbook"):
+        playbook = resolve_inside(run_dir / "project", spec["playbook"], "playbook")
+    else:
+        playbook = runtime_dir / "checks.yml"
+        playbook.write_text(check_playbook(timeout))
+    plan_file = runtime_dir / "plan.yml"
+    plan_file.write_text(f"fleet_plan: {unsafe_yaml(plan)}\n")
+    hosts = runtime_dir / "hosts.limit"
+    hosts.write_text("".join(f"{host}\n" for host in plan))
+    clean = {key: spec[key] for key in ("inventory", "inventory_source", "forks", "user",
+                                         "become", "vaults") if key in spec}
+    argv = _playbook_argv(clean, run_dir, runtime_dir, credentials_dir, playbook)
+    return [*argv[:-1], "--limit", f"@{hosts}", "--extra-vars", f"@{plan_file}", argv[-1]]
 
 
 def build_inventory_argv(spec: dict, run_dir: Path, credentials_dir: Path | None) -> list[str]:

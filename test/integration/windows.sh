@@ -1,6 +1,8 @@
 #!/bin/sh
 # A run against a Windows node over SSH, through fleetctl: credential with a
 # private key, inventory, host key, template, launch. Prints what each task took.
+# Then the checks of the catalog on the same node, in cycles of the timer,
+# with the results Linux nodes give (checks.sh): about two minutes more.
 #   IT_WIN_HOST=192.0.2.10 IT_WIN_USER=admin IT_WIN_KEY=secret-name windows.sh
 # IT_WIN_KEY names an existing secret holding a key authorised on the node.
 # The ansible.windows collection is downloaded into the project when the
@@ -94,6 +96,40 @@ for event in events:
         name, ts = started[event["task_uuid"]]
         print(f"  {event['event'][5:]:12} {name:32} {event['ts'] - ts:5.1f} s")
 print(f"  total {events[-1]['ts'] - events[0]['ts']:.1f} s")
+PY
+
+# --- the checks of the catalog ------------------------------------------------------
+cred_id=$(get "$cred" 'a["data"]["id"]')
+base="\"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"max_attempts\": 1"
+for kind in reachability disk cpu memory uptime clock; do
+    admin check.create "{\"name\": \"$kind\", \"kind\": \"$kind\", $base}" >/dev/null
+done
+admin check.create "{\"name\": \"services\", \"kind\": \"services\", $base, \"params\": {\"names\": [\"sshd\", \"NoSuchService\"]}}" >/dev/null
+admin check.create "{\"name\": \"certificates\", \"kind\": \"certificates\", $base, \"params\": {\"paths\": [\"Cert:\\\\LocalMachine\\\\Root\"]}}" >/dev/null
+n=0
+while [ "$n" -lt 180 ] && [ "$(db "SELECT count(*) FROM check_states WHERE state IS NULL")" != 0 ]; do
+    sleep 3; n=$((n + 3))
+done
+expect_eq "the timer checked the node" "$(db "SELECT count(*) FROM check_states WHERE state IS NULL")" 0
+state() { db "SELECT s.state FROM check_states s JOIN checks c ON c.id = s.check_id WHERE c.name = '$1'"; }
+summary() { db "SELECT s.summary FROM check_states s JOIN checks c ON c.id = s.check_id WHERE c.name = '$1'"; }
+expect_eq "the platform is Windows" "$(db "SELECT platform FROM hosts")" windows
+expect_eq "and the system named" "$(db "SELECT os LIKE 'Microsoft Windows%' FROM hosts")" 1
+for kind in reachability disk cpu memory uptime clock; do
+    expect_ok "$kind answers on Windows ($(summary "$kind"))" test "$(state "$kind")" != 3
+done
+expect_eq "the disk is measured as on Linux, C: for a mount point" \
+    "$(db "SELECT group_concat(DISTINCT json_extract(m.value, '\$.name') || ':' || json_extract(m.value, '\$.unit')) FROM check_states s JOIN checks c ON c.id = s.check_id, json_each(s.metrics) m WHERE c.name = 'disk' AND json_extract(m.value, '\$.instance') = 'C:'")" \
+    "used_pct:%,free:B"
+expect_ok "a service that is not there counts as not running" sh -c "echo '$(summary services)' | grep -q 'not running: NoSuchService'"
+expect_eq "a store of certificates is read" "$(db "SELECT json_array_length(s.metrics) > 0 FROM check_states s JOIN checks c ON c.id = s.check_id WHERE c.name = 'certificates'")" 1
+cycle=$(db "SELECT id FROM runs WHERE kind = 'check' AND status = 'successful' ORDER BY created_at LIMIT 1")
+python3 - "/var/lib/cockpit-fleet/runs/$cycle/events.jsonl" <<'PY'
+import json, sys
+events = [json.loads(line) for line in open(sys.argv[1])]
+start = next(e["ts"] for e in events if e["event"] == "task_start")
+done = next(e for e in events if e["event"] == "host_ok")
+print(f"  eight checks in one task: {done['ts'] - start:.1f} s")
 PY
 
 finish

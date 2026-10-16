@@ -127,6 +127,9 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
     elif kind == "adhoc":
         command = runner.build_adhoc_argv(spec, run_dir, runtime_dir, credentials)
         env.update(runner.ADHOC_ENV)
+    elif kind == "check":
+        command = runner.build_check_argv(spec, run_dir, runtime_dir, credentials)
+        env.update(runner.check_env(spec))
     else:
         raise ValueError(f"unknown job kind: {kind!r}")
     return {"rc": execute(command, env, run_dir / "project", log)}
@@ -165,6 +168,9 @@ def main(argv: list[str]) -> int:
     temporary = run_dir / "result.json.tmp"
     temporary.write_text(json.dumps(result))
     temporary.replace(run_dir / "result.json")
+    if spec.get("kind") == "check" and result["rc"] in runner.CHECK_RCS:
+        # The cycle ran: a host that failed is in its states, not in the unit's.
+        return 0
     return 0 if result["rc"] == 0 else (result["rc"] if 0 < result["rc"] < 256 else 1)
 
 

@@ -43,6 +43,15 @@ class TransferTest(Base):
                 "name": "nightly", "template_id": template["id"], "calendar": "02:00",
                 "timezone": "Europe/Rome", "limit": "web01", "answers": {"version": "2"},
                 "overlap": "queue", "catch_up": True, "priority": 2, "random_delay": 60})
+        self.ok("check.create", {"name": "space", "kind": "disk", "inventory_id": managed["id"],
+                                 "interval": 600, "machine_credential_id": machine["id"],
+                                 "params": {"mounts": ["/var"]},
+                                 "thresholds": {"used_pct": {"warning": 70, "critical": None}}})
+        channel = self.ok("channel.create", {"name": "hook", "kind": "webhook",
+                                             "settings": {"url": "https://hooks.example.org/x"}})
+        self.ok("rule.create", {"name": "web problems", "channel_id": channel["id"],
+                                "events": ["problem", "recovery"], "scope": "group",
+                                "scope_id": managed["id"], "group": "web"})
 
     def elsewhere(self):
         """A context on another, empty database."""
@@ -76,12 +85,12 @@ class TransferTest(Base):
         answer = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)
         self.assertTrue(answer["ok"], answer)
         data = answer["data"]
-        self.assertEqual((data["created"], data["exists"], data["failed"]), (10, 0, 0), data)
+        self.assertEqual((data["created"], data["exists"], data["failed"]), (13, 0, 0), data)
         again = dispatch("config.export", b"", ctx)["data"]
         for section in transfer.SECTIONS:
             self.assertEqual(again[section], document[section], section)
         second = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)["data"]
-        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 10, 0))
+        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 13, 0))
         # Each thing left the record its own command leaves; the text of an
         # inventory is in none.
         rows = ctx.conn.execute("SELECT command, params FROM audit").fetchall()

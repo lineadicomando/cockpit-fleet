@@ -51,6 +51,13 @@ install-files: ## Install the built bundle, backend and system files under DESTD
 		$(SHARE_DIR)/collections/$(COLLECTION)/
 	install -m 0644 collection/$(COLLECTION)/plugins/callback/*.py \
 		$(SHARE_DIR)/collections/$(COLLECTION)/plugins/callback/
+	install -d $(SHARE_DIR)/collections/$(COLLECTION)/plugins/modules \
+		$(SHARE_DIR)/collections/$(COLLECTION)/plugins/action
+	install -m 0644 collection/$(COLLECTION)/plugins/modules/*.py \
+		collection/$(COLLECTION)/plugins/modules/*.ps1 \
+		$(SHARE_DIR)/collections/$(COLLECTION)/plugins/modules/
+	install -m 0644 collection/$(COLLECTION)/plugins/action/*.py \
+		$(SHARE_DIR)/collections/$(COLLECTION)/plugins/action/
 	cp -r --no-preserve=mode,ownership collection/$(COLLECTION)/roles collection/$(COLLECTION)/playbooks \
 		$(SHARE_DIR)/collections/$(COLLECTION)/
 	install -D -m 0644 system/cockpit-fleet-run@.service \

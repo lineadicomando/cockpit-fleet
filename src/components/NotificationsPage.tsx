@@ -24,12 +24,16 @@ import { formatTime } from "../lib/format.ts";
 import { usePolling, useLoad } from "../lib/hooks.ts";
 import { EMPTY_FORM, destination, formOf, settingsOf, type ChannelForm } from "../lib/notify.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Channel, ChannelKind, Notification, NotifyEvent, NotifyRule, Project, RuleScope, Schedule, Template } from "../lib/types.ts";
+import type { Channel, ChannelKind, CheckDef, CheckEvent, FleetHost, Inventory, Notification, NotifyEvent, NotifyRule, Project, RuleScope, RunEvent, Schedule, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 
 const KINDS: ChannelKind[] = ["telegram", "webhook", "smtp", "matrix"];
-const EVENTS: NotifyEvent[] = ["failed", "changed", "succeeded", "canceled"];
+const RUN_EVENTS: RunEvent[] = ["failed", "changed", "succeeded", "canceled"];
+const CHECK_EVENTS: CheckEvent[] = ["problem", "recovery", "reminder"];
+// Scopes that only runs have, and those that only checks have.
+const RUN_SCOPES: RuleScope[] = ["project", "template", "schedule"];
+const CHECK_SCOPES: RuleScope[] = ["group", "check"];
 const MONO = { fontFamily: "var(--pf-t--global--font--family--mono)" };
 
 function useLabels() {
@@ -52,13 +56,19 @@ function useLabels() {
             changed: t("With changes"),
             succeeded: t("Successful"),
             canceled: t("Canceled"),
+            problem: t("A problem"),
+            recovery: t("Its recovery"),
+            reminder: t("A reminder of it"),
             test: t("Test"),
         } as Record<NotifyEvent | "test", string>,
         scopes: {
-            all: t("Every run"),
+            all: t("Everything"),
             project: t("Runs of a project"),
             template: t("Runs of a job template"),
             schedule: t("Runs of a schedule"),
+            inventory: t("Runs and checks of an inventory"),
+            group: t("Checks of a group of hosts"),
+            check: t("One check"),
         } as Record<RuleScope, string>,
     };
 }
@@ -214,19 +224,45 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
     const [events, setEvents] = useState<NotifyEvent[]>(rule?.events ?? ["failed"]);
     const [scope, setScope] = useState<RuleScope>(rule?.scope ?? "all");
     const [scopeId, setScopeId] = useState(rule?.scope_id ?? "");
+    const [group, setGroup] = useState(rule?.group ?? "");
     const [enabled, setEnabled] = useState(rule?.enabled ?? true);
     const targets = useLoad(async () => {
-        const [projects, templates, schedules] = await Promise.all([
+        const [projects, templates, schedules, inventories, checks, hosts] = await Promise.all([
             call<{ projects: Project[] }>("project.list"),
             call<{ templates: Template[] }>("template.list"),
             call<{ schedules: Schedule[] }>("schedule.list"),
+            call<{ inventories: Inventory[] }>("inventory.list"),
+            call<{ checks: CheckDef[] }>("check.list"),
+            call<{ hosts: FleetHost[] }>("host.list"),
         ]);
-        return { project: projects.projects, template: templates.templates, schedule: schedules.schedules } as Record<string, { id: string; name: string }[]>;
+        return {
+            lists: {
+                project: projects.projects, template: templates.templates, schedule: schedules.schedules,
+                inventory: inventories.inventories, group: inventories.inventories, check: checks.checks,
+            } as Record<string, { id: string; name: string }[]>,
+            hosts: hosts.hosts,
+        };
     });
-    const choices = scope === "all" ? [] : targets.data?.[scope] ?? [];
+    const choices = scope === "all" ? [] : targets.data?.lists[scope] ?? [];
+    // The groups of the inventory chosen, as its hosts last listed them.
+    const groups = [...new Set((targets.data?.hosts ?? []).filter(host => host.inventory_id === scopeId).flatMap(host => host.groups))].sort();
+    const runsAllowed = !CHECK_SCOPES.includes(scope);
+    const checksAllowed = !RUN_SCOPES.includes(scope);
+
+    function changeScope(value: RuleScope) {
+        setScope(value);
+        setScopeId("");
+        setGroup("");
+        // What the scope cannot have is left out, rather than refused when saved.
+        setEvents(current => current.filter(event => RUN_EVENTS.includes(event as RunEvent)
+            ? !CHECK_SCOPES.includes(value) : !RUN_SCOPES.includes(value)));
+    }
 
     async function submit() {
-        const params = { name, channel_id: channelId, events, scope, enabled, ...(scope === "all" ? {} : { scope_id: scopeId }) };
+        const params = {
+            name, channel_id: channelId, events, scope, enabled,
+            ...(scope === "all" ? {} : { scope_id: scopeId }), ...(scope === "group" ? { group } : {}),
+        };
         if (rule) await call("rule.update", { id: rule.id, ...params });
         else await call("rule.create", params);
         onDone();
@@ -235,19 +271,28 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
 
     return (
         <FormModal title={rule ? t("Edit rule") : t("New rule")} submitLabel={rule ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose}
-            isDisabled={!name.trim() || !channelId || events.length === 0 || (scope !== "all" && !scopeId)}>
+            isDisabled={!name.trim() || !channelId || events.length === 0 || (scope !== "all" && !scopeId) || (scope === "group" && !group)}>
             <FormGroup label={t("Name")} isRequired fieldId="rule-name">
                 <TextInput id="rule-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
             <FormGroup label={t("When a run ends")} role="group" isStack fieldId="rule-events">
-                {EVENTS.map(event => (
+                {RUN_EVENTS.map(event => (
                     <Checkbox key={event} id={`rule-event-${event}`} label={labels.events[event]} isChecked={events.includes(event)}
+                        isDisabled={!runsAllowed}
                         onChange={(_e, on) => setEvents(current => on ? [...current, event] : current.filter(item => item !== event))} />
                 ))}
                 <Help>{t("A run with changes is also successful: choose both and it is told once, as with changes.")}</Help>
             </FormGroup>
-            <FormGroup label={t("Which runs")} fieldId="rule-scope">
-                <FormSelect id="rule-scope" value={scope} onChange={(_e, value) => { setScope(value as RuleScope); setScopeId(""); }}>
+            <FormGroup label={t("When a check on a host has")} role="group" isStack fieldId="rule-check-events">
+                {CHECK_EVENTS.map(event => (
+                    <Checkbox key={event} id={`rule-event-${event}`} label={labels.events[event]} isChecked={events.includes(event)}
+                        isDisabled={!checksAllowed}
+                        onChange={(_e, on) => setEvents(current => on ? [...current, event] : current.filter(item => item !== event))} />
+                ))}
+                <Help>{t("A problem is told once it is confirmed, after the attempts its check asks for. A reminder comes while nobody has acknowledged it.")}</Help>
+            </FormGroup>
+            <FormGroup label={t("About what")} fieldId="rule-scope">
+                <FormSelect id="rule-scope" value={scope} onChange={(_e, value) => changeScope(value as RuleScope)}>
                     {(Object.keys(labels.scopes) as RuleScope[]).map(key => <FormSelectOption key={key} value={key} label={labels.scopes[key]} />)}
                 </FormSelect>
             </FormGroup>
@@ -256,6 +301,15 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
                     <FormSelect id="rule-target" value={scopeId} onChange={(_e, value) => setScopeId(value)} isDisabled={!targets.data}>
                         <FormSelectOption value="" label={t("Choose…")} isPlaceholder />
                         {choices.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                    </FormSelect>
+                </FormGroup>
+            )}
+            {scope === "group" && (
+                <FormGroup label={t("Group")} isRequired fieldId="rule-group">
+                    <FormSelect id="rule-group" value={group} onChange={(_e, value) => setGroup(value)} isDisabled={!scopeId}>
+                        <FormSelectOption value="" label={t("Choose…")} isPlaceholder />
+                        <FormSelectOption value="all" label={t("Every host")} />
+                        {groups.map(name => <FormSelectOption key={name} value={name} label={name} />)}
                     </FormSelect>
                 </FormGroup>
             )}
@@ -313,7 +367,7 @@ function Outbox({ reloadKey }: { reloadKey: number }) {
                     <Table variant="compact" aria-label={t("Recent notifications")}>
                         <Thead>
                             <Tr>
-                                <Th>{t("When")}</Th><Th>{t("Channel")}</Th><Th>{t("Event")}</Th><Th>{t("Run")}</Th><Th>{t("State")}</Th><Th screenReaderText={t("Actions")} />
+                                <Th>{t("When")}</Th><Th>{t("Channel")}</Th><Th>{t("Event")}</Th><Th>{t("About")}</Th><Th>{t("State")}</Th><Th screenReaderText={t("Actions")} />
                             </Tr>
                         </Thead>
                         <Tbody>
@@ -322,10 +376,10 @@ function Outbox({ reloadKey }: { reloadKey: number }) {
                                     <Td dataLabel={t("When")}>{formatTime(item.sent_at ?? item.created_at, i18n.language)}</Td>
                                     <Td dataLabel={t("Channel")}>{item.channel}</Td>
                                     <Td dataLabel={t("Event")}>{labels.events[item.event]}</Td>
-                                    <Td dataLabel={t("Run")}>
-                                        {item.run_id
-                                            ? <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", item.run_id!])}>{item.title || item.run_id}</Button>
-                                            : item.title}
+                                    <Td dataLabel={t("About")}>
+                                        {item.run_id && <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", item.run_id!])}>{item.title || item.run_id}</Button>}
+                                        {item.host_id && <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", item.host_id!])}>{item.title}</Button>}
+                                        {!item.run_id && !item.host_id && item.title}
                                     </Td>
                                     <Td dataLabel={t("State")}>
                                         <NotificationState notification={item} />
@@ -438,23 +492,23 @@ export function NotificationsPage() {
                 </SectionHeader>
                 <ListState loaded={rules} isEmpty={data => data.rules.length === 0}
                     emptyTitle={t("No rules")}
-                    emptyBody={t("A rule says which runs to tell about, and through which channel: for example, every failed run, or the runs of one schedule with changes.")}>
+                    emptyBody={t("A rule says what to tell about, and through which channel: for example, every failed run, the runs of one schedule with changes, or the problems of the checks of a group of hosts.")}>
                     {data => (
                         <Table variant="compact" aria-label={t("Rules")}>
                             <Thead>
                                 <Tr>
-                                    <Th>{t("Name")}</Th><Th>{t("When a run ends")}</Th><Th>{t("Which runs")}</Th><Th>{t("Channel")}</Th><Th>{t("State")}</Th><Th screenReaderText={t("Actions")} />
+                                    <Th>{t("Name")}</Th><Th>{t("When")}</Th><Th>{t("About what")}</Th><Th>{t("Channel")}</Th><Th>{t("State")}</Th><Th screenReaderText={t("Actions")} />
                                 </Tr>
                             </Thead>
                             <Tbody>
                                 {data.rules.map(rule => (
                                     <Tr key={rule.id}>
                                         <Td dataLabel={t("Name")}>{rule.name}</Td>
-                                        <Td dataLabel={t("When a run ends")}>
+                                        <Td dataLabel={t("When")}>
                                             {rule.events.map(event => <Label key={event} isCompact style={{ marginInlineEnd: "0.25rem" }}>{labels.events[event]}</Label>)}
                                         </Td>
-                                        <Td dataLabel={t("Which runs")}>
-                                            {rule.scope === "all" ? labels.scopes.all : `${labels.scopes[rule.scope]}: ${rule.scope_name}`}
+                                        <Td dataLabel={t("About what")}>
+                                            {rule.scope === "all" ? labels.scopes.all : `${labels.scopes[rule.scope]}: ${rule.scope_name}${rule.scope === "group" ? ` / ${rule.group === "all" ? t("Every host") : rule.group}` : ""}`}
                                         </Td>
                                         <Td dataLabel={t("Channel")}>{rule.channel}</Td>
                                         <Td dataLabel={t("State")}>{rule.enabled ? t("Enabled") : t("Off")}</Td>

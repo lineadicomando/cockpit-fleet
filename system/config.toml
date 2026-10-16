@@ -26,6 +26,19 @@
 # means https://<the name of this machine>:9090.
 #url = "https://fleet.example.org:9090"
 
+[checks]
+# Check cycles running at the same time, apart from runs: a cycle does not
+# wait behind a long playbook, nor a playbook behind the checks.
+#max_concurrent = 1
+# Hosts in one cycle; more hosts due at once make more cycles.
+#shard_size = 50
+# Hosts Ansible works on in parallel within one cycle.
+#forks = 20
+# Seconds the checks of one host may take before they are cut short.
+#timeout = 60
+# Hours after which a problem nobody acknowledged is told again; 0 never.
+#reminder_hours = 24
+
 [adhoc]
 # Modules an administrator may run as an ad-hoc command, by their full name.
 # An empty list disables ad-hoc commands.

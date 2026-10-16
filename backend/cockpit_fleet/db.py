@@ -301,6 +301,109 @@ MIGRATIONS: list[list[str]] = [
         "CREATE INDEX notifications_due ON notifications (state, channel_id, next_at)",
         "CREATE INDEX notifications_created ON notifications (created_at)",
     ],
+    [
+        # Checks: the hosts of the inventories, the checks applied to their
+        # groups, the state of each check on each host and its changes, and
+        # the windows in which a host is in maintenance.
+        """
+        CREATE TABLE hosts (
+            id            TEXT PRIMARY KEY,
+            inventory_id  TEXT NOT NULL REFERENCES inventories (id) ON DELETE CASCADE,
+            name          TEXT NOT NULL,
+            address       TEXT NOT NULL DEFAULT '',
+            groups        TEXT NOT NULL DEFAULT '[]',
+            platform      TEXT NOT NULL DEFAULT '',
+            os            TEXT NOT NULL DEFAULT '',
+            facts         TEXT NOT NULL DEFAULT '{}',
+            facts_at      REAL,
+            reachable     INTEGER,
+            created_at    REAL NOT NULL,
+            UNIQUE (inventory_id, name)
+        )
+        """,
+        """
+        CREATE TABLE checks (
+            id                     TEXT PRIMARY KEY,
+            name                   TEXT NOT NULL UNIQUE,
+            kind                   TEXT NOT NULL,
+            inventory_id           TEXT NOT NULL REFERENCES inventories (id),
+            host_group             TEXT NOT NULL DEFAULT 'all',
+            interval               INTEGER NOT NULL,
+            retry_interval         INTEGER NOT NULL,
+            max_attempts           INTEGER NOT NULL DEFAULT 3,
+            params                 TEXT NOT NULL DEFAULT '{}',
+            thresholds             TEXT NOT NULL DEFAULT '{}',
+            machine_credential_id  TEXT REFERENCES credentials (id),
+            become                 INTEGER NOT NULL DEFAULT 0,
+            project_id             TEXT REFERENCES projects (id),
+            playbook               TEXT NOT NULL DEFAULT '',
+            enabled                INTEGER NOT NULL DEFAULT 1,
+            created_by             TEXT NOT NULL,
+            created_at             REAL NOT NULL,
+            updated_at             REAL NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE check_states (
+            host_id         TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            check_id        TEXT NOT NULL REFERENCES checks (id) ON DELETE CASCADE,
+            state           INTEGER,
+            hard_state      INTEGER NOT NULL DEFAULT 0,
+            state_type      TEXT NOT NULL DEFAULT 'hard',
+            attempt         INTEGER NOT NULL DEFAULT 0,
+            summary         TEXT NOT NULL DEFAULT '',
+            metrics         TEXT NOT NULL DEFAULT '[]',
+            details         TEXT NOT NULL DEFAULT '{}',
+            checked_at      REAL,
+            changed_at      REAL,
+            next_at         REAL,
+            run_id          TEXT,
+            history         TEXT NOT NULL DEFAULT '[]',
+            flapping        INTEGER NOT NULL DEFAULT 0,
+            ack_by          TEXT NOT NULL DEFAULT '',
+            ack_at          REAL,
+            ack_comment     TEXT NOT NULL DEFAULT '',
+            notified_state  INTEGER NOT NULL DEFAULT 0,
+            notified_at     REAL,
+            PRIMARY KEY (host_id, check_id)
+        )
+        """,
+        "CREATE INDEX check_states_due ON check_states (next_at)",
+        "CREATE INDEX check_states_check ON check_states (check_id)",
+        """
+        CREATE TABLE state_changes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            host_id     TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            check_id    TEXT NOT NULL REFERENCES checks (id) ON DELETE CASCADE,
+            ts          REAL NOT NULL,
+            state       INTEGER NOT NULL,
+            state_type  TEXT NOT NULL,
+            summary     TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        "CREATE INDEX state_changes_of ON state_changes (host_id, check_id, ts)",
+        "CREATE INDEX state_changes_ts ON state_changes (ts)",
+        """
+        CREATE TABLE maintenances (
+            id            TEXT PRIMARY KEY,
+            inventory_id  TEXT NOT NULL REFERENCES inventories (id) ON DELETE CASCADE,
+            host_group    TEXT NOT NULL DEFAULT '',
+            host_id       TEXT REFERENCES hosts (id) ON DELETE CASCADE,
+            starts_at     REAL NOT NULL,
+            ends_at       REAL NOT NULL,
+            comment       TEXT NOT NULL DEFAULT '',
+            created_by    TEXT NOT NULL,
+            created_at    REAL NOT NULL
+        )
+        """,
+        "CREATE INDEX maintenances_ends ON maintenances (ends_at)",
+        # Rules about checks: a group of an inventory as their scope.
+        "ALTER TABLE notify_rules ADD COLUMN scope_group TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE notifications ADD COLUMN host_id TEXT"
+        " REFERENCES hosts (id) ON DELETE SET NULL",
+        "ALTER TABLE notifications ADD COLUMN check_id TEXT"
+        " REFERENCES checks (id) ON DELETE SET NULL",
+    ],
 ]
 
 

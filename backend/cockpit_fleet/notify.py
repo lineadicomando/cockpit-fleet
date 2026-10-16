@@ -1,12 +1,14 @@
-"""Notifications: rules choose the runs to tell about, channels carry the
-message, and an outbox in the database lies between them.
+"""Notifications: rules choose the runs and the states of checks to tell
+about, channels carry the message, and an outbox in the database lies
+between them.
 
-When a run ends, reconcile() puts one row in the outbox for every channel a
-rule sends it to, and writes notify.wake: cockpit-fleet-notify.path starts
-cockpit-fleet-notify.service, which delivers with the secrets of the channels
-decrypted for it by PID 1. A channel that does not answer is tried again
-later, with a growing delay, and holds up no other; the tick of the
-scheduler writes notify.wake again when something is due.
+When a run ends, or the hard state of a check changes, one row goes in the
+outbox for every channel a rule sends it to, and notify.wake is written:
+cockpit-fleet-notify.path starts cockpit-fleet-notify.service, which
+delivers with the secrets of the channels decrypted for it by PID 1. A
+channel that does not answer is tried again later, with a growing delay,
+and holds up no other; the tick of the scheduler writes notify.wake again
+when something is due.
 """
 
 import fcntl
@@ -14,20 +16,29 @@ import functools
 import json
 import os
 import socket
+import time
 from pathlib import Path
 
 from . import channels, journal, paths, store
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Strs, Values, command
 from .errors import BadRequest, Conflict, NotFound, Unavailable
+from .validators import check_group
 
 # In the order of preference, when a run is more than one: with changes before succeeded.
 EVENTS = ("failed", "changed", "succeeded", "canceled")
-SCOPES = ("all", "project", "template", "schedule")
+# What the states of checks give: a problem, its end, and a problem nobody
+# acknowledged that is told again.
+CHECK_EVENTS = ("problem", "recovery", "reminder")
+SCOPES = ("all", "project", "template", "schedule", "inventory", "group", "check")
+# Scopes that only runs have, and those that only checks have.
+_RUN_SCOPES = ("project", "template", "schedule")
+_CHECK_SCOPES = ("group", "check")
 LANGUAGES = ("en", "it")
 STATES = ("pending", "sent", "failed")
 # Runs that are about the nodes; the jobs that serve a project are not.
 RUN_KINDS = ("playbook", "adhoc")
-_SCOPE_TABLES = {"project": "projects", "template": "templates", "schedule": "schedules"}
+_SCOPE_TABLES = {"project": "projects", "template": "templates", "schedule": "schedules",
+                 "inventory": "inventories", "group": "inventories", "check": "checks"}
 
 # Tried again after 1, 2, 4 ... minutes, at most an hour apart, for a day.
 RETRY_FIRST = 60
@@ -47,20 +58,28 @@ _WORDS = {
         "failed": "Run failed", "succeeded": "Run succeeded", "changed": "Run with changes",
         "canceled": "Run canceled", "test": "Test message",
         "test_text": "The channel {channel} of Fleet on {host} works.",
-        "several": "{count} runs ended", "template": "Template", "project": "Project",
+        "several": "{count} runs ended", "several_events": "{count} events",
+        "template": "Template", "project": "Project",
         "schedule": "Schedule", "by": "Launched by", "check": "dry run",
         "hosts": "Hosts: {ok} ok, {changed} changed, {failed} failed, {unreachable} unreachable",
         "failed_hosts": "Failed", "error": "Error", "more": "and {count} more",
+        "problem": "Problem", "recovery": "Recovered", "reminder": "Still a problem",
+        "ok": "OK", "warning": "WARNING", "critical": "CRITICAL", "unknown": "UNKNOWN",
+        "inventory": "Inventory", "since": "Since",
     },
     "it": {
         "failed": "Run fallita", "succeeded": "Run riuscita", "changed": "Run con modifiche",
         "canceled": "Run annullata", "test": "Messaggio di prova",
         "test_text": "Il canale {channel} di Fleet su {host} funziona.",
-        "several": "{count} run terminate", "template": "Template", "project": "Progetto",
+        "several": "{count} run terminate", "several_events": "{count} eventi",
+        "template": "Template", "project": "Progetto",
         "schedule": "Pianificazione", "by": "Lanciata da", "check": "prova",
         "hosts": "Host: {ok} ok, {changed} modificati, {failed} falliti,"
                  " {unreachable} irraggiungibili",
         "failed_hosts": "Falliti", "error": "Errore", "more": "e altre {count}",
+        "problem": "Problema", "recovery": "Risolto", "reminder": "Ancora un problema",
+        "ok": "OK", "warning": "AVVISO", "critical": "CRITICO", "unknown": "SCONOSCIUTO",
+        "inventory": "Inventario", "since": "Dal",
     },
 }
 
@@ -77,7 +96,10 @@ def base_url(ctx: Context) -> str:
     return ctx.config.notify_url or f"https://{_fqdn()}:9090"
 
 
-def _link(base: str, run_id: str | None) -> str:
+def _link(base: str, event: dict | None) -> str:
+    if event and event.get("host_id"):
+        return f"{base}/fleet#/hosts/{event['host_id']}"
+    run_id = event.get("run_id") if event else None
     return f"{base}/fleet#/runs/{run_id}" if run_id else f"{base}/fleet#/runs"
 
 
@@ -102,11 +124,22 @@ def _hosts(stats: dict) -> dict:
 
 
 def _headline(words: dict, event: dict) -> str:
+    if event["event"] in CHECK_EVENTS:
+        state = words.get(event.get("state", ""), event.get("state", ""))
+        return f"{words[event['event']]}: {event['title']} {state}"
     title = f"{words[event['event']]}: {event['title']}"
     return title + (f" ({words['check']})" if event.get("check") else "")
 
 
 def _details(words: dict, event: dict) -> list[str]:
+    if event["event"] in CHECK_EVENTS:
+        lines = [event["summary"]] if event.get("summary") else []
+        if event.get("inventory"):
+            lines.append(f"{words['inventory']}: {event['inventory']}")
+        if event.get("since"):
+            since = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(event["since"]))
+            lines.append(f"{words['since']}: {since}")
+        return lines
     lines = []
     for key in ("template", "project", "schedule"):
         if event.get(key):
@@ -126,7 +159,7 @@ def _details(words: dict, event: dict) -> list[str]:
 def compose(language: str, events: list[dict], base: str, channel: str = "") -> channels.Message:
     """One message for what happened, in the language of the channel."""
     words = _WORDS.get(language, _WORDS["en"])
-    links = [{**event, "link": _link(base, event.get("run_id"))} for event in events]
+    links = [{**event, "link": _link(base, event)} for event in events]
     if len(events) == 1 and events[0]["event"] == "test":
         host = base.split("//", 1)[-1]
         return channels.Message(f"Fleet: {words['test']}",
@@ -140,7 +173,8 @@ def compose(language: str, events: list[dict], base: str, channel: str = "") -> 
     lines = [f"- {_headline(words, event)}\n  {event['link']}" for event in links[:_LISTED]]
     if len(events) > _LISTED:
         lines.append(words["more"].format(count=len(events) - _LISTED))
-    return channels.Message(f"Fleet: {words['several'].format(count=len(events))}",
+    several = "several" if all(event["event"] in EVENTS for event in events) else "several_events"
+    return channels.Message(f"Fleet: {words[several].format(count=len(events))}",
                             "\n".join(lines), _link(base, None), links)
 
 
@@ -168,8 +202,10 @@ def _run_events(run) -> set[str]:
 
 
 def _in_scope(rule, run) -> bool:
+    if rule["scope"] in _CHECK_SCOPES:
+        return False
     column = {"project": "project_id", "template": "template_id",
-              "schedule": "schedule_id"}.get(rule["scope"])
+              "schedule": "schedule_id", "inventory": "inventory_id"}.get(rule["scope"])
     return column is None or run[column] == rule["scope_id"]
 
 
@@ -216,6 +252,42 @@ def run_ended(ctx: Context, run_id: str) -> int:
             "channel_id": channel_id, "event": event, "run_id": run_id,
             "payload": json.dumps(_payload(ctx, run, event)), "state": "pending",
             "next_at": now + windows[channel_id], "created_at": now}, "notification")
+    if chosen:
+        wake()
+    return len(chosen)
+
+
+def _check_in_scope(rule, check_id: str, inventory_id: str, groups: list[str]) -> bool:
+    scope = rule["scope"]
+    if scope == "all":
+        return True
+    if scope == "inventory":
+        return rule["scope_id"] == inventory_id
+    if scope == "group":
+        return rule["scope_id"] == inventory_id and (
+            rule["scope_group"] == "all" or rule["scope_group"] in groups)
+    return scope == "check" and rule["scope_id"] == check_id
+
+
+def check_event(ctx: Context, event: str, payload: dict, host_id: str, check_id: str,
+                inventory_id: str, groups: list[str]) -> int:
+    """Put in the outbox what the rules say about the state of a check on a
+    host; one notification per channel, however many of its rules match."""
+    rules = ctx.conn.execute(
+        "SELECT r.*, c.group_window FROM notify_rules r JOIN channels c ON c.id = r.channel_id"
+        " WHERE r.enabled = 1 AND c.enabled = 1 ORDER BY r.created_at").fetchall()
+    now = store.now()
+    chosen: dict[str, int] = {}
+    for rule in rules:
+        if (event in store.loads(rule["events"], [])
+                and _check_in_scope(rule, check_id, inventory_id, groups)
+                and rule["channel_id"] not in chosen):
+            chosen[rule["channel_id"]] = rule["group_window"]
+    for channel_id, window in chosen.items():
+        store.insert(ctx.conn, "notifications", {
+            "channel_id": channel_id, "event": event, "host_id": host_id, "check_id": check_id,
+            "payload": json.dumps(payload), "state": "pending", "next_at": now + window,
+            "created_at": now}, "notification")
     if chosen:
         wake()
     return len(chosen)
@@ -388,7 +460,8 @@ def channel_list(ctx: Context, params: Values) -> dict:
     """The notification channels, with whether their secret is set; never its value."""
     rows = ctx.conn.execute("SELECT * FROM channels ORDER BY name COLLATE NOCASE").fetchall()
     return {"channels": [_channel(ctx, row) for row in rows],
-            "kinds": list(channels.KINDS), "events": list(EVENTS)}
+            "kinds": list(channels.KINDS), "events": list(EVENTS),
+            "check_events": list(CHECK_EVENTS)}
 
 
 @command("channel.create", role="admin", mutating=True,
@@ -455,6 +528,7 @@ def channel_test(ctx: Context, params: Values) -> dict:
 def _rule(ctx: Context, row) -> dict:
     data = {key: row[key] for key in ("id", "name", "channel_id", "scope", "scope_id",
                                       "created_at")}
+    data["group"] = row["scope_group"]
     data.update(events=store.loads(row["events"], []), enabled=bool(row["enabled"]))
     channel = ctx.conn.execute("SELECT name FROM channels WHERE id = ?",
                                (row["channel_id"],)).fetchone()
@@ -470,19 +544,24 @@ def _rule(ctx: Context, row) -> dict:
 _RULE_PARAMS = {
     "name": Str(required=True, max_length=200),
     "channel_id": Id("The channel the notifications go through"),
-    "events": Strs("Which ends of a run to tell about: " + ", ".join(EVENTS), max_items=4),
-    "scope": Choice(SCOPES, "Every run, or the runs of one project, template or schedule",
-                    default="all"),
-    "scope_id": Id("The project, template or schedule, for a scope other than all",
-                   required=False),
+    "events": Strs("What to tell about: the ends of a run, " + ", ".join(EVENTS)
+                   + "; the states of checks, " + ", ".join(CHECK_EVENTS), max_items=7),
+    "scope": Choice(SCOPES, "Everything, or the runs of one project, template or schedule,"
+                    " the runs and checks of an inventory, the checks of a group of an"
+                    " inventory, or one check", default="all"),
+    "scope_id": Id("The project, template, schedule, inventory or check, for a scope other"
+                   " than all; the inventory for a group", required=False),
+    "group": Str("The group of the inventory, for the scope group", default="",
+                 max_length=128),
     "enabled": Bool(default=True),
 }
 
 
 def _rule_values(ctx: Context, params: Values) -> dict:
     events = params["events"]
-    if not events or any(event not in EVENTS for event in events):
-        raise BadRequest(f"events must name at least one of: {', '.join(EVENTS)}")
+    known = (*EVENTS, *CHECK_EVENTS)
+    if not events or any(event not in known for event in events):
+        raise BadRequest(f"events must name at least one of: {', '.join(known)}")
     store.fetch(ctx.conn, "channels", params["channel_id"], "channel")
     scope, scope_id = params["scope"], params["scope_id"]
     if scope == "all" and scope_id is not None:
@@ -490,11 +569,21 @@ def _rule_values(ctx: Context, params: Values) -> dict:
     if scope != "all":
         if scope_id is None:
             raise BadRequest(f"scope_id is required for the scope {scope}")
-        store.fetch(ctx.conn, _SCOPE_TABLES[scope], scope_id, scope)
+        store.fetch(ctx.conn, _SCOPE_TABLES[scope], scope_id,
+                    "inventory" if scope == "group" else scope)
+    if scope in _RUN_SCOPES and set(events) & set(CHECK_EVENTS):
+        raise BadRequest(f"the scope {scope} has runs only: it cannot tell about checks")
+    if scope in _CHECK_SCOPES and set(events) & set(EVENTS):
+        raise BadRequest(f"the scope {scope} has checks only: it cannot tell about runs")
+    group = params["group"].strip()
+    if (scope == "group") != bool(group):
+        raise BadRequest("group is required for the scope group, and only for it")
+    if group:
+        check_group(group)
     return {"name": store.check_name(params["name"]), "channel_id": params["channel_id"],
-            "events": json.dumps([event for event in EVENTS if event in events]),
+            "events": json.dumps([event for event in known if event in events]),
             "scope": scope, "scope_id": scope_id if scope != "all" else None,
-            "enabled": int(params["enabled"])}
+            "scope_group": group, "enabled": int(params["enabled"])}
 
 
 @command("rule.list", role="viewer")
@@ -535,8 +624,9 @@ def rule_delete(ctx: Context, params: Values) -> dict:
 
 def _notification(row) -> dict:
     payload = store.loads(row["payload"], {})
-    return {key: row[key] for key in ("id", "channel_id", "event", "run_id", "state", "attempts",
-                                      "next_at", "error", "created_at", "sent_at")} | {
+    return {key: row[key] for key in ("id", "channel_id", "event", "run_id", "host_id",
+                                      "check_id", "state", "attempts", "next_at", "error",
+                                      "created_at", "sent_at")} | {
         "channel": row["channel"], "title": payload.get("title", "")}
 
 

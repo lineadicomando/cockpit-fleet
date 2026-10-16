@@ -144,9 +144,10 @@ test/integration/chat.sh             # fleet-chat with fake-agent.py: start, lim
 test/integration/cli.sh              # fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin; WIPES
 test/integration/schedules.sh        # the timer, ten schedules on one minute, missed times, overlap (about 5 min); WIPES
 test/integration/notify.sh           # notifications to stand-ins of the four channels, a retry by the tick (about 3 min); WIPES
+test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about (about 6 min); WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
-test/integration/windows.sh          # Windows node over SSH (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
+test/integration/windows.sh          # Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
 test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
 ```
 
@@ -159,7 +160,10 @@ Run these after any change to the unit, the helpers, `fleetctl` or sudoers. The
 tests that go through `fleetctl` share helpers in `lib.sh` (`admin`, `get`,
 `expect_run`, `wipe`, `prepare`). A failed `expect_run` prints the end of the
 run's output. With `IT_KEEP=yes`, `windows.sh` leaves its data in place so the
-same run can be launched from the interface.
+same run can be launched from the interface; so does `checks.sh`, whose
+stand-in for the webhook then stays up (`pkill -f notify-sinks.py` as root).
+`dnf install` of a `.rpm` of the same version does nothing: use `dnf
+reinstall`.
 
 ## Test environment
 
@@ -176,7 +180,7 @@ same run can be launched from the interface.
   `alma10-fleet` (AlmaLinux 10.2, `maint@VM`), same password as
   `deb13-samba-dc`, 2 GB each. Snapshot `baseline`: the OS with `cockpit`,
   `podman`, `sshpass` and `git`, no `cockpit-fleet`; `baseline_fleet`, its
-  child, adds the package as of 15 October (and `ansible-lint` on Fedora) and
+  child, adds the package as of 16 October (and `ansible-lint` on Fedora) and
   the `fleet-node` image. Install with `dnf install
   ./cockpit-fleet-*.fc44.noarch.rpm` (`.el10` on Alma); the integration scripts
   run there as on Debian. Both are set up from scratch with kickstart; the

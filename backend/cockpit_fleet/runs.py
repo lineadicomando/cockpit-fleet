@@ -211,7 +211,8 @@ def run_cancel(ctx: Context, params: Values) -> dict:
              "kind": Str(default="", max_length=20),
          })
 def run_list(ctx: Context, params: Values) -> dict:
-    """The runs, newest first, with their status and outcome per host."""
+    """The runs, newest first, with their status and outcome per host. Check
+    cycles are listed only when asked for by their kind, check."""
     limit = params["limit"]
     before = params["before"]
     status = params["status"]
@@ -221,7 +222,7 @@ def run_list(ctx: Context, params: Values) -> dict:
     jobs.reconcile(ctx)
     rows = ctx.conn.execute(
         "SELECT rowid, * FROM runs WHERE (? IS NULL OR rowid < ?) AND (? = '' OR status = ?)"
-        " AND (? = '' OR kind = ?) ORDER BY rowid DESC LIMIT ?",
+        " AND (? = '' AND kind != 'check' OR kind = ?) ORDER BY rowid DESC LIMIT ?",
         (before, before, status, status, kind, kind, limit),
     ).fetchall()
     return {"runs": [{**run_row(row), "cursor": row["rowid"]} for row in rows],

@@ -1457,9 +1457,6 @@ msgstr[1] "{{count}} minuti"
 msgid "A channel is where notifications go: a Telegram chat, a webhook, a mail address, a Matrix room. Its token or password is encrypted and never shown again."
 msgstr "Un canale è dove vanno le notifiche: una chat Telegram, un webhook, un indirizzo di posta, una stanza Matrix. Il suo token o la sua password vengono cifrati e non si vedono più."
 
-msgid "A rule says which runs to tell about, and through which channel: for example, every failed run, or the runs of one schedule with changes."
-msgstr "Una regola dice di quali run dare notizia e con quale canale: per esempio ogni run fallita, o le run di una pianificazione con modifiche."
-
 msgid "A run with changes is also successful: choose both and it is told once, as with changes."
 msgstr "Una run con modifiche è anche riuscita: scegliendo entrambe se ne dà notizia una volta sola, come run con modifiche."
 
@@ -1510,9 +1507,6 @@ msgstr "Cifrato su questa macchina e mai più mostrato, nemmeno agli amministrat
 
 msgid "Event"
 msgstr "Evento"
-
-msgid "Every run"
-msgstr "Ogni run"
 
 msgid "From"
 msgstr "Mittente"
@@ -1670,9 +1664,6 @@ msgstr "Se il segreto non è nell'URL, viene inviato così com'è in questa inte
 msgid "Where the message is sent. Write $secret where the secret goes when the service wants it in the address, as Slack and Discord do."
 msgstr "Dove viene inviato il messaggio. Scrivi $secret dove va il segreto, se il servizio lo vuole nell'indirizzo come fanno Slack e Discord."
 
-msgid "Which runs"
-msgstr "Quali run"
-
 msgid "With changes"
 msgstr "Con modifiche"
 
@@ -1680,3 +1671,426 @@ msgid "given_up_count"
 msgid_plural "given_up_count_plural"
 msgstr[0] "{{count}} abbandonata"
 msgstr[1] "{{count}} abbandonate"
+
+msgid "{{name}} is being checked on its hosts: the results appear in Hosts."
+msgstr "{{name}} è in corso sui suoi host: i risultati compaiono in Host."
+
+msgid "A check looks at the hosts of a group of an inventory at regular intervals: disk space, memory, services, certificates. Ansible does it over the connection the inventory gives, with nothing to install on the hosts."
+msgstr "Un check guarda a intervalli regolari gli host di un gruppo di un inventario: spazio su disco, memoria, servizi, certificati. Lo fa Ansible, con la connessione data dall'inventario, senza nulla da installare sugli host."
+
+msgid "A group of hosts"
+msgstr "Un gruppo di host"
+
+msgid "A problem"
+msgstr "Un problema"
+
+msgid "A problem is confirmed, and told about, once it has been seen that many times in a row; until then it is checked again more often. Checks run on the minute, so shorter times are rounded up to it."
+msgstr "Un problema è confermato, e notificato, quando è stato visto tante volte di seguito; nel frattempo viene ricontrollato più spesso. I check partono allo scoccare del minuto, quindi i tempi più brevi vengono arrotondati per eccesso."
+
+msgid "A problem is told once it is confirmed, after the attempts its check asks for. A reminder comes while nobody has acknowledged it."
+msgstr "Un problema viene notificato quando è confermato, dopo i tentativi che il suo check richiede. Il promemoria arriva finché nessuno lo ha preso in carico."
+
+msgid "A reminder of it"
+msgstr "Un suo promemoria"
+
+msgid "A rule says what to tell about, and through which channel: for example, every failed run, the runs of one schedule with changes, or the problems of the checks of a group of hosts."
+msgstr "Una regola dice di che cosa avvisare e attraverso quale canale: per esempio ogni run fallita, le run con modifiche di una pianificazione, o i problemi dei check di un gruppo di host."
+
+msgid "About"
+msgstr "Riguarda"
+
+msgid "About what"
+msgstr "Su che cosa"
+
+msgid "Acknowledge"
+msgstr "Prendi in carico"
+
+msgid "Acknowledge {{check}} on {{host}}"
+msgstr "Prendi in carico {{check}} su {{host}}"
+
+msgid "Acknowledged"
+msgstr "Preso in carico"
+
+msgid "All hosts"
+msgstr "Tutti gli host"
+
+msgid "All of them when empty; C: and D: on Windows."
+msgstr "Tutti, se vuoto; C: e D: su Windows."
+
+msgid "attempt {{attempt}} of {{max}}"
+msgstr "tentativo {{attempt}} di {{max}}"
+
+msgid "Attempts before a problem"
+msgstr "Tentativi prima di un problema"
+
+msgid "Become root (some checks need it)"
+msgstr "Diventa root (serve ad alcuni check)"
+
+msgid "Being checked"
+msgstr "In corso"
+
+msgid "Beyond the pseudo filesystems, which are always left out."
+msgstr "Oltre agli pseudo-filesystem, che sono sempre esclusi."
+
+msgid "By"
+msgstr "Da"
+
+msgid "Certificate expiry"
+msgstr "Scadenza dei certificati"
+
+msgid "Certificates"
+msgstr "Certificati"
+
+msgid "Check cycle"
+msgstr "Ciclo di check"
+
+msgid "Check now"
+msgstr "Controlla ora"
+
+msgid "Checked"
+msgstr "Controllato"
+
+msgid "Checks"
+msgstr "Check"
+
+msgid "Checks of a group of hosts"
+msgstr "Check di un gruppo di host"
+
+msgid "Clock"
+msgstr "Orologio"
+
+msgid "Comment"
+msgstr "Commento"
+
+msgid "Confirmed state: {{state}}"
+msgstr "Stato confermato: {{state}}"
+
+msgid "Critical"
+msgstr "Critico"
+
+msgid "Critical at"
+msgstr "Critico a"
+
+msgid "Days before certificates expire: files, directories of them, or a Windows store."
+msgstr "Giorni alla scadenza dei certificati: file, cartelle di file o un archivio di Windows."
+
+msgid "Days before expiry"
+msgstr "Giorni alla scadenza"
+
+msgid "Disk being replaced"
+msgstr "Disco in sostituzione"
+
+msgid "Disk replacement"
+msgstr "Sostituzione del disco"
+
+msgid "Disk space"
+msgstr "Spazio su disco"
+
+msgid "During a maintenance window nothing is told about its hosts: for a planned reboot, or work on a disk."
+msgstr "Durante una finestra di manutenzione non arriva nessun avviso sui suoi host: per un riavvio programmato, o un intervento su un disco."
+
+msgid "Edit check"
+msgstr "Modifica il check"
+
+msgid "Empty means no threshold. When the critical one is below the warning, lower is worse, as for the days before a certificate expires."
+msgstr "Vuoto vuol dire nessuna soglia. Quando quella critica è sotto quella di avviso, più basso è peggio, come per i giorni alla scadenza di un certificato."
+
+msgid "End now"
+msgstr "Termina ora"
+
+msgid "Ended"
+msgstr "Terminata"
+
+msgid "Every (minutes)"
+msgstr "Ogni (minuti)"
+
+msgid "Every host"
+msgstr "Tutti gli host"
+
+msgid "Every inventory"
+msgstr "Tutti gli inventari"
+
+msgid "Everything"
+msgstr "Tutto"
+
+msgid "Files in PEM or DER, directories of them, or a store such as Cert:\\LocalMachine\\My."
+msgstr "File in PEM o DER, cartelle che li contengono, o un archivio come Cert:\\LocalMachine\\My."
+
+msgid "Flapping"
+msgstr "Instabile"
+
+msgid "For"
+msgstr "Per"
+
+msgid "Grid"
+msgstr "Griglia"
+
+msgid "Group"
+msgstr "Gruppo"
+
+msgid "Group {{group}}"
+msgstr "Gruppo {{group}}"
+
+msgid "Host unreachable"
+msgstr "Host irraggiungibile"
+
+msgid "Hosts and checks"
+msgstr "Host e check"
+
+msgid "How far the clock of the host is from the controller's, network delay included."
+msgstr "Quanto l'orologio dell'host si discosta da quello del controller, ritardo di rete compreso."
+
+msgid "In maintenance"
+msgstr "In manutenzione"
+
+msgid "Inodes used (%)"
+msgstr "Inode usati (%)"
+
+msgid "It keeps changing: nothing is told about it until it settles."
+msgstr "Continua a cambiare: non viene notificato finché non si stabilizza."
+
+msgid "Its recovery"
+msgstr "La sua risoluzione"
+
+msgid "Last seen"
+msgstr "Ultimo contatto"
+
+msgid "Leave out these filesystem types"
+msgstr "Escludi questi tipi di filesystem"
+
+msgid "Maintenance of {{host}}"
+msgstr "Manutenzione di {{host}}"
+
+msgid "Maintenance windows"
+msgstr "Finestre di manutenzione"
+
+msgid "Maintenance…"
+msgstr "Manutenzione…"
+
+msgid "Meanwhile, every (seconds)"
+msgstr "Nel frattempo, ogni (secondi)"
+
+msgid "Measure"
+msgstr "Misura"
+
+msgid "Measures"
+msgstr "Misure"
+
+msgid "Memory"
+msgstr "Memoria"
+
+msgid "Memory and swap in use."
+msgstr "Memoria e swap in uso."
+
+msgid "Memory used (%)"
+msgstr "Memoria usata (%)"
+
+msgid "New check"
+msgstr "Nuovo check"
+
+msgid "New maintenance window"
+msgstr "Nuova finestra di manutenzione"
+
+msgid "Next"
+msgstr "Prossimo"
+
+msgid "No change of state yet."
+msgstr "Ancora nessun cambio di stato."
+
+msgid "No check applies to this host."
+msgstr "Nessun check riguarda questo host."
+
+msgid "No checks"
+msgstr "Nessun check"
+
+msgid "No hosts yet"
+msgstr "Ancora nessun host"
+
+msgid "No maintenance windows"
+msgstr "Nessuna finestra di manutenzione"
+
+msgid "No measures"
+msgstr "Nessuna misura"
+
+msgid "No problems: every check is OK, or not checked yet."
+msgstr "Nessun problema: ogni check è OK, o non è ancora stato eseguito."
+
+msgid "None: as the inventory says"
+msgstr "Nessuna: come dice l'inventario"
+
+msgid "Not checked yet"
+msgstr "Non ancora controllato"
+
+msgid "Not confirmed"
+msgstr "Non confermato"
+
+msgid "Not confirmed yet: it is checked again before it is told about."
+msgstr "Non ancora confermato: viene ricontrollato prima di essere notificato."
+
+msgid "Not enabled"
+msgstr "Non attivo"
+
+msgid "Not known yet"
+msgstr "Non ancora noto"
+
+msgid "Now"
+msgstr "In corso"
+
+msgid "Of"
+msgstr "Di"
+
+msgid "Offset (seconds)"
+msgstr "Scarto (secondi)"
+
+msgid "One check"
+msgstr "Un check"
+
+msgid "One per line."
+msgstr "Uno per riga."
+
+msgid "Only these mount points"
+msgstr "Solo questi punti di mount"
+
+msgid "Processor"
+msgstr "Processore"
+
+msgid "Processor busy (%)"
+msgstr "Processore occupato (%)"
+
+msgid "Processor time used over one second (its load on Windows), and the load averages on Linux."
+msgstr "Tempo di processore usato in un secondo (il suo carico su Windows), e il carico medio su Linux."
+
+msgid "Reachability"
+msgstr "Raggiungibilità"
+
+msgid "Reachable"
+msgstr "Raggiungibile"
+
+msgid "Reboot required (1 = yes)"
+msgstr "Riavvio necessario (1 = sì)"
+
+msgid "Runs and checks of an inventory"
+msgstr "Run e check di un inventario"
+
+msgid "Services"
+msgstr "Servizi"
+
+msgid "Services not running"
+msgstr "Servizi non attivi"
+
+msgid "Since"
+msgstr "Dal"
+
+msgid "Someone is on it: no reminder is sent while the problem lasts. The acknowledgement ends when the check is OK again."
+msgstr "Qualcuno se ne sta occupando: finché il problema dura non viene mandato nessun promemoria. La presa in carico finisce quando il check torna OK."
+
+msgid "Space and inodes used on each filesystem of the host, each fixed drive on Windows."
+msgstr "Spazio e inode usati su ogni filesystem dell'host, su ogni unità fissa in Windows."
+
+msgid "Space used (%)"
+msgstr "Spazio usato (%)"
+
+msgid "States"
+msgstr "Stati"
+
+msgid "Swap used (%)"
+msgstr "Swap usato (%)"
+
+msgid "Take back"
+msgstr "Annulla"
+
+msgid "The check is deleted, with the states of its hosts and their history."
+msgstr "Il check viene eliminato, con gli stati dei suoi host e la loro cronologia."
+
+msgid "The groups appear once the inventory has been read."
+msgstr "I gruppi compaiono dopo la lettura dell'inventario."
+
+msgid "The host cannot be reached: only its reachability is told about."
+msgstr "L'host non è raggiungibile: viene notificata solo la sua raggiungibilità."
+
+msgid "The hosts of an inventory are listed here once it has been read. Configure what to check on them in Checks."
+msgstr "Gli host di un inventario compaiono qui dopo la sua lettura. Che cosa controllare su di essi si configura in Check."
+
+msgid "This host is in maintenance: nothing about it is told until the window ends."
+msgstr "Questo host è in manutenzione: non arriva nessun avviso su di esso fino alla fine della finestra."
+
+msgid "Thresholds"
+msgstr "Soglie"
+
+msgid "Time since the last boot, and whether updates wait for a reboot."
+msgstr "Tempo dall'ultimo avvio, e se ci sono aggiornamenti in attesa di un riavvio."
+
+msgid "Unit names on Linux (ssh, cron), service names on Windows (sshd, W32Time)."
+msgstr "Nomi di unit su Linux (ssh, cron), nomi di servizi su Windows (sshd, W32Time)."
+
+msgid "Unknown"
+msgstr "Sconosciuto"
+
+msgid "Begins"
+msgstr "Inizio"
+
+msgid "Ends"
+msgstr "Fine"
+
+msgid "Uptime and reboot"
+msgstr "Uptime e riavvio"
+
+msgid "View"
+msgstr "Vista"
+
+msgid "Warning at"
+msgstr "Avviso a"
+
+msgid "What"
+msgstr "Che cosa"
+
+msgid "What it found"
+msgstr "Che cosa ha trovato"
+
+msgid "What to check"
+msgstr "Che cosa controllare"
+
+msgid "When a check on a host has"
+msgstr "Quando un check su un host ha"
+
+msgid "Whether Ansible reaches the host. A host it does not reach has its other checks unknown, and only this one is told about: apply it to every host."
+msgstr "Se Ansible raggiunge l'host. Un host non raggiunto ha gli altri check sconosciuti, e viene notificato solo questo: applicalo a tutti gli host."
+
+msgid "Whether the services named are running: systemd units on Linux, services on Windows."
+msgstr "Se i servizi indicati sono attivi: unit di systemd su Linux, servizi su Windows."
+
+msgid "While a host is in maintenance nothing about it is told. Its checks still run, and what is still a problem when the window ends is told then."
+msgstr "Mentre un host è in manutenzione non arriva nessun avviso su di esso. I suoi check continuano a girare, e quello che è ancora un problema alla fine della finestra viene notificato allora."
+
+msgid "Why"
+msgstr "Perché"
+
+msgid "Which check"
+msgstr "Check"
+
+msgid "Changes of state"
+msgstr "Cambi di stato"
+
+msgid "Not reachable"
+msgstr "Non raggiungibile"
+
+msgid "Rule"
+msgstr "Regola"
+
+msgid "Schedule"
+msgstr "Pianificazione"
+
+msgid "A check of your own: a playbook of a project whose last task, lineadicomando.fleet.fleet_result, gives a state, a summary and metrics for each host."
+msgstr "Un check tuo: un playbook di un progetto il cui ultimo task, lineadicomando.fleet.fleet_result, dà uno stato, un riassunto e delle metriche per ogni host."
+
+msgid "A playbook of a project"
+msgstr "Un playbook di un progetto"
+
+msgid "Add a threshold"
+msgstr "Aggiungi una soglia"
+
+msgid "For the metrics the playbook gives to fleet_result, by name: lowercase letters, digits and _. The state it gives itself counts too: the worse of the two is kept."
+msgstr "Per le metriche che il playbook passa a fleet_result, per nome: lettere minuscole, cifre e _. Conta anche lo stato che dà da sé: si tiene il peggiore dei due."
+
+msgid "Name of a metric"
+msgstr "Nome di una metrica"

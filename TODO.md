@@ -8,8 +8,8 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 ## Status
 
 Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
-4 (schedules) and 5 (notifications) are closed, the last on 15 October
-2026. On 14 October `fleet` was written, the backend for a person at a terminal
+4 (schedules), 5 (notifications) and 6 (checks) are closed, the last on
+16 October 2026. On 14 October `fleet` was written, the backend for a person at a terminal
 (`docs/architecture.md`, "The terminal"); the rest of what the terminal
 could give is under "The terminal" below.
 
@@ -20,8 +20,8 @@ ansible-core went down to 2.16, AlmaLinux's, for both packages and
 `selfcheck`. What is left of it is under "Open points", in the leftovers and
 in phase 10.
 
-**Next step: phase 6** (data collection and checks). The ideas left for
-the terminal are an alternative the user may pick first.
+**Next step: phase 7** (CMDB, updates, drift). The ideas left for the terminal are an alternative the
+user may pick first.
 
 To resume: read `CLAUDE.md` (rules, commands, test environment), then
 `docs/architecture.md` (what exists and why). This file only says what is
@@ -39,19 +39,25 @@ the configuration; roles from Unix groups and the audit trail; agents through
 user; schedules of templates (`OnCalendar` with a time zone, overlap,
 catching up, priority in the queue); notifications of the end of runs to
 Telegram, webhooks, mail and Matrix, with rules, retries, grouping and a
-limit; a self-check of the controller; an overview, the audit trail as a
-page; the interface in English and Italian; the command `fleet` for a
+limit; checks of the hosts from a catalog or from a playbook of the user,
+on Linux and Windows, with states, acknowledgement, maintenance windows and
+notifications of problems; a self-check of the controller; an overview,
+the audit trail as a page; the interface in English and Italian; the command `fleet` for a
 terminal, with completion for bash and a manual.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): the package as of commit
-`7e5a0fb` (the close of phase 5). Its `config.toml` is the packaged one plus
-`[mcp] enabled = true`, `[notifications] url = "https://VM:9090"`
-and the chat's agent, so a later deploy stops at dpkg's question: install
-with `apt-get install -o Dpkg::Options::=--force-confold`. Throwaway
-accounts `tadmin`, `toperator` and `tviewer`, one per role group (their
-password was random and is lost: set a new one with `chpasswd` as root).
-The data of those checks: the project `notify-demo` (written in the
+State of the test VM `deb13-samba-dc` (shut off): the package of the work
+of phase 6 (16 October, not committed yet), with the data of phase 5 put
+back after the integration scripts (a backup of `/var/lib/cockpit-fleet`
+and `/etc/cockpit-fleet` taken that morning, kept in
+`/root/phase5-backup.tar`). Its `config.toml` is the packaged one of phase 5
+plus `[mcp] enabled = true`, `[notifications] url =
+"https://VM:9090"` and the chat's agent, with no `[checks]`
+section, so a later deploy stops at dpkg's question: install with `apt-get
+install -o Dpkg::Options::=--force-confold`. Throwaway accounts `tadmin`,
+`toperator` and `tviewer`, one per role group (their password was random
+and is lost: set a new one with `chpasswd` as root). No check is configured
+there. The data of those checks: the project `notify-demo` (written in the
 interface, `fail.yml` and `ok.yml` on localhost), the inventory `local`,
 the templates `fail-demo` and `ok-demo`, the schedule `nightly-fail`
 (daily). Channels: three to stand-ins (`hook-renamed`, `mail-test`,
@@ -75,18 +81,18 @@ neither Node.js nor an agent for the chat. After a revert, `make
 vm-deb-deploy` installs the current code.
 
 The two RPM controllers, `fed44-fleet` and `alma10-fleet` (shut off, see
-`CLAUDE.md`), have the package of the RPM work (Alma that of commit `8888816`,
-Fedora one built just before the minimum went to 2.16, which changes
-nothing there), the `fleet-node` image and no data. On Alma the package in
-`baseline_fleet` predates that minimum, so its `selfcheck` reports
-`ansible`: after a revert, install the current `.rpm`.
+`CLAUDE.md`), were installed again on 16 October on this host (the workstation)
+and their `baseline_fleet` has the package as of commit `b660213`, the
+`fleet-node` image, no data and no test accounts. On 16 October they got the
+package of phase 6 for its scripts.
 
-Integration tests, all passing when last run, on 15 October on Debian 13,
-Fedora 44 and AlmaLinux 10.2 alike: every script but `windows.sh` and
-`measure-events.sh`; `runs.sh` without the git part (`IT_GIT_URL` not set)
-and `galaxy.sh` without the network (`IT_GALAXY_NET` not set). `windows.sh`
-was last run before phase 3 and wants the secret `it-win-key` made again
-(see `CLAUDE.md`); Windows was tried by the two acceptance tests instead. The
+Integration tests, all passing when last run, on 16 October on Debian 13,
+Fedora 44 and AlmaLinux 10.2 alike (SELinux enforcing, no denial): every
+script but `windows.sh` and `measure-events.sh`; `runs.sh` without the git
+part (`IT_GIT_URL` not set) and `galaxy.sh` without the network
+(`IT_GALAXY_NET` not set). `windows.sh` was run on Debian the same day,
+against `win11-pc00`, with a key made for it; its secret `it-win-key` is
+gone with the data of the tests (see `CLAUDE.md` to make it again). The
 role that installs the chat's agent has no script: it was tried by hand on
 Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 
@@ -123,7 +129,18 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Delivery of notifications | `cockpit-fleet-notify.service`, started by a path unit on `notify.wake`, which the backend writes; retries woken by the tick of the scheduler. No root code: `fleet-unit` was not extended |
 | Secrets of channels | One per channel, `n-<id>-token`, kept by `fleet-secret` in `secrets/notify/`, the only directory the delivery unit has decrypted |
 | What is told about | Playbook runs and ad-hoc commands that end failed (or in error), with changes, successful or canceled; scope: every run, a project, a template or a schedule. Not the jobs of projects |
-| Group as scope of a rule | Not now: a run has no group. Groups of hosts come with the checks (phase 6) |
+| Scope of a rule | Every run or check; a project, a template or a schedule (runs); an inventory (runs and checks); a group of an inventory or one check (checks). Events of runs and of checks are not mixed in a scope that has only one of them |
+| Check cycles | A job of the kind `check`, in the run unit, with a limit of its own (`[checks] max_concurrent`); started by the tick of the scheduler; decided on 16 October with the user |
+| Hosts | From the `inventory` job, identity `(inventory, name)`; what a host is from the first cycle (16 October, with the user) |
+| Who does what with checks | Viewer sees; operator acknowledges, opens maintenance windows, checks now; admin configures (16 October, with the user) |
+| Catalog on the nodes | One task per host: the action `lineadicomando.fleet.checks` calls `checks.py` or `win_checks.ps1` by the shell of the connection (Ansible alone took the `.ps1` for a Linux host); ansible-core only, so AlmaLinux checks Windows too (confirmed on 16 October) |
+| Checks of the user | A playbook of a project ending with `fleet_result`, an action that runs nothing on the node; one cycle per check (confirmed on 16 October) |
+| Thresholds | `warning` and `critical` per metric, on the controller at ingest; a critical below the warning means lower is worse; a check stores only what differs from the catalog (confirmed on 16 October) |
+| Planning | What is due grouped by inventory, credential and `become`, in shards of `[checks] shard_size`; the plan a variables file of `!unsafe` strings, the hosts a `--limit @file`; the next time counted from the tick that planned it (confirmed on 16 October) |
+| Status of a cycle | ansible-playbook's 2 and 4 are outcomes of hosts: the cycle is successful and its unit not failed; cycles are out of the list of runs and deleted after a day (confirmed on 16 October) |
+| Results of the nodes | Taken only for the checks planned for a host in that cycle, the host being the one Ansible names; an unreachable host suppresses its other checks and is told about once, by `reachability` (confirmed on 16 October) |
+| Metrics | `name`, `value`, `unit`, an optional `instance` (`/var`, `C:`), `min`, `max`; names in lowercase, digits and `_` (confirmed on 16 October) |
+| Flapping | Half of the last 20 results changing, with 10 at least; ends under a quarter (confirmed on 16 October) |
 | Approval requested | An event of phase 9, when approvals exist |
 | Data from the nodes | Health checks, CMDB, updates, drift |
 | Checks | Built-in catalog + user playbooks with a result contract |
@@ -212,9 +229,9 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
   (no host key checking: ours come first on the command line and win, checked
   by reading the code of the ssh plugin, not by a test). Whether the node let
   the run in by the key of the credential or by that password was not looked
-  at. The keys made for the two acceptance tests are still authorised on
-  `win11-pc00` (comment `cockpit-fleet-test`); their private halves were
-  deleted.
+  at. The keys made for the two acceptance tests, and the one of `windows.sh` on
+  16 October, are still authorised on `win11-pc00` (comment
+  `cockpit-fleet-test`); their private halves were deleted.
 - Inventory plugins: no credential for them (a cloud token), and one written
   in the interface is called `hosts.yml`, which some plugins refuse; only
   built-in plugins were tried.
@@ -410,45 +427,40 @@ backend refuses it). A mail channel with a user name and no password
 is `secret_required: no`, so it looks complete; `fleet channel update`
 wants the name again even to change only the settings.
 
-## Phase 6 — Data collection and checks
+## Phase 6 — Data collection and checks (closed on 16 October)
 
-To decide first, with the user (nothing is settled; no code exists yet:
-no tables for hosts or results in `db.py`, no `plugins/modules` in the
-collection):
-
-- How a check cycle is a job: a new kind for `fleet-run`, and how it shares
-  `[runs] max_concurrent` and the queue with playbook runs
-- What starts the cycles: the tick of `cockpit-fleet-scheduler.timer`, a
-  timer of its own, or schedules
-- How the host registry is filled: parsing the inventories (the
-  `inventory` job) or a run that gathers facts
-- The tables of hosts, checks, assignments, states and results, and their
-  migrations
-- Who sees, acknowledges and assigns checks (viewer, operator, admin)
-
-- [ ] **Host registry** from the inventories, identity `(inventory, hostname)`,
-      platform from the facts
-- [ ] **Result contract**: `check`, `state` (0-3), `summary`, `metrics[]`
-      (`name`, `value`, `unit`, `min`, `max`), `details`; module
-      `lineadicomando.fleet.fleet_result` for the user's checks
-- [ ] **Catalog** with one implementation per platform and one schema only:
-      reachability, disk and inodes, CPU and memory, services, uptime and reboot
-      required, certificate expiry, clock
-- [ ] **Measured constraint**: on Windows every task costs 4-5 s. All the checks
-      of a node in a single task with a single script
-- [ ] Thresholds evaluated on the controller at ingest, changeable without a new
-      collection
-- [ ] Assignment of checks to groups, with interval and parameters
-- [ ] **Planning**: checks that are due grouped by host, hosts in shards, one run
-      per shard, `strategy: free`, timeout per task
-- [ ] **State engine**: soft/hard after N attempts, an unreachable host that
-      suppresses the alerts of its checks, flapping
-- [ ] Acknowledgement and maintenance windows
-- [ ] Notifications on state change, recovery, reminder
-- [ ] Interface: counters, list of problems, host × check grid, host detail
+Done on 16 October and described in `docs/architecture.md` ("Checks"): the
+host registry, the result contract and `fleet_result`, the catalog on Linux
+and Windows in one task, thresholds at ingest, checks on groups, planning in
+shards by the tick, the state engine, acknowledgement and maintenance,
+notifications of problems, recoveries and reminders, export and import, the
+pages "Hosts" and "Checks", `checks.sh`, and checks in `windows.sh`.
 
 Done when: "disk space" gives comparable results on Debian and Windows, and a
-full test disk produces a notification within two intervals.
+full test disk produces a notification within two intervals. **Met on 16
+October** on the VM: the same metrics (`used_pct`, `free`) from Debian
+containers and from Windows 11 over SSH, `C:` for a mount point; a disk of
+16 MB filled up told about to a webhook in 117 to 119 s with an interval of
+60 s and two attempts, then its recovery. The pages were looked at in the
+browser, in Italian, as an administrator and as an operator.
+
+The same day `checks.sh` and the other scripts passed on Fedora 44 and
+AlmaLinux 10 (the full disk told about in 112 and 121 s), and the user
+confirmed the decisions taken alone.
+
+What it leaves to be desired: what a host is comes only from the cycles,
+not from fact gathering; `services` needs systemd (a container without it
+is unknown); "reboot required" on Linux is `/run/reboot-required`,
+`needs-restarting`, or a newer kernel in `/lib/modules`; certificates in a
+directory are the files ending in `.pem`, `.crt` and `.cer`; summaries are
+written by the nodes, in English; only the changes of state are kept, no
+time series (phase 8); a threshold applies to every host of a check, with
+no override per host; `state.list` answers with every state at once;
+maintenance windows are not exported; the overview page and `selfcheck` say
+nothing of checks; `fleet_result` is taken last per host, so a playbook
+gives one result; the inventories that checks use are read again every
+hour, and each reading is a run in the list of runs. The decisions of the last two items of "Data from the
+nodes" in the table (CMDB, updates, drift) are phase 7.
 
 ## Phase 7 — Inventory, updates, drift
 

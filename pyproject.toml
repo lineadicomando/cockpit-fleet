@@ -15,6 +15,9 @@ ignore = ["S603"]
 "backend/tests/*" = ["S101", "E501"]
 # Ansible plugins put DOCUMENTATION before the imports.
 "collection/**/plugins/**" = ["E402"]
+# Modules run on the nodes, whose Python may be as old as 3.6 (what
+# ansible-core 2.16 supports there): no zip(strict=), no capture_output.
+"collection/**/plugins/modules/*" = ["E402", "UP", "B905"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cockpit_fleet"]

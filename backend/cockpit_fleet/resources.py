@@ -449,8 +449,14 @@ def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | 
          })
 def inventory_parse(ctx: Context, params: Values) -> dict:
     """Queue a job that lists the hosts and groups of an inventory."""
-    inventory_id = params["id"]
-    inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    inventory = store.fetch(ctx.conn, "inventories", params["id"], "inventory")
+    return {"run_id": queue_parse(ctx, inventory)}
+
+
+def queue_parse(ctx: Context, inventory, created_by: str | None = None,
+                start: bool = True) -> str:
+    """Queue the job that lists the hosts and groups of an inventory."""
+    inventory_id = inventory["id"]
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
     try:
@@ -467,10 +473,12 @@ def inventory_parse(ctx: Context, params: Values) -> dict:
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
-    jobs.enqueue(ctx, {"id": run_id, "kind": "inventory", "title": inventory["name"],
-                       "inventory_id": inventory_id, "project_id": inventory["project_id"]},
-                 spec, directory)
-    return {"run_id": run_id}
+    run = {"id": run_id, "kind": "inventory", "title": inventory["name"],
+           "inventory_id": inventory_id, "project_id": inventory["project_id"]}
+    if created_by:
+        run["created_by"] = created_by
+    (jobs.enqueue if start else jobs.queue)(ctx, run, spec, directory)
+    return run_id
 
 
 # --- host keys -------------------------------------------------------------------

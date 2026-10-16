@@ -165,12 +165,13 @@ refuses those that mean nothing in the form asked for.
 
 ## Jobs
 
-A run unit executes one job, of one of seven kinds, described by `spec.json`
+A run unit executes one job, of one of eight kinds, described by `spec.json`
 in its directory: `playbook` (ansible-playbook), `adhoc` (one module, as a
 playbook written for the job), `inventory` (`ansible-inventory --list`, to
 learn hosts and groups), `sync` (fetch a git project), `syntax` (check a
-playbook without running it), `unpack` (extract an uploaded archive) and
-`galaxy` (install the collections a project asks for). All of them need the sandbox, because all of them work on what a project
+playbook without running it), `unpack` (extract an uploaded archive),
+`galaxy` (install the collections a project asks for) and `check` (a cycle
+of checks, see "Checks"). All of them need the sandbox, because all of them work on what a project
 brings: inventory plugins and scripts, git itself, the rules a project gives
 to ansible-lint, an archive made by anyone, or a list of sources to download
 from.
@@ -601,7 +602,8 @@ scheduled, and an optional one is left unanswered.
 
 A rule names the ends of a run to tell about (`failed`, which covers `error`
 too, `changed`, `succeeded`, `canceled`), which runs (every one, or those of
-one project, template or schedule) and a channel. Channels are Telegram, a
+one project, template, schedule or inventory) and a channel; what a rule
+says about checks is in "Checks". Channels are Telegram, a
 webhook, mail (SMTP) and Matrix, written with the standard library. Only
 playbook runs and ad-hoc commands are told about, not the jobs that serve a
 project.
@@ -683,10 +685,154 @@ a webhook, an SMTP server and a Matrix homeserver (stand-ins on the VM,
 database nor the journal; a channel whose server was down got the
 notification about 90 s later, from the tick, once it answered.
 
+## Checks
+
+A check is a kind of the catalog (reachability, disk, processor, memory,
+services, uptime and reboot, certificates, clock), or a playbook of the
+user, applied to a group of an inventory, with an interval, the attempts
+before a problem is confirmed and the interval meanwhile, parameters,
+thresholds and a machine credential. Each host of the group has a state for
+it. Nothing is installed on the hosts: Ansible reaches them as for a run.
+
+```
+scheduler.tick ── due states, by inventory, credential and become ──▶ shards of hosts
+   │ jobs.queue: a run of the kind "check", its plan in spec.json
+   ▼
+cockpit-fleet-run@ID   the same sandbox, a limit of its own ([checks] max_concurrent)
+   │ one task per host: lineadicomando.fleet.checks → checks.py or win_checks.ps1
+   │ events.jsonl
+   ▼
+reconcile → checks.ingest ── thresholds, soft and hard ──▶ check_states, state_changes
+   │ a hard state that changed
+   ▼
+notify.check_event → the outbox, as for runs
+```
+
+**The hosts** come from the `inventory` job: when it succeeds, `hosts` gets
+a row per host of that inventory (the identity is the inventory and the
+name), with its address and groups, and loses those that are gone, with
+their states. A check on an inventory never read queues the job, and the
+tick reads again, every hour, the inventories that checks use. What a host
+is (platform, system, kernel) is what the first cycle reports; no fact
+gathering is spent on it.
+
+**One task per host.** The catalog is one module in two files: `checks.py`
+for Linux and `win_checks.ps1` for Windows, with the same parameters and the
+same output. Ansible would not choose between them by itself: for a host
+without a PowerShell shell it looks a module up with no suffix, and took the
+`.ps1` (found on ansible-core 2.20). So the task names the action
+`lineadicomando.fleet.checks`, which runs on the controller and calls one
+module or the other according to the shell plugin of the connection. Every
+check of a host runs in that one task, which matters on Windows, where a
+task costs 4 to 5 s: eight checks take 5.4 s there (`windows.sh`). The
+Windows module needs nothing but ansible-core (`Ansible.Basic` is part of
+it), so AlmaLinux, which has no `ansible.windows`, checks Windows too, and
+it sets the invariant culture, so that a summary says `32.2%` whatever the
+language of the node. The Linux module runs on Python 3.6 and later, what
+ansible-core 2.16 supports on a node, with the standard library only;
+certificates are read with a reader of DER of its own.
+
+**The plan** is data. `fleet-run` writes it into the runtime directory as a
+variables file whose strings are all tagged `!unsafe`, the hosts into a file
+given to `--limit @…`, and the playbook (one play, `strategy: free`, the
+task with a `timeout`) beside them; nothing of it is in the command line. A
+service named `{{ lookup('pipe', 'id') }}` reaches the node as those
+characters.
+
+**Results are untrusted.** They are written by the nodes. A result is taken
+only for a check planned for that host in that cycle, and the host is the
+one Ansible names in the event, never one a result names. States, metrics
+(name, value, unit, instance, bounds), summaries and details are checked and
+cut to size; a node cannot report for another host, nor for a check it was
+not asked for.
+
+**Thresholds** are applied on the controller, at ingest, so that changing
+one needs no new collection and a node does not decide whether it is in
+trouble. Each metric may have a warning and a critical; when the critical is
+below the warning, lower is worse (the days before a certificate expires).
+A check sets only what differs from the catalog's defaults. The modules of
+the catalog report metrics and leave the state to the thresholds (they say
+`unknown` when they cannot measure); the clock's offset is computed here,
+from the time the node says and the time of the event.
+
+**States.** Ok, warning, critical, unknown, with unknown between warning and
+critical when they are compared. A problem is soft until it has been seen
+`max_attempts` times in a row, checked again at `retry_interval` meanwhile;
+then it is hard. A change between two problems is hard at once, and so is a
+recovery. The next time is counted from when the cycle was planned, on the
+tick, with 10 s of slack: counted from when the result arrived, it slipped
+to the following tick every time (177 s instead of two intervals of 60).
+Every change of the last state or of the hard one is kept in
+`state_changes`. A check that changed in at least half of its last 20
+results, with 10 at least, flaps, and stops flapping under a quarter.
+
+**Unreachable hosts.** A host Ansible cannot reach has its `reachability`
+check critical and its other checks unknown and suppressed: they keep their
+hard state and their count, and nothing is told about them. A host is told
+about once, not once per check: `reachability` should be applied to every
+host.
+
+**Cycles.** A cycle is a run of the kind `check`, in the same unit as every
+job, with a limit of its own, `[checks] max_concurrent` (1), apart from
+`[runs] max_concurrent`: checks do not wait behind a long playbook, nor a
+playbook behind them. What is due is grouped by inventory, credential and
+`become`, then cut in shards of `[checks] shard_size` hosts (50), each a
+cycle with `[checks] forks` (20). A state held by a cycle is not planned
+again until it ends. ansible-playbook says 2 when a host failed and 4 when
+one could not be reached: for a cycle these are outcomes of hosts, which
+their states record, so the cycle is successful and its unit is not left
+failed; with a host down, a failed unit a minute would pile up. The output
+of a cycle is the default callback without the hosts that went well, so the
+journal gets a line per failure, not the results. Cycles are not in the
+list of runs unless asked for (`run.list` with `kind: check`), and are
+deleted with their directory after a day, by the tick: their results are in
+the states.
+
+**Checks of the user.** A check of the kind `playbook` names a playbook of a
+project; it runs alone, on the hosts of its group, sharded the same way.
+Its last task is `lineadicomando.fleet.fleet_result` with a state, a summary,
+metrics and details: an action, which runs on the controller and sends
+nothing to the node, so it is the same on Linux and Windows. It checks what
+it is given and hands it back; ingest takes the last one of each host and
+applies the thresholds of the check, keeping the worse of that state and
+the one the playbook gave. A task that failed (and was not ignored) makes
+the state unknown with its message. Every task has `[checks] timeout`
+(`ANSIBLE_TASK_TIMEOUT`).
+
+**Notifications.** After each ingest and at each tick, a hard state that
+differs from the last one told about is told: `problem`, or `recovery` from
+a problem told about. A problem nobody acknowledged is told again after
+`[checks] reminder_hours` (24; 0 never) as `reminder`. Nothing is told for a
+check that flaps or whose host is unreachable, nor for a host in a
+maintenance window: what is still a problem when the window ends is told at
+the next tick. Rules have three more scopes: an inventory (its runs and its
+checks), a group of an inventory, one check; the scopes of a project,
+template or schedule have runs only, those of a group or a check have checks
+only, and a rule that mixes them is refused. The message links to the host,
+`/fleet#/hosts/ID`.
+
+**Roles.** A viewer sees hosts, states and their history; an operator also
+acknowledges a problem (until it is ok again), runs a check now, and opens
+and closes maintenance windows (a host, or a group of an inventory, at most
+90 days); an administrator configures checks. Checks are in the exported
+document, maintenance windows are not.
+
+**The interface.** "Hosts" has the counters, the problems with what can be
+done about each, the hosts, and a grid of hosts and checks; the page of a
+host (`#/hosts/ID`) has what it is, its checks with their metrics, and its
+last changes. "Checks" has the checks and the maintenance windows.
+
+Checked on Debian 13 (`checks.sh`, four Linux containers and an address
+with no host): every kind of the catalog and a playbook of the user, an
+unreachable host told about once, a disk of 16 MB filled up told about in
+117 to 119 s with an interval of 60 s and two attempts, and its recovery;
+and on Windows 11 over SSH (`windows.sh`), the catalog with the same metrics
+as on Linux, `C:` for a mount point.
+
 ## Export and import
 
 `config.export` returns the configuration as one JSON document: credentials,
-projects, inventories, trusted host keys, job templates, schedules,
+projects, inventories, trusted host keys, job templates, schedules, checks,
 notification channels and rules. Things refer to
 each other by name, since identifiers differ between two installations. It
 holds no secret: a credential is its name, its kind, its user name and its

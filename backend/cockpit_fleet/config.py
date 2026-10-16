@@ -64,6 +64,14 @@ class Config:
     chat_max_sessions: int = 2
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""
+    # Check cycles: how many at once (apart from runs), hosts per cycle,
+    # forks within one, the time limit of the task on a host, and how often a
+    # problem nobody acknowledged is told again (0: never).
+    checks_max_concurrent: int = 1
+    checks_shard_size: int = 50
+    checks_forks: int = 20
+    checks_timeout: int = 60
+    checks_reminder_hours: int = 24
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -141,7 +149,7 @@ def parse(text: str) -> Config:
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
     unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
-                                     "chat", "notifications"})
+                                     "chat", "notifications", "checks"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -191,6 +199,9 @@ def parse(text: str) -> Config:
         raise ConfigError("notifications.url must be empty or an http(s)://host[:port][/path]"
                           " URL")
 
+    checks = _section(data, "checks", {"max_concurrent", "shard_size", "forks", "timeout",
+                                       "reminder_hours"})
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -206,6 +217,13 @@ def parse(text: str) -> Config:
         chat_agents=tuple(_agent(name, section) for name, section in agents.items()),
         chat_max_sessions=_int(chat, "chat", "max_sessions", Config.chat_max_sessions, 1, 64),
         notify_url=notify_url.rstrip("/"),
+        checks_max_concurrent=_int(checks, "checks", "max_concurrent",
+                                   Config.checks_max_concurrent, 1, 16),
+        checks_shard_size=_int(checks, "checks", "shard_size", Config.checks_shard_size, 1, 1000),
+        checks_forks=_int(checks, "checks", "forks", Config.checks_forks, 1, 200),
+        checks_timeout=_int(checks, "checks", "timeout", Config.checks_timeout, 5, 600),
+        checks_reminder_hours=_int(checks, "checks", "reminder_hours",
+                                   Config.checks_reminder_hours, 0, 24 * 30),
     )
 
 
