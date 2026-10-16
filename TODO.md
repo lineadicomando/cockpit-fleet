@@ -11,13 +11,13 @@ Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
 4 (schedules), 5 (notifications), 6 (checks) and 7 (CMDB, updates, drift)
 are closed. Phase 6 closed with commit `3dc0e38`, pushed with `409148c`, CI
 green; phase 7 on 16 October with `ff5ce85`, `c3cfc16` and the commit that
-says so, **not pushed yet**. Before them, also not pushed: `d7708be` (schedules on
+says so, and the terminal's ideas (`a551049`), **not pushed yet**. Before them, also not pushed: `d7708be` (schedules on
 a controller in UTC, a bug the containers found), `5c85947` (tracked files
 made generic, the details of a developer's machines moved out) and
 `30424cd` (integration scripts in containers, `make ct-test`). On 14 October
 `fleet` was written, the backend for a person at a terminal
-(`docs/architecture.md`, "The terminal"); the rest of what the terminal
-could give is under "The terminal" below.
+(`docs/architecture.md`, "The terminal"); on 16 October every idea left for
+it was made, as "The terminal" below says, with two things still to see.
 
 On 15 October the controller was extended to Fedora 44 and AlmaLinux 10:
 an `.rpm` (`make rpm`) and two test VMs, every integration script passing
@@ -28,7 +28,7 @@ in phase 10.
 
 **Phase 7** (CMDB, updates, drift) was closed with the user on 16 October;
 what is left of it is in its section, none of it blocking. **Next step:**
-phase 8 (time series and scale), or the ideas left for the terminal.
+phase 8 (time series and scale).
 
 To resume:
 
@@ -156,7 +156,8 @@ script: it was tried by hand on Debian, on 13 and 14 October, as
 | Permissions in the chat | Read-only tools of `fleet-mcp` go without a question, everything else is confirmed; "always" lasts a conversation and is kept by the page, never written in the agent's settings |
 | Name of `fleetctl` | Stays `fleetctl`, with `fleet-mcp` next to it: they are in `/usr/libexec/cockpit-fleet`, out of the `PATH`, and sharing a name with FleetDM's CLI creates no ambiguity |
 | Name of the command for the terminal | `fleet`, confirmed on 14 October. No package of Debian (trixie, sid), Fedora 44 or AlmaLinux 10 (with EPEL) installs `bin/fleet`, its completion or its manual (Fedora and Alma checked on 15 October); the CLI of Rancher Fleet, installed by hand in `/usr/local/bin`, would shadow it, and JetBrains Fleet's launcher is for desktops. `fleetctl` was weighed and discarded: it is the backend's own name, and FleetDM's CLI. A second name, `cockpit-fleet`, as a link, was proposed for that case and not made |
-| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`, `help`); five commands meant for programs are not listed and still answer; tables for a person, `--json` for a program |
+| Terminal | `fleet` in `/usr/bin`, for admins, operators and viewers: a client of `fleetctl` through sudo like the page and `fleet-mcp`, with `"via": "cli"`, which is recorded and is not an agent's (no ceiling). Every command of the registry as `fleet AREA VERB --param value`, plus shortcuts (`launch`, `log`, `result`, `secret`, `assistant`, `help`) and `project clone`, `pull`, `push`; a name stands for an id; five commands meant for programs are not listed and still answer; tables for a person, `--json` for a program |
+| Projects at a terminal | Administrators only (16 October, with the user): a directory under `local_roots` of the group `cockpit-fleet-admin`, read by the service through an ACL; a project written in the interface cloned, pulled and pushed as git bundles, a push taken only as a fast forward of files the editor could have written |
 | Secrets at the terminal | Never on the command line: asked for with no echo, or read from stdin, and handed to `fleet-secret` on its stdin |
 | Scheduling | A single timer, shipped and enabled by the package, that runs `fleetctl scheduler.tick` every minute, not a timer per schedule (root must not write units from user input; queue and sharding are needed anyway); `OnCalendar` expressions read by `systemd-analyze`, with a time zone |
 | Who manages schedules | As templates: an administrator creates, changes and deletes; an operator turns one on or off and runs it now; a viewer sees them (confirmed on 14 October) |
@@ -317,11 +318,14 @@ outcome read, a conversation resumed after a reload.
 
 ## The terminal (started on 14 October)
 
-Done: the command `fleet` (point 1 of the brainstorm), with completion for
-bash and a manual, tried by `cli.sh` and by hand at a terminal. The user
-wants all of what follows (16 October), in this order: names and
-completion, `fleet assistant`, the command from the page, then projects
-at the terminal, whose question about operators comes first. Ideas left:
+Done: the command `fleet`, with completion for bash and a manual, and on
+16 October every idea that was left (`a551049`). Still to see, with a
+controller up:
+
+- [ ] `fleet assistant` with Claude logged in, on a controller
+- [ ] The sections "At a terminal" in a browser
+
+What was made on 16 October:
 
 - [x] Projects at the terminal (16 October, decided with the user): the
       convention for `[projects] local_roots` (`cockpit-fleet-admin` writes,
