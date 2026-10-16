@@ -27,8 +27,9 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { CmdbChange, CmdbDetail, CmdbHost, Drift, Inventory, PackageHit } from "../lib/types.ts";
+import type { CmdbChange, CmdbDetail, CmdbHost, Drift, Inventory, PackageHit, Template } from "../lib/types.ts";
 import { ListState, SectionHeader, message } from "./common.tsx";
+import { LaunchModal } from "./TemplatesPage.tsx";
 
 // Long lists are shown this many rows at a time, with a filter.
 const PAGE = 200;
@@ -174,8 +175,8 @@ export function AssetsPage() {
                             <Table variant="compact" aria-label={t("Assets")}>
                                 <Thead>
                                     <Tr>
-                                        <Th>{t("Host")}</Th><Th>{t("System")}</Th><Th>{t("Hardware")}</Th><Th>{t("CPUs")}</Th><Th>{t("Memory")}</Th>
-                                        <Th>{t("Packages")}</Th><Th>{t("Updates")}</Th><Th>{t("Compliance")}</Th><Th>{t("Collected")}</Th>
+                                        {[t("Host"), t("System"), t("Hardware"), t("CPUs"), t("Memory"), t("Packages"), t("Updates"), t("Compliance"), t("Collected")]
+                                            .map(name => <Th key={name} modifier="wrap">{name}</Th>)}
                                     </Tr>
                                 </Thead>
                                 <Tbody>
@@ -298,6 +299,30 @@ function ChangeList({ changes }: { changes: CmdbChange[] }) {
     );
 }
 
+// A template of the host's inventory that applies its updates, launched on it alone.
+function ApplyUpdates({ host }: { host: CmdbDetail }) {
+    const { t } = useTranslation();
+    const templates = useLoad(() => call<{ templates: Template[] }>("template.list"));
+    const fitting = (templates.data?.templates ?? []).filter(item => item.inventory_id === host.inventory_id);
+    const [chosen, setChosen] = useState("");
+    const [launching, setLaunching] = useState(false);
+    const guess = fitting.find(item => /updat|upgrad|patch|aggiorn/i.test(item.name)) ?? fitting[0];
+    const template = fitting.find(item => item.id === chosen) ?? guess;
+    if (!templates.data) return null;
+    if (!template) {
+        return <Content component="small">{t("To apply them from here, make a job template on the inventory {{inventory}}.", { inventory: host.inventory })}</Content>;
+    }
+    return (
+        <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} style={{ marginBlockEnd: "1rem" }}>
+            <FormSelect aria-label={t("Job template")} value={template.id} style={{ maxWidth: "20rem" }} onChange={(_e, value) => setChosen(value)}>
+                {fitting.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+            </FormSelect>
+            <Button variant="secondary" onClick={() => setLaunching(true)}>{t("Apply on this host…")}</Button>
+            {launching && <LaunchModal template={template} limit={host.name} onClose={() => setLaunching(false)} />}
+        </Flex>
+    );
+}
+
 function DiffText({ text }: { text: string }) {
     const color = (line: string) => line.startsWith("+") && !line.startsWith("+++")
         ? "var(--pf-t--global--color--status--success--default)"
@@ -380,21 +405,24 @@ export function HostInventory({ hostId }: { hostId: string }) {
             {tab === "updates" && (host.update_list.length === 0
                 ? <Content component="p">{t("Up to date.")}</Content>
                 : (
-                    <Filtered items={host.update_list} label={t("Updates")} keyOf={item => item.name} text={item => `${item.name} ${item.source}`}
-                        columns={[t("Update"), t("Installed"), t("Available"), t("From")]}
-                        row={item => (
-                            <>
-                                <Td dataLabel={t("Update")}>
-                                    {item.name}
-                                    {item.security && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Security")}</Label>}
-                                </Td>
-                                <Td dataLabel={t("Installed")}>{item.current}</Td>
-                                <Td dataLabel={t("Available")}>{item.available}</Td>
-                                <Td dataLabel={t("From")}>
-                                    <Tooltip content={item.source}><span>{item.source.length > 40 ? item.source.slice(0, 40) + "…" : item.source}</span></Tooltip>
-                                </Td>
-                            </>
-                        )} />
+                    <>
+                        {can("run.start") && <ApplyUpdates host={host} />}
+                        <Filtered items={host.update_list} label={t("Updates")} keyOf={item => item.name} text={item => `${item.name} ${item.source}`}
+                            columns={[t("Update"), t("Installed"), t("Available"), t("From")]}
+                            row={item => (
+                                <>
+                                    <Td dataLabel={t("Update")}>
+                                        {item.name}
+                                        {item.security && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Security")}</Label>}
+                                    </Td>
+                                    <Td dataLabel={t("Installed")}>{item.current}</Td>
+                                    <Td dataLabel={t("Available")}>{item.available}</Td>
+                                    <Td dataLabel={t("From")}>
+                                        <Tooltip content={item.source}><span>{item.source.length > 40 ? item.source.slice(0, 40) + "…" : item.source}</span></Tooltip>
+                                    </Td>
+                                </>
+                            )} />
+                    </>
                 ))}
             {tab === "changes" && <ChangeList changes={host.changes} />}
             {tab === "drift" && (drift.error ? <Alert variant="danger" isInline title={drift.error.message} /> : <DriftList drift={driftItems} />)}

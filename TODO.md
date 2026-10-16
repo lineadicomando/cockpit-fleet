@@ -8,9 +8,10 @@ only. It does not replace Icinga: nothing in real time, alerts that are
 ## Status
 
 Phases 0, 1, 2, 3, 3b (agents and the chat, "Assistant" in the interface),
-4 (schedules), 5 (notifications) and 6 (checks) are closed, the last on
-16 October 2026 with commit `3dc0e38`, pushed with `409148c`, CI green.
-After them, on 16 October and **not pushed yet**: `d7708be` (schedules on
+4 (schedules), 5 (notifications), 6 (checks) and 7 (CMDB, updates, drift)
+are closed. Phase 6 closed with commit `3dc0e38`, pushed with `409148c`, CI
+green; phase 7 on 16 October with `ff5ce85`, `c3cfc16` and the commit that
+says so, **not pushed yet**. Before them, also not pushed: `d7708be` (schedules on
 a controller in UTC, a bug the containers found), `5c85947` (tracked files
 made generic, the details of a developer's machines moved out) and
 `30424cd` (integration scripts in containers, `make ct-test`). On 14 October
@@ -25,8 +26,9 @@ ansible-core went down to 2.16, AlmaLinux's, for both packages and
 `selfcheck`. What is left of it is under "Open points", in the leftovers and
 in phase 10.
 
-**Next step: phase 7** (CMDB, updates, drift), under way: its questions
-were answered on 16 October, the design is in its section.
+**Phase 7** (CMDB, updates, drift) was closed with the user on 16 October;
+what is left of it is in its section, none of it blocking. **Next step:**
+phase 8 (time series and scale), or the ideas left for the terminal.
 
 To resume:
 
@@ -454,7 +456,7 @@ through a vault or a passphrase-protected key (the code is that of runs);
 a cycle of more than one shard on real nodes (the unit tests do it);
 checks of Windows from Fedora or AlmaLinux (`windows.sh` ran from Debian).
 
-## Phase 7 — Inventory, updates, drift (started on 16 October)
+## Phase 7 — Inventory, updates, drift (closed on 16 October)
 
 Decided with the user on 16 October (see "Decisions"): the CMDB and the
 updates are kinds of the catalog, drift a kind of check that runs a
@@ -484,25 +486,22 @@ What follows from it:
   warning from one; the diffs of the last cycle kept per host, shown to
   operators and administrators only.
 
-Built on 16 October, not committed yet (see `docs/architecture.md`, "The
-inventory of hosts"): the three kinds, the slow lane, the tables, the
-commands `cmdb.*` and `drift.get`, the page "Assets" and the inventory on the
-page of a host, `cmdb.sh`. Left:
+Built and tried on 16 October (see `docs/architecture.md`, "The inventory
+of hosts"): the three kinds, the slow lane, the tables, the commands `cmdb.*`
+and `drift.get`, the page "Assets", the inventory on the page of a host and
+a template launched from its updates. `cmdb.sh` passes in containers and on
+the machines of the three distributions (SELinux enforcing, no denial), with
+drift and a change of hardware told to a webhook and their recovery;
+`windows.sh` passes on Windows 11 with the CMDB and Windows Update; the
+whole suite passes in containers of Debian. The interface was looked at in
+a browser on Debian. Left, none blocking:
 
-- [ ] Windows: `cmdb` and `updates` pass `windows.sh` on `win11-pc00` (16
-      October), Windows Update with no `become`. A check with `become`
-      (runas SYSTEM) failed before the module ran: the exec wrapper did not
-      find its temporary file under `ansible_remote_tmp`
-      (`C:\Windows\Temp\ansible`); find out whether it is that setting
-- [ ] The three kinds on machines at the close of the phase, with the
-      interface in a browser (in containers on 16 October: `cmdb.sh` on the
-      three distributions, `checks.sh` on Debian and AlmaLinux, the whole
-      suite on Debian, all passing)
-- [ ] Updates: a link from the updates of a host to a template that applies
-      them; zypper never had an update to find; dnf without `become` fetches
-      metadata into the account's cache on every search
-- [ ] Notifications: security updates, drift and hardware go through the
-      states and the rules as they are; try them end to end
+- [ ] The criterion's "Linux and Windows together" in one list was not seen
+      in one browser session: each was tried apart
+- [ ] Updates: zypper never had an update to find; dnf without `become`
+      fetches metadata into the account's cache on every search
+- [ ] A notification of security updates end to end (the threshold is unit
+      tested; the nodes of the tests had one only when made to)
 
 Done when: the CMDB shows Linux and Windows together and a manual change to a
 managed file appears as drift at the next cycle.

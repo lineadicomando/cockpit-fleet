@@ -904,7 +904,10 @@ updates and compliance, filtered by any word and counted by system, exported
 as CSV (a cell that would start a formula is opened by an apostrophe) or
 JSON, and a search of a package across hosts. The page of a host has what it
 is made of: hardware, packages, services, updates, changes and, for an
-operator, drift.
+operator, drift. From its updates an operator launches a template of the
+same inventory, narrowed to that host, through the usual launch (survey and
+dry run included): which template applies updates is the user's, the
+plugin installs nothing by itself.
 
 Checked in containers of Debian 13, Fedora 44 and AlmaLinux 10 (`cmdb.sh`,
 on 16 October): a Debian node's packages
@@ -1287,6 +1290,13 @@ Every task on Windows costs 4 to 5 seconds whatever it does, against a fraction
 of a second on Linux. A collection cycle must therefore gather everything a
 Windows node has to report in one task, with one script, and not run one task
 per check.
+
+`become` on Windows is `runas`, with `ansible_become_method: runas` and
+`ansible_become_user: SYSTEM` in the inventory. It fails before any module
+runs when `ansible_remote_tmp` is set to a directory such as
+`C:\Windows\Temp\ansible`, and works with the default (`%TEMP%`): tried with
+`win_whoami` and with the checks of the catalog on Windows 11, 16 October.
+Windows Update needs no `become` over SSH with a key.
 
 ## Packaging
 

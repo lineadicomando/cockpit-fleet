@@ -3,18 +3,25 @@
 # of, their updates, and drift. A cmdb, an updates and a compliance check run
 # from the timer, in cycles of their own; a package removed by hand is a change
 # of the CMDB, a managed file changed by hand is drift at the next cycle, with
-# its diff for an operator and not for a viewer.
+# its diff for an operator and not for a viewer; drift and a network interface
+# added to a node (a change of hardware) told about to a webhook (a stand-in,
+# notify-sinks.py), then their recovery.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
-# It waits for the timer: about four minutes. IT_KEEP=yes leaves it all behind.
+# It waits for the timer: about six minutes. IT_KEEP=yes leaves it all behind.
 set -u
 . "$(dirname "$0")/lib.sh"
 require_root
 require_wipe
 HERE=$(dirname "$0")
 KEYS=/run/fleet-it-keys
+SINKS=/run/fleet-it-sinks
 NODES=2
 
-cleanup() { wipe; userdel -r itviewer 2>/dev/null; sh "$HERE/nodes.sh" down 2>/dev/null; rm -rf "$KEYS"; }
+stop_sinks() { pkill -f "notify-sinks.py $SINKS" 2>/dev/null; rm -rf "$SINKS"; }
+cleanup() {
+    stop_sinks; wipe; userdel -r itviewer 2>/dev/null; sh "$HERE/nodes.sh" down 2>/dev/null
+    podman network rm -f fleet-it-extra >/dev/null 2>&1; rm -rf "$KEYS"
+}
 [ "${IT_KEEP:-}" = yes ] || trap cleanup EXIT
 cleanup
 prepare
@@ -31,6 +38,11 @@ summary() {
 checked() {  # checked HOST CHECK: when its last result came
     db "SELECT coalesce(s.checked_at, 0) FROM check_states s JOIN hosts h ON h.id = s.host_id
         JOIN checks c ON c.id = s.check_id WHERE h.name = '$1' AND c.name = '$2'"
+}
+count() { if [ -f "$SINKS/$1" ]; then grep -c -- "$2" "$SINKS/$1"; else echo 0; fi; }
+wait_count() {  # wait_count FILE PATTERN N SECONDS
+    n=0
+    while [ "$n" -lt "$4" ] && [ "$(count "$1" "$2")" -lt "$3" ]; do sleep 2; n=$((n + 2)); done
 }
 wait_after() {  # wait_after HOST CHECK TIME SECONDS: until a result newer than TIME
     n=0
@@ -77,6 +89,13 @@ cat > /srv/fleet-it/baseline/baseline.yml <<'YAML'
 YAML
 chmod -R a+rX /srv/fleet-it
 project=$(get "$(admin project.create '{"name": "baseline", "kind": "local", "path": "/srv/fleet-it/baseline"}')" 'a["data"]["id"]')
+
+# --- a channel for what is told ------------------------------------------------------
+mkdir -p "$SINKS"
+python3 "$HERE/notify-sinks.py" "$SINKS" 8025 2525 </dev/null >/dev/null 2>&1 &
+sleep 1
+channel=$(get "$(admin channel.create '{"name":"hook","kind":"webhook","settings":{"url":"http://127.0.0.1:8025/hook","template":"{\"title\": \"$title\", \"text\": \"$text\"}"}}')" 'a["data"]["id"]')
+admin rule.create "{\"name\":\"inventory\",\"channel_id\":\"$channel\",\"events\":[\"problem\",\"recovery\"]}" >/dev/null
 
 # --- the checks -----------------------------------------------------------------
 base="\"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"interval\": 60, \"max_attempts\": 1"
@@ -135,6 +154,24 @@ expect_eq "the file was not touched: check mode" "$(podman exec fleet-node-1 cat
 listed=$(ctl itviewer cmdb.list)
 expect_eq "the list says which host drifted" \
     "$(get "$listed" 'sorted((h["name"], h["compliant"]) for h in a["data"]["hosts"])')" "[('node1', False), ('node2', True)]"
+
+wait_count http.jsonl "baseline on node1" 1 60
+expect_eq "drift is told about" "$(count http.jsonl "baseline on node1")" 1
+
+# --- a change of hardware, and recoveries ----------------------------------------------
+since=$(checked node2 cmdb)
+podman network create fleet-it-extra >/dev/null
+podman network connect fleet-it-extra fleet-node-2
+wait_after node2 cmdb "$since" 120
+expect_eq "an interface added is a change of hardware" "$(state node2 cmdb)" 1
+expect_eq "saying which" "$(summary node2 cmdb | cut -d: -f1-2 | cut -c1-34)" "hardware changed: interface eth1 -"
+wait_count http.jsonl "cmdb on node2" 1 60
+expect_eq "and told about at once" "$(count http.jsonl "cmdb on node2")" 1
+podman exec fleet-node-1 sh -c 'printf "managed by the baseline\n" > /etc/fleet-managed'
+wait_count http.jsonl "Recovered: cmdb on node2" 1 150
+wait_count http.jsonl "Recovered: baseline on node1" 1 150
+expect_eq "the hardware warning lasts one cycle" "$(count http.jsonl "Recovered: cmdb on node2")" 1
+expect_eq "drift undone by hand recovers" "$(count http.jsonl "Recovered: baseline on node1")" 1
 
 expect_eq "no cycle failed" "$(db "SELECT count(*) FROM runs WHERE kind = 'check' AND status IN ('failed', 'error')")" 0
 expect_eq "nor left a unit failed" "$(systemctl list-units --failed --plain --no-legend 'cockpit-fleet-run@*' | wc -l)" 0

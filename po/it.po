@@ -2293,3 +2293,9 @@ msgid "security_updates_count"
 msgid_plural "security_updates_count_plural"
 msgstr[0] "{{count}} di sicurezza"
 msgstr[1] "{{count}} di sicurezza"
+
+msgid "Apply on this host…"
+msgstr "Applica su questo host…"
+
+msgid "To apply them from here, make a job template on the inventory {{inventory}}."
+msgstr "Per applicarli da qui, crea un template sull'inventario {{inventory}}."

@@ -171,9 +171,10 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     );
 }
 
-function LaunchModal({ template, onClose }: { template: Template; onClose: () => void }) {
+// limit: what the hosts are narrowed to at first, such as the host whose updates are applied.
+export function LaunchModal({ template, limit: initialLimit = "", onClose }: { template: Template; limit?: string; onClose: () => void }) {
     const { t } = useTranslation();
-    const [limit, setLimit] = useState("");
+    const [limit, setLimit] = useState(initialLimit);
     const [check, setCheck] = useState(false);
     const [answers, setAnswers] = useState(() => initialAnswers(template.survey));
 
