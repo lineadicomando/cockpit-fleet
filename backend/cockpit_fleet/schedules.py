@@ -51,15 +51,31 @@ def analyze(calendar: str, timezone: str = "", count: int = 1) -> tuple[str, lis
     if result.returncode != 0:
         raise BadRequest(f"not a valid OnCalendar expression: {calendar}")
     normalized, times = "", []
+    # Each time comes in the controller's zone, followed by "(in UTC)" unless
+    # that zone is UTC or another with no offset and no daylight saving time
+    # ("GMT"): then the local time is already the one in UTC.
+    local = None
     for line in result.stdout.splitlines():
         label, _, value = line.strip().partition(": ")
         if label == "Normalized form":
             normalized = value
+        elif label == "Next elapse" or label.startswith("Iteration #"):
+            if local:
+                times.append(_epoch(local))
+            local = None if value == "never" else value
         elif label == "(in UTC)":
-            # "Wed 2026-10-14 22:00:00 UTC": the day's name is left out.
-            stamp = datetime.strptime(value.split(" ", 1)[1], "%Y-%m-%d %H:%M:%S UTC")
-            times.append(stamp.replace(tzinfo=UTC).timestamp())
+            times.append(_epoch(value))
+            local = None
+    if local:
+        times.append(_epoch(local))
     return normalized, times
+
+
+def _epoch(value: str) -> float:
+    """Epoch seconds of "Wed 2026-10-14 22:00:00 UTC", a time in UTC; the
+    day's name and the zone's abbreviation are left out."""
+    stamp = datetime.strptime(" ".join(value.split(" ")[1:3]), "%Y-%m-%d %H:%M:%S")
+    return stamp.replace(tzinfo=UTC).timestamp()
 
 
 def check_calendar(value: str) -> str:

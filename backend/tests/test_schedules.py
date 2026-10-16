@@ -276,6 +276,18 @@ class CalendarTest(ScheduleBase):
         self.assertEqual(argv[-2:], ["--", "daily Europe/Rome"])
         self.assertEqual(normalized, "*-*-* 00:00:00 Europe/Rome")
         self.assertEqual(times, [1792015200.0, 1792101600.0])
+        # A controller in UTC, or in a zone with no offset, prints no "(in UTC)".
+        for zone in ("UTC", "GMT"):
+            output = ("  Original form: daily\n"
+                      "Normalized form: *-*-* 00:00:00 Europe/Rome\n"
+                      f"    Next elapse: Wed 2026-10-14 22:00:00 {zone}\n"
+                      "       From now: 6h left\n"
+                      f"   Iteration #2: Thu 2026-10-15 22:00:00 {zone}\n"
+                      "       From now: 1 day 6h left\n")
+            with mock.patch.object(subprocess, "run") as run:
+                run.return_value = subprocess.CompletedProcess([], 0, output, "")
+                self.assertEqual(REAL_ANALYZE("daily", "Europe/Rome", 2)[1],
+                                 [1792015200.0, 1792101600.0], zone)
         with mock.patch.object(subprocess, "run") as run:
             run.return_value = subprocess.CompletedProcess([], 0, "Next elapse: never\n", "")
             self.assertEqual(REAL_ANALYZE("2020-01-01")[1], [])
