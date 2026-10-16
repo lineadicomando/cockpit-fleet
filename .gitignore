@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.log
 Makefile.local
+CLAUDE.local.md
 __pycache__/
 debian/cockpit-fleet/
 debian/.debhelper/

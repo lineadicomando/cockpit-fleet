@@ -20,6 +20,11 @@ Three documents, each with one job; do not repeat one in another:
 `docs/chat.md` is for the administrator of a controller: how the chat is
 turned on and its agent installed. Keep it in step with `[chat]`.
 
+`CLAUDE.local.md` and `Makefile.local`, when present, are not tracked: they
+describe one developer's own machines (test VMs, addresses, hosting, deploy
+targets). Nothing of them goes into tracked files, which must make sense to
+anyone who clones the repository.
+
 Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 `backend/libexec/` the helpers installed in `/usr/libexec/cockpit-fleet`,
 `backend/bin/` the command `fleet` installed in `/usr/bin`,
@@ -27,7 +32,7 @@ Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 (the callback of the runs, and roles an administrator runs on the controller),
 `system/` units, sudoers, sysusers, tmpfiles and the default config,
 `debian/` and `packaging/` (the RPM spec) packaging, `test/` frontend tests, `test/integration/` scripts for
-the VM, `po/` translations.
+a controller, `po/` translations.
 
 ## Non-negotiable rules
 
@@ -61,20 +66,20 @@ them needs the user's explicit agreement.
 
 ## Stack and conventions
 
-- Frontend: TypeScript, React 18, PatternFly 6, esbuild. Mirror
-  `../cockpit-samba-dc` for layout, build, i18n, test
-  setup and code style (4-space indent, `.ts` import extensions, comments only
-  where the reason is not obvious).
+- Frontend: TypeScript, React 18, PatternFly 6, esbuild. Mirror the sibling
+  project `cockpit-samba-dc` for layout, build, i18n, test setup and code
+  style (4-space indent, `.ts` import extensions, comments only where the
+  reason is not obvious).
 - Backend: Python 3.12 or later (AlmaLinux 10 has 3.12), standard library only
   at runtime (it ships in a `.deb` and an `.rpm` that depend on `ansible-core`). Tests use `unittest`, so they run with no extra
-  package. `ruff` is not installed on the host: run it in a container, as CI does
-  (`pip install ruff && ruff check backend collection`).
+  package. Lint with `ruff check backend collection`, at the version CI pins.
 - Controller targets: Debian 13 (systemd 257, Cockpit 337), Fedora 44 and
   AlmaLinux 10 (ansible-core 2.16, Python 3.12, SELinux enforcing). Debian is
   the main one; the other two are tried with the integration scripts after a
   change to the unit, the helpers, sudoers or packaging, and AlmaLinux at
   every phase, because ansible-core 2.16 is the minimum and only it has that. Anything involving
-  Ansible, systemd or packaging must be verified on a VM, not locally.
+  Ansible, systemd or packaging must be verified on a controller with the
+  package installed, not on the development host.
 - User-visible strings are English in source, translated in `po/it.po`.
 - Code, comments, commit messages and docs (`TODO.md` included) in English;
   conversation with the user in Italian.
@@ -109,8 +114,9 @@ To drive the interface from the browser tools, the page is an iframe named
 by an `input` event. After a redeploy, reload the page ignoring the cache: a
 change of the URL fragment does not reload the bundle.
 
-To look at a page as a given role, create a throwaway account on the VM in the
-matching group, log in to Cockpit with it, and delete it afterwards.
+To look at a page as a given role, create a throwaway account on the
+controller in the matching group, log in to Cockpit with it, and delete it
+afterwards.
 
 ## Commands
 
@@ -119,15 +125,9 @@ make build | watch              # frontend bundle, watch mode
 make check                      # frontend (node --test) and backend (unittest) tests
 make deb                        # .deb built in a Debian 13 container (podman), into deb/
 make rpm                        # .rpm for Fedora 44 and AlmaLinux 10, in containers, into rpm/
-make vm-deploy                  # frontend only, into ~maint/.local/share/cockpit
-make vm-deb-deploy              # full package on the VM; needs SSHPASS exported
 ```
 
-`Makefile.local` holds the VM targets and is not tracked. Prefer
-`vm-deb-deploy`: a copy left by `vm-deploy` in `~/.local/share/cockpit` shadows
-the packaged one.
-
-Integration tests run as root on the VM, with the package installed:
+Integration tests run as root on a controller, with the package installed:
 
 ```
 test/integration/privileges.sh       # what the service account can reach
@@ -151,107 +151,56 @@ test/integration/windows.sh          # Windows node over SSH, a run and the chec
 test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
 ```
 
-To run them, copy the directory to the VM and start one as root, e.g.
-`tar -C test -cf - integration | sshpass -e ssh maint@VM 'rm -rf /tmp/it &&
-mkdir /tmp/it && tar -C /tmp/it -xf -'`, then `sudo env IT_WIPE=yes
-IT_SSH_USER=maint IT_SSH_PASSWORD=... sh /tmp/it/integration/runs.sh` (the
-password through `sudo -S` on stdin). The same works on the RPM VMs.
-Run these after any change to the unit, the helpers, `fleetctl` or sudoers. The
-tests that go through `fleetctl` share helpers in `lib.sh` (`admin`, `get`,
-`expect_run`, `wipe`, `prepare`). A failed `expect_run` prints the end of the
-run's output. With `IT_KEEP=yes`, `windows.sh` leaves its data in place so the
-same run can be launched from the interface; so does `checks.sh`, whose
-stand-in for the webhook then stays up (`pkill -f notify-sinks.py` as root).
-`dnf install` of a `.rpm` of the same version does nothing: use `dnf
-reinstall`.
+To run them, copy `test/integration` to the controller and start one as
+root, e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
+integration/runs.sh`, where `USER` is an account of the controller that
+accepts password logins over SSH. Run these after any change to the unit, the
+helpers, `fleetctl` or sudoers. The tests that go through `fleetctl` share
+helpers in `lib.sh` (`admin`, `get`, `expect_run`, `wipe`, `prepare`). A
+failed `expect_run` prints the end of the run's output. With `IT_KEEP=yes`,
+`windows.sh` leaves its data in place so the same run can be launched from the
+interface; so does `checks.sh`, whose stand-in for the webhook then stays up
+(`pkill -f notify-sinks.py` as root).
 
 ## Test environment
 
-- Controller VM: libvirt `deb13-samba-dc`, `maint@VM`, Cockpit on
-  `https://VM:9090`. Password-only SSH (`sshpass -e`).
-- Its snapshot `baseline_fleet` is where a test starts from: the package and
-  what the integration tests need, no data. Go back to it with
-  `virsh -c qemu:///system snapshot-revert deb13-samba-dc baseline_fleet`, then
-  `make vm-deb-deploy` to install the current code. The snapshots are external:
-  reverting deletes whatever was on the VM since, with no way back.
-- Windows nodes over SSH: `teacher` .10, `student01` .11, `student02` .12, from
-  `../ansible-win_edulab/inventories/school`.
-- RPM controllers: `fed44-fleet` (Fedora 44, `maint@VM`) and
-  `alma10-fleet` (AlmaLinux 10.2, `maint@VM`), same password as
-  `deb13-samba-dc`, 2 GB each. Snapshot `baseline`: the OS with `cockpit`,
-  `podman`, `sshpass` and `git`, no `cockpit-fleet`; `baseline_fleet`, its
-  child, adds the package as of 16 October (and `ansible-lint` on Fedora) and
-  the `fleet-node` image. Install with `dnf install
-  ./cockpit-fleet-*.fc44.noarch.rpm` (`.el10` on Alma); the integration scripts
-  run there as on Debian. Both are set up from scratch with kickstart; the
-  Fedora installer needs 4 GB while it runs.
-- Linux nodes: containers on the controller VM (podman is installed there;
-  `test/integration/nodes.sh` starts them on 10.88.0.101 onwards), or a clone of
-  `debian13-base`.
-- VMs are usually shut off: `virsh -c qemu:///system list --all`, then start what
-  is needed. Ask before creating, cloning or deleting a VM.
-- Before starting a VM, check that the running VMs plus the new one do not need
-  more than the host can give: compare the memory and vCPUs assigned to them
-  (`virsh dominfo <domain>`) with what is free on the host (`free -m`, `nproc`).
-  If they do not fit, start fewer VMs or shut down the ones not needed for the
-  test, and shut down what you started when the test is over.
-- After a deploy, a Cockpit tab keeps running the old bundle until reloaded, and a
-  package in `/usr/share/cockpit` is shadowed by a copy in `~/.local/share/cockpit`.
-- Despite its name the VM has no Samba AD DC for now: tests run without it.
-- Cockpit there has a self-signed certificate, which the browser tools refuse.
-  Open an SSH tunnel (`ssh -L 9091:127.0.0.1:9090`) and use
+- A controller is a machine of one of the target distributions with
+  `cockpit`, the package, `podman` and `sshpass`; `nodes.sh` needs podman
+  there and starts Linux nodes on its default network, at 10.88.0.101
+  onwards. Windows nodes are reached over SSH with a key: authorise a key
+  pair made for the test on the node and store its private half as a
+  credential, or as the secret `it-win-key` that `windows.sh` expects.
+- Install the `.deb` with `apt-get install ./cockpit-fleet_*.deb`, the `.rpm`
+  with `dnf install ./cockpit-fleet-*.noarch.rpm`; `dnf install` of a `.rpm`
+  of the same version does nothing: use `dnf reinstall`.
+- An install stops at dpkg's question when `/etc/cockpit-fleet/config.toml`
+  was changed on the controller and the packaged one changed too: put the
+  packaged file back first, or install with `--force-confold` to keep the
+  test configuration.
+- After a deploy, a Cockpit tab keeps running the old bundle until reloaded,
+  and a package in `/usr/share/cockpit` is shadowed by a copy in
+  `~/.local/share/cockpit` (what `make devel-install` leaves).
+- Cockpit has a self-signed certificate, which the browser tools refuse.
+  Open an SSH tunnel to the controller (`ssh -L 9091:127.0.0.1:9090`) and use
   `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
 - Do not `pkill -f` or `pgrep -f` with a pattern that also appears in your own
   command line: it matches the shell that runs it.
-- `vm-deb-deploy` stops at dpkg's question when `/etc/cockpit-fleet/config.toml`
-  was changed on the VM and the packaged one changed too: put the packaged
-  file back first, or install with `dpkg -i --force-confold` to keep the test
-  configuration.
-- The work tree is in a folder synced by Nextcloud, which leaves out
-  `node_modules`, `dist` and `deb`. If `node_modules` loses its files again,
-  the client's `permanent_delete` log says why; and look at `git diff` for
-  changes of mode before a commit.
-- The controller has no standing key for the Windows nodes: make a key pair
-  for the test, authorise its public half with
-  `local/cockpit_fleet_ssh_key.yaml` in `ansible-win_edulab` from the host
-  (pass the key as JSON: `-e '{"fleet_ssh_public_key": "ssh-ed25519 ..."}'`),
-  and store the private half as a credential, or as the secret `it-win-key`
-  that `windows.sh` expects.
-- `ansible-win_edulab` is meant to be used from inside this plugin: read it
-  freely and use it to act on the test VMs. Its own `CLAUDE.md` applies there
-  (one-off playbooks go in its `local/`, which is not tracked). `win11-pc00` is `teacher` (.10),
-  `win11-pc01` is `student01` (.11), `win11-pc02` is `student02` (.12); each has
-  4 GB assigned: check what is free before starting more than one.
 
-## Git hosting
+## Repository
 
-- A private Gitea. CLI: `tea`, login `example`, which
-  is not the default: always pass `--login LOGIN`, after the subcommand.
-- `tea` fails outside a git work tree (`git rev-parse` error): run it from inside
-  the repository.
-- Remotes use HTTPS (credentials come from the git credential store). Gitea SSH
-  listens on port 2221 and is not set up on this host (no known host key).
-- Repository: a private Gitea, remote `origin`.
 - The repository will be published on GitHub once the project is stable. Treat
   every commit as future public history: no secrets, no passwords, no details of
-  real (non-test) environments, in files or in commit messages.
+  real (non-test) environments or of a developer's machines, in files or in
+  commit messages.
 - License: `LGPL-2.1-or-later`, same as `cockpit-samba-dc` (provisional).
-- CI: `.gitea/workflows/ci.yml`, on the runner labelled `cockpit-fleet`
-  (container `gitea-runner` on the CI host, defined in
-  `/srv/gitea/compose.yaml` and `/srv/gitea/runner-ci/`). It is a
-  Debian 13 arm64 container where jobs run directly, as a non-root user. Tools
-  with a version (Node.js, ruff) are pinned in the workflow and cached in
-  `/data/tools`. That host runs production services: change nothing there
-  beyond `runner-ci` without asking.
-- After a push, look at the run: `tea api --login LOGIN
-  "/repos/source/cockpit-fleet/actions/runs?limit=3"`, and `…/runs/ID/jobs` for
-  its steps.
+- CI: `.gitea/workflows/ci.yml`, on a runner labelled `cockpit-fleet`: a
+  Debian 13 arm64 container where jobs run directly, as a non-root user.
+  Tools with a version (Node.js, ruff) are pinned in the workflow.
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material
 
 - `cockpit-samba-dc`: frontend patterns (`src/lib/exec.ts` for spawn wrappers,
-  `test/mocks/cockpit.ts` for the cockpit mock, `Makefile.local` for VM targets).
-- `ansible-win_edulab`: a real project that must run unmodified from this plugin
-  (acceptance test of Phase 3); its `.claude/skills/ansible-jinja2` is useful when
-  writing the bundled collection.
+  `test/mocks/cockpit.ts` for the cockpit mock).
+- `ansible-win_edulab`: a real Windows project that must run unmodified from
+  this plugin (acceptance test of Phase 3).

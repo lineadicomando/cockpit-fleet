@@ -52,62 +52,16 @@ the audit trail as a page; the interface in English and Italian; the command `fl
 terminal, with completion for bash and a manual.
 Tried on Linux nodes (containers) and on Windows over SSH.
 
-State of the test VM `deb13-samba-dc` (shut off): the package as of commit
-`3dc0e38` (the close of phase 6), with the data of phase 5 put back after
-the integration scripts, from a backup of `/var/lib/cockpit-fleet` and
-`/etc/cockpit-fleet` kept in `/root/phase5-backup.tar` (taken with the
-database already at schema 10, the one of phase 6). To run a script that
-wipes and keep that data: stop the timer and the path unit, `tar -C / -cpf`
-those two directories, run the script, then empty them (and
-`/etc/cockpit-fleet/secrets/*`) and `tar -C / -xpf` the backup back, as on
-16 October. Its `config.toml` is the packaged one of phase 5
-plus `[mcp] enabled = true`, `[notifications] url =
-"https://VM:9090"` and the chat's agent, with no `[checks]`
-section, so a later deploy stops at dpkg's question: install with `apt-get
-install -o Dpkg::Options::=--force-confold`. Throwaway accounts `tadmin`,
-`toperator` and `tviewer`, one per role group (their password was random
-and is lost: set a new one with `chpasswd` as root). No check is configured
-there. The data of those checks: the project `notify-demo` (written in the
-interface, `fail.yml` and `ok.yml` on localhost), the inventory `local`,
-the templates `fail-demo` and `ok-demo`, the schedule `nightly-fail`
-(daily). Channels: three to stand-ins (`hook-renamed`, `mail-test`,
-`matrix-test`, on ports 8025 and 2525 of `notify-sinks.py`, which is not
-running after a boot, so they end given up) and three to real services of
-the user, kept on purpose for the checks of phase 6: one for mail (
-an account of its own), `telegram` and `matrix` (a bot and an account of
-their own). Rules on every failed run send to all of them: **a failed run
-on this VM reaches the user's phone and mailbox**; turn the rules off
-before tests that fail on purpose. Going back to `baseline_fleet` removes
-all of it. To try the chat again: a test account in a role group, and the
-user logs it in to Claude at Cockpit's terminal
-(`/opt/cockpit-fleet-agent/bin/claude /login`); log it out (`claude auth
-logout`) before removing the account.
-
-The snapshot `baseline_fleet` (redone on 13 October, a child of `baseline`) is
-where tests start from: Debian 13 with `cockpit`, `cockpit-fleet` as of commit
-`1bb7a37`, `ansible`, `ansible-lint`, `sshpass`, `podman` and the `fleet-node`
-image already built; no data and no test accounts, and no Samba AD DC. It has
-neither Node.js nor an agent for the chat. After a revert, `make
-vm-deb-deploy` installs the current code.
-
-The two RPM controllers, `fed44-fleet` and `alma10-fleet` (shut off, see
-`CLAUDE.md`), were installed again on 16 October on this host (the workstation)
-and their `baseline_fleet` has the package as of commit `b660213`, the
-`fleet-node` image, no data and no test accounts. On 16 October they got the
-package of commit `3dc0e38` for its scripts, which left no data (the
-summaries are in `/root/it-results`); their snapshots were not redone.
-
 Integration tests, all passing when last run, on 16 October on Debian 13,
 Fedora 44 and AlmaLinux 10.2 alike (SELinux enforcing, no denial): every
 script but `windows.sh` and `measure-events.sh`; `runs.sh` without the git
 part (`IT_GIT_URL` not set) and `galaxy.sh` without the network
 (`IT_GALAXY_NET` not set). `windows.sh` was run on Debian the same day,
-against `win11-pc00`, with a key made for it; its secret `it-win-key` is
-gone with the data of the tests (see `CLAUDE.md` to make it again). The
+against a Windows 11 node, with a key made for it. The
 role that installs the chat's agent has no script: it was tried by hand on
 Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 
-`runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` (`maint`) and
+`runs.sh`, `sandbox.sh` and `adhoc.sh` want `IT_SSH_USER` and
 `IT_SSH_PASSWORD`.
 
 ## Decisions
@@ -240,9 +194,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
   (no host key checking: ours come first on the command line and win, checked
   by reading the code of the ssh plugin, not by a test). Whether the node let
   the run in by the key of the credential or by that password was not looked
-  at. The keys made for the two acceptance tests, and the one of `windows.sh` on
-  16 October, are still authorised on `win11-pc00` (comment
-  `cockpit-fleet-test`); their private halves were deleted.
+  at.
 - Inventory plugins: no credential for them (a cloud token), and one written
   in the interface is called `hosts.yml`, which some plugins refuse; only
   built-in plugins were tried.
@@ -300,7 +252,7 @@ above.
 
 Done when: `ansible-win_edulab` runs from cockpit-fleet with no change to the
 repository, with its vault as a credential. **Met on 13 October**, from the
-interface, on `win11-pc00`: the project uploaded as an archive, the two
+interface, on a Windows 11 node: the project uploaded as an archive, the two
 collections of its `requirements.yaml` installed from GitHub, the inventory
 `inventories/school/hosts.yaml` read with the vault credential, host keys
 trusted from the inventory, `playbooks/win_wm.yaml` launched by an operator
@@ -322,7 +274,7 @@ rests.
 Done when: from Claude Code, over ssh, an operator launches a template of
 `ansible-win_edulab` as a tool and reads its outcome, and the same request with
 an admin tool is refused and ends up in the audit trail. **Met on 13 October**
-on `win11-pc00`, the project set up as for the acceptance of phase 3: Claude
+on a Windows 11 node, the project set up as for the acceptance of phase 3: Claude
 Code 2.1, over ssh with a key forced on `fleet-mcp`, as an operator, launched
 `playbooks/win_wm.yaml` through its `launch_*` tool with `t = ping,sysinfo`,
 waited with `run_result` and reported the host and the tasks (7 turns). Asked
@@ -473,7 +425,7 @@ gives one result; the inventories that checks use are read again every
 hour, and each reading is a run in the list of runs.
 Not tried: the pages as a viewer (only the roles' unit tests and
 `checks.sh` for the operator); a problem of a check reaching the real
-channels kept on `deb13-samba-dc` (only the webhook stand-in); `fleet` for
+channels kept on the test controller (only the webhook stand-in); `fleet` for
 checks beyond `state list` and `help check`; checks on hosts reached
 through a vault or a passphrase-protected key (the code is that of runs);
 a cycle of more than one shard on real nodes (the unit tests do it);
