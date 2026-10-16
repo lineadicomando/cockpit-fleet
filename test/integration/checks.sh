@@ -105,7 +105,13 @@ created=$(create "{\"name\": \"reach\", \"kind\": \"reachability\", $base, \"max
 expect_eq "a check is created" "$(get "$created" 'a["ok"]')" True
 create "{\"name\": \"disk\", \"kind\": \"disk\", $base, \"group\": \"data\", \"max_attempts\": 2, \"params\": {\"mounts\": [\"/data\"]}}" >/dev/null
 create "{\"name\": \"cert\", \"kind\": \"certificates\", $base, \"group\": \"web\", \"max_attempts\": 1, \"params\": {\"paths\": [\"/etc/fleet-it.pem\"]}}" >/dev/null
-for kind in memory cpu uptime clock; do
+# The nodes are containers, which show them the memory and the processor of
+# whatever runs the controller: with no thresholds, the state says that the
+# module answered, not how busy that machine is.
+off='{"warning": null, "critical": null}'
+create "{\"name\": \"memory\", \"kind\": \"memory\", $base, \"group\": \"web\", \"thresholds\": {\"memory_used_pct\": $off, \"swap_used_pct\": $off}}" >/dev/null
+create "{\"name\": \"cpu\", \"kind\": \"cpu\", $base, \"group\": \"web\", \"thresholds\": {\"cpu_pct\": $off}}" >/dev/null
+for kind in uptime clock; do
     create "{\"name\": \"$kind\", \"kind\": \"$kind\", $base, \"group\": \"web\"}" >/dev/null
 done
 # A check of the user: a playbook of a project, which ends with fleet_result.

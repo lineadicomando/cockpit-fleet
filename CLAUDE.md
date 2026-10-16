@@ -75,11 +75,12 @@ them needs the user's explicit agreement.
   package. Lint with `ruff check backend collection`, at the version CI pins.
 - Controller targets: Debian 13 (systemd 257, Cockpit 337), Fedora 44 and
   AlmaLinux 10 (ansible-core 2.16, Python 3.12, SELinux enforcing). Debian is
-  the main one; the other two are tried with the integration scripts after a
-  change to the unit, the helpers, sudoers or packaging, and AlmaLinux at
-  every phase, because ansible-core 2.16 is the minimum and only it has that. Anything involving
-  Ansible, systemd or packaging must be verified on a controller with the
-  package installed, not on the development host.
+  the main one. Anything involving Ansible, systemd or packaging must be
+  verified with the package installed, not on the development host: with
+  `make ct-test` on the three after a change to the unit, the helpers,
+  `fleetctl`, sudoers or packaging (AlmaLinux above all, the only one with
+  ansible-core 2.16, the minimum), and on machines at the close of a phase,
+  for what a container cannot show (see "Test environment").
 - User-visible strings are English in source, translated in `po/it.po`.
 - Code, comments, commit messages and docs (`TODO.md` included) in English;
   conversation with the user in Italian.
@@ -125,6 +126,8 @@ make build | watch              # frontend bundle, watch mode
 make check                      # frontend (node --test) and backend (unittest) tests
 make deb                        # .deb built in a Debian 13 container (podman), into deb/
 make rpm                        # .rpm for Fedora 44 and AlmaLinux 10, in containers, into rpm/
+make ct-test DISTRO=alma TESTS="sandbox runs"   # integration scripts in containers (all by default)
+make ct-clean                   # remove the containers and images of ct-test
 ```
 
 Integration tests run as root on a controller, with the package installed:
@@ -151,11 +154,16 @@ test/integration/windows.sh          # Windows node over SSH, a run and the chec
 test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
 ```
 
-To run them, copy `test/integration` to the controller and start one as
-root, e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
+`make ct-test` is the usual way to run them: it builds the package of
+`DISTRO` (`debian`, `fedora` or `alma`), then runs each script as root in a
+fresh container of that distribution (`test/containers/`), `CT_JOBS` at a
+time (2 by default), with `IT_WIPE=yes` and an account for `IT_SSH_USER`.
+Other `IT_*` variables of the caller are passed on; the logs go to
+`it-results/DISTRO/`. `windows.sh` and `measure-events.sh` run only when
+named. On a machine, copy `test/integration` there and start one as root,
+e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
 integration/runs.sh`, where `USER` is an account of the controller that
-accepts password logins over SSH. Run these after any change to the unit, the
-helpers, `fleetctl` or sudoers. The tests that go through `fleetctl` share
+accepts password logins over SSH. The tests that go through `fleetctl` share
 helpers in `lib.sh` (`admin`, `get`, `expect_run`, `wipe`, `prepare`). A
 failed `expect_run` prints the end of the run's output. With `IT_KEEP=yes`,
 `windows.sh` leaves its data in place so the same run can be launched from the
@@ -164,6 +172,19 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
 
 ## Test environment
 
+- `make ct-test` needs rootless podman on cgroup v2, nothing else of the
+  host. Its containers are privileged within the user's namespace and make
+  `/` a shared mount at boot (`test/containers/make-rshared.service`): the
+  sandbox of a run cannot start otherwise, and without the shared mount a
+  run gets no credentials, with no error. They run in UTC.
+- What a container cannot show, and so needs a machine of the distribution:
+  SELinux (Fedora and AlmaLinux are enforcing; a container has none of its
+  own); that the sandbox of a run holds on its own kernel, since a container
+  shares the host's and, unprivileged, ignores `PrivateIPC` with only a
+  warning: confirm a change to the unit with `sandbox.sh` on a machine (rule
+  8); the interface in a browser; Windows nodes. Container nodes also show
+  the memory and processor of the host, which is why `checks.sh` turns off
+  the thresholds of those two checks.
 - A controller is a machine of one of the target distributions with
   `cockpit`, the package, `podman` and `sshpass`; `nodes.sh` needs podman
   there and starts Linux nodes on its default network, at 10.88.0.101

@@ -57,7 +57,9 @@ Fedora 44 and AlmaLinux 10.2 alike (SELinux enforcing, no denial): every
 script but `windows.sh` and `measure-events.sh`; `runs.sh` without the git
 part (`IT_GIT_URL` not set) and `galaxy.sh` without the network
 (`IT_GALAXY_NET` not set). `windows.sh` was run on Debian the same day,
-against a Windows 11 node, with a key made for it. The
+against a Windows 11 node, with a key made for it. The same day every
+script but those two passed in containers of the three (`make ct-test`),
+about 8 minutes for each distribution, two scripts at a time. The
 role that installs the chat's agent has no script: it was tried by hand on
 Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 
@@ -113,6 +115,7 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
 | Scale | Over 200 nodes: intervals of 5-15 min, one connection per host, sharding |
 | Managed nodes | Anything Ansible supports; Windows over SSH only |
 | Controller | Debian 13 (`.deb`), Fedora 44 and AlmaLinux 10 (`.rpm`, one spec), decided on 15 October; SELinux enforcing, with no policy of ours |
+| Integration tests | In containers of the three distributions (`make ct-test`) after every change that needs them; on machines at the close of a phase, for SELinux, the run sandbox on its own kernel, the browser and Windows; decided on 16 October |
 | External triggers | Out of scope, future development |
 | Agents (MCP) | `fleet-mcp` on stdio, launched by the user (also over ssh): every tool is a call to `fleetctl`, so roles and audit stay the same; no HTTP; standard library only |
 | Secrets and agents | No tool for `fleet-secret`: the agent creates the credential, a person enters the value from the interface |
@@ -157,7 +160,8 @@ Debian, on 13 and 14 October, as `docs/architecture.md` tells.
   comes with retention (phase 8).
 - Whoever enters with Cockpit's administrative access without being in a group
   appears in the audit trail as `root`.
-- Integration tests only run by hand on the VM, not in CI.
+- Integration tests run by hand (`make ct-test`, or on a machine), not in
+  CI: the runner was not set up for privileged containers.
 - A run that fails leaves its unit `cockpit-fleet-run@ID` failed in systemd
   (`fleet-run` exits with the playbook's code): Cockpit marks "Services" red
   and the system is `degraded` until a reboot or `reset-failed`. The outcome

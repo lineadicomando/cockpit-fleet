@@ -1289,11 +1289,41 @@ Found on the way:
 | The command fleet for a terminal | `test/integration/cli.sh` | controller, as root; wipes the database |
 | Schedules and the timer | `test/integration/schedules.sh` | controller, as root; wipes the database |
 | Notifications, with stand-ins of the four channels | `test/integration/notify.sh` | controller, as root; wipes the database |
+| Checks of the hosts, a full disk told about | `test/integration/checks.sh` | controller with podman, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |
 
+The controller is a container or a machine. `make ct-test`
+(`scripts/ct-test.sh`, `test/containers/`) builds an image of Debian 13,
+Fedora 44 or AlmaLinux 10 with systemd as PID 1, what the package needs and
+podman for the nodes, installs the package in it, and runs each script in a
+fresh container, so that scripts that wipe the database run side by side.
+Two things make a container behave as a machine here. It is privileged,
+within the user's namespace: unprivileged, the run unit fails at `NAMESPACE`,
+since systemd may neither make the namespaces nor mount a new `/proc` for
+`PrivatePIDs`, and it ignores `PrivateIPC` with only a warning. And `/` is
+made a shared mount at boot: systemd mounts the credentials of a unit in a
+namespace of its own and moves them into `/run/credentials`, which reaches
+the unit only through shared propagation; on podman's private `/` a run got
+no secret, with no error.
+
+What a container leaves to machines: SELinux, which belongs to the host's
+kernel (a container reports it disabled); the kernel itself, which is the
+host's; the interface in a browser; Windows nodes. Its nodes, containers in
+the container, read the host's `/proc/meminfo` and `/proc/stat`, which is
+why `checks.sh` gives the memory and processor checks
+no thresholds: the state it expects says that the module answered, whatever
+the load of the host.
+
+The containers run in UTC, which the test machines did not, and that found a
+bug: `systemd-analyze calendar` prints a time "(in UTC)" only when the local
+zone has an offset, and the schedules read only that line, so on a
+controller in UTC no schedule was ever due.
+
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors
-and warnings. The `.rpm` is not built in CI: the runner is Debian. The integration scripts need the package installed on a
-controller and are not part of CI yet.
+and warnings. The `.rpm` is not built in CI: the runner is Debian. The
+integration scripts are not part of CI: they need podman able to start
+privileged containers, which the runner, itself a container where jobs run
+as a non-root user, was not set up for.

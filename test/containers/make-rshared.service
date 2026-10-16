@@ -1,0 +1,15 @@
+# On a machine systemd makes / a shared mount at boot; podman gives a
+# container a private one. Without this, the credentials of a unit are
+# mounted where the unit cannot see them, and LoadCredentialEncrypted
+# delivers nothing, with no error.
+[Unit]
+Description=Make / a shared mount, as on a machine
+DefaultDependencies=no
+Before=local-fs.target sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mount --make-rshared /
+
+[Install]
+WantedBy=sysinit.target

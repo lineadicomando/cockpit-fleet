@@ -11,7 +11,7 @@ COLLECTION := ansible_collections/lineadicomando/fleet
 
 -include Makefile.local
 
-.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm pot po-compile help
+.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-clean pot po-compile help
 
 all: build
 
@@ -99,6 +99,15 @@ deb: build ## Build the .deb in a Debian 13 container, into deb/
 
 rpm: build ## Build the .rpm for Fedora 44 and AlmaLinux 10 in containers, into rpm/
 	scripts/build-rpm.sh
+
+DISTRO ?= debian
+TESTS ?=
+ct-test: ## Integration scripts in containers: DISTRO=debian|fedora|alma, TESTS="runs ..." (all)
+	$(MAKE) $(if $(filter debian,$(DISTRO)),deb,rpm)
+	scripts/ct-test.sh $(DISTRO) $(TESTS)
+
+ct-clean: ## Remove the containers and images of ct-test
+	scripts/ct-test.sh clean
 
 pot: ## Extract translatable strings from src/ into src/locales/*/translation.json
 	npm run pot
