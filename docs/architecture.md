@@ -1478,3 +1478,36 @@ and warnings. The `.rpm` is not built in CI: the runner is Debian. The
 integration scripts are not part of CI: they need podman able to start
 privileged containers, which the runner, itself a container where jobs run
 as a non-root user, was not set up for.
+
+## Acceptance of the phases
+
+What each closed phase had to show, and how it was shown.
+
+- **3, complete runner** (13 October): `ansible-win_edulab` ran unmodified
+  from the interface on a Windows 11 node: uploaded as an archive (its vault
+  file is not in git), the two collections of its requirements installed
+  from GitHub, the inventory read with the vault credential, host keys
+  trusted, `playbooks/win_wm.yaml` launched by an operator with a survey (14
+  tasks, 14 s), an ad-hoc `win_command`, and `shutdown.yaml`, which delegates
+  a task to the controller.
+- **3b, agents** (13 October): Claude Code over ssh, with a key forced on
+  `fleet-mcp`, as an operator, launched `win_wm.yaml` through its tool, waited
+  with `run_result` and reported the outcome; asked for an ad-hoc command it
+  found no tool, and the same call sent with `via`, as an operator and as an
+  administrator under the ceiling, was refused and audited. The chat was
+  tried from the page with `fake-agent.py` and with Claude, as an operator.
+- **4, schedules** (14 October): ten schedules on one minute with
+  `max_concurrent = 2` never ran more than two, highest priority first
+  (`schedules.sh`); after a shutdown with one run running and two queued,
+  the first tick recorded the cut run as failed, started the queue, caught
+  up one schedule once and recorded the other as missed.
+- **5, notifications** (14 and 15 October): a failed run reached stand-ins
+  of the four channels in one delivery, a refused fifth was retried by the
+  tick (`notify.sh`); then real Telegram, mail over TLS and Matrix, the page
+  in the browser in Italian for the three roles, no token in the database
+  or the journal.
+- **6, checks** (16 October): see "Checks": the same disk metrics from
+  Debian and Windows, a full disk told about within two intervals.
+- **7, inventory of hosts** (16 October): see "The inventory of hosts":
+  `cmdb.sh` on the machines of the three distributions, drift from a file
+  changed by hand at the next cycle, the CMDB of Windows by `windows.sh`.
