@@ -6,11 +6,27 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
 ## Status (20 October 2026)
 
-Phases 0–7 closed, the terminal's ideas done and seen live; pushed up to
-`ec5891d`, CI green. **Phase 8 under way**: time series (schema 12,
-`metrics.py`) and maintenance (schema 13, `maintenance.py`) done, the
-latter not pushed; next are the charts.
-`test/integration/measure-events.sh` is where the load tests start from.
+Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
+under way**: time series (schema 12, `metrics.py`) and maintenance (schema
+13, `maintenance.py`) done; pushed up to `d7d3819`, CI green. **Next: the
+charts.** Where they start from:
+
+- The data: `metric.query` (viewer) takes `host_id` and optionally
+  `check_id`, `name`, `instance`, `since`, `until` (epoch seconds, the last
+  day by default) and `resolution` (`auto`, `raw`, `hour`, `day`); it
+  returns `series`, each with its check, metric, instance, unit and
+  `points`: `[ts, value]` as they came, `[ts, average, lowest, highest]` for
+  aggregates. `auto` reads values up to 2 days, hours up to 62, then days;
+  at most 5000 points a series (`truncated`). Daily buckets are UTC days.
+- The place: the page of a host, `HostDetailPage` in
+  `src/components/HostsPage.tsx`, which shows today only the last values
+  (`Metrics`, through `formatMetric` of `src/lib/checks.ts`).
+- The library: `@patternfly/react-charts` is not a dependency yet; take the
+  major that goes with PatternFly 6 and look at what it adds to the bundle
+  (it brings Victory).
+- `test/integration/measure-events.sh` is where the load tests start from;
+  at the target, 14 days of raw values are about 500 MB
+  (`docs/architecture.md`, "Time series").
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state: the Debian VM holds the
@@ -29,7 +45,8 @@ the CMDB in `cmdb.py`, the terminal in `terminal.py`, node modules in
 Last test runs: in containers (`make ct-test`) on 16 October, the whole
 suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
 on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
-`557dd22`.
+`557dd22`, then `checks` on Debian and AlmaLinux and `runs` on Debian with
+the tree of `d7d3819` (phase 8 not yet on Fedora, nor on machines).
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
@@ -45,7 +62,8 @@ start (now a directory of its own).
 
 ## Decisions
 
-Detail and reasons in `docs/architecture.md`. All confirmed by the user.
+Detail and reasons in `docs/architecture.md`. All confirmed by the user,
+except the rows that say "to confirm".
 
 | Topic | Decision |
 |---|---|
@@ -80,8 +98,8 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 
 ## Leftovers (known limits, none blocking)
 
-- Runs: a failed run leaves
-  its unit failed, so the system is `degraded` until `reset-failed`
+- Runs: a failed run leaves its unit failed, so the system is `degraded`
+  until `reset-failed`
   (`CollectMode=inactive-or-failed` untried); Cockpit's admin access without
   a group is audited as `root`; integration tests not in CI (no privileged
   containers on the runner).
@@ -97,7 +115,7 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Masking: other encodings, and secrets a run decrypts itself, not masked.
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a
-  process up to 50 s; 199 of 273 parameters have no description.
+  process up to 50 s; 199 of 280 parameters have no description.
 - Chat: plain text; conversations not deletable; model not choosable; one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,
@@ -122,13 +140,18 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
   one long summary.
   Untried: pages as a viewer, Windows checks from Fedora/Alma, multi-shard
   cycles on real nodes.
+- Time series and maintenance: ingest writes outside a transaction (0.12 s
+  for 5000 values, half in one); aggregates by UTC day; a database of
+  before phase 8 above 64 MB is never made incremental (none exists); rows
+  of runs, state changes and the audit grow without end; deleting run
+  output and giving pages back seen in unit tests and containers only.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.
 - Terminal: survey choices not pickable or completed; pushed commits keep
   the authors of the clone (who pushed is audited).
 
-## Phase 8 — Time series and scale (next)
+## Phase 8 — Time series and scale (under way)
 
 - [x] Narrow metrics table, hourly and daily aggregates, retention
 - [x] Maintenance: deletion (run directories too), vacuum (downsampling
