@@ -7,10 +7,13 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 ## Status (20 October 2026)
 
 Phases 0–7 closed, the terminal's ideas done and seen live; pushed up to
-`949c711`, CI green. **Next: phase 8.**
+`557dd22`, CI green. **Next: phase 8**, from its first item (the metrics
+table, a new entry of `MIGRATIONS`); `test/integration/measure-events.sh`
+is where the load tests start from.
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
-if present (this developer's VMs and their state); `docs/architecture.md`
+if present (this developer's VMs and their state: the Debian VM holds the
+data of the live tests and is to be reverted first); `docs/architecture.md`
 says what exists and why, its last section how each phase was accepted.
 `git status`, `git log origin/main..`; `make check`; `make ct-test
 DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
@@ -23,11 +26,13 @@ modules in `collection/.../plugins/modules/` (`checks.py`,
 
 Last test runs: in containers (`make ct-test`) on 16 October, the whole
 suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
-on Debian and AlmaLinux.
+on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
+`557dd22`.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
-against Windows 11 the same day. Not yet on machines: the schedules fix
-(`d7708be`).
+against Windows 11 the same day and again on 20 October. Not yet on
+machines: the schedules fix (`d7708be`); the terminal's changes only by
+hand on Debian, not `cli.sh`, and not on Fedora or AlmaLinux.
 Live on Debian, 20 October: Linux and Windows nodes in one Assets list;
 "At a terminal" of a launch, a run and an upload, each command copied and
 run; the chat's agent installed by its playbook, the page and `fleet
@@ -49,12 +54,12 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 | Controller | Debian 13 `.deb`; Fedora 44 and AlmaLinux 10 `.rpm` (one spec); SELinux enforcing with no policy of ours; distro `ansible-core` ≥ 2.16 |
 | Tests | `make ct-test` on the three after changes that need it; machines at the close of a phase (SELinux, sandbox on its own kernel, browser, Windows) |
 | Secrets | `systemd-creds`, decrypted only by PID 1 per run; survey secrets via `fleet-secret answer` tickets; never on a command line; masked in output |
-| Projects | Git, local directory, written in the interface (git repo beside the tree, admin only), uploaded archive (base64 on stdin, ≤ 50 MB); `ansible.cfg` keys by allowlist; Galaxy collections installed beside the tree, copied into runs |
+| Projects | Git, local directory, written in the interface (git repo beside the tree, admin only), uploaded archive (base64 on stdin, 20 MB by default, `[projects] max_upload_mb` up to 50); `ansible.cfg` keys by allowlist; Galaxy collections installed beside the tree, copied into runs |
 | Inventories | A file, a directory of sources or a plugin file, of a project, read in the sandbox; scripts off unless `[inventories] scripts` |
 | Ad-hoc | Admin only, modules from `[adhoc] modules`, run as a generated playbook |
 | Export/import | One JSON by name, no secrets, no files; import creates, never replaces |
 | Agents (MCP) | `fleet-mcp` on stdio, each tool a `fleetctl` call; `[mcp] enabled = false`, `max_role = "operator"`; `via` audited, can only restrict; no tool for secrets; templates with a required secret not tools |
-| Chat ("Assistant") | Agent named in `[chat.agents.NAME]` (ACP), installed by the role `chat_agent`, not by the package; started by `fleet-chat` as the user; login per user at a terminal; `[chat] max_sessions` 2; read-only tools unasked, the rest confirmed |
+| Chat ("Assistant") | Agent named in `[chat.agents.NAME]` (ACP), installed by the role `chat_agent`, not by the package; started by `fleet-chat` as the user; login per user at a terminal; `[chat] max_sessions` 2; in the page read-only tools unasked, the rest confirmed; `fleet assistant` runs the agent's CLI with `--permission-mode manual` (every call confirmed) in `~/.local/state/cockpit-fleet/assistant` |
 | Terminal | `fleet` for the three roles, `via: cli`; every command as `fleet AREA VERB --param`, names for ids, shortcuts `launch log result secret assistant help`, `project clone/pull/push`; secrets never on the command line; English only until a field-tested version |
 | Projects at a terminal | Admins only: `local_roots` dir of group `cockpit-fleet-admin` 2770 + ACL for the service, checked by `selfcheck`; managed projects as git bundles, push only as a fast forward of files the editor could write |
 | Schedules | One timer, `scheduler.tick` each minute; `OnCalendar` with time zone; admin edits, operator switches and runs now; answers stored, never secrets; missed > 5 min; overlap skip/queue/cancel |
@@ -72,7 +77,8 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 
 ## Leftovers (known limits, none blocking)
 
-- Runs: their directories are never deleted (phase 8); a failed run leaves
+- Runs: their directories are never deleted, those of check cycles aside
+  (a day; phase 8); a failed run leaves
   its unit failed, so the system is `degraded` until `reset-failed`
   (`CollectMode=inactive-or-failed` untried); Cockpit's admin access without
   a group is audited as `root`; integration tests not in CI (no privileged
@@ -93,7 +99,11 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 - Chat: plain text; conversations not deletable; model not choosable; one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,
-  untried behind a proxy; `fleet assistant` permission answers not kept.
+  untried behind a proxy; `fleet assistant` permission answers not kept,
+  read-only calls asked too, Claude's question on trusting its directory
+  the first time (it says the agent may edit and run files: it may not);
+  the page lists Claude's own `/login` among past conversations; the tab
+  appears only once the page is reloaded after the agent is named.
 - AlmaLinux: no `ansible`/`ansible-lint` (no lint; collections from the
   requirements file); `selfcheck` leaves `/var/lib/cockpit-fleet/.ansible`.
 - Schedules: builder knows few shapes; no end date or window; runs not
@@ -105,7 +115,9 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
   update` wants the name again.
 - Checks: host facts only from cycles; one `fleet_result` per host;
   thresholds per check, not per host; `state.list` returns everything;
-  maintenance windows not exported; inventories re-read hourly, each a run.
+  maintenance windows not exported; inventories re-read hourly, each a run;
+  `certificates` on a Windows store lists every expired root it keeps, in
+  one long summary.
   Untried: pages as a viewer, Windows checks from Fedora/Alma, multi-shard
   cycles on real nodes.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
@@ -144,7 +156,7 @@ approved by another user and completes.
 
 - [ ] Security review: root helpers, sandbox, sudoers, archives, git, bundles
 - [ ] Automated negative tests: injection, traversal, role escalation, secrets
-- [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle")
+- [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle", "Copyable input")
 - [ ] Docs: installation, security model, writing a check, backup
 - [ ] Upgrade and removal (`purge` too), `.deb` and `.rpm`
 - [ ] `.rpm` built in CI (runner is Debian)
