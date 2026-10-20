@@ -779,9 +779,10 @@ host.
 job, with a limit of its own, `[checks] max_concurrent` (1), apart from
 `[runs] max_concurrent`: checks do not wait behind a long playbook, nor a
 playbook behind them. What is due is grouped by inventory, credential and
-`become`, then cut in shards of `[checks] shard_size` hosts (50), each a
-cycle with `[checks] forks` (20). A state held by a cycle is not planned
-again until it ends. ansible-playbook says 2 when a host failed and 4 when
+`become`, then cut in shards of at most `[checks] shard_size` hosts (50),
+as even as they can be, each a cycle with at most `[checks] forks` (20);
+fewer of either when what the last cycles took says so (below). A state held
+by a cycle is not planned again until it ends. ansible-playbook says 2 when a host failed and 4 when
 one could not be reached: for a cycle these are outcomes of hosts, which
 their states record, so the cycle is successful and its unit is not left
 failed; with a host down, a failed unit a minute would pile up. The output
@@ -795,6 +796,36 @@ mark in the options of the run. Cycles are not in the
 list of runs unless asked for (`run.list` with `kind: check`), and are
 deleted with their directory after a day, by the tick: their results are in
 the states.
+
+**Sizing.** Every cycle leaves a row in `cycles`: its group (the
+inventory, and the kind or the check of the user when it goes in cycles of
+its own), its hosts, checks and forks, when it started and ended, the peak of
+its memory and its processor time. `fleet-run` reads the last two from its
+own cgroup (`memory.peak`, `cpu.stat`) once Ansible has ended, and writes
+them in `result.json`: it is the main process of the unit, and systemd
+forgets both once the unit has stopped (`MemoryPeak` of a stopped unit is
+not set). They are written in the run's directory, so believed only as far
+as their shape: a playbook of the user could skew the sizing of its own
+cycles, nothing else. The rows stay 30 days, after the cycles themselves are
+gone. The planner sizes the next cycle of a group on its last 20 successful
+ones:
+
+- forks: as many as fit in the memory one cycle may take, `[checks]
+  memory_mb` (by default half the controller's) shared by every cycle that
+  may run at once (`max_concurrent` in each of the two lanes). The memory of
+  a cycle is fitted as a base plus so much per fork when cycles ran with
+  different forks, else all of it is counted per fork, which errs low and
+  grows back as cycles with more forks are measured;
+- hosts: as many as those forks get through in half the shortest interval of
+  what the group checks, at the time a host took a fork (the time of a cycle
+  times its forks over its hosts), and never fewer than the forks.
+
+With nothing measured, the configured values hold. They stay the most there
+may be: sizing only takes away, since more forks than configured is more
+memory than the administrator agreed to, and a larger shard only saves the
+start of a playbook. What a cycle is too slow for, sizing cannot fix: it
+ends late, and the next is not planned until it does (see "System health",
+to come).
 
 **Checks of the user.** A check of the kind `playbook` names a playbook of a
 project; it runs alone, on the hosts of its group, sharded the same way.
@@ -992,6 +1023,7 @@ and does not keep the others from running.
 | What | Kept | How |
 |---|---|---|
 | Check cycles | a day | row and directory deleted |
+| What check cycles took | 30 days | deleted |
 | Output of other runs | `[runs] keep_days` (90) | directory deleted, 500 a tick at most; the row stays with its outcome and `pruned_at` |
 | Directories of `runs/` with no run | a day | deleted, the directory looked through once an hour (a stamp file) |
 | CMDB changes | 365 days | deleted |

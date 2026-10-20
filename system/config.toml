@@ -36,10 +36,17 @@
 # wait behind a long playbook, nor a playbook behind the checks. Cycles of the
 # slow kinds have as many of their own.
 #max_concurrent = 1
-# Hosts in one cycle; more hosts due at once make more cycles.
+# Hosts in one cycle, at most; more hosts due at once make more cycles.
+# Fewer when the last cycles of the same checks say that this many would
+# take more than half their interval.
 #shard_size = 50
-# Hosts Ansible works on in parallel within one cycle.
+# Hosts Ansible works on in parallel within one cycle, at most. Fewer when
+# the memory the last cycles took says that this many would not fit in
+# memory_mb, shared by every cycle that may run at once.
 #forks = 20
+# Megabytes of memory that check cycles may take together; 0 is half of the
+# controller's.
+#memory_mb = 0
 # Seconds the checks of one host may take before they are cut short.
 #timeout = 60
 # The same for the slow kinds (the CMDB, updates, compliance), which run in

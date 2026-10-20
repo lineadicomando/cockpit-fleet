@@ -42,6 +42,12 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(parse("").runs_keep_days, 90)
         self.assertEqual(parse("[runs]\nkeep_days = 0").runs_keep_days, 0)
 
+    def test_check_cycles_take_half_the_memory_unless_told(self):
+        self.assertEqual(parse("").checks_memory_mb, 0)
+        self.assertEqual(parse("[checks]\nmemory_mb = 1024").checks_memory_mb, 1024)
+        with self.assertRaises(ConfigError):
+            parse("[checks]\nmemory_mb = -1")
+
     def test_default_forks_follow_a_lower_maximum(self):
         self.assertEqual(parse("[runs]\nmax_forks = 2").default_forks, 2)
 

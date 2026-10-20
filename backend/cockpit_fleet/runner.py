@@ -685,3 +685,32 @@ def build_sync(
         [*git, "-C", checkout, "checkout", "--quiet", "--detach", "FETCH_HEAD"],
     ]
     return commands, env
+
+
+def usage(cgroup_file: Path = Path("/proc/self/cgroup"),
+          root: Path = Path("/sys/fs/cgroup")) -> dict[str, int]:
+    """What the unit has used so far: the peak of its memory, in bytes, and
+    its processor time, in microseconds. fleet-run is the main process of the
+    unit, so its own cgroup is the unit's; systemd forgets both once the unit
+    has stopped. What cannot be read is left out."""
+    found: dict[str, int] = {}
+    try:
+        lines = cgroup_file.read_text().splitlines()
+        path = next(line[3:] for line in lines if line.startswith("0::"))
+        group = root / path.lstrip("/")
+        if not group.resolve().is_relative_to(root.resolve()):
+            return found
+    except (OSError, StopIteration):
+        return found
+    try:
+        found["memory_peak"] = int((group / "memory.peak").read_text().strip())
+    except (OSError, ValueError):
+        pass
+    try:
+        for line in (group / "cpu.stat").read_text().splitlines():
+            name, _, value = line.partition(" ")
+            if name == "usage_usec":
+                found["cpu_usec"] = int(value)
+    except (OSError, ValueError):
+        pass
+    return found

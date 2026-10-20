@@ -70,13 +70,16 @@ class Config:
     chat_max_sessions: int = 2
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""
-    # Check cycles: how many at once (apart from runs), hosts per cycle,
-    # forks within one, the time limit of the task on a host (and that of the
-    # slow kinds: the CMDB, updates, compliance), and how often a problem
-    # nobody acknowledged is told again (0: never).
+    # Check cycles: how many at once (apart from runs), at most so many hosts
+    # per cycle and forks within one (fewer when what cycles took says so),
+    # the memory they may take together (MB; 0: half the controller's), the
+    # time limit of the task on a host (and that of the slow kinds: the CMDB,
+    # updates, compliance), and how often a problem nobody acknowledged is
+    # told again (0: never).
     checks_max_concurrent: int = 1
     checks_shard_size: int = 50
     checks_forks: int = 20
+    checks_memory_mb: int = 0
     checks_timeout: int = 60
     checks_slow_timeout: int = 900
     checks_reminder_hours: int = 24
@@ -217,8 +220,8 @@ def parse(text: str) -> Config:
         raise ConfigError("notifications.url must be empty or an http(s)://host[:port][/path]"
                           " URL")
 
-    checks = _section(data, "checks", {"max_concurrent", "shard_size", "forks", "timeout",
-                                       "slow_timeout", "reminder_hours"})
+    checks = _section(data, "checks", {"max_concurrent", "shard_size", "forks", "memory_mb",
+                                       "timeout", "slow_timeout", "reminder_hours"})
 
     metrics = _section(data, "metrics", {"raw_days", "hourly_days", "daily_days"})
     raw_days = _int(metrics, "metrics", "raw_days", Config.metrics_raw_days, 1, 366)
@@ -247,6 +250,8 @@ def parse(text: str) -> Config:
                                    Config.checks_max_concurrent, 1, 16),
         checks_shard_size=_int(checks, "checks", "shard_size", Config.checks_shard_size, 1, 1000),
         checks_forks=_int(checks, "checks", "forks", Config.checks_forks, 1, 200),
+        checks_memory_mb=_int(checks, "checks", "memory_mb", Config.checks_memory_mb,
+                              0, 1024 * 1024),
         checks_timeout=_int(checks, "checks", "timeout", Config.checks_timeout, 5, 600),
         checks_slow_timeout=_int(checks, "checks", "slow_timeout", Config.checks_slow_timeout,
                                  5, 3600),

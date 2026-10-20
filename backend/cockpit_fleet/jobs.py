@@ -374,6 +374,9 @@ def _collect(ctx, run) -> None:
                          {"collections_error": error}, "project")
 
     _finish(ctx, run_id, status, rc, error, extra)
+    if run["kind"] == "check":
+        from . import checks
+        checks.record_cycle(ctx, run, result, status)
     # The copy of the project and the ciphertext are only needed while it runs.
     for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
                      "collections", "galaxy", "scratch"):

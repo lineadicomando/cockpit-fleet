@@ -13,9 +13,12 @@ with a longer time limit; what they collect beyond a state is kept by cmdb.
 """
 
 import json
+import math
 import shutil
+import statistics
 import traceback
 from collections import defaultdict
+from pathlib import Path
 
 from . import catalog, cmdb, jobs, journal, metrics, notify, store
 from .catalog import COMPLIANCE, CRITICAL, OK, OWN_KINDS, PLAYBOOK, STATE_NAMES, UNKNOWN, WARNING
@@ -35,6 +38,10 @@ _FLAP_END = 0.25
 REFRESH = 3600
 # Check cycles are kept this long, then removed with their directory.
 KEEP_CYCLES = 24 * 3600
+# What a cycle took is kept longer, without its run, and the planner sizes
+# the next cycles of the same checks on the last few.
+KEEP_MEASURES = 30 * 86400
+MEASURED = 20
 # A check due this little after a tick goes with it: the next time is counted
 # from when its cycle was planned, on the tick, and the timer is this precise.
 SLACK = 10
@@ -394,10 +401,121 @@ def _keep(ctx: Context, row, host_id: str, answer: dict, event: dict, now: float
     return []
 
 
+# --- sizing -------------------------------------------------------------------------
+
+def record_cycle(ctx: Context, run, result: dict, status: str) -> None:
+    """Keep what a cycle took: its time, its hosts and forks, the peak of its
+    memory and its processor time, which fleet-run read from the unit."""
+    options = store.loads(run["options"], {})
+    if not run["inventory_id"] or not run["started_at"] or "forks" not in options:
+        return
+
+    def count(value, high: int) -> int | None:
+        # Written in the run's directory, so believed only as far as its shape.
+        return value if type(value) is int and 0 <= value <= high else None
+
+    usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+    now = store.now()
+    finished = result.get("finished_at")
+    if not isinstance(finished, (int, float)) or not run["started_at"] <= finished <= now:
+        finished = now
+    ctx.conn.execute(
+        "INSERT OR REPLACE INTO cycles (run_id, inventory_id, grp, slow, status, started_at,"
+        " finished_at, hosts, checks, forks, memory_peak, cpu_usec)"
+        " SELECT ?, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM inventories WHERE id = ?",
+        (run["id"], str(options.get("group", "")), 1 if options.get("slow") else 0, status,
+         run["started_at"], finished, count(options.get("hosts"), 10**6) or 0,
+         count(options.get("checks"), 10**7) or 0, count(options.get("forks"), 1000) or 1,
+         count(usage.get("memory_peak"), 2**50), count(usage.get("cpu_usec"), 2**60),
+         run["inventory_id"]))
+
+
+def _memory_total(meminfo: Path = Path("/proc/meminfo")) -> int:
+    try:
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0
+
+
+def memory_budget(ctx: Context) -> int:
+    """The bytes one check cycle may take: [checks] memory_mb, or half the
+    controller's memory, shared by the cycles that may run at once (as many
+    in the lane of the slow kinds as in the other)."""
+    total = ctx.config.checks_memory_mb * 1024 * 1024 or _memory_total() // 2
+    return total // (2 * ctx.config.checks_max_concurrent)
+
+
+def _memory_line(points: list[tuple[int, int]]) -> tuple[float, float]:
+    """The memory of a cycle as a base plus so much per fork, fitted to what
+    cycles took; with one number of forks only, all of it per fork."""
+    if len({forks for forks, _ in points}) > 1:
+        mean_x = statistics.fmean(forks for forks, _ in points)
+        mean_y = statistics.fmean(peak for _, peak in points)
+        spread = sum((forks - mean_x) ** 2 for forks, _ in points)
+        slope = sum((forks - mean_x) * (peak - mean_y) for forks, peak in points) / spread
+        base = mean_y - slope * mean_x
+        if slope > 0 and base >= 0:
+            return base, slope
+    return 0.0, statistics.median(peak / forks for forks, peak in points)
+
+
+def size(history: list[dict], forks: int, shard_size: int, budget: int,
+         target: float) -> dict:
+    """Forks and hosts for the next cycle of a group, from its last cycles.
+
+    forks and shard_size are the most there may be. Forks are as many as fit
+    in budget, at the memory each took; a shard is as many hosts as those
+    forks get through in target seconds, at the time each host took a fork,
+    and never fewer than the forks. With nothing measured, the most.
+    """
+    out: dict = {"forks": forks, "shard_size": shard_size, "basis": "configured"}
+    used = [(min(row["forks"], row["hosts"]), row) for row in history
+            if row["hosts"] > 0 and row["forks"] > 0]
+    if not used:
+        return out
+    out["basis"] = "measured"
+    memory = [(width, row["memory_peak"]) for width, row in used if row["memory_peak"]]
+    if memory and budget > 0:
+        base, per_fork = _memory_line(memory)
+        out["memory_base"], out["memory_per_fork"] = int(base), int(per_fork)
+        if per_fork > 0:
+            forks = max(1, min(forks, int((budget - base) // per_fork)))
+    per_host = statistics.median(
+        max(row["finished_at"] - row["started_at"], 0) * width / row["hosts"]
+        for width, row in used)
+    out["seconds_per_host"] = round(per_host, 2)
+    if per_host > 0 and target > 0:
+        shard_size = max(min(forks, shard_size), min(shard_size, int(target * forks / per_host)))
+    out.update(forks=forks, shard_size=shard_size)
+    return out
+
+
+def _history(ctx: Context, inventory_id: str, group: str) -> list[dict]:
+    rows = ctx.conn.execute(
+        "SELECT hosts, forks, started_at, finished_at, memory_peak FROM cycles"
+        " WHERE inventory_id = ? AND grp = ? AND status = 'successful'"
+        " ORDER BY finished_at DESC LIMIT ?", (inventory_id, group, MEASURED)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def shards(names: list[str], size: int) -> list[list[str]]:
+    """Cut the hosts in as few shards of at most size as there can be, of
+    sizes as even as they can be: 51 hosts by 50 are 26 and 25, not 50 and 1."""
+    if not names:
+        return []
+    count = math.ceil(len(names) / size)
+    width = math.ceil(len(names) / count)
+    return [names[start:start + width] for start in range(0, len(names), width)]
+
+
 # --- planning ---------------------------------------------------------------------
 
 def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: bool,
-                 plan: dict[str, list[dict]], check=None) -> str:
+                 plan: dict[str, list[dict]], check=None, group: str = "",
+                 forks: int | None = None) -> str:
     """Prepare and queue one check cycle; returns its run. With check, a
     check of the user: its playbook, from its project. A cycle of a slow
     kind has a longer time limit and a lane of the dispatch of its own."""
@@ -411,7 +529,8 @@ def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: boo
     spec: dict = {"kind": "check", "plan": plan,
                   "timeout": ctx.config.checks_slow_timeout if slow
                   else ctx.config.checks_timeout,
-                  "forks": min(ctx.config.checks_forks, ctx.config.max_forks), "become": become,
+                  "forks": min(forks or ctx.config.checks_forks, ctx.config.checks_forks,
+                               ctx.config.max_forks), "become": become,
                   "vaults": []}
     if check is not None:
         spec["playbook"] = check["playbook"]
@@ -450,7 +569,8 @@ def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: boo
                      "inventory_id": inventory["id"],
                      "project_id": project["id"] if project else None,
                      "options": json.dumps({"hosts": count, "slow": slow,
-                                            "checks": sum(len(e) for e in plan.values())})},
+                                            "checks": sum(len(e) for e in plan.values()),
+                                            "group": group, "forks": spec["forks"]})},
                spec, directory)
     return run_id
 
@@ -463,7 +583,7 @@ def plan(ctx: Context, now: float) -> list[str]:
                  " (SELECT id FROM runs WHERE status IN ('queued', 'running'))")
     rows = conn.execute(
         "SELECT s.host_id, s.check_id, h.name AS host, h.inventory_id, c.kind, c.params,"
-        " c.machine_credential_id, c.become FROM check_states s"
+        " c.machine_credential_id, c.become, c.interval FROM check_states s"
         " JOIN hosts h ON h.id = s.host_id JOIN checks c ON c.id = s.check_id"
         " WHERE c.enabled = 1 AND s.run_id IS NULL AND (s.next_at IS NULL OR s.next_at <= ?)"
         " ORDER BY s.next_at, h.name", (now + SLACK,)).fetchall()
@@ -483,21 +603,26 @@ def plan(ctx: Context, now: float) -> list[str]:
         key = (row["inventory_id"], row["machine_credential_id"], bool(row["become"]), own)
         groups[key][row["host"]].append(row)
     queued = []
-    size = ctx.config.checks_shard_size
+    budget = memory_budget(ctx)
+    ceiling = min(ctx.config.checks_forks, ctx.config.max_forks)
     for (inventory_id, credential_id, become, own), by_host in groups.items():
         inventory = store.fetch(conn, "inventories", inventory_id, "inventory")
         check = store.fetch(conn, "checks", own, "check") \
             if own and own not in catalog.KINDS else None
-        names = sorted(by_host)
-        for start in range(0, len(names), size):
-            shard = {name: by_host[name] for name in names[start:start + size]}
+        # A cycle should end within half the shortest interval of what it checks.
+        target = min(row["interval"] for entries in by_host.values() for row in entries) / 2
+        sizing = size(_history(ctx, inventory_id, own or ""), ceiling,
+                      ctx.config.checks_shard_size, budget, target)
+        for names in shards(sorted(by_host), sizing["shard_size"]):
+            shard = {name: by_host[name] for name in names}
             cycle_plan = {name: [{"id": row["check_id"], "check": row["kind"],
                                   "params": store.loads(row["params"], {})} for row in entries]
                           for name, entries in shard.items()}
             held = [(row["host_id"], row["check_id"]) for entries in shard.values()
                     for row in entries]
             try:
-                run_id = _queue_cycle(ctx, inventory, credential_id, become, cycle_plan, check)
+                run_id = _queue_cycle(ctx, inventory, credential_id, become, cycle_plan, check,
+                                      own or "", sizing["forks"])
             except (FleetError, OSError) as failure:
                 for host_id, check_id in held:
                     row = conn.execute(_STATE_ROW + " WHERE s.host_id = ? AND s.check_id = ?",
@@ -530,12 +655,13 @@ def _refresh_inventories(ctx: Context, now: float) -> None:
 
 def prune_cycles(ctx: Context, now: float) -> int:
     """Delete the check cycles past a day, with their directory: their
-    results are in the states."""
+    results are in the states. What they took goes after a month."""
     rows = ctx.conn.execute("SELECT id FROM runs WHERE kind = 'check' AND finished_at < ?",
                             (now - KEEP_CYCLES,)).fetchall()
     for row in rows:
         shutil.rmtree(jobs.run_dir(row["id"]), ignore_errors=True)
         ctx.conn.execute("DELETE FROM runs WHERE id = ?", (row["id"],))
+    ctx.conn.execute("DELETE FROM cycles WHERE finished_at < ?", (now - KEEP_MEASURES,))
     return len(rows)
 
 

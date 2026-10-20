@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from cockpit_fleet.errors import BadRequest
-from cockpit_fleet.runner import build_argv, build_env, mask, secret_values
+from cockpit_fleet.runner import build_argv, build_env, mask, secret_values, usage
 
 
 class BuildArgvTest(unittest.TestCase):
@@ -181,3 +181,29 @@ class BuildEnvTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UsageTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "cgroup"
+        self.group = self.root / "system.slice" / "cockpit-fleet-run@r1.service"
+        self.group.mkdir(parents=True)
+        self.proc = Path(self.tmp.name) / "self-cgroup"
+        self.proc.write_text("0::/system.slice/cockpit-fleet-run@r1.service\n")
+
+    def test_the_peak_of_memory_and_the_processor_time_of_the_unit(self):
+        (self.group / "memory.peak").write_text("209715200\n")
+        (self.group / "cpu.stat").write_text("usage_usec 3141592\nuser_usec 3000000\n")
+        self.assertEqual(usage(self.proc, self.root),
+                         {"memory_peak": 209715200, "cpu_usec": 3141592})
+
+    def test_what_cannot_be_read_is_left_out(self):
+        (self.group / "cpu.stat").write_text("usage_usec 12\n")
+        self.assertEqual(usage(self.proc, self.root), {"cpu_usec": 12})
+        self.proc.write_text("0::/../../etc\n")
+        self.assertEqual(usage(self.proc, self.root), {})
+        self.proc.write_text("1:name=systemd:/x\n")
+        self.assertEqual(usage(self.proc, self.root), {})
+        self.assertEqual(usage(Path(self.tmp.name) / "missing", self.root), {})

@@ -164,6 +164,8 @@ def main(argv: list[str]) -> int:
             result = {"rc": 2, "error": str(error)}
 
     result["finished_at"] = time.time()
+    # Read last, once every command has ended: the planner sizes check cycles on it.
+    result["usage"] = runner.usage()
     result["terminated"] = terminated
     temporary = run_dir / "result.json.tmp"
     temporary.write_text(json.dumps(result))

@@ -573,3 +573,102 @@ class StoreTest(CheckBase):
         self.assertEqual(self.ok("host.list")["hosts"], [])
         self.assertEqual(jobs.ACTIVE, ("queued", "running"))
         self.assertTrue(store.now())
+
+
+class SizingTest(CheckBase):
+    def measured(self, hosts, forks, seconds, peak=None):
+        return {"hosts": hosts, "forks": forks, "started_at": 0.0, "finished_at": seconds,
+                "memory_peak": peak}
+
+    def test_with_nothing_measured_the_configured_values_hold(self):
+        self.assertEqual(checks.size([], 20, 50, 10**9, 150),
+                         {"forks": 20, "shard_size": 50, "basis": "configured"})
+
+    def test_forks_fit_the_memory_a_cycle_may_take(self):
+        mb = 1024 * 1024
+        # 100 MB of base and 30 MB a fork, seen with 5 and 10 forks.
+        history = [self.measured(50, 5, 20, 250 * mb), self.measured(50, 10, 10, 400 * mb)]
+        sizing = checks.size(history, 20, 50, 500 * mb, 300)
+        self.assertEqual((sizing["memory_base"], sizing["memory_per_fork"]), (100 * mb, 30 * mb))
+        self.assertEqual(sizing["forks"], 13)
+        # One number of forks only: all of it counts per fork.
+        sizing = checks.size([self.measured(50, 10, 10, 400 * mb)], 20, 50, 500 * mb, 300)
+        self.assertEqual(sizing["forks"], 12)
+        # Never fewer than one, never more than the most.
+        self.assertEqual(checks.size(history, 20, 50, 10 * mb, 300)["forks"], 1)
+        self.assertEqual(checks.size(history, 4, 50, 10**12, 300)["forks"], 4)
+
+    def test_a_shard_is_what_the_forks_get_through_in_the_target(self):
+        # 40 hosts in 60 s with 10 forks: 15 s a host for a fork.
+        history = [self.measured(40, 10, 60)]
+        sizing = checks.size(history, 10, 50, 0, 30)
+        self.assertEqual((sizing["seconds_per_host"], sizing["shard_size"]), (15, 20))
+        # Never fewer hosts than forks, never more than the most.
+        self.assertEqual(checks.size(history, 10, 50, 0, 1)["shard_size"], 10)
+        self.assertEqual(checks.size(history, 10, 50, 0, 3600)["shard_size"], 50)
+        # Fewer hosts than forks: each host had a fork of its own.
+        self.assertEqual(checks.size([self.measured(2, 10, 8)], 10, 50, 0, 30)["seconds_per_host"],
+                         8)
+
+    def test_shards_are_as_even_as_they_can_be(self):
+        names = [f"h{i:02}" for i in range(51)]
+        self.assertEqual([len(shard) for shard in checks.shards(names, 50)], [26, 25])
+        self.assertEqual([len(shard) for shard in checks.shards(names[:50], 50)], [50])
+        self.assertEqual(sum(checks.shards(names, 7), []), names)
+        self.assertEqual(checks.shards([], 50), [])
+
+    def test_the_budget_is_shared_by_the_cycles_that_may_run_at_once(self):
+        self.config = dataclasses.replace(self.config, checks_memory_mb=800,
+                                          checks_max_concurrent=2)
+        self.assertEqual(checks.memory_budget(self.ctx()), 200 * 1024 * 1024)
+        self.config = dataclasses.replace(self.config, checks_memory_mb=0)
+        with mock.patch.object(checks, "_memory_total", lambda: 4096):
+            self.assertEqual(checks.memory_budget(self.ctx()), 512)
+
+    def rows(self):
+        import sqlite3
+        conn = sqlite3.connect(self.root / "fleet.db")
+        conn.row_factory = sqlite3.Row
+        try:
+            return [dict(row) for row in conn.execute("SELECT * FROM cycles ORDER BY started_at")]
+        finally:
+            conn.close()
+
+    def test_what_a_cycle_took_is_kept_and_sizes_the_next(self):
+        mb = 1024 * 1024
+        self.config = dataclasses.replace(self.config, checks_memory_mb=2 * 150,
+                                          checks_max_concurrent=1, checks_forks=20)
+        inventory = self.inventory()
+        self.check(inventory, group="web", interval=60)
+        run_id = self.tick()["queued"][0]
+        spec = json.loads((paths.RUNS_DIR / run_id / "spec.json").read_text())
+        self.assertEqual(spec["forks"], 20)
+        (paths.RUNS_DIR / run_id / "events.jsonl").write_text("")
+        self.clock += 4
+        self.finish(run_id, finished_at=self.clock,
+                    usage={"memory_peak": 200 * mb, "cpu_usec": 3_000_000})
+        self.ok("run.list")
+        [row] = self.rows()
+        self.assertEqual((row["run_id"], row["inventory_id"], row["grp"], row["status"]),
+                         (run_id, inventory["id"], "", "successful"))
+        self.assertEqual((row["hosts"], row["checks"], row["forks"], row["memory_peak"],
+                          row["cpu_usec"], row["finished_at"] - row["started_at"]),
+                         (2, 2, 20, 200 * mb, 3_000_000, 4))
+        # Two hosts took 200 MB with a fork each: 150 MB fit one.
+        run_id = self.tick(self.clock + 60)["queued"][0]
+        spec = json.loads((paths.RUNS_DIR / run_id / "spec.json").read_text())
+        self.assertEqual(spec["forks"], 1)
+        options = self.ok("run.get", {"id": run_id})["options"]
+        self.assertEqual((options["forks"], options["group"]), (1, ""))
+        # What a run wrote is believed only as far as its shape.
+        self.finish(run_id, finished_at=-5, usage={"memory_peak": "lots", "cpu_usec": True})
+        self.ok("run.list")
+        row = self.rows()[1]
+        self.assertEqual((row["memory_peak"], row["cpu_usec"], row["finished_at"]),
+                         (None, None, self.clock))
+        # Kept a month, after the cycle itself is gone.
+        self.tick(self.clock + 2 * 86400)
+        self.assertNotIn(run_id, [run["id"] for run in self.cycles()])
+        self.assertEqual(len(self.rows()), 2)
+        self.tick(self.clock + 30 * 86400)
+        self.assertEqual(self.rows(), [])

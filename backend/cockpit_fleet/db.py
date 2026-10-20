@@ -535,6 +535,29 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE runs ADD COLUMN pruned_at REAL",
         "CREATE INDEX runs_unpruned ON runs (finished_at) WHERE pruned_at IS NULL",
     ],
+    [
+        # What each check cycle took, kept after the cycle itself is deleted:
+        # the planner sizes the next cycles of the same group on it. The run
+        # is gone after a day, so run_id refers to nothing.
+        """
+        CREATE TABLE cycles (
+            run_id        TEXT PRIMARY KEY,
+            inventory_id  TEXT NOT NULL REFERENCES inventories (id) ON DELETE CASCADE,
+            grp           TEXT NOT NULL DEFAULT '',
+            slow          INTEGER NOT NULL DEFAULT 0,
+            status        TEXT NOT NULL,
+            started_at    REAL NOT NULL,
+            finished_at   REAL NOT NULL,
+            hosts         INTEGER NOT NULL,
+            checks        INTEGER NOT NULL,
+            forks         INTEGER NOT NULL,
+            memory_peak   INTEGER,
+            cpu_usec      INTEGER
+        )
+        """,
+        "CREATE INDEX cycles_of ON cycles (inventory_id, grp, finished_at)",
+        "CREATE INDEX cycles_finished ON cycles (finished_at)",
+    ],
 ]
 
 

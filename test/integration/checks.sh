@@ -147,6 +147,10 @@ cycle=$(db "SELECT id FROM runs WHERE kind = 'check' ORDER BY created_at LIMIT 1
 expect_eq "which the list of runs leaves out" "$(get "$(admin run.list)" "'$cycle' in [r['id'] for r in a['data']['runs']]")" False
 expect_eq "unless asked for" "$(get "$(admin run.list '{"kind": "check"}')" "'$cycle' in [r['id'] for r in a['data']['runs']]")" True
 expect_eq "a cycle runs in the sandbox" "$(journalctl -u "cockpit-fleet-run@$cycle.service" -o cat | grep -c 'TASK \[Checks\]')" 1
+expect_eq "what a cycle took is kept" "$(db "SELECT count(*) FROM cycles WHERE run_id = '$cycle'")" 1
+expect_eq "its memory read from the sandbox" \
+    "$(db "SELECT memory_peak > 10000000 AND memory_peak < 4000000000 FROM cycles WHERE run_id = '$cycle'")" 1
+expect_eq "and its processor time" "$(db "SELECT cpu_usec > 0 FROM cycles WHERE run_id = '$cycle'")" 1
 expect_eq "the platform comes from the first cycle" "$(db "SELECT platform FROM hosts WHERE name = 'node1'")" linux
 expect_eq "and the system" "$(db "SELECT os LIKE 'Debian GNU/Linux 13%' FROM hosts WHERE name = 'node1'")" 1
 for check in memory cpu uptime clock; do
@@ -194,6 +198,8 @@ expect_eq "with the full disk among its values" \
     "$(get "$series" 'max(p[1] for p in a["data"]["series"][0]["points"]) >= 90')" True
 expect_eq "and its hourly aggregate" \
     "$(db "SELECT max(h.high) >= 90 FROM metric_hourly h JOIN metric_series s ON s.id = h.series_id WHERE s.host_id = '$host_id' AND s.instance = '/data' AND s.name = 'used_pct'")" 1
+expect_ok "later cycles are sized on what the first ones took" \
+    test "$(db "SELECT count(*) FROM runs WHERE kind = 'check' AND json_extract(options, '\$.forks') IS NOT NULL")" -gt 0
 expect_eq "the database gives back free pages a few at a time" "$(db "PRAGMA auto_vacuum")" 2
 expect_eq "and the maintenance of the ticks never failed" \
     "$(journalctl --since "-30min" -o cat --no-pager | grep -c '^maintenance: .* failed')" 0
