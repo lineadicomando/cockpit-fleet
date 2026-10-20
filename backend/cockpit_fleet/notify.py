@@ -29,10 +29,14 @@ EVENTS = ("failed", "changed", "succeeded", "canceled")
 # What the states of checks give: a problem, its end, and a problem nobody
 # acknowledged that is told again.
 CHECK_EVENTS = ("problem", "recovery", "reminder")
+# What the controller says of itself: check cycles that fall behind, and catch up.
+SYSTEM_EVENTS = ("late", "caught_up")
 SCOPES = ("all", "project", "template", "schedule", "inventory", "group", "check")
 # Scopes that only runs have, and those that only checks have.
 _RUN_SCOPES = ("project", "template", "schedule")
 _CHECK_SCOPES = ("group", "check")
+# The scopes in which the controller's own events can be.
+_SYSTEM_SCOPES = ("all", "inventory")
 LANGUAGES = ("en", "it")
 STATES = ("pending", "sent", "failed")
 # Runs that are about the nodes; the jobs that serve a project are not.
@@ -66,6 +70,7 @@ _WORDS = {
         "problem": "Problem", "recovery": "Recovered", "reminder": "Still a problem",
         "ok": "OK", "warning": "WARNING", "critical": "CRITICAL", "unknown": "UNKNOWN",
         "inventory": "Inventory", "since": "Since",
+        "late": "Falling behind", "caught_up": "Back on time",
     },
     "it": {
         "failed": "Run fallita", "succeeded": "Run riuscita", "changed": "Run con modifiche",
@@ -80,6 +85,7 @@ _WORDS = {
         "problem": "Problema", "recovery": "Risolto", "reminder": "Ancora un problema",
         "ok": "OK", "warning": "AVVISO", "critical": "CRITICO", "unknown": "SCONOSCIUTO",
         "inventory": "Inventario", "since": "Dal",
+        "late": "In ritardo", "caught_up": "Di nuovo in orario",
     },
 }
 
@@ -97,6 +103,8 @@ def base_url(ctx: Context) -> str:
 
 
 def _link(base: str, event: dict | None) -> str:
+    if event and event.get("page") == "system":
+        return f"{base}/fleet#/system"
     if event and event.get("host_id"):
         return f"{base}/fleet#/hosts/{event['host_id']}"
     run_id = event.get("run_id") if event else None
@@ -124,6 +132,8 @@ def _hosts(stats: dict) -> dict:
 
 
 def _headline(words: dict, event: dict) -> str:
+    if event["event"] in SYSTEM_EVENTS:
+        return f"{words[event['event']]}: {event['title']}"
     if event["event"] in CHECK_EVENTS:
         state = words.get(event.get("state", ""), event.get("state", ""))
         return f"{words[event['event']]}: {event['title']} {state}"
@@ -132,7 +142,7 @@ def _headline(words: dict, event: dict) -> str:
 
 
 def _details(words: dict, event: dict) -> list[str]:
-    if event["event"] in CHECK_EVENTS:
+    if event["event"] in (*CHECK_EVENTS, *SYSTEM_EVENTS):
         lines = [event["summary"]] if event.get("summary") else []
         if event.get("inventory"):
             lines.append(f"{words['inventory']}: {event['inventory']}")
@@ -288,6 +298,29 @@ def check_event(ctx: Context, event: str, payload: dict, host_id: str, check_id:
             "channel_id": channel_id, "event": event, "host_id": host_id, "check_id": check_id,
             "payload": json.dumps(payload), "state": "pending", "next_at": now + window,
             "created_at": now}, "notification")
+    if chosen:
+        wake()
+    return len(chosen)
+
+
+def system_event(ctx: Context, event: str, payload: dict, inventory_id: str) -> int:
+    """Put in the outbox what the rules say about the controller itself,
+    for an inventory; one notification per channel."""
+    rules = ctx.conn.execute(
+        "SELECT r.*, c.group_window FROM notify_rules r JOIN channels c ON c.id = r.channel_id"
+        " WHERE r.enabled = 1 AND c.enabled = 1 ORDER BY r.created_at").fetchall()
+    now = store.now()
+    chosen: dict[str, int] = {}
+    for rule in rules:
+        if (event in store.loads(rule["events"], [])
+                and (rule["scope"] == "all"
+                     or (rule["scope"] == "inventory" and rule["scope_id"] == inventory_id))
+                and rule["channel_id"] not in chosen):
+            chosen[rule["channel_id"]] = rule["group_window"]
+    for channel_id, window in chosen.items():
+        store.insert(ctx.conn, "notifications", {
+            "channel_id": channel_id, "event": event, "payload": json.dumps(payload),
+            "state": "pending", "next_at": now + window, "created_at": now}, "notification")
     if chosen:
         wake()
     return len(chosen)
@@ -461,7 +494,7 @@ def channel_list(ctx: Context, params: Values) -> dict:
     rows = ctx.conn.execute("SELECT * FROM channels ORDER BY name COLLATE NOCASE").fetchall()
     return {"channels": [_channel(ctx, row) for row in rows],
             "kinds": list(channels.KINDS), "events": list(EVENTS),
-            "check_events": list(CHECK_EVENTS)}
+            "check_events": list(CHECK_EVENTS), "system_events": list(SYSTEM_EVENTS)}
 
 
 @command("channel.create", role="admin", mutating=True,
@@ -545,7 +578,9 @@ _RULE_PARAMS = {
     "name": Str(required=True, max_length=200),
     "channel_id": Id("The channel the notifications go through"),
     "events": Strs("What to tell about: the ends of a run, " + ", ".join(EVENTS)
-                   + "; the states of checks, " + ", ".join(CHECK_EVENTS), max_items=7),
+                   + "; the states of checks, " + ", ".join(CHECK_EVENTS)
+                   + "; check cycles that fall behind and catch up, " + ", ".join(SYSTEM_EVENTS),
+                   max_items=9),
     "scope": Choice(SCOPES, "Everything, or the runs of one project, template or schedule,"
                     " the runs and checks of an inventory, the checks of a group of an"
                     " inventory, or one check", default="all"),
@@ -559,7 +594,7 @@ _RULE_PARAMS = {
 
 def _rule_values(ctx: Context, params: Values) -> dict:
     events = params["events"]
-    known = (*EVENTS, *CHECK_EVENTS)
+    known = (*EVENTS, *CHECK_EVENTS, *SYSTEM_EVENTS)
     if not events or any(event not in known for event in events):
         raise BadRequest(f"events must name at least one of: {', '.join(known)}")
     store.fetch(ctx.conn, "channels", params["channel_id"], "channel")
@@ -575,6 +610,9 @@ def _rule_values(ctx: Context, params: Values) -> dict:
         raise BadRequest(f"the scope {scope} has runs only: it cannot tell about checks")
     if scope in _CHECK_SCOPES and set(events) & set(EVENTS):
         raise BadRequest(f"the scope {scope} has checks only: it cannot tell about runs")
+    if scope not in _SYSTEM_SCOPES and set(events) & set(SYSTEM_EVENTS):
+        raise BadRequest(f"check cycles falling behind are told for everything or for an"
+                         f" inventory, not for the scope {scope}")
     group = params["group"].strip()
     if (scope == "group") != bool(group):
         raise BadRequest("group is required for the scope group, and only for it")

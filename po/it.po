@@ -2338,3 +2338,112 @@ msgstr "Valori di {{metric}} nel tempo"
 
 msgid "The charts could not be loaded: reload the page."
 msgstr "Non è stato possibile caricare i grafici: ricarica la pagina."
+
+msgid "{{forks}} forks, up to {{hosts}} hosts"
+msgstr "{{forks}} fork, fino a {{hosts}} host"
+
+msgid "{{mb}} MB of the configuration shared by {{cycles}} cycles at once"
+msgstr "{{mb}} MB della configurazione divisi fra {{cycles}} cicli alla volta"
+
+msgid "{{running}} of {{limit}}"
+msgstr "{{running}} su {{limit}}"
+
+msgid "{{share}}% of the budget"
+msgstr "{{share}}% del budget"
+
+msgid "{{size}}, of which {{free}} free for new rows; write-ahead log {{wal}}"
+msgstr "{{size}}, di cui {{free}} liberi per nuove righe; write-ahead log {{wal}}"
+
+msgid "{{streak}} in a row since {{since}}"
+msgstr "{{streak}} di fila dal {{since}}"
+
+msgid "as configured"
+msgstr "come configurato"
+
+msgid "Back on time"
+msgstr "Di nuovo in orario"
+
+msgid "Check cycles"
+msgstr "Cicli dei check"
+
+msgid "Check cycles of the last day. A cycle should end within half the shortest interval of what it checks: one still running when its checks are due again makes them skip, and a group that skips {{times}} times in a row is falling behind, which the rules of notifications can tell about."
+msgstr "Cicli dei check dell'ultimo giorno. Un ciclo dovrebbe finire entro metà dell'intervallo più breve di ciò che controlla: uno ancora in corso quando i suoi check tornano in scadenza li fa saltare, e un gruppo che salta {{times}} volte di fila è in ritardo, cosa che le regole delle notifiche possono segnalare."
+
+msgid "Cycles"
+msgstr "Cicli"
+
+msgid "Cycles failed"
+msgstr "Cicli falliti"
+
+msgid "Cycles of the slow kinds"
+msgstr "Cicli dei tipi lenti"
+
+msgid "Duration, usual and longest"
+msgstr "Durata, abituale e massima"
+
+msgid "Falling behind"
+msgstr "In ritardo"
+
+msgid "Falling behind: cycles still running when their checks are due again, as many times in a row as the configuration says. Back on time: a cycle ends with nothing skipped. For everything or for one inventory."
+msgstr "In ritardo: cicli ancora in corso quando i loro check tornano in scadenza, tante volte di fila quante dice la configurazione. Di nuovo in orario: un ciclo finisce senza aver saltato nulla. Per tutto o per un inventario."
+
+msgid "free space is not given back to the file system"
+msgstr "lo spazio libero non viene restituito al file system"
+
+msgid "half the memory of the controller shared by {{cycles}} cycles at once"
+msgstr "metà della memoria del controller divisa fra {{cycles}} cicli alla volta"
+
+msgid "Health"
+msgstr "Salute"
+
+msgid "Interval"
+msgstr "Intervallo"
+
+msgid "Longest wait"
+msgstr "Attesa più lunga"
+
+msgid "Memory of one cycle"
+msgstr "Memoria di un ciclo"
+
+msgid "Memory peak"
+msgstr "Picco di memoria"
+
+msgid "No check is turned on."
+msgstr "Nessun check è attivo."
+
+msgid "No cycle yet"
+msgstr "Ancora nessun ciclo"
+
+msgid "On time"
+msgstr "In orario"
+
+msgid "Over its memory"
+msgstr "Oltre la sua memoria"
+
+msgid "Per cycle"
+msgstr "Per ciclo"
+
+msgid "Queue"
+msgstr "Coda"
+
+msgid "Slow"
+msgstr "Lento"
+
+msgid "Skipped due times"
+msgstr "Scadenze saltate"
+
+msgid "The other checks"
+msgstr "Gli altri check"
+
+msgid "When the check cycles of an inventory are"
+msgstr "Quando i cicli dei check di un inventario sono"
+
+msgid "cycles_active_count"
+msgid_plural "cycles_active_count_plural"
+msgstr[0] "{{count}} in corso"
+msgstr[1] "{{count}} in corso"
+
+msgid "cycles_unsuccessful_count"
+msgid_plural "cycles_unsuccessful_count_plural"
+msgstr[0] "{{count}} non riuscito"
+msgstr[1] "{{count}} non riusciti"

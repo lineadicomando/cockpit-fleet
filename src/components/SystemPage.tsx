@@ -1,16 +1,175 @@
 import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Content, Flex, FlexItem, Spinner, Title } from "@patternfly/react-core";
+import {
+    Alert,
+    Button,
+    Content,
+    DescriptionList,
+    DescriptionListDescription,
+    DescriptionListGroup,
+    DescriptionListTerm,
+    Flex,
+    FlexItem,
+    Spinner,
+    Title,
+} from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { formatBytes, formatInterval } from "../lib/checks.ts";
 import { call } from "../lib/fleet.ts";
-import { useLoad } from "../lib/hooks.ts";
+import { formatDuration, formatTime } from "../lib/format.ts";
+import { keeping, keepingTone, share, type Keeping } from "../lib/health.ts";
+import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Check, CheckStatus, ImportReport } from "../lib/types.ts";
+import type { Check, CheckStatus, Health, HealthGroup, HealthLane, ImportReport } from "../lib/types.ts";
+import { useKindNames } from "./ChecksPage.tsx";
 import { message } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 
 const TONE: Record<CheckStatus, Tone> = { ok: "good", warn: "warning", fail: "bad" };
 const ORDER: Record<CheckStatus, number> = { fail: 0, warn: 1, ok: 2 };
+
+// How the controller keeps up: the check cycles against their intervals and
+// their memory, the queue, the database.
+function HealthSection() {
+    const { t, i18n } = useTranslation();
+    const kindNames = useKindNames() as Record<string, string>;
+    const { data, error, loading, reload } = useLoad(() => call<Health>("system.health"));
+    usePolling(reload, 30000, true);
+
+    const keepingText: Record<Keeping, string> = {
+        idle: t("No cycle yet"),
+        ok: t("On time"),
+        failing: t("Cycles failed"),
+        memory: t("Over its memory"),
+        slow: t("Slow"),
+        late: t("Skipped due times"),
+        behind: t("Falling behind"),
+    };
+    const laneText: Record<HealthLane["lane"], string> = {
+        runs: t("Runs"),
+        checks: t("Check cycles"),
+        slow: t("Cycles of the slow kinds"),
+    };
+    const what = (group: HealthGroup) => group.runs === "checks" ? t("The other checks")
+        : group.runs === "slow" ? kindNames[group.name] ?? group.name : group.name;
+    const seconds = (value: number | null) => value === null ? "–" : formatDuration(value);
+
+    return (
+        <>
+            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}>
+                <FlexItem>
+                    <Title headingLevel="h2" size="lg">{t("Health")}</Title>
+                </FlexItem>
+                <FlexItem>
+                    <Button variant="secondary" onClick={reload} isLoading={loading} isDisabled={loading}>{t("Refresh")}</Button>
+                </FlexItem>
+            </Flex>
+            {error && <Alert variant="danger" isInline title={error.message} />}
+            {!data && loading && <Spinner aria-label={t("Loading")} />}
+            {data && (
+                <>
+                    <Content component="p">
+                        {t("Check cycles of the last day. A cycle should end within half the shortest interval of what it checks: one still running when its checks are due again makes them skip, and a group that skips {{times}} times in a row is falling behind, which the rules of notifications can tell about.", { times: data.late_after })}
+                    </Content>
+                    {data.groups.length === 0
+                        ? <Content component="p">{t("No check is turned on.")}</Content>
+                        : (
+                            <Table variant="compact" aria-label={t("Check cycles")}>
+                                <Thead>
+                                    <Tr>
+                                        <Th>{t("Inventory")}</Th>
+                                        <Th>{t("Checks")}</Th>
+                                        <Th>{t("Interval")}</Th>
+                                        <Th>{t("Cycles")}</Th>
+                                        <Th>{t("Duration, usual and longest")}</Th>
+                                        <Th>{t("Memory peak")}</Th>
+                                        <Th>{t("Skipped")}</Th>
+                                        <Th>{t("Per cycle")}</Th>
+                                        <Th>{t("Status")}</Th>
+                                    </Tr>
+                                </Thead>
+                                <Tbody>
+                                    {data.groups.map(group => {
+                                        const state = keeping(group, data.memory.budget);
+                                        const tone = keepingTone(state);
+                                        const memory = share(group.memory_peak, data.memory.budget);
+                                        return (
+                                            <Tr key={`${group.inventory_id}/${group.group}`}>
+                                                <Td dataLabel={t("Inventory")}>{group.inventory}</Td>
+                                                <Td dataLabel={t("Checks")}>{what(group)}</Td>
+                                                <Td dataLabel={t("Interval")}>{formatInterval(group.interval)}</Td>
+                                                <Td dataLabel={t("Cycles")}>
+                                                    {group.cycles}
+                                                    {group.unsuccessful > 0 && <> ({t("cycles_unsuccessful_count", { count: group.unsuccessful })})</>}
+                                                    {group.active > 0 && <> · {t("cycles_active_count", { count: group.active })}</>}
+                                                </Td>
+                                                <Td dataLabel={t("Duration, usual and longest")}>
+                                                    {group.cycles ? `${seconds(group.duration_median)} / ${seconds(group.duration_max)}` : "–"}
+                                                </Td>
+                                                <Td dataLabel={t("Memory peak")}>
+                                                    {group.memory_peak === null ? "–" : formatBytes(group.memory_peak)}
+                                                    {memory !== null && <> ({t("{{share}}% of the budget", { share: memory })})</>}
+                                                </Td>
+                                                <Td dataLabel={t("Skipped")}>
+                                                    {group.skipped}
+                                                    {group.behind && <> · {t("{{streak}} in a row since {{since}}", { streak: group.behind.streak, since: formatTime(group.behind.since, i18n.language) })}</>}
+                                                </Td>
+                                                <Td dataLabel={t("Per cycle")}>
+                                                    {t("{{forks}} forks, up to {{hosts}} hosts", { forks: group.sizing.forks, hosts: group.sizing.shard_size })}
+                                                    {group.sizing.basis === "configured" && <> ({t("as configured")})</>}
+                                                </Td>
+                                                <Td dataLabel={t("Status")}>
+                                                    {tone ? <StatusLabel tone={tone}>{keepingText[state]}</StatusLabel> : keepingText[state]}
+                                                </Td>
+                                            </Tr>
+                                        );
+                                    })}
+                                </Tbody>
+                            </Table>
+                        )}
+                    <Table variant="compact" aria-label={t("Queue")} style={{ marginBlockStart: "1rem" }}>
+                        <Thead>
+                            <Tr>
+                                <Th>{t("Queue")}</Th>
+                                <Th>{t("Running")}</Th>
+                                <Th>{t("Waiting")}</Th>
+                                <Th>{t("Longest wait")}</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {data.queue.map(lane => (
+                                <Tr key={lane.lane}>
+                                    <Td dataLabel={t("Queue")}>{laneText[lane.lane]}</Td>
+                                    <Td dataLabel={t("Running")}>{t("{{running}} of {{limit}}", { running: lane.running, limit: lane.limit })}</Td>
+                                    <Td dataLabel={t("Waiting")}>{lane.queued}</Td>
+                                    <Td dataLabel={t("Longest wait")}>{seconds(lane.oldest_wait)}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                    <DescriptionList isHorizontal isCompact style={{ marginBlockStart: "1rem" }}>
+                        <DescriptionListGroup>
+                            <DescriptionListTerm>{t("Memory of one cycle")}</DescriptionListTerm>
+                            <DescriptionListDescription>
+                                {formatBytes(data.memory.budget)}{" "}
+                                ({data.memory.configured_mb
+                                    ? t("{{mb}} MB of the configuration shared by {{cycles}} cycles at once", { mb: data.memory.configured_mb, cycles: data.memory.cycles_at_once })
+                                    : t("half the memory of the controller shared by {{cycles}} cycles at once", { cycles: data.memory.cycles_at_once })})
+                            </DescriptionListDescription>
+                        </DescriptionListGroup>
+                        <DescriptionListGroup>
+                            <DescriptionListTerm>{t("Database")}</DescriptionListTerm>
+                            <DescriptionListDescription>
+                                {t("{{size}}, of which {{free}} free for new rows; write-ahead log {{wal}}", { size: formatBytes(data.database.bytes), free: formatBytes(data.database.free_bytes), wal: formatBytes(data.database.wal_bytes) })}
+                                {!data.database.incremental && <> · {t("free space is not given back to the file system")}</>}
+                            </DescriptionListDescription>
+                        </DescriptionListGroup>
+                    </DescriptionList>
+                </>
+            )}
+        </>
+    );
+}
 
 // The configuration as one file, to keep it or to take it to another controller.
 function Transfer() {
@@ -129,7 +288,8 @@ export function SystemPage() {
 
     return (
         <>
-            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}>
+            <HealthSection />
+            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }} style={{ marginBlockStart: "2rem" }}>
                 <FlexItem>
                     <Title headingLevel="h2" size="lg">{t("Installation checks")}</Title>
                 </FlexItem>

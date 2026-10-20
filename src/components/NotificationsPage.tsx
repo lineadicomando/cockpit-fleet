@@ -24,13 +24,16 @@ import { formatTime } from "../lib/format.ts";
 import { usePolling, useLoad } from "../lib/hooks.ts";
 import { EMPTY_FORM, destination, formOf, settingsOf, type ChannelForm } from "../lib/notify.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Channel, ChannelKind, CheckDef, CheckEvent, FleetHost, Inventory, Notification, NotifyEvent, NotifyRule, Project, RuleScope, RunEvent, Schedule, Template } from "../lib/types.ts";
+import type { Channel, ChannelKind, CheckDef, CheckEvent, FleetHost, Inventory, Notification, NotifyEvent, NotifyRule, Project, RuleScope, RunEvent, Schedule, SystemEvent, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 
 const KINDS: ChannelKind[] = ["telegram", "webhook", "smtp", "matrix"];
 const RUN_EVENTS: RunEvent[] = ["failed", "changed", "succeeded", "canceled"];
 const CHECK_EVENTS: CheckEvent[] = ["problem", "recovery", "reminder"];
+const SYSTEM_EVENTS: SystemEvent[] = ["late", "caught_up"];
+// The scopes in which check cycles falling behind can be told about.
+const SYSTEM_SCOPES: RuleScope[] = ["all", "inventory"];
 // Scopes that only runs have, and those that only checks have.
 const RUN_SCOPES: RuleScope[] = ["project", "template", "schedule"];
 const CHECK_SCOPES: RuleScope[] = ["group", "check"];
@@ -59,6 +62,8 @@ function useLabels() {
             problem: t("A problem"),
             recovery: t("Its recovery"),
             reminder: t("A reminder of it"),
+            late: t("Falling behind"),
+            caught_up: t("Back on time"),
             test: t("Test"),
         } as Record<NotifyEvent | "test", string>,
         scopes: {
@@ -248,6 +253,7 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
     const groups = [...new Set((targets.data?.hosts ?? []).filter(host => host.inventory_id === scopeId).flatMap(host => host.groups))].sort();
     const runsAllowed = !CHECK_SCOPES.includes(scope);
     const checksAllowed = !RUN_SCOPES.includes(scope);
+    const systemAllowed = SYSTEM_SCOPES.includes(scope);
 
     function changeScope(value: RuleScope) {
         setScope(value);
@@ -255,7 +261,8 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
         setGroup("");
         // What the scope cannot have is left out, rather than refused when saved.
         setEvents(current => current.filter(event => RUN_EVENTS.includes(event as RunEvent)
-            ? !CHECK_SCOPES.includes(value) : !RUN_SCOPES.includes(value)));
+            ? !CHECK_SCOPES.includes(value)
+            : SYSTEM_EVENTS.includes(event as SystemEvent) ? SYSTEM_SCOPES.includes(value) : !RUN_SCOPES.includes(value)));
     }
 
     async function submit() {
@@ -290,6 +297,14 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
                         onChange={(_e, on) => setEvents(current => on ? [...current, event] : current.filter(item => item !== event))} />
                 ))}
                 <Help>{t("A problem is told once it is confirmed, after the attempts its check asks for. A reminder comes while nobody has acknowledged it.")}</Help>
+            </FormGroup>
+            <FormGroup label={t("When the check cycles of an inventory are")} role="group" isStack fieldId="rule-system-events">
+                {SYSTEM_EVENTS.map(event => (
+                    <Checkbox key={event} id={`rule-event-${event}`} label={labels.events[event]} isChecked={events.includes(event)}
+                        isDisabled={!systemAllowed}
+                        onChange={(_e, on) => setEvents(current => on ? [...current, event] : current.filter(item => item !== event))} />
+                ))}
+                <Help>{t("Falling behind: cycles still running when their checks are due again, as many times in a row as the configuration says. Back on time: a cycle ends with nothing skipped. For everything or for one inventory.")}</Help>
             </FormGroup>
             <FormGroup label={t("About what")} fieldId="rule-scope">
                 <FormSelect id="rule-scope" value={scope} onChange={(_e, value) => changeScope(value as RuleScope)}>

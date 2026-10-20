@@ -145,7 +145,7 @@ def apply(ctx: Context, row, state: int, summary: str, metrics: list, details: d
         "state": state, "hard_state": hard, "state_type": kind, "attempt": attempt,
         "summary": summary[:1000], "metrics": json.dumps(metrics),
         "details": json.dumps(details, ensure_ascii=False, default=str),
-        "checked_at": now, "run_id": None, "history": json.dumps(history),
+        "checked_at": now, "run_id": None, "skipped": 0, "history": json.dumps(history),
         "flapping": int(flapping),
         # From when the cycle was planned, so that it keeps to the ticks.
         "next_at": (since or now) + (row["retry_interval"] if kind == "soft"
@@ -419,15 +419,19 @@ def record_cycle(ctx: Context, run, result: dict, status: str) -> None:
     finished = result.get("finished_at")
     if not isinstance(finished, (int, float)) or not run["started_at"] <= finished <= now:
         finished = now
+    group = str(options.get("group", ""))
+    skipped = count(options.get("skipped"), 10**9) or 0
     ctx.conn.execute(
         "INSERT OR REPLACE INTO cycles (run_id, inventory_id, grp, slow, status, started_at,"
-        " finished_at, hosts, checks, forks, memory_peak, cpu_usec)"
-        " SELECT ?, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM inventories WHERE id = ?",
-        (run["id"], str(options.get("group", "")), 1 if options.get("slow") else 0, status,
+        " finished_at, hosts, checks, forks, memory_peak, cpu_usec, skipped)"
+        " SELECT ?, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM inventories WHERE id = ?",
+        (run["id"], group, 1 if options.get("slow") else 0, status,
          run["started_at"], finished, count(options.get("hosts"), 10**6) or 0,
          count(options.get("checks"), 10**7) or 0, count(options.get("forks"), 1000) or 1,
          count(usage.get("memory_peak"), 2**50), count(usage.get("cpu_usec"), 2**60),
-         run["inventory_id"]))
+         skipped, run["inventory_id"]))
+    if not skipped:
+        caught_up(ctx, run["inventory_id"], group, run, finished)
 
 
 def _memory_total(meminfo: Path = Path("/proc/meminfo")) -> int:
@@ -493,7 +497,7 @@ def size(history: list[dict], forks: int, shard_size: int, budget: int,
     return out
 
 
-def _history(ctx: Context, inventory_id: str, group: str) -> list[dict]:
+def recent_cycles(ctx: Context, inventory_id: str, group: str) -> list[dict]:
     rows = ctx.conn.execute(
         "SELECT hosts, forks, started_at, finished_at, memory_peak FROM cycles"
         " WHERE inventory_id = ? AND grp = ? AND status = 'successful'"
@@ -575,12 +579,61 @@ def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: boo
     return run_id
 
 
+def group_of(kind: str, check_id: str) -> str:
+    """The cycles a check goes in, within its inventory: a check of the user
+    alone, a slow kind with its own kind only, the rest together ('')."""
+    return check_id if kind in OWN_KINDS else kind if catalog.slow(kind) else ""
+
+
+def count_skips(ctx: Context, now: float) -> dict[tuple[str, str], int]:
+    """Count the due times of the states that a cycle still holds: each is
+    skipped, since a slow cycle is never doubled, and counted once. Returns,
+    per inventory and group, the due times newly skipped (the most of any
+    one state, so that a hundred hosts behind by one cycle are one)."""
+    conn = ctx.conn
+    # The cycle answers the due time it was queued for; the next is an
+    # interval after that, as apply() counts it.
+    rows = conn.execute(
+        "SELECT s.host_id, s.check_id, s.run_id, s.skipped, c.kind, c.interval, h.inventory_id,"
+        " r.created_at FROM check_states s JOIN checks c ON c.id = s.check_id"
+        " JOIN hosts h ON h.id = s.host_id JOIN runs r ON r.id = s.run_id"
+        " WHERE c.enabled = 1 AND r.created_at + c.interval <= ?", (now + SLACK,)).fetchall()
+    per_run: dict[str, int] = defaultdict(int)
+    per_group: dict[tuple[str, str], int] = defaultdict(int)
+    for row in rows:
+        missed = int((now + SLACK - row["created_at"]) // max(row["interval"], 1))
+        new = missed - row["skipped"]
+        if new <= 0:
+            continue
+        conn.execute("UPDATE check_states SET skipped = ? WHERE host_id = ? AND check_id = ?",
+                     (missed, row["host_id"], row["check_id"]))
+        per_run[row["run_id"]] += new
+        key = (row["inventory_id"], group_of(row["kind"], row["check_id"]))
+        per_group[key] = max(per_group[key], new)
+    for run_id, new in per_run.items():
+        conn.execute("UPDATE runs SET options = json_set(options, '$.skipped',"
+                     " coalesce(json_extract(options, '$.skipped'), 0) + ?) WHERE id = ?",
+                     (new, run_id))
+    for (inventory_id, group), new in per_group.items():
+        conn.execute(
+            "INSERT INTO cycle_lag (inventory_id, grp, streak, since, skipped_at)"
+            " VALUES (?, ?, ?, ?, ?) ON CONFLICT (inventory_id, grp) DO UPDATE SET"
+            " streak = streak + excluded.streak, skipped_at = excluded.skipped_at",
+            (inventory_id, group, new, now, now))
+        journal.send(f"checks: a cycle of {_group_name(ctx, inventory_id, group)} has not"
+                     f" ended when due again, {new} due time{'s' if new != 1 else ''} skipped", 4,
+                     FLEET_INVENTORY=inventory_id, FLEET_GROUP=group, FLEET_SKIPPED=str(new))
+    tell_late(ctx, now)
+    return dict(per_group)
+
+
 def plan(ctx: Context, now: float) -> list[str]:
     """Queue a cycle for what is due; returns the runs queued."""
     conn = ctx.conn
     # A state held by a cycle that is no longer queued or running is free again.
-    conn.execute("UPDATE check_states SET run_id = NULL WHERE run_id IS NOT NULL AND run_id NOT IN"
-                 " (SELECT id FROM runs WHERE status IN ('queued', 'running'))")
+    conn.execute("UPDATE check_states SET run_id = NULL, skipped = 0 WHERE run_id IS NOT NULL"
+                 " AND run_id NOT IN (SELECT id FROM runs WHERE status IN ('queued', 'running'))")
+    count_skips(ctx, now)
     rows = conn.execute(
         "SELECT s.host_id, s.check_id, h.name AS host, h.inventory_id, c.kind, c.params,"
         " c.machine_credential_id, c.become, c.interval FROM check_states s"
@@ -596,10 +649,7 @@ def plan(ctx: Context, now: float) -> list[str]:
                                  (row["host_id"], row["check_id"])).fetchone()
             apply(ctx, state, UNKNOWN, "a host by this name cannot be checked", [], {}, now)
             continue
-        # A check of the user is a playbook of its own: it goes alone; a slow
-        # kind goes with its own kind only.
-        own = row["check_id"] if row["kind"] in OWN_KINDS \
-            else row["kind"] if catalog.slow(row["kind"]) else None
+        own = group_of(row["kind"], row["check_id"]) or None
         key = (row["inventory_id"], row["machine_credential_id"], bool(row["become"]), own)
         groups[key][row["host"]].append(row)
     queued = []
@@ -611,7 +661,7 @@ def plan(ctx: Context, now: float) -> list[str]:
             if own and own not in catalog.KINDS else None
         # A cycle should end within half the shortest interval of what it checks.
         target = min(row["interval"] for entries in by_host.values() for row in entries) / 2
-        sizing = size(_history(ctx, inventory_id, own or ""), ceiling,
+        sizing = size(recent_cycles(ctx, inventory_id, own or ""), ceiling,
                       ctx.config.checks_shard_size, budget, target)
         for names in shards(sorted(by_host), sizing["shard_size"]):
             shard = {name: by_host[name] for name in names}
@@ -662,6 +712,8 @@ def prune_cycles(ctx: Context, now: float) -> int:
         shutil.rmtree(jobs.run_dir(row["id"]), ignore_errors=True)
         ctx.conn.execute("DELETE FROM runs WHERE id = ?", (row["id"],))
     ctx.conn.execute("DELETE FROM cycles WHERE finished_at < ?", (now - KEEP_MEASURES,))
+    # A group that skipped nothing for a month is gone, or was never seen to end.
+    ctx.conn.execute("DELETE FROM cycle_lag WHERE skipped_at < ?", (now - KEEP_MEASURES,))
     return len(rows)
 
 
@@ -732,6 +784,70 @@ def notify_states(ctx: Context, now: float) -> int:
                      " WHERE host_id = ? AND check_id = ?",
                      (row["hard_state"], now, row["host_id"], row["check_id"]))
     return told
+
+
+def _group_name(ctx: Context, inventory_id: str, group: str) -> str:
+    """The inventory and, but for the checks that go together, what the cycles
+    of the group run: the kind, or the name of a check of the user."""
+    row = ctx.conn.execute("SELECT name FROM inventories WHERE id = ?",
+                           (inventory_id,)).fetchone()
+    name = row["name"] if row else inventory_id
+    if not group:
+        return name
+    if group in catalog.KINDS:
+        return f"{name}, {group}"
+    check = ctx.conn.execute("SELECT name FROM checks WHERE id = ?", (group,)).fetchone()
+    return f"{name}, {check['name'] if check else group}"
+
+
+def _lag_payload(ctx: Context, event: str, row, now: float, summary: str) -> dict:
+    return {"event": event, "title": f"check cycles of {_group_name(ctx, row['inventory_id'],
+                                                                    row['grp'])}",
+            "summary": summary, "inventory_id": row["inventory_id"], "group": row["grp"],
+            "since": row["since"], "page": "system"}
+
+
+def tell_late(ctx: Context, now: float) -> int:
+    """Tell, once, about the groups that skipped [checks] late_after due
+    times in a row."""
+    rows = ctx.conn.execute("SELECT * FROM cycle_lag WHERE told = 0 AND streak >= ?",
+                            (ctx.config.checks_late_after,)).fetchall()
+    told = 0
+    for row in rows:
+        summary = (f"{row['streak']} due times skipped in a row: its cycles have not ended"
+                   " when due again")
+        told += notify.system_event(ctx, "late", _lag_payload(ctx, "late", row, now, summary),
+                                    row["inventory_id"])
+        ctx.conn.execute("UPDATE cycle_lag SET told = 1 WHERE inventory_id = ? AND grp = ?",
+                         (row["inventory_id"], row["grp"]))
+    return told
+
+
+def caught_up(ctx: Context, inventory_id: str, group: str, run, finished: float) -> None:
+    """A cycle of the group ended with nothing skipped: unless another of its
+    cycles is still behind, the group is on time again, and a delay told
+    about is told to be over."""
+    row = ctx.conn.execute("SELECT * FROM cycle_lag WHERE inventory_id = ? AND grp = ?",
+                           (inventory_id, group)).fetchone()
+    if row is None:
+        return
+    behind = ctx.conn.execute(
+        "SELECT 1 FROM check_states s JOIN runs r ON r.id = s.run_id WHERE s.skipped > 0"
+        " AND r.inventory_id = ? AND coalesce(json_extract(r.options, '$.group'), '') = ?"
+        " LIMIT 1", (inventory_id, group)).fetchone()
+    if behind:
+        return
+    ctx.conn.execute("DELETE FROM cycle_lag WHERE inventory_id = ? AND grp = ?",
+                     (inventory_id, group))
+    journal.send(f"checks: the cycles of {_group_name(ctx, inventory_id, group)} are on time"
+                 " again", 5, FLEET_INVENTORY=inventory_id, FLEET_GROUP=group)
+    if row["told"]:
+        took = max(finished - (run["started_at"] or finished), 0)
+        summary = (f"a cycle ended with nothing skipped, in {round(took)} s, after"
+                   f" {row['streak']} due times skipped")
+        notify.system_event(ctx, "caught_up",
+                            _lag_payload(ctx, "caught_up", row, finished, summary),
+                            inventory_id)
 
 
 # --- commands: checks -----------------------------------------------------------------

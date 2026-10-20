@@ -54,6 +54,10 @@
 #slow_timeout = 900
 # Hours after which a problem nobody acknowledged is told again; 0 never.
 #reminder_hours = 24
+# Due times a group of checks may skip in a row, because its cycles have not
+# ended when they are due again, before it is said to fall behind: in the
+# journal at every skip, to the rules that ask for it after this many.
+#late_after = 3
 
 [metrics]
 # Days the values the checks measure are kept as they came, then as hourly

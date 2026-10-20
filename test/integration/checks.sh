@@ -2,9 +2,10 @@
 # Checks: hosts from an inventory, cycles started by the tick of the timer, the
 # catalog on Linux nodes (containers, see nodes.sh), an unreachable host told
 # about once, and a disk that fills up told about within two intervals, then
-# its recovery, to a webhook (a stand-in on this machine, notify-sinks.py).
+# its recovery, to a webhook (a stand-in on this machine, notify-sinks.py); a
+# cycle slower than its interval, which skips and is told to fall behind.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
-# It waits for the timer: about six minutes. IT_KEEP=yes leaves it all behind.
+# It waits for the timer: about ten minutes. IT_KEEP=yes leaves it all behind.
 set -u
 . "$(dirname "$0")/lib.sh"
 require_root
@@ -21,7 +22,7 @@ cleanup() { stop_sinks; wipe; sh "$HERE/nodes.sh" down 2>/dev/null; rm -rf "$KEY
 [ "${IT_KEEP:-}" = yes ] || trap cleanup EXIT
 cleanup
 prepare
-printf '[checks]\nreminder_hours = 0\n' >> "$CONFIG"
+printf '[checks]\nreminder_hours = 0\nlate_after = 1\n' >> "$CONFIG"
 
 op() { ctl itoperator "$@"; }
 count() { if [ -f "$SINKS/$1" ]; then grep -c -- "${2:-}" "$SINKS/$1"; else echo 0; fi; }
@@ -95,6 +96,7 @@ sleep 1
 channel=$(get "$(admin channel.create '{"name":"hook","kind":"webhook","settings":{"url":"http://127.0.0.1:8025/hook","template":"{\"title\": \"$title\", \"text\": \"$text\"}"}}')" 'a["data"]["id"]')
 admin rule.create "{\"name\":\"checks\",\"channel_id\":\"$channel\",\"events\":[\"problem\",\"recovery\"],\"scope\":\"group\",\"scope_id\":\"$inventory_id\",\"group\":\"all\"}" >/dev/null
 admin rule.create "{\"name\":\"runs\",\"channel_id\":\"$channel\",\"events\":[\"failed\"]}" >/dev/null
+admin rule.create "{\"name\":\"late\",\"channel_id\":\"$channel\",\"events\":[\"late\",\"caught_up\"],\"scope\":\"inventory\",\"scope_id\":\"$inventory_id\"}" >/dev/null
 
 # --- the checks -----------------------------------------------------------------
 create() { admin check.create "$1"; }
@@ -203,6 +205,43 @@ expect_ok "later cycles are sized on what the first ones took" \
 expect_eq "the database gives back free pages a few at a time" "$(db "PRAGMA auto_vacuum")" 2
 expect_eq "and the maintenance of the ticks never failed" \
     "$(journalctl --since "-30min" -o cat --no-pager | grep -c '^maintenance: .* failed')" 0
+
+# --- a cycle slower than its interval ---------------------------------------------
+expect_eq "no cycle fell behind so far" "$(count http.jsonl 'Falling behind')" 0
+cat > /srv/fleet-it/own/slow.yml <<'YAML'
+- hosts: all
+  gather_facts: false
+  tasks:
+    - ansible.builtin.command: sleep 45
+      changed_when: false
+    - ansible.builtin.command: sleep 45
+      changed_when: false
+    - lineadicomando.fleet.fleet_result:
+        summary: slow
+YAML
+chmod a+r /srv/fleet-it/own/slow.yml
+slow=$(get "$(create "{\"name\": \"slow\", \"kind\": \"playbook\", $base, \"group\": \"web\", \"project_id\": \"$own\", \"playbook\": \"slow.yml\"}")" 'a["data"]["id"]')
+wait_count http.jsonl 'Falling behind: check cycles of nodes, slow' 1 240 >/dev/null
+expect_eq "a cycle still running when due again is told to fall behind" \
+    "$(count http.jsonl 'Falling behind: check cycles of nodes, slow')" 1
+expect_ok "and says so in the journal at each skip" \
+    test "$(journalctl --since "-10min" -o cat --no-pager | grep -c 'a cycle of nodes, slow has not ended when due again')" -ge 1
+health=$(op system.health)
+expect_eq "the page of health shows it behind" \
+    "$(get "$health" '[g["behind"] is not None for g in a["data"]["groups"] if g["group"] == "'"$slow"'"]')" "[True]"
+expect_eq "with the due times it skipped" \
+    "$(get "$health" '[g["skipped"] > 0 for g in a["data"]["groups"] if g["group"] == "'"$slow"'"]')" "[True]"
+expect_eq "and the queue of each lane" "$(get "$health" '[q["lane"] for q in a["data"]["queue"]]')" "['runs', 'checks', 'slow']"
+expect_eq "and the size of the database" "$(get "$health" 'a["data"]["database"]["bytes"] > 0')" True
+# Quick again: the next cycle ends in time, and the group is on time.
+sed -i 's/sleep 45/true/' /srv/fleet-it/own/slow.yml
+wait_count http.jsonl 'Back on time: check cycles of nodes, slow' 1 300 >/dev/null
+expect_eq "a cycle that ends in time is told to be back on time" \
+    "$(count http.jsonl 'Back on time: check cycles of nodes, slow')" 1
+expect_eq "what the slow cycle skipped is kept with what it took" \
+    "$(db "SELECT sum(skipped) > 0 FROM cycles WHERE grp = '$slow'")" 1
+expect_eq "and the group is no longer behind" "$(db "SELECT count(*) FROM cycle_lag WHERE grp = '$slow'")" 0
+admin check.delete "{\"id\": \"$slow\"}" >/dev/null
 
 # --- what stays out ----------------------------------------------------------------
 expect_denied "the private key is not in the database" grep -qa "$(sed -n 2p "$KEYS/key")" "$DB" "$DB-wal"

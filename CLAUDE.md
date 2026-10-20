@@ -147,7 +147,7 @@ test/integration/chat.sh             # fleet-chat with fake-agent.py: start, lim
 test/integration/cli.sh              # fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin; WIPES
 test/integration/schedules.sh        # the timer, ten schedules on one minute, missed times, overlap (about 5 min); WIPES
 test/integration/notify.sh           # notifications to stand-ins of the four channels, a retry by the tick (about 3 min); WIPES
-test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about (about 6 min); WIPES
+test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about, a cycle falling behind (about 10 min); WIPES
 test/integration/cmdb.sh             # the CMDB, updates and drift of container nodes, changes by hand (about 4 min); WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES

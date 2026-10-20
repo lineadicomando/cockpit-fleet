@@ -605,7 +605,8 @@ scheduled, and an optional one is left unanswered.
 A rule names the ends of a run to tell about (`failed`, which covers `error`
 too, `changed`, `succeeded`, `canceled`), which runs (every one, or those of
 one project, template, schedule or inventory) and a channel; what a rule
-says about checks is in "Checks". Channels are Telegram, a
+says about checks, and about check cycles falling behind (`late`,
+`caught_up`), is in "Checks". Channels are Telegram, a
 webhook, mail (SMTP) and Matrix, written with the standard library. Only
 playbook runs and ad-hoc commands are told about, not the jobs that serve a
 project.
@@ -782,7 +783,8 @@ playbook behind them. What is due is grouped by inventory, credential and
 `become`, then cut in shards of at most `[checks] shard_size` hosts (50),
 as even as they can be, each a cycle with at most `[checks] forks` (20);
 fewer of either when what the last cycles took says so (below). A state held
-by a cycle is not planned again until it ends. ansible-playbook says 2 when a host failed and 4 when
+by a cycle is not planned again until it ends: when it is due again
+meanwhile, that due time is skipped (below). ansible-playbook says 2 when a host failed and 4 when
 one could not be reached: for a cycle these are outcomes of hosts, which
 their states record, so the cycle is successful and its unit is not left
 failed; with a host down, a failed unit a minute would pile up. The output
@@ -824,8 +826,26 @@ With nothing measured, the configured values hold. They stay the most there
 may be: sizing only takes away, since more forks than configured is more
 memory than the administrator agreed to, and a larger shard only saves the
 start of a playbook. What a cycle is too slow for, sizing cannot fix: it
-ends late, and the next is not planned until it does (see "System health",
-to come).
+ends late, and the next is not planned until it does.
+
+**Skipped, and falling behind.** A cycle answers the due time it was queued
+for; when one interval later it has not ended (still queued counts too),
+the next due time of each state it holds is skipped, never doubled, and
+counted once: `skipped` in the state, how many of its due times have passed
+since the cycle was queued, the same reckoning as the next time of a result.
+The tick adds what is new to the options of the cycle, which end in its row
+of `cycles`, and writes a warning to the journal for each group with the
+due times it skipped. A hundred hosts behind by one cycle are one due time
+of the group, not a hundred. `cycle_lag` keeps, per inventory and group,
+the due times skipped in a row and since when; at `[checks] late_after` (3)
+the group is `late`, told once to the rules that ask for it. It is
+`caught_up` when one of its cycles ends with nothing skipped and no other
+cycle of the group still holds a skipped state, so that a small shard on
+time does not end the delay of a large one; the row is then deleted, and a
+delay told about is told to be over. A row nothing has added to in 30 days
+goes with the measures: its group is gone. These events are about the
+controller, not a host: their rules have the scope of everything or of an
+inventory, and their message links to the System tab.
 
 **Checks of the user.** A check of the kind `playbook` names a playbook of a
 project; it runs alone, on the hosts of its group, sharded the same way.
@@ -1044,6 +1064,34 @@ database made before is rewritten once by `VACUUM` to work that way, if it
 is below 64 MB (every one made before phase 8); a larger one is left as it
 is. The scheduler's unit has a private `/tmp`, where `VACUUM` writes its
 copy.
+
+## System health
+
+`system.health` says how the controller keeps up, from what is already
+kept, for viewers like `selfcheck`: watching the checks includes knowing
+whether their results are fresh. It holds no configuration beyond the
+memory a cycle may take. The System tab shows it above the installation
+checks, read again every 30 s.
+
+- For each group of cycles that the enabled checks make (by inventory: the
+  checks that go together, each slow kind, each check of the user): its
+  shortest interval; from `cycles`, over the last day, how many cycles
+  ended and how many not successfully, their usual (median) and longest
+  duration, the highest peak of memory against the budget of one cycle,
+  the due times they skipped (with those of cycles still under way); the
+  delay of `cycle_lag`; and the forks and hosts per cycle the planner would
+  choose now, from `checks.size()`, measured or as configured.
+- The queue of each lane of the dispatch (`jobs.lanes()`, the ones
+  `dispatch()` uses): running against its limit, waiting, the longest wait.
+- The database: pages, free pages and the page size as SQLite counts them
+  (`PRAGMA page_count`, `freelist_count`), as `maintenance.vacuum()` reads
+  them, the size of the write-ahead log, and whether free pages are given
+  back. Never `count(*)`: the tables of metrics reach millions of rows.
+
+The page puts the worst first for each group (`src/lib/health.ts`): falling
+behind; skipped, or a cycle longer than the interval; slow, a usual cycle
+over half of it, which is what sizing aims at; over its memory; cycles not
+successful.
 
 ## Export and import
 
@@ -1574,7 +1622,7 @@ Found on the way:
 | The command fleet for a terminal | `test/integration/cli.sh` | controller, as root; wipes the database |
 | Schedules and the timer | `test/integration/schedules.sh` | controller, as root; wipes the database |
 | Notifications, with stand-ins of the four channels | `test/integration/notify.sh` | controller, as root; wipes the database |
-| Checks of the hosts, a full disk told about | `test/integration/checks.sh` | controller with podman, as root; wipes the database |
+| Checks of the hosts, a full disk told about, a cycle falling behind | `test/integration/checks.sh` | controller with podman, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |

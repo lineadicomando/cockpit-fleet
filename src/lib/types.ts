@@ -315,7 +315,9 @@ export type ChannelKind = "telegram" | "webhook" | "smtp" | "matrix";
 export type RunEvent = "failed" | "changed" | "succeeded" | "canceled";
 // What the states of checks give.
 export type CheckEvent = "problem" | "recovery" | "reminder";
-export type NotifyEvent = RunEvent | CheckEvent;
+// What the controller says of itself: check cycles falling behind, and back on time.
+export type SystemEvent = "late" | "caught_up";
+export type NotifyEvent = RunEvent | CheckEvent | SystemEvent;
 export type RuleScope = "all" | "project" | "template" | "schedule" | "inventory" | "group" | "check";
 export type NotificationState = "pending" | "sent" | "failed";
 
@@ -605,4 +607,45 @@ export interface Drift {
     check: string;
     ts: number;
     changes: { task: string; diff: string; note?: string }[];
+}
+
+// A group of check cycles of an inventory, as system.health reads it.
+export interface HealthGroup {
+    inventory: string;
+    inventory_id: string;
+    // "" for the checks that go together, a slow kind, or the id of a check of the user.
+    group: string;
+    runs: "checks" | "slow" | "own";
+    // The kind for a slow one, the name of the check for one of the user.
+    name: string;
+    interval: number;
+    checks: number;
+    cycles: number;
+    unsuccessful: number;
+    duration_median: number | null;
+    duration_max: number | null;
+    memory_peak: number | null;
+    skipped: number;
+    last: { status: string; started_at: number; finished_at: number; hosts: number; forks: number; duration: number } | null;
+    active: number;
+    behind: { streak: number; since: number; told: boolean } | null;
+    sizing: { forks: number; shard_size: number; basis: "configured" | "measured"; seconds_per_host?: number };
+}
+
+export interface HealthLane {
+    lane: "runs" | "checks" | "slow";
+    limit: number;
+    running: number;
+    queued: number;
+    oldest_wait: number | null;
+}
+
+export interface Health {
+    now: number;
+    window: number;
+    late_after: number;
+    memory: { budget: number; configured_mb: number; cycles_at_once: number };
+    groups: HealthGroup[];
+    queue: HealthLane[];
+    database: { bytes: number; free_bytes: number; wal_bytes: number; incremental: boolean };
 }

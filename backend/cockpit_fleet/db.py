@@ -558,6 +558,25 @@ MIGRATIONS: list[list[str]] = [
         "CREATE INDEX cycles_of ON cycles (inventory_id, grp, finished_at)",
         "CREATE INDEX cycles_finished ON cycles (finished_at)",
     ],
+    [
+        # A state still held by a cycle when it is due again is skipped, not
+        # doubled: how many of its due times were, for the cycle that holds
+        # it; how many the cycle held past, kept with what it took; and the
+        # groups whose cycles fall behind, told about once.
+        "ALTER TABLE check_states ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE cycles ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0",
+        """
+        CREATE TABLE cycle_lag (
+            inventory_id  TEXT NOT NULL REFERENCES inventories (id) ON DELETE CASCADE,
+            grp           TEXT NOT NULL DEFAULT '',
+            streak        INTEGER NOT NULL DEFAULT 0,
+            since         REAL NOT NULL,
+            skipped_at    REAL NOT NULL,
+            told          INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (inventory_id, grp)
+        )
+        """,
+    ],
 ]
 
 

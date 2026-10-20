@@ -245,20 +245,25 @@ def _fleet_unit(verb: str, run_id: str) -> None:
         raise Unavailable(result.stderr.strip() or f"cannot {verb} the run unit")
 
 
+def lanes(config) -> list[tuple[str, str, int]]:
+    """The lanes of the dispatch: a name, which runs are in it, how many of
+    them may run at once."""
+    slow = "coalesce(json_extract(options, '$.slow'), 0)"
+    return [("runs", "kind != 'check'", config.max_concurrent_runs),
+            ("checks", f"kind = 'check' AND {slow} = 0", config.checks_max_concurrent),
+            ("slow", f"kind = 'check' AND {slow} != 0", config.checks_max_concurrent)]
+
+
 def dispatch(ctx) -> None:
     """Start queued runs while fewer than the configured maximum are running:
     those of a higher priority first, then the oldest. Check cycles have a
     limit of their own, and do not count against that of the other runs;
     cycles of the slow kinds have another, so as not to hold the others back."""
     conn = ctx.conn
-    slow = "coalesce(json_extract(options, '$.slow'), 0)"
     conn.execute("BEGIN IMMEDIATE")
     try:
         chosen = []
-        for lane, limit in (("kind != 'check'", ctx.config.max_concurrent_runs),
-                            (f"kind = 'check' AND {slow} = 0", ctx.config.checks_max_concurrent),
-                            (f"kind = 'check' AND {slow} != 0",
-                             ctx.config.checks_max_concurrent)):
+        for _name, lane, limit in lanes(ctx.config):
             running = conn.execute(f"SELECT count(*) FROM runs WHERE status = 'running'"  # noqa: S608
                                    f" AND {lane}").fetchone()[0]
             chosen += [row["id"] for row in conn.execute(

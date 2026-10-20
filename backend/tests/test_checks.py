@@ -8,7 +8,16 @@ from unittest import mock
 
 from test_notify import NotifyBase
 
-from cockpit_fleet import catalog, checks, jobs, paths, runner, schedules, store  # noqa: F401
+from cockpit_fleet import (  # noqa: F401
+    catalog,
+    checks,
+    health,
+    jobs,
+    paths,
+    runner,
+    schedules,
+    store,
+)
 from cockpit_fleet.errors import BadRequest
 
 LISTING = {
@@ -672,3 +681,168 @@ class SizingTest(CheckBase):
         self.assertEqual(len(self.rows()), 2)
         self.tick(self.clock + 30 * 86400)
         self.assertEqual(self.rows(), [])
+
+
+class LateTest(CheckBase):
+    """A cycle that has not ended when its checks are due again: they are
+    skipped, counted once each, and a group that keeps falling behind is told."""
+
+    def setUp(self):
+        super().setUp()
+        self.config = dataclasses.replace(self.config, checks_late_after=3)
+
+    def lag(self):
+        return [dict(row) for row in self.ctx().conn.execute("SELECT * FROM cycle_lag")]
+
+    def told(self):
+        return [(n["event"], n["title"]) for n in self.ok("notification.list")["notifications"]]
+
+    def report(self):
+        return self.ok("system.health", role="viewer")
+
+    def test_a_cycle_still_held_when_due_again_skips_and_is_counted_once(self):
+        channel = self.channel()
+        self.rule(channel, events=("late", "caught_up"))
+        inventory = self.inventory()
+        self.check(inventory, group="web", interval=60)
+        start = self.clock
+        run_id = self.tick()["queued"][0]
+        # Within the interval nothing is skipped, however many ticks.
+        self.tick(start + 30)
+        self.assertEqual(self.lag(), [])
+        # Due again within the slack of a tick: one due time skipped, for the
+        # two hosts together, and counted once however many ticks see it.
+        for at in (start + 55, start + 60, start + 100):
+            self.assertEqual(self.tick(at)["queued"], [])
+        [lag] = self.lag()
+        self.assertEqual((lag["inventory_id"], lag["grp"], lag["streak"], lag["told"]),
+                         (inventory["id"], "", 1, 0))
+        self.assertEqual(self.ok("run.get", {"id": run_id})["options"]["skipped"], 2)
+        self.tick(start + 125)
+        [group] = self.report()["groups"]
+        self.assertEqual((group["skipped"], group["active"], group["behind"]["streak"],
+                          group["behind"]["told"]), (4, 1, 2, False))
+        self.assertEqual(self.told(), [])
+        # The third due time in a row: told, once.
+        self.tick(start + 185)
+        self.tick(start + 190)
+        self.assertEqual(self.told(), [("late", "check cycles of lab")])
+        payload = json.loads(self.ctx().conn.execute(
+            "SELECT payload FROM notifications").fetchone()["payload"])
+        from cockpit_fleet import notify
+        message = notify.compose("it", [payload], "https://fleet:9090")
+        self.assertEqual(message.title, "Fleet: In ritardo: check cycles of lab")
+        self.assertIn("https://fleet:9090/fleet#/system", message.text)
+        self.assertIn("3 due times skipped in a row", message.text)
+
+        # It ends: what it skipped stays with what it took, and the group is
+        # still behind until a cycle ends with nothing skipped.
+        self.answer(run_id, {"web01": {"disk": disk(10)}, "web02": {"disk": disk(10)}})
+        cycle = self.ctx().conn.execute("SELECT skipped FROM cycles WHERE run_id = ?",
+                                        (run_id,)).fetchone()
+        self.assertEqual(cycle["skipped"], 6)
+        self.assertEqual(len(self.lag()), 1)
+        states = self.states()
+        self.assertEqual({state["next_at"] for state in states.values()}, {start + 60})
+        # The next is due at once, and ends in time.
+        run_id = self.tick(start + 200)["queued"][0]
+        self.clock += 5
+        self.answer(run_id, {"web01": {"disk": disk(10)}, "web02": {"disk": disk(10)}})
+        self.assertEqual(self.lag(), [])
+        self.assertEqual(self.told()[0], ("caught_up", "check cycles of lab"))
+        [group] = self.report()["groups"]
+        self.assertEqual((group["cycles"], group["skipped"], group["active"], group["behind"]),
+                         (2, 6, 0, None))
+
+    def test_a_shard_on_time_is_not_the_group_on_time(self):
+        self.config = dataclasses.replace(self.config, checks_shard_size=1,
+                                          checks_max_concurrent=2, checks_late_after=1)
+        channel = self.channel()
+        self.rule(channel, events=("late", "caught_up"))
+        inventory = self.inventory()
+        self.check(inventory, group="web", interval=60)
+        start = self.clock
+        first, second = self.tick()["queued"]
+        self.tick(start + 65)
+        self.assertEqual(self.told(), [("late", "check cycles of lab")])
+        # The second shard ends: it was behind too, so nothing changes.
+        self.answer(second, {name: {"disk": disk(10)} for name in
+                             json.loads((paths.RUNS_DIR / second / "spec.json").read_text())
+                             ["plan"]})
+        self.assertEqual(len(self.lag()), 1)
+        # A new cycle of one host ends in time, while the first still holds
+        # the other: still behind.
+        [again] = self.tick(start + 66)["queued"]
+        self.answer(again, {name: {"disk": disk(10)} for name in
+                            json.loads((paths.RUNS_DIR / again / "spec.json").read_text())
+                            ["plan"]})
+        self.assertEqual(len(self.lag()), 1)
+        self.assertEqual(len(self.told()), 1)
+
+    def test_a_cycle_released_without_an_end_frees_its_count(self):
+        inventory = self.inventory()
+        self.check(inventory, group="web", interval=60)
+        run_id = self.tick()["queued"][0]
+        self.tick(self.clock + 65)
+        self.ctx().conn.execute("UPDATE runs SET status = 'error' WHERE id = ?", (run_id,))
+        self.tick(self.clock + 1)
+        skipped = {row["skipped"] for row in self.ctx().conn.execute(
+            "SELECT skipped FROM check_states")}
+        self.assertEqual(skipped, {0})
+
+    def test_rules_about_cycles_are_for_everything_or_an_inventory(self):
+        channel = self.channel()
+        other = self.channel("other", secret="")
+        inventory = self.inventory()
+        check = self.check(inventory, group="web", interval=60)
+        template = self.template()
+        for scope, target in (("template", template["id"]), ("check", check["id"]),
+                              ("group", inventory["id"])):
+            self.assertEqual(self.code("rule.create", {
+                "name": scope, "channel_id": channel["id"], "events": ["late"],
+                "scope": scope, "scope_id": target,
+                **({"group": "web"} if scope == "group" else {})}), "bad_request")
+        self.rule(channel, events=("late",), scope="inventory", scope_id=inventory["id"])
+        elsewhere = self.ok("inventory.create", {"name": "far", "kind": "managed",
+                                                 "content": "x"})
+        self.rule(other, events=("late",), scope="inventory", scope_id=elsewhere["id"])
+        self.config = dataclasses.replace(self.config, checks_late_after=1)
+        self.tick()
+        self.tick(self.clock + 65)
+        self.assertEqual([(n["event"], n["channel"]) for n in
+                          self.ok("notification.list")["notifications"]], [("late", "ops")])
+
+
+class HealthTest(CheckBase):
+    def test_what_the_page_of_health_reads(self):
+        self.config = dataclasses.replace(self.config, checks_memory_mb=400,
+                                          checks_max_concurrent=1)
+        inventory = self.inventory()
+        self.check(inventory, group="web", interval=300)
+        self.check(inventory, "reachability", interval=120)
+        self.check(inventory, "cmdb", interval=86400)
+        report = self.ok("system.health", role="viewer")
+        self.assertEqual(report["memory"], {"budget": 200 * 1024 * 1024, "configured_mb": 400,
+                                            "cycles_at_once": 2})
+        groups = {(g["runs"], g["name"]): g for g in report["groups"]}
+        self.assertEqual(sorted(groups), [("checks", ""), ("slow", "cmdb")])
+        fast = groups[("checks", "")]
+        self.assertEqual((fast["interval"], fast["checks"], fast["cycles"], fast["last"],
+                          fast["sizing"]["basis"]), (120, 2, 0, None, "configured"))
+        self.assertEqual([lane["lane"] for lane in report["queue"]], ["runs", "checks", "slow"])
+        self.assertTrue(report["database"]["bytes"] > 0)
+        self.assertTrue(report["database"]["incremental"])
+        queued = self.tick()["queued"]
+        self.clock += 10
+        report = self.ok("system.health", role="viewer")
+        lanes = {lane["lane"]: lane for lane in report["queue"]}
+        self.assertEqual((lanes["checks"]["running"], lanes["slow"]["running"]), (1, 1))
+        for run_id in queued:
+            (paths.RUNS_DIR / run_id / "events.jsonl").write_text("")
+            self.finish(run_id, finished_at=self.clock, usage={"memory_peak": 50 * 1024 * 1024})
+        self.ok("run.list")
+        groups = {(g["runs"], g["name"]): g for g in self.ok("system.health")["groups"]}
+        fast = groups[("checks", "")]
+        self.assertEqual((fast["cycles"], fast["duration_max"], fast["memory_peak"],
+                          fast["last"]["hosts"], fast["sizing"]["basis"]),
+                         (1, 10, 50 * 1024 * 1024, 3, "measured"))
