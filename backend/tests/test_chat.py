@@ -3,6 +3,8 @@ on open sessions, and fleet-chat, which runs it."""
 
 import io
 import json
+import os
+import shutil
 import tempfile
 import unittest
 from dataclasses import replace
@@ -228,14 +230,18 @@ class TerminalLauncherTest(unittest.TestCase):
         class Done:
             returncode = 0
 
-        def run(argv, env, check):
+        def run(argv, env, cwd, check):
             config = Path(argv[2])
             seen.update(argv=argv, env=env, config=json.loads(config.read_text()), path=config,
-                        mode=config.parent.stat().st_mode & 0o777)
+                        mode=config.parent.stat().st_mode & 0o777, cwd=cwd)
             return Done()
 
-        with mock.patch.object(chat_agent.signal, "signal"):
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        with mock.patch.object(chat_agent.signal, "signal"), \
+                mock.patch.dict(os.environ, {"HOME": home, "XDG_STATE_HOME": ""}):
             status = chat_agent.main(["fleet-chat", "--terminal", "claude"], call=call, run=run)
+            again = chat_agent.workspace()
         self.assertEqual(status, 0)
         self.assertEqual(seen["asked"], ("chat.start", {"agent": "claude", "terminal": True,
                                                         "via": "cli"}))
@@ -246,6 +252,10 @@ class TerminalLauncherTest(unittest.TestCase):
         self.assertEqual(seen["mode"], 0o700)
         self.assertFalse(seen["path"].exists())
         self.assertEqual(seen["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"], "false")
+        # One directory of its own, the same each time, so that the agent asks once.
+        self.assertEqual(seen["cwd"], os.path.join(home, ".local/state/cockpit-fleet/assistant"))
+        self.assertEqual(again, seen["cwd"])
+        self.assertEqual(Path(seen["cwd"]).stat().st_mode & 0o777, 0o700)
 
     def test_a_refusal_is_said_and_nothing_runs(self):
         def run(argv, env, check):

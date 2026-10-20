@@ -1204,11 +1204,17 @@ which asks `chat.start` with `terminal` for the agent's program for a
 terminal (`terminal` in `[chat.agents.NAME]`), writes a private MCP
 configuration naming `fleet-mcp` alone, fills `{mcp_config}` and
 `{instructions}` in that command line, and runs it on the user's terminal,
-ignoring ^C, which is the agent's. Being a `fleet-chat`, it is counted as a
+ignoring ^C, which is the agent's, in `~/.local/state/cockpit-fleet/assistant`
+(under `XDG_STATE_HOME` when set; mode 0700), the same directory each time:
+Claude asks whether to trust the directory it starts in and keeps no answer
+for a home directory, so from the home it asked at every start. Being a `fleet-chat`, it is counted as a
 session; the configuration is deleted when the agent ends. For Claude the
 role names `--strict-mcp-config`, `--tools ""` and `--setting-sources ""`,
-what `_meta` does for a session of the page. Tried with a stand-in program
-(`chat.sh`), and the options with the CLI of Claude by hand.
+what `_meta` does for a session of the page, and `--permission-mode manual`:
+without it the CLI may start in its "auto" mode, which calls tools without
+asking (seen on 20 October with an account on a Max plan). Tried with a
+stand-in program (`chat.sh`), and with the CLI of Claude on Debian 13: a
+launch asked for, refused, and audited as `mcp:claude-code`.
 
 **Permissions.** The agent asks before each call to a tool
 (`session/request_permission`). The page answers by itself for a tool of

@@ -4,10 +4,10 @@ Cockpit plugin that runs Ansible from the browser (Semaphore UI style) and
 collects, stores and notifies on data from the nodes, with Ansible only. Not
 a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
-## Status (17 October 2026)
+## Status (20 October 2026)
 
-Phases 0–7 closed, the terminal's ideas done; everything pushed (`f689a50`),
-CI green. **Next: phase 8.**
+Phases 0–7 closed, the terminal's ideas done and seen live; pushed up to
+`949c711`, CI green. **Next: phase 8.**
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
@@ -27,13 +27,14 @@ on Debian and AlmaLinux.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day. Not yet on machines: the schedules fix
-(`d7708be`) and the terminal's changes.
-
-To see live, with a controller up:
-
-- [ ] `fleet assistant` with Claude logged in (`chat.sh` uses a stand-in)
-- [ ] The sections "At a terminal" (launch, run, upload) in a browser
-- [ ] Phase 7's "Linux and Windows together" in one Assets list (each seen apart)
+(`d7708be`).
+Live on Debian, 20 October: Linux and Windows nodes in one Assets list;
+"At a terminal" of a launch, a run and an upload, each command copied and
+run; the chat's agent installed by its playbook, the page and `fleet
+assistant` with Claude. Fixed then: the playbook failed on `os_family`;
+`fleet assistant` started in Claude's "auto" mode, calling tools unasked
+(now `--permission-mode manual`), and asked to trust the home at every
+start (now a directory of its own).
 
 ## Decisions
 
@@ -67,7 +68,7 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 ## Open point
 
 - The chat's agent role on Fedora and AlmaLinux (before phase 10): installs
-  `xz` there, never run on either.
+  `xz` there, never run on either (on Debian it now runs, 20 October).
 
 ## Leftovers (known limits, none blocking)
 

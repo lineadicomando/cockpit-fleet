@@ -46,6 +46,25 @@ def terminal_argv(command: list[str], mcp_config: str) -> list[str]:
             for word in command]
 
 
+def workspace() -> str:
+    """The directory of the agent at a terminal: the same one each time.
+
+    Claude asks whether to trust the directory it starts in, and keeps no
+    answer for a home directory: here it asks once, and the conversations of
+    fleet assistant are together, to be resumed. Where it cannot be made, the
+    current directory.
+    """
+    base = os.environ.get("XDG_STATE_HOME", "")
+    if not os.path.isabs(base):
+        base = os.path.join(os.path.expanduser("~"), ".local", "state")
+    path = os.path.join(base, "cockpit-fleet", "assistant")
+    try:
+        os.makedirs(path, mode=0o700, exist_ok=True)
+    except OSError:
+        return os.getcwd()
+    return path
+
+
 def terminal(name: str, call=fleetctl, run=subprocess.run) -> int:
     """fleet-chat --terminal NAME: the agent on the user's terminal."""
     try:
@@ -67,7 +86,7 @@ def terminal(name: str, call=fleetctl, run=subprocess.run) -> int:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
             return run(terminal_argv(answer["data"]["command"], config),
-                       env={**os.environ, **_ENVIRONMENT}, check=False).returncode
+                       env={**os.environ, **_ENVIRONMENT}, cwd=workspace(), check=False).returncode
         except OSError as error:
             print(f"fleet assistant: cannot start the agent: {error}", file=sys.stderr)
             return 3

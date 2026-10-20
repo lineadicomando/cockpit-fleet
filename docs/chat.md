@@ -143,7 +143,7 @@ names in `config.toml` beside the one of the page:
 ```toml
 terminal = ["/opt/cockpit-fleet-agent/bin/claude", "--mcp-config", "{mcp_config}",
             "--strict-mcp-config", "--tools", "", "--setting-sources", "",
-            "--append-system-prompt", "{instructions}"]
+            "--permission-mode", "manual", "--append-system-prompt", "{instructions}"]
 ```
 
 `{mcp_config}` becomes a file, private to the session and deleted at its
@@ -153,8 +153,13 @@ on where the agent is. The options keep the agent to the tools of
 page. What the user gets is the same: the role under `[mcp] max_role`, the
 start in the audit log (`chat.start`, with `terminal`), a session counted in
 `[chat] max_sessions`. The agent asks before every call, in its own way; the
-answers are not kept. With more than one agent, `fleet assistant NAME`
+answers are not kept. It starts in a directory of its own,
+`~/.local/state/cockpit-fleet/assistant`, the same each time: Claude asks
+there, the first time, whether to trust it (answer yes: its own tools are
+off, whatever the question says), and the conversations held at a terminal
+are there, to be resumed with `/resume`. With more than one agent, `fleet assistant NAME`
 chooses; an agent without `terminal` is for the page only. When it is
 installed by hand, add the line to its section; a controller set up before
 this line existed gets it by running the playbook again with
-`chat_agent_configure=true`, once the section it wrote is removed.
+`chat_agent_configure=true`, which replaces the section it wrote (a section
+written by hand is to be removed first).

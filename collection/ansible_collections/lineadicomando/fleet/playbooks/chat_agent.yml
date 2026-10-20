@@ -18,6 +18,7 @@
         gather_subset:
           - "!all"
           - "!min"
+          - distribution
           - platform
           - user
 
