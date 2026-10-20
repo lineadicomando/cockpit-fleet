@@ -9,34 +9,51 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
 under way**: time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
-`src/lib/metrics.ts`) and the sizing of cycles (schema 14, `cycles`) done;
-pushed up to `127a64b`, CI green. **Next: a cycle that does not end before
-the next is skipped and reported, and the "System health" page.** Where it
-starts from:
+`src/lib/metrics.ts`) and the sizing of cycles (schema 14, table `cycles`)
+done; pushed up to `45b14aa`, CI green, working tree clean.
 
-- Sizing: every cycle leaves a row in `cycles` (group, hosts, forks,
-  duration, `memory_peak` and `cpu_usec` that `fleet-run` reads from its
-  cgroup), kept 30 days; `checks.size()` takes forks from `[checks]
-  memory_mb` and hosts per shard from half the shortest interval, the
-  configured values as ceilings (`docs/architecture.md`, "Checks",
-  "Sizing"). The health page reads that table.
-- Overlap: a state held by a queued or running cycle (`check_states.run_id`)
-  is not planned again, so a slow cycle is never doubled; what is missing is
-  saying so: the tick knows when a due state is held (it is left out of
-  `plan()`'s query), nothing records or tells it yet.
-- SSH: within a run `ControlMaster=auto`, `ControlPersist=60s`, sockets in
-  the run's runtime directory (`runner.py`, `ANSIBLE_SSH_CONTROL_PATH_DIR`),
-  gone when it ends. Reusing connections between cycles means a socket
-  outliving a run: weigh it against rule 8 of `CLAUDE.md` with the user
-  before building it. The checks' playbook has `gather_facts: false`: host
-  facts come from the checks themselves, so "fact caching" may come to
-  nothing; say so rather than add it.
+Four proposals of 20 October wait for the user's word (rows "to confirm"
+under Decisions): `metric.query` for viewers, the charts' library, the
+retention and vacuum, the sizing of cycles. Ask before building on them.
+
+**Next: a cycle that does not end before the next is skipped and reported,
+then the "System health" page.** Where it starts from:
+
+- Overlap: `plan()` takes only states with `s.run_id IS NULL`
+  (`checks.py`), so a due state still held by a queued or running cycle is
+  left out without a trace, and a slow cycle is never doubled. Missing:
+  counting those (a due state held is one skipped), keeping the count with
+  the cycle that held it or per group, and saying so: the journal, the
+  health page, and perhaps a notification (none exists for the system
+  itself: ask the user before adding an event kind).
+- Sizing to read back: each cycle leaves a row in `cycles` (inventory,
+  group: `''`, a slow kind or a check id; hosts, checks, forks, start and
+  end, `memory_peak`, `cpu_usec`), kept 30 days; `checks.size()` and
+  `memory_budget()` give what the planner chose, the run's `options` keep
+  `forks` and `group` (`docs/architecture.md`, "Checks", "Sizing").
+- "System health": the System tab (`src/components/SystemPage.tsx`) has
+  export/import and `selfcheck` (viewer). Wanted: cycle durations per group
+  against their interval, memory peak against the budget, cycles skipped,
+  the queue (queued runs per lane of `jobs.dispatch()` and the age of the
+  oldest), the size of the database (`PRAGMA page_count`, `freelist_count`,
+  as `maintenance.vacuum()` reads them; no `count(*)` on the metric tables,
+  they reach millions of rows). A new read-only command, its role to decide
+  (admin, like `config.show`, unless the user says viewer).
+
+Then, in phase 8:
+
+- SSH and facts: within a run `ControlMaster=auto`, `ControlPersist=60s`,
+  sockets in the run's runtime directory (`runner.py`,
+  `ANSIBLE_SSH_CONTROL_PATH_DIR`), gone when it ends. Reusing connections
+  between cycles means a socket outliving a run: weigh it against rule 8 of
+  `CLAUDE.md` with the user before building anything. The checks' playbook
+  has `gather_facts: false` (host facts come from the checks), so "fact
+  caching" likely comes to nothing: say so rather than add it.
 - Load: `test/integration/measure-events.sh` (hosts as local aliases of the
-  controller) is where load tests start from; measured ~0.6 s per host on 2
-  vCPUs, CPU-bound. At the target, 14 days of raw values are about 500 MB
-  (`docs/architecture.md`, "Time series").
-- The System tab (`SystemPage.tsx`) shows `selfcheck` only; "System health"
-  would be added there.
+  controller, local connection) is where a load script starts from;
+  measured ~0.6 s per host on 2 vCPUs, CPU-bound. At the target, 14 days
+  of raw values are about 500 MB. The "done when" needs a controller with
+  4 GB and 24 hours: a machine, not a container.
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
@@ -60,14 +77,16 @@ on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
 the tree of `d7d3819`; the charts (`849303f`) with `checks` on Debian,
 then looked at in a browser on a container controller with a month of
 made-up values (one line and several, a gap, day to year); the sizing of
-cycles (uncommitted tree after `55bfcca`) with `checks` on the three and
-`runs` on Debian, the memory and processor time read in the sandbox. Phase
-8 not yet on machines.
+cycles (`6f20a5b`) with `checks` on the three and `runs` on Debian, the
+memory and processor time read in the sandbox. Phase 8 not yet on
+machines.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
 machines: the schedules fix (`d7708be`); the terminal's changes only by
-hand on Debian, not `cli.sh`, and not on Fedora or AlmaLinux.
+hand on Debian, not `cli.sh`, and not on Fedora or AlmaLinux. At the
+close of phase 8, on the three machines: every script (they cover all of
+the above), the charts and the health page in a browser, the load test.
 Live on Debian, 20 October: Linux and Windows nodes in one Assets list;
 "At a terminal" of a launch, a run and an upload, each command copied and
 run; the chat's agent installed by its playbook, the page and `fleet
