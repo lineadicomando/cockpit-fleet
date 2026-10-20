@@ -8,12 +8,40 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
 Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
 under way**: time series (schema 12, `metrics.py`), maintenance (schema
-13, `maintenance.py`) and the charts (page of a host, `MetricHistory.tsx`,
-`src/lib/metrics.ts`) done; pushed up to `d7d3819`, CI green, the charts
-not committed yet. **Next: shards and forks sized on measured duration and
-RAM**, then the rest of phase 8 below. `test/integration/measure-events.sh`
-is where the load tests start from; at the target, 14 days of raw values
-are about 500 MB (`docs/architecture.md`, "Time series").
+13, `maintenance.py`) and the charts (`MetricHistory.tsx`,
+`src/lib/metrics.ts`) done; pushed up to `127a64b`, CI green. **Next: shards
+and forks sized on measured duration and RAM.** Where it starts from:
+
+- Today: `[checks]` `shard_size` 50, `forks` 20 (capped by `[runs]
+  max_forks`, 50), `max_concurrent` 1, `timeout` 60, `slow_timeout` 900:
+  defaults in `config.py`, the same for every inventory, set by hand in
+  `config.toml`. `checks.plan()` groups the due states by inventory,
+  credential, become and own kind (a check of the user, a slow kind), cuts
+  each group into shards of `shard_size` hosts, and `_queue_cycle()` queues
+  each shard as one `check` run with those forks; the run's `options` keep
+  its hosts and checks.
+- Durations: a cycle's run row has `started_at`/`finished_at`, but
+  `prune_cycles()` deletes cycles after a day (`KEEP_CYCLES`), so nothing
+  measured survives to size on: keep what is needed (per inventory, per
+  kind) before sizing, and it also feeds the "System health" page. Nothing
+  measures the memory of a cycle yet (systemd's accounting of the run unit
+  is one source).
+- Overlap: a state held by a queued or running cycle (`check_states.run_id`)
+  is not planned again, so a slow cycle is never doubled; what is missing is
+  saying so (the item "skipped and reported").
+- SSH: within a run `ControlMaster=auto`, `ControlPersist=60s`, sockets in
+  the run's runtime directory (`runner.py`, `ANSIBLE_SSH_CONTROL_PATH_DIR`),
+  gone when it ends. Reusing connections between cycles means a socket
+  outliving a run: weigh it against rule 8 of `CLAUDE.md` with the user
+  before building it. The checks' playbook has `gather_facts: false`: host
+  facts come from the checks themselves, so "fact caching" may come to
+  nothing; say so rather than add it.
+- Load: `test/integration/measure-events.sh` (hosts as local aliases of the
+  controller) is where load tests start from; measured ~0.6 s per host on 2
+  vCPUs, CPU-bound. At the target, 14 days of raw values are about 500 MB
+  (`docs/architecture.md`, "Time series").
+- The System tab (`SystemPage.tsx`) shows `selfcheck` only; "System health"
+  would be added there.
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
@@ -22,7 +50,9 @@ says what exists and why, its last section how each phase was accepted.
 DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `db.py` schema 13), checks in `checks.py` and
+`cli.py` the registry, `db.py` schema 13), the queue and dispatch of jobs in
+`jobs.py`, command lines of jobs in `runner.py`, `selfcheck` and the audit in
+`system.py`, checks in `checks.py` and
 `catalog.py`, time series in `metrics.py`, retention in `maintenance.py`,
 the CMDB in `cmdb.py`, the terminal in `terminal.py`, node modules in
 `collection/.../plugins/modules/` (`checks.py`, `win_checks.ps1`), pages in
@@ -32,10 +62,10 @@ Last test runs: in containers (`make ct-test`) on 16 October, the whole
 suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
 on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
 `557dd22`, then `checks` on Debian and AlmaLinux and `runs` on Debian with
-the tree of `d7d3819` (phase 8 not yet on Fedora, nor on machines); the
-charts with `checks` on Debian, then looked at in a browser on a container
-controller with a month of made-up values (one line and several, a gap,
-day to year).
+the tree of `d7d3819`; the charts (`849303f`) with `checks` on Debian,
+then looked at in a browser on a container controller with a month of
+made-up values (one line and several, a gap, day to year). Phase 8 not yet
+on Fedora, nor on machines.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
