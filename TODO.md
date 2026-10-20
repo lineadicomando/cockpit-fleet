@@ -7,10 +7,9 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 ## Status (20 October 2026)
 
 Phases 0–7 closed, the terminal's ideas done and seen live; pushed up to
-`557dd22`, CI green. **Phase 8 under way**: the time series are done
-(schema 12, `metrics.py`; `checks.sh` in containers of Debian and
-AlmaLinux, at `d287fa3`, not pushed);
-next is maintenance (run directories, vacuum).
+`ec5891d`, CI green. **Phase 8 under way**: time series (schema 12,
+`metrics.py`) and maintenance (schema 13, `maintenance.py`) done, the
+latter not pushed; next are the charts.
 `test/integration/measure-events.sh` is where the load tests start from.
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
@@ -21,11 +20,11 @@ says what exists and why, its last section how each phase was accepted.
 DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `db.py` schema 12), checks in `checks.py` and
-`catalog.py`, time series in `metrics.py`, the CMDB in `cmdb.py`, the
-terminal in `terminal.py`, node modules in
-`collection/.../plugins/modules/` (`checks.py`, `win_checks.ps1`), pages
-in `src/components/`.
+`cli.py` the registry, `db.py` schema 13), checks in `checks.py` and
+`catalog.py`, time series in `metrics.py`, retention in `maintenance.py`,
+the CMDB in `cmdb.py`, the terminal in `terminal.py`, node modules in
+`collection/.../plugins/modules/` (`checks.py`, `win_checks.ps1`), pages in
+`src/components/`.
 
 Last test runs: in containers (`make ct-test`) on 16 October, the whole
 suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
@@ -70,7 +69,7 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 | Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers (proposed 20 October, to confirm) |
 | Checks | Catalog + playbooks ending with `fleet_result`; one task per host, `checks.py` or `win_checks.ps1` by shell; thresholds at ingest; cycles as `check` jobs with their own limit, sharded by inventory/credential/become; soft/hard states, flapping, ack, maintenance; viewer sees, operator acks, admin configures |
 | CMDB, updates, drift | Kinds `cmdb`, `updates` and `compliance` (a playbook in `--check --diff`), slow: own cycles, `[checks] slow_timeout`, own dispatch lane; snapshot + changes tables; hardware change = warning for one cycle; viewer sees CMDB, drift diffs operator+ |
-| Retention | Metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); target run logs 90 d (phase 8). Today: outbox 90 d, check cycles 1 d, CMDB changes 365 d; runs, state changes, audit kept |
+| Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d, CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back (proposed 20 October, to confirm) |
 | Discarded | MCP servers of projects (Ansible outside the sandbox, keys in clear); the chat as its own package, or hooked by `cockpit-samba-dc`; installing the agent per user from the page, from an apt repo or by a shell recipe; driving `claude` without ACP; a timer per schedule (root writing units from input); a second command name for `fleet` (Rancher's CLI in `/usr/local/bin` would shadow it, left as is); unloading failed run units (kept as systemd does, 15 October) |
 | Out of scope | External triggers (future) |
 
@@ -81,8 +80,7 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 
 ## Leftovers (known limits, none blocking)
 
-- Runs: their directories are never deleted, those of check cycles aside
-  (a day; phase 8); a failed run leaves
+- Runs: a failed run leaves
   its unit failed, so the system is `degraded` until `reset-failed`
   (`CollectMode=inactive-or-failed` untried); Cockpit's admin access without
   a group is audited as `root`; integration tests not in CI (no privileged
@@ -133,7 +131,7 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 ## Phase 8 — Time series and scale (next)
 
 - [x] Narrow metrics table, hourly and daily aggregates, retention
-- [ ] Maintenance: deletion (run directories too), vacuum (downsampling
+- [x] Maintenance: deletion (run directories too), vacuum (downsampling
       needs no pass: aggregates are kept at ingest)
 - [ ] Charts (`@patternfly/react-charts`)
 - [ ] Shards and forks sized on measured duration and RAM

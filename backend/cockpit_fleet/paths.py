@@ -29,6 +29,8 @@ SCHEDULER_LOCK = STATE_DIR / "scheduler.lock"
 # starts the service that does it.
 NOTIFY_WAKE = STATE_DIR / "notify.wake"
 NOTIFY_LOCK = STATE_DIR / "notify.lock"
+# Touched when the tick last looked for run directories with no run.
+SWEEP_STAMP = STATE_DIR / "sweep.stamp"
 CONFIG_FILE = Path("/etc/cockpit-fleet/config.toml")
 LIBEXEC_DIR = Path("/usr/libexec/cockpit-fleet")
 

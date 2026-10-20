@@ -397,7 +397,9 @@ export function RunDetailPage({ id }: { id: string }) {
                 </FlexItem>
                 <FlexItem><Recap stats={data.stats} /></FlexItem>
                 <FlexItem>
-                    {mayRead ? (
+                    {mayRead && data.pruned_at ? (
+                        <Alert variant="info" isInline title={t("The output of this run was deleted on {{when}}, as runs this old keep only their outcome.", { when: formatTime(data.pruned_at, i18n.language) })} />
+                    ) : mayRead ? (
                         <Card isPlain>
                             <Tabs activeKey={tab} onSelect={(_event, key) => setTab(String(key))}>
                                 <Tab eventKey="output" title={<TabTitleText>{t("Output")}</TabTitleText>} />

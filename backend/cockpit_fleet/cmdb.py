@@ -14,7 +14,7 @@ from . import store
 from .catalog import clean_text, finite
 from .cli import Context, Id, Int, Str, Values, command
 
-# Changes are kept this long; phase 8 decides retention as a whole.
+# Changes are kept this long; maintenance.tidy deletes them after.
 KEEP_CHANGES = 365 * 86400
 # A change of the memory below this share is the kernel keeping more or less
 # for itself, not a module added or removed.

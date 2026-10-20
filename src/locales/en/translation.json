@@ -657,6 +657,7 @@
   "The modules allowed are listed in the configuration file.": "The modules allowed are listed in the configuration file.",
   "The number of the chat or group (negative for a group), or the @name of a channel. The bot must be a member.": "The number of the chat or group (negative for a group), or the @name of a channel. The bot must be a member.",
   "The output of a run is shown to operators and administrators only, because it may contain sensitive data.": "The output of a run is shown to operators and administrators only, because it may contain sensitive data.",
+  "The output of this run was deleted on {{when}}, as runs this old keep only their outcome.": "The output of this run was deleted on {{when}}, as runs this old keep only their outcome.",
   "The project and the files fetched for it are deleted. The repository is not touched.": "The project and the files fetched for it are deleted. The repository is not touched.",
   "The project and the files unpacked for it are deleted.": "The project and the files unpacked for it are deleted.",
   "The project is forgotten. The directory and its files are not touched.": "The project is forgotten. The directory and its files are not touched.",

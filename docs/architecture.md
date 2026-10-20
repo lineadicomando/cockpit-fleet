@@ -189,7 +189,9 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 
 The run then sees a self-contained directory and nothing else. `project/`,
 `creds/`, `collections/` and an uploaded `archive` are removed when the job
-ends; `stdout.log`, `events.jsonl` and `result.json` stay.
+ends; `stdout.log`, `events.jsonl` and `result.json` stay until
+`[runs] keep_days` (90; 0 for ever) after it ended, when the tick deletes the
+directory (see "Maintenance").
 
 There is no daemon tracking jobs. The `runs` table holds the state, and
 `reconcile` brings it up to date from what a unit left behind: it runs when a
@@ -875,7 +877,7 @@ as changes only: a package that came, went or changed version, a service
 that came, went or changed whether it starts at boot (not whether it runs,
 which is a matter for the checks), a change of hardware, a change of the
 addresses of an interface. The first snapshot records none. Changes are kept
-365 days, pruned by the tick, until phase 8 decides retention. What a node
+365 days, then deleted by the tick (see "Maintenance"). What a node
 sends is read as untrusted: cut to size (20 000 packages, 5 000 services and
 updates, 64 disks and interfaces), malformed entries left out. Memory that
 moves by less than 5% is the kernel keeping more or less for itself, not a
@@ -959,6 +961,37 @@ each: a cycle's 5000 values are written in 0.12 s outside a transaction
 0.1 s for a day of 125 000 values. At the target of phase 8 (500 hosts, 10
 checks every 10 minutes, about 20 values per host) 14 days of values are
 some 20 million rows, about 500 MB.
+
+## Maintenance
+
+Every retention is applied in one place, `maintenance.tidy`, at each tick
+after the checks; only the outbox of notifications is pruned by the service
+that delivers it (90 days). One step that fails is written to the journal
+and does not keep the others from running.
+
+| What | Kept | How |
+|---|---|---|
+| Check cycles | a day | row and directory deleted |
+| Output of other runs | `[runs] keep_days` (90) | directory deleted, 500 a tick at most; the row stays with its outcome and `pruned_at` |
+| Directories of `runs/` with no run | a day | deleted, the directory looked through once an hour (a stamp file) |
+| CMDB changes | 365 days | deleted |
+| Metrics | `[metrics]` (14, 90, 730 days) | deleted, see "Time series" |
+| Runs, state changes, audit | always | |
+
+A run whose output was deleted says so in its page, in `fleet log` and in
+`fleet result`: its status, rc and outcome per host are in its row.
+
+**Giving space back.** Deleted rows leave free pages, which new rows reuse:
+at a steady state, the values that expire make room for those that arrive,
+and the file stops growing. Giving pages back to the file system matters
+after a large deletion (a shorter retention, a check removed). A database is
+created with `auto_vacuum = INCREMENTAL`; the tick then gives back up to
+32 MB of free pages at a time, and only when they are a quarter of the file
+or more, so that it does not shrink a file that will grow again at once. A
+database made before is rewritten once by `VACUUM` to work that way, if it
+is below 64 MB (every one made before phase 8); a larger one is left as it
+is. The scheduler's unit has a private `/tmp`, where `VACUUM` writes its
+copy.
 
 ## Export and import
 

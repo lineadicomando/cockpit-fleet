@@ -8,6 +8,9 @@
 #default_forks = 5
 # Upper bound a job template may ask for.
 #max_forks = 50
+# Days the output of a run is kept once it ended (its outcome stays); 0 keeps
+# it for ever.
+#keep_days = 90
 
 [projects]
 # Directories of this machine that may be used as a project as they are.

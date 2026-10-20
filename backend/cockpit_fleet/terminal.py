@@ -697,7 +697,7 @@ def _follow(term: Terminal, run_id: str) -> int:
     return _result(term, [run_id])
 
 
-def _drain(term: Terminal, run_id: str, offset: int = 0) -> None:
+def _drain(term: Terminal, run_id: str, offset: int = 0) -> int:
     more = True
     while more:
         chunk = term("run.log", {"id": run_id, "offset": offset})
@@ -705,6 +705,11 @@ def _drain(term: Terminal, run_id: str, offset: int = 0) -> None:
         if not term.as_json:
             term.out.write(chunk["text"] if term.color else _ANSI_RE.sub("", chunk["text"]))
             term.out.flush()
+    return offset
+
+
+def _pruned(run: dict) -> str:
+    return f"its output was deleted on {_when(run['pruned_at'])}: only the outcome is kept"
 
 
 def _log(term: Terminal, args: list[str]) -> int:
@@ -715,7 +720,10 @@ def _log(term: Terminal, args: list[str]) -> int:
     options = parser.parse_args(args)
     if options.follow:
         return _follow(term, options.run)
-    _drain(term, options.run)
+    if not _drain(term, options.run):
+        run = term("run.get", {"id": options.run})
+        if run.get("pruned_at"):
+            term.err.write(f"{run['id']}: {_pruned(run)}\n")
     return OK
 
 
@@ -734,6 +742,8 @@ def _result(term: Terminal, args: list[str]) -> int:
     term.say(f"\n{result['id']}  {result['title']}: {result['status']}{rc}")
     if result["error"]:
         term.say(f"error: {result['error']}")
+    if result.get("pruned_at"):
+        term.say(_pruned(result))
     stats = result["stats"]
     if stats:
         columns = ["host", "ok", "changed", "failures", "unreachable", "skipped"]

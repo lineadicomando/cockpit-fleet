@@ -18,7 +18,7 @@ import unicodedata
 import zoneinfo
 from datetime import UTC, datetime
 
-from . import checks, jobs, journal, notify, paths, runs, store, survey
+from . import checks, jobs, journal, maintenance, notify, paths, runs, store, survey
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError, Unavailable
 from .validators import check_limit
@@ -475,7 +475,8 @@ def tick(ctx: Context) -> dict:
             "SELECT * FROM schedules WHERE enabled = 1 AND next_at IS NOT NULL AND next_at <= ?"
             " ORDER BY priority DESC, next_at", (now,)).fetchall()
         fired = [_fire(ctx, row, now) for row in due]
-        return {"busy": False, "schedules": fired, "checks": checks.cycle(ctx)}
+        return {"busy": False, "schedules": fired, "checks": checks.cycle(ctx),
+                "maintenance": maintenance.tidy(ctx)}
     finally:
         os.close(descriptor)
 

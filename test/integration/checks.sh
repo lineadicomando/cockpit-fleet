@@ -194,6 +194,9 @@ expect_eq "with the full disk among its values" \
     "$(get "$series" 'max(p[1] for p in a["data"]["series"][0]["points"]) >= 90')" True
 expect_eq "and its hourly aggregate" \
     "$(db "SELECT max(h.high) >= 90 FROM metric_hourly h JOIN metric_series s ON s.id = h.series_id WHERE s.host_id = '$host_id' AND s.instance = '/data' AND s.name = 'used_pct'")" 1
+expect_eq "the database gives back free pages a few at a time" "$(db "PRAGMA auto_vacuum")" 2
+expect_eq "and the maintenance of the ticks never failed" \
+    "$(journalctl --since "-30min" -o cat --no-pager | grep -c '^maintenance: .* failed')" 0
 
 # --- what stays out ----------------------------------------------------------------
 expect_denied "the private key is not in the database" grep -qa "$(sed -n 2p "$KEYS/key")" "$DB" "$DB-wal"

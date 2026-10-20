@@ -33,6 +33,7 @@ class Base(unittest.TestCase):
 
         patches = [
             mock.patch.object(paths, "RUNS_DIR", self.root / "runs"),
+            mock.patch.object(paths, "SWEEP_STAMP", self.root / "sweep.stamp"),
             mock.patch.object(paths, "PROJECTS_DIR", self.root / "projects"),
             mock.patch.object(paths, "SECRETS_DIR", self.root / "secrets"),
             mock.patch.object(jobs, "_fleet_unit", fleet_unit),

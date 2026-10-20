@@ -529,6 +529,12 @@ MIGRATIONS: list[list[str]] = [
         ) WITHOUT ROWID
         """,
     ],
+    [
+        # The output of a run is deleted after [runs] keep_days; its row stays,
+        # with its outcome, and says when.
+        "ALTER TABLE runs ADD COLUMN pruned_at REAL",
+        "CREATE INDEX runs_unpruned ON runs (finished_at) WHERE pruned_at IS NULL",
+    ],
 ]
 
 
@@ -566,6 +572,10 @@ def connect(path: Path) -> sqlite3.Connection:
         # Autocommit: transactions are opened explicitly where they are needed.
         conn = sqlite3.connect(path, timeout=5, isolation_level=None)
         conn.row_factory = sqlite3.Row
+        if schema_version(conn) == 0:
+            # Only before the first table: free pages can then be given back
+            # to the file system a few at a time (maintenance.vacuum).
+            conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA busy_timeout = 5000")

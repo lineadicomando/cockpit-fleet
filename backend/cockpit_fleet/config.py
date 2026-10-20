@@ -57,6 +57,8 @@ class Config:
     max_concurrent_runs: int = 4
     default_forks: int = 5
     max_forks: int = 50
+    # Days the output of a run is kept after it ended; 0: always.
+    runs_keep_days: int = 90
     local_project_roots: tuple[str, ...] = ()
     max_upload_mb: int = 20
     proxy: str = ""
@@ -169,7 +171,7 @@ def parse(text: str) -> Config:
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
-    runs = _section(data, "runs", {"max_concurrent", "default_forks", "max_forks"})
+    runs = _section(data, "runs", {"max_concurrent", "default_forks", "max_forks", "keep_days"})
     max_forks = _int(runs, "runs", "max_forks", Config.max_forks, 1, 200)
     fallback = min(Config.default_forks, max_forks)
     default_forks = _int(runs, "runs", "default_forks", fallback, 1, 200)
@@ -229,6 +231,7 @@ def parse(text: str) -> Config:
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
         max_forks=max_forks,
+        runs_keep_days=_int(runs, "runs", "keep_days", Config.runs_keep_days, 0, 36600),
         local_project_roots=tuple(_root(root) for root in roots),
         max_upload_mb=_int(projects, "projects", "max_upload_mb", Config.max_upload_mb,
                            1, MAX_UPLOAD_MB),

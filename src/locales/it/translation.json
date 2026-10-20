@@ -221,6 +221,7 @@
   "The inventory is deleted. Files of a project are not touched.": "L'inventario viene eliminato. I file di un progetto non vengono toccati.",
   "The job template is deleted. Its past runs stay in the history.": "Il template viene eliminato. Le sue run passate restano nella cronologia.",
   "The output of a run is shown to operators and administrators only, because it may contain sensitive data.": "L'output di una run è mostrato solo a operatori e amministratori, perché può contenere dati sensibili.",
+  "The output of this run was deleted on {{when}}, as runs this old keep only their outcome.": "L'output di questa run è stato eliminato il {{when}}: delle run così vecchie resta solo l'esito.",
   "The project and the files fetched for it are deleted. The repository is not touched.": "Il progetto e i file scaricati vengono eliminati. Il repository non viene toccato.",
   "The project is forgotten. The directory and its files are not touched.": "Il progetto viene dimenticato. La directory e i suoi file non vengono toccati.",
   "Trusted by": "Resa attendibile da",

@@ -528,7 +528,9 @@ def _refresh_inventories(ctx: Context, now: float) -> None:
                          {"parse_error": str(failure), "parsed_at": now}, "inventory")
 
 
-def _prune(ctx: Context, now: float) -> int:
+def prune_cycles(ctx: Context, now: float) -> int:
+    """Delete the check cycles past a day, with their directory: their
+    results are in the states."""
     rows = ctx.conn.execute("SELECT id FROM runs WHERE kind = 'check' AND finished_at < ?",
                             (now - KEEP_CYCLES,)).fetchall()
     for row in rows:
@@ -548,9 +550,6 @@ def cycle(ctx: Context) -> dict:
             journal.send(f"checks: {name} failed", 3, FLEET_TRACEBACK=traceback.format_exc())
     try:
         out["queued"] = plan(ctx, now)
-        out["pruned"] = _prune(ctx, now)
-        cmdb.prune(ctx, now)
-        metrics.prune(ctx, now)
     except Exception:  # noqa: BLE001
         journal.send("checks: planning failed", 3, FLEET_TRACEBACK=traceback.format_exc())
     jobs.dispatch(ctx)

@@ -243,6 +243,8 @@ export interface Run {
     priority: number;
     started_at: number | null;
     finished_at: number | null;
+    // When its output was deleted, [runs] keep_days after it ended.
+    pruned_at: number | null;
     rc: number | null;
     revision: string;
     error: string;

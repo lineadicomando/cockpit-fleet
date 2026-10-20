@@ -17,7 +17,7 @@ def run_row(row) -> dict:
     data = {key: row[key] for key in ("id", "kind", "status", "title", "template_id", "project_id",
                                       "inventory_id", "created_by", "created_at", "started_at",
                                       "finished_at", "rc", "revision", "error", "schedule_id",
-                                      "priority")}
+                                      "priority", "pruned_at")}
     data["options"] = store.loads(row["options"], {})
     data["stats"] = store.loads(row["stats"], {})
     return data

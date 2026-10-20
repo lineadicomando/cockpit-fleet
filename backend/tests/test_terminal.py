@@ -252,6 +252,18 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual([params["wait"] for _, params in fake.calls], [50, 50])
 
 
+    def test_a_run_whose_output_was_deleted_says_so(self):
+        pruned = {**RESULT, "pruned_at": 1_800_000_000, "tasks": []}
+        fake = Fake({"run.log": {"text": "", "offset": 0, "more": False}, "run.get": pruned,
+                     "run.result": pruned})
+        t = term(fake)
+        self.assertEqual(terminal.run(t, COMMANDS, ["log", "r1"]), terminal.OK)
+        self.assertIn("r1: its output was deleted on ", t.err.getvalue())
+        t = term(fake)
+        terminal.run(t, COMMANDS, ["result", "r1"])
+        self.assertIn("only the outcome is kept", t.out.getvalue())
+
+
 class SecretTest(unittest.TestCase):
     CREDENTIALS = {"credentials": [{"id": "c1", "name": "git",
                                     "secret_names": {"token": "c-c1-token"}}]}

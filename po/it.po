@@ -682,6 +682,9 @@ msgstr "Il template viene eliminato. Le sue run passate restano nella cronologia
 msgid "The output of a run is shown to operators and administrators only, because it may contain sensitive data."
 msgstr "L'output di una run è mostrato solo a operatori e amministratori, perché può contenere dati sensibili."
 
+msgid "The output of this run was deleted on {{when}}, as runs this old keep only their outcome."
+msgstr "L'output di questa run è stato eliminato il {{when}}: delle run così vecchie resta solo l'esito."
+
 msgid "The project and the files fetched for it are deleted. The repository is not touched."
 msgstr "Il progetto e i file scaricati vengono eliminati. Il repository non viene toccato."
 
