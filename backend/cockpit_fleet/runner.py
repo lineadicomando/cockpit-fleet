@@ -491,9 +491,17 @@ def check_playbook(timeout: int) -> str:
 
 def check_env(spec: dict) -> dict[str, str]:
     """What a "check" job adds to the environment: little output, and the
-    time limit of each task, for a playbook of the user too."""
+    time limit of each task, for a playbook of the user too. The catalog is
+    pipelined: its one task per host goes as one command over the
+    connection, instead of a directory made, a file copied, run and removed.
+    A playbook of the user keeps what its project says; an inventory that
+    sets ansible_pipelining for a host still has the last word, and Ansible
+    always pipelines over SSH to a PowerShell shell."""
     timeout = check_int(spec.get("timeout", 60), "timeout", 5, CHECK_MAX_TIMEOUT)
-    return {**CHECK_ENV, "ANSIBLE_TASK_TIMEOUT": str(timeout)}
+    env = {**CHECK_ENV, "ANSIBLE_TASK_TIMEOUT": str(timeout)}
+    if not spec.get("playbook"):
+        env["ANSIBLE_PIPELINING"] = "True"
+    return env
 
 
 def build_check_argv(

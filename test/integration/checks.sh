@@ -105,7 +105,8 @@ denied=$(op check.create "{\"name\": \"x\", \"kind\": \"disk\", $base}")
 expect_eq "an operator does not configure checks" "$(get "$denied" 'a["error"]["code"]')" forbidden
 created=$(create "{\"name\": \"reach\", \"kind\": \"reachability\", $base, \"max_attempts\": 1}")
 expect_eq "a check is created" "$(get "$created" 'a["ok"]')" True
-create "{\"name\": \"disk\", \"kind\": \"disk\", $base, \"group\": \"data\", \"max_attempts\": 2, \"params\": {\"mounts\": [\"/data\"]}}" >/dev/null
+# With become: pipelined through sudo too.
+create "{\"name\": \"disk\", \"kind\": \"disk\", $base, \"group\": \"data\", \"become\": true, \"max_attempts\": 2, \"params\": {\"mounts\": [\"/data\"]}}" >/dev/null
 create "{\"name\": \"cert\", \"kind\": \"certificates\", $base, \"group\": \"web\", \"max_attempts\": 1, \"params\": {\"paths\": [\"/etc/fleet-it.pem\"]}}" >/dev/null
 # The nodes are containers, which show them the memory and the processor of
 # whatever runs the controller: with no thresholds, the state says that the
@@ -163,6 +164,10 @@ expect_eq "the clock is within a second or two" \
 expect_eq "a certificate that expires in three days is critical" "$(state node1 cert)" "2 2"
 expect_eq "one that cannot be read is unknown" "$(state node2 cert)" "3 3"
 expect_eq "the disk of node$DATA is ok" "$(state "node$DATA" disk)" "0 0"
+# Only the catalog reaches this node, pipelined, with become and without:
+# nothing is copied to it.
+expect_denied "the catalog leaves no temporary files on a node" \
+    podman exec "fleet-node-$DATA" test -e /home/ansible/.ansible/tmp
 # root and ansible have bash on the nodes: over the warning of 2 accounts.
 expect_eq "a playbook of the user gives its result, thresholds applied" "$(state node1 logins)" "1 1"
 expect_eq "with its own summary" "$(summary node1 logins | cut -c1-20)" "accounts 2 (warning "

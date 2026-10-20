@@ -98,6 +98,10 @@ class SlowKindsTest(CmdbBase):
         with self.assertRaises(BadRequest):
             runner.check_env({"timeout": 7200})
 
+    def test_the_catalog_is_pipelined_a_playbook_of_the_user_as_its_project_says(self):
+        self.assertEqual(runner.check_env({})["ANSIBLE_PIPELINING"], "True")
+        self.assertNotIn("ANSIBLE_PIPELINING", runner.check_env({"playbook": "site.yml"}))
+
 
 class CmdbTest(CmdbBase):
     def setUp(self):

@@ -799,6 +799,25 @@ list of runs unless asked for (`run.list` with `kind: check`), and are
 deleted with their directory after a day, by the tick: their results are in
 the states.
 
+**Connections.** Within a run, SSH keeps one connection per host
+(`ControlMaster=auto`, `ControlPersist=60s`), its socket in the run's
+runtime directory, gone with it. The catalog is pipelined
+(`ANSIBLE_PIPELINING`, set by `runner.check_env`): its one task per host
+goes as one command over that connection, instead of a directory made on
+the node, the module copied, run and removed. A host whose inventory sets
+`ansible_pipelining` keeps that, a playbook of the user keeps what its
+project says, and SSH to a PowerShell shell is always pipelined by Ansible.
+Connections are not kept from one cycle to the next. Kept by the account,
+any run of any project could use the open connections of another inventory,
+`become` included, without its key (rule 8 of `CLAUDE.md`). Kept by a unit
+per group, mounted into its cycles only, they would need a unit that stays
+up, `fleet-unit` adding mounts per run, and sessions that outlive a
+credential revoked, a host key no longer trusted, or options (forwards, a
+`ProxyCommand`) that the first cycle's inventory gave them; that is weighed
+again only if the load test shows that opening connections is what keeps a
+controller from its target. Nor are facts cached: the checks gather none
+(`gather_facts: false`), what is known of a host comes from the checks.
+
 **Sizing.** Every cycle leaves a row in `cycles`: its group (the
 inventory, and the kind or the check of the user when it goes in cycles of
 its own), its hosts, checks and forks, when it started and ended, the peak of
