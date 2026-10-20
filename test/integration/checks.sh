@@ -188,6 +188,12 @@ wait_count http.jsonl "Recovered: disk on node$DATA" 1 90 >/dev/null
 expect_eq "the recovery is told about" "$(count http.jsonl "Recovered: disk on node$DATA")" 1
 expect_eq "and ends the acknowledgement" "$(db "SELECT ack_by FROM check_states WHERE host_id = '$host_id'")" ""
 expect_eq "a cycle is not told about as a failed run" "$(count http.jsonl 'Run failed')" 0
+series=$(op metric.query "{\"host_id\": \"$host_id\", \"check_id\": \"$disk_id\", \"name\": \"used_pct\", \"instance\": \"/data\"}")
+expect_eq "the use of the disk is kept as a time series" "$(get "$series" 'a["data"]["resolution"]')" raw
+expect_eq "with the full disk among its values" \
+    "$(get "$series" 'max(p[1] for p in a["data"]["series"][0]["points"]) >= 90')" True
+expect_eq "and its hourly aggregate" \
+    "$(db "SELECT max(h.high) >= 90 FROM metric_hourly h JOIN metric_series s ON s.id = h.series_id WHERE s.host_id = '$host_id' AND s.instance = '/data' AND s.name = 'used_pct'")" 1
 
 # --- what stays out ----------------------------------------------------------------
 expect_denied "the private key is not in the database" grep -qa "$(sed -n 2p "$KEYS/key")" "$DB" "$DB-wal"

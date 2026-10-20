@@ -393,6 +393,7 @@ def load_commands() -> dict[str, Command]:
         checks,
         cmdb,
         files,
+        metrics,
         moduledocs,
         notify,
         resources,

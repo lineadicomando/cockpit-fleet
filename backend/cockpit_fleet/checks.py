@@ -17,7 +17,7 @@ import shutil
 import traceback
 from collections import defaultdict
 
-from . import catalog, cmdb, jobs, journal, notify, store
+from . import catalog, cmdb, jobs, journal, metrics, notify, store
 from .catalog import COMPLIANCE, CRITICAL, OK, OWN_KINDS, PLAYBOOK, STATE_NAMES, UNKNOWN, WARNING
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
@@ -350,7 +350,7 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
                 continue  # changed or removed while the cycle ran
             if status == "host_ok" and entry["id"] in answers:
                 answer = answers[entry["id"]]
-                state, summary, metrics, details = judge(
+                state, summary, values, details = judge(
                     row["kind"], store.loads(row["thresholds"], {}), answer, info.get("time"),
                     event.get("ts"))
                 changed = _keep(ctx, row, host["id"], answer, event, now)
@@ -358,8 +358,10 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
                     state = catalog.worst(state, WARNING)
                     summary = "hardware changed: " + "; ".join(changed)[:400] + \
                         (f" ({summary})" if summary else "")
-                apply(ctx, row, state, summary, metrics, details, now, since=since,
+                apply(ctx, row, state, summary, values, details, now, since=since,
                       at_once=bool(changed))
+                metrics.record(ctx, host["id"], row["check_id"], values,
+                               metrics.when(event.get("ts"), since, now))
             elif status == "host_ok":
                 missing = ("the playbook gave no result: it ends with"
                            " lineadicomando.fleet.fleet_result" if row["kind"] == PLAYBOOK
@@ -548,6 +550,7 @@ def cycle(ctx: Context) -> dict:
         out["queued"] = plan(ctx, now)
         out["pruned"] = _prune(ctx, now)
         cmdb.prune(ctx, now)
+        metrics.prune(ctx, now)
     except Exception:  # noqa: BLE001
         journal.send("checks: planning failed", 3, FLEET_TRACEBACK=traceback.format_exc())
     jobs.dispatch(ctx)

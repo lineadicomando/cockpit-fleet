@@ -480,6 +480,55 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # Time series: one row per metric of a check on a host, and its
+        # values as narrow rows keyed by the series and the time, so that a
+        # value costs a few bytes. The hourly and daily aggregates are kept
+        # up to date as values arrive; each table has its own retention.
+        """
+        CREATE TABLE metric_series (
+            id        INTEGER PRIMARY KEY,
+            host_id   TEXT NOT NULL REFERENCES hosts (id) ON DELETE CASCADE,
+            check_id  TEXT NOT NULL REFERENCES checks (id) ON DELETE CASCADE,
+            name      TEXT NOT NULL,
+            instance  TEXT NOT NULL DEFAULT '',
+            unit      TEXT NOT NULL DEFAULT '',
+            last_at   REAL NOT NULL,
+            UNIQUE (host_id, check_id, name, instance)
+        )
+        """,
+        "CREATE INDEX metric_series_check ON metric_series (check_id)",
+        """
+        CREATE TABLE metric_points (
+            series_id  INTEGER NOT NULL REFERENCES metric_series (id) ON DELETE CASCADE,
+            ts         INTEGER NOT NULL,
+            value      REAL NOT NULL,
+            PRIMARY KEY (series_id, ts)
+        ) WITHOUT ROWID
+        """,
+        """
+        CREATE TABLE metric_hourly (
+            series_id  INTEGER NOT NULL REFERENCES metric_series (id) ON DELETE CASCADE,
+            ts         INTEGER NOT NULL,
+            n          INTEGER NOT NULL,
+            low        REAL NOT NULL,
+            high       REAL NOT NULL,
+            total      REAL NOT NULL,
+            PRIMARY KEY (series_id, ts)
+        ) WITHOUT ROWID
+        """,
+        """
+        CREATE TABLE metric_daily (
+            series_id  INTEGER NOT NULL REFERENCES metric_series (id) ON DELETE CASCADE,
+            ts         INTEGER NOT NULL,
+            n          INTEGER NOT NULL,
+            low        REAL NOT NULL,
+            high       REAL NOT NULL,
+            total      REAL NOT NULL,
+            PRIMARY KEY (series_id, ts)
+        ) WITHOUT ROWID
+        """,
+    ],
 ]
 
 

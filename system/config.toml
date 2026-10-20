@@ -45,6 +45,13 @@
 # Hours after which a problem nobody acknowledged is told again; 0 never.
 #reminder_hours = 24
 
+[metrics]
+# Days the values the checks measure are kept as they came, then as hourly
+# and daily aggregates (lowest, highest, average). They must not decrease.
+#raw_days = 14
+#hourly_days = 90
+#daily_days = 730
+
 [adhoc]
 # Modules an administrator may run as an ad-hoc command, by their full name.
 # An empty list disables ad-hoc commands.

@@ -78,6 +78,11 @@ class Config:
     checks_timeout: int = 60
     checks_slow_timeout: int = 900
     checks_reminder_hours: int = 24
+    # Days the values of the checks are kept as they came, then by the hour,
+    # then by the day.
+    metrics_raw_days: int = 14
+    metrics_hourly_days: int = 90
+    metrics_daily_days: int = 730
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -160,7 +165,7 @@ def parse(text: str) -> Config:
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
     unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
-                                     "chat", "notifications", "checks"})
+                                     "chat", "notifications", "checks", "metrics"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -213,6 +218,13 @@ def parse(text: str) -> Config:
     checks = _section(data, "checks", {"max_concurrent", "shard_size", "forks", "timeout",
                                        "slow_timeout", "reminder_hours"})
 
+    metrics = _section(data, "metrics", {"raw_days", "hourly_days", "daily_days"})
+    raw_days = _int(metrics, "metrics", "raw_days", Config.metrics_raw_days, 1, 366)
+    hourly_days = _int(metrics, "metrics", "hourly_days", Config.metrics_hourly_days, 1, 3660)
+    daily_days = _int(metrics, "metrics", "daily_days", Config.metrics_daily_days, 1, 36600)
+    if not raw_days <= hourly_days <= daily_days:
+        raise ConfigError("metrics: raw_days, hourly_days and daily_days must not decrease")
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -237,6 +249,9 @@ def parse(text: str) -> Config:
                                  5, 3600),
         checks_reminder_hours=_int(checks, "checks", "reminder_hours",
                                    Config.checks_reminder_hours, 0, 24 * 30),
+        metrics_raw_days=raw_days,
+        metrics_hourly_days=hourly_days,
+        metrics_daily_days=daily_days,
     )
 
 

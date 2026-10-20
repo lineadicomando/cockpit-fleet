@@ -7,9 +7,11 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 ## Status (20 October 2026)
 
 Phases 0–7 closed, the terminal's ideas done and seen live; pushed up to
-`557dd22`, CI green. **Next: phase 8**, from its first item (the metrics
-table, a new entry of `MIGRATIONS`); `test/integration/measure-events.sh`
-is where the load tests start from.
+`557dd22`, CI green. **Phase 8 under way**: the time series are done
+(schema 12, `metrics.py`; `checks.sh` in containers of Debian and
+AlmaLinux, uncommitted);
+next is maintenance (run directories, vacuum).
+`test/integration/measure-events.sh` is where the load tests start from.
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state: the Debian VM holds the
@@ -19,10 +21,11 @@ says what exists and why, its last section how each phase was accepted.
 DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `db.py` schema 11), checks in `checks.py` and
-`catalog.py`, the CMDB in `cmdb.py`, the terminal in `terminal.py`, node
-modules in `collection/.../plugins/modules/` (`checks.py`,
-`win_checks.ps1`), pages in `src/components/`.
+`cli.py` the registry, `db.py` schema 12), checks in `checks.py` and
+`catalog.py`, time series in `metrics.py`, the CMDB in `cmdb.py`, the
+terminal in `terminal.py`, node modules in
+`collection/.../plugins/modules/` (`checks.py`, `win_checks.ps1`), pages
+in `src/components/`.
 
 Last test runs: in containers (`make ct-test`) on 16 October, the whole
 suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
@@ -64,9 +67,10 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 | Projects at a terminal | Admins only: `local_roots` dir of group `cockpit-fleet-admin` 2770 + ACL for the service, checked by `selfcheck`; managed projects as git bundles, push only as a fast forward of files the editor could write |
 | Schedules | One timer, `scheduler.tick` each minute; `OnCalendar` with time zone; admin edits, operator switches and runs now; answers stored, never secrets; missed > 5 min; overlap skip/queue/cancel |
 | Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs, check problem/recovery/reminder |
+| Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers (proposed 20 October, to confirm) |
 | Checks | Catalog + playbooks ending with `fleet_result`; one task per host, `checks.py` or `win_checks.ps1` by shell; thresholds at ingest; cycles as `check` jobs with their own limit, sharded by inventory/credential/become; soft/hard states, flapping, ack, maintenance; viewer sees, operator acks, admin configures |
 | CMDB, updates, drift | Kinds `cmdb`, `updates` and `compliance` (a playbook in `--check --diff`), slow: own cycles, `[checks] slow_timeout`, own dispatch lane; snapshot + changes tables; hardware change = warning for one cycle; viewer sees CMDB, drift diffs operator+ |
-| Retention | Target: raw 14 d, hourly 90 d, daily 2 y, run logs 90 d (phase 8). Today: outbox 90 d, check cycles 1 d, CMDB changes 365 d; runs, state changes, audit kept |
+| Retention | Metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); target run logs 90 d (phase 8). Today: outbox 90 d, check cycles 1 d, CMDB changes 365 d; runs, state changes, audit kept |
 | Discarded | MCP servers of projects (Ansible outside the sandbox, keys in clear); the chat as its own package, or hooked by `cockpit-samba-dc`; installing the agent per user from the page, from an apt repo or by a shell recipe; driving `claude` without ACP; a timer per schedule (root writing units from input); a second command name for `fleet` (Rancher's CLI in `/usr/local/bin` would shadow it, left as is); unloading failed run units (kept as systemd does, 15 October) |
 | Out of scope | External triggers (future) |
 
@@ -128,8 +132,9 @@ Detail and reasons in `docs/architecture.md`. All confirmed by the user.
 
 ## Phase 8 — Time series and scale (next)
 
-- [ ] Narrow metrics table, hourly and daily aggregates, retention
-- [ ] Maintenance: downsampling, deletion (run directories too), vacuum
+- [x] Narrow metrics table, hourly and daily aggregates, retention
+- [ ] Maintenance: deletion (run directories too), vacuum (downsampling
+      needs no pass: aggregates are kept at ingest)
 - [ ] Charts (`@patternfly/react-charts`)
 - [ ] Shards and forks sized on measured duration and RAM
 - [ ] Fact caching, SSH connections reused between cycles

@@ -33,6 +33,11 @@ class ConfigTest(unittest.TestCase):
         self.assertFalse(parse("").inventory_scripts)
         self.assertTrue(parse("[inventories]\nscripts = true").inventory_scripts)
 
+    def test_metrics_are_kept_raw_then_hourly_then_daily(self):
+        config = parse("[metrics]\nraw_days = 7\nhourly_days = 30")
+        self.assertEqual((config.metrics_raw_days, config.metrics_hourly_days,
+                          config.metrics_daily_days), (7, 30, 730))
+
     def test_default_forks_follow_a_lower_maximum(self):
         self.assertEqual(parse("[runs]\nmax_forks = 2").default_forks, 2)
 
@@ -54,6 +59,8 @@ class ConfigTest(unittest.TestCase):
             "runs = 3": "\\[runs\\] must be a table",
             "[inventories]\nscripts = 1": "inventories.scripts",
             "[inventories]\nscript = true": "unknown key in \\[inventories\\]",
+            "[metrics]\nraw_days = 0": "metrics.raw_days",
+            "[metrics]\nraw_days = 100": "must not decrease",
             "[runs": "not valid TOML",
         }
         for text, message in cases.items():
