@@ -7,30 +7,16 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 ## Status (20 October 2026)
 
 Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
-under way**: time series (schema 12, `metrics.py`) and maintenance (schema
-13, `maintenance.py`) done; pushed up to `d7d3819`, CI green. **Next: the
-charts.** Where they start from:
-
-- The data: `metric.query` (viewer) takes `host_id` and optionally
-  `check_id`, `name`, `instance`, `since`, `until` (epoch seconds, the last
-  day by default) and `resolution` (`auto`, `raw`, `hour`, `day`); it
-  returns `series`, each with its check, metric, instance, unit and
-  `points`: `[ts, value]` as they came, `[ts, average, lowest, highest]` for
-  aggregates. `auto` reads values up to 2 days, hours up to 62, then days;
-  at most 5000 points a series (`truncated`). Daily buckets are UTC days.
-- The place: the page of a host, `HostDetailPage` in
-  `src/components/HostsPage.tsx`, which shows today only the last values
-  (`Metrics`, through `formatMetric` of `src/lib/checks.ts`).
-- The library: `@patternfly/react-charts` is not a dependency yet; take the
-  major that goes with PatternFly 6 and look at what it adds to the bundle
-  (it brings Victory).
-- `test/integration/measure-events.sh` is where the load tests start from;
-  at the target, 14 days of raw values are about 500 MB
-  (`docs/architecture.md`, "Time series").
+under way**: time series (schema 12, `metrics.py`), maintenance (schema
+13, `maintenance.py`) and the charts (page of a host, `MetricHistory.tsx`,
+`src/lib/metrics.ts`) done; pushed up to `d7d3819`, CI green, the charts
+not committed yet. **Next: shards and forks sized on measured duration and
+RAM**, then the rest of phase 8 below. `test/integration/measure-events.sh`
+is where the load tests start from; at the target, 14 days of raw values
+are about 500 MB (`docs/architecture.md`, "Time series").
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
-if present (this developer's VMs and their state: the Debian VM holds the
-data of the live tests and is to be reverted first); `docs/architecture.md`
+if present (this developer's VMs and their state); `docs/architecture.md`
 says what exists and why, its last section how each phase was accepted.
 `git status`, `git log origin/main..`; `make check`; `make ct-test
 DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
@@ -46,7 +32,10 @@ Last test runs: in containers (`make ct-test`) on 16 October, the whole
 suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
 on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
 `557dd22`, then `checks` on Debian and AlmaLinux and `runs` on Debian with
-the tree of `d7d3819` (phase 8 not yet on Fedora, nor on machines).
+the tree of `d7d3819` (phase 8 not yet on Fedora, nor on machines); the
+charts with `checks` on Debian, then looked at in a browser on a container
+controller with a month of made-up values (one line and several, a gap,
+day to year).
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
@@ -84,7 +73,7 @@ except the rows that say "to confirm".
 | Projects at a terminal | Admins only: `local_roots` dir of group `cockpit-fleet-admin` 2770 + ACL for the service, checked by `selfcheck`; managed projects as git bundles, push only as a fast forward of files the editor could write |
 | Schedules | One timer, `scheduler.tick` each minute; `OnCalendar` with time zone; admin edits, operator switches and runs now; answers stored, never secrets; missed > 5 min; overlap skip/queue/cancel |
 | Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs, check problem/recovery/reminder |
-| Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers (proposed 20 October, to confirm) |
+| Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers (proposed 20 October, to confirm); charts under a check on the page of a host, `@patternfly/react-charts` in a chunk of its own (20 October, to confirm) |
 | Checks | Catalog + playbooks ending with `fleet_result`; one task per host, `checks.py` or `win_checks.ps1` by shell; thresholds at ingest; cycles as `check` jobs with their own limit, sharded by inventory/credential/become; soft/hard states, flapping, ack, maintenance; viewer sees, operator acks, admin configures |
 | CMDB, updates, drift | Kinds `cmdb`, `updates` and `compliance` (a playbook in `--check --diff`), slow: own cycles, `[checks] slow_timeout`, own dispatch lane; snapshot + changes tables; hardware change = warning for one cycle; viewer sees CMDB, drift diffs operator+ |
 | Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d, CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back (proposed 20 October, to confirm) |
@@ -145,6 +134,9 @@ except the rows that say "to confirm".
   before phase 8 above 64 MB is never made incremental (none exists); rows
   of runs, state changes and the audit grow without end; deleting run
   output and giving pages back seen in unit tests and containers only.
+- Charts: on the page of a host only, per check; no zoom, no chosen dates,
+  no thresholds drawn; seen in a browser on a container only, with values
+  made up for the past.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.
@@ -156,7 +148,7 @@ except the rows that say "to confirm".
 - [x] Narrow metrics table, hourly and daily aggregates, retention
 - [x] Maintenance: deletion (run directories too), vacuum (downsampling
       needs no pass: aggregates are kept at ingest)
-- [ ] Charts (`@patternfly/react-charts`)
+- [x] Charts (`@patternfly/react-charts` 8, a chunk loaded on demand)
 - [ ] Shards and forks sized on measured duration and RAM
 - [ ] Fact caching, SSH connections reused between cycles
 - [ ] A cycle that does not end before the next is skipped and reported
