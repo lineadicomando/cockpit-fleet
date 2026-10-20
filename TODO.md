@@ -8,27 +8,22 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
 Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
 under way**: time series (schema 12, `metrics.py`), maintenance (schema
-13, `maintenance.py`) and the charts (`MetricHistory.tsx`,
-`src/lib/metrics.ts`) done; pushed up to `127a64b`, CI green. **Next: shards
-and forks sized on measured duration and RAM.** Where it starts from:
+13, `maintenance.py`), the charts (`MetricHistory.tsx`,
+`src/lib/metrics.ts`) and the sizing of cycles (schema 14, `cycles`) done;
+pushed up to `127a64b`, CI green. **Next: a cycle that does not end before
+the next is skipped and reported, and the "System health" page.** Where it
+starts from:
 
-- Today: `[checks]` `shard_size` 50, `forks` 20 (capped by `[runs]
-  max_forks`, 50), `max_concurrent` 1, `timeout` 60, `slow_timeout` 900:
-  defaults in `config.py`, the same for every inventory, set by hand in
-  `config.toml`. `checks.plan()` groups the due states by inventory,
-  credential, become and own kind (a check of the user, a slow kind), cuts
-  each group into shards of `shard_size` hosts, and `_queue_cycle()` queues
-  each shard as one `check` run with those forks; the run's `options` keep
-  its hosts and checks.
-- Durations: a cycle's run row has `started_at`/`finished_at`, but
-  `prune_cycles()` deletes cycles after a day (`KEEP_CYCLES`), so nothing
-  measured survives to size on: keep what is needed (per inventory, per
-  kind) before sizing, and it also feeds the "System health" page. Nothing
-  measures the memory of a cycle yet (systemd's accounting of the run unit
-  is one source).
+- Sizing: every cycle leaves a row in `cycles` (group, hosts, forks,
+  duration, `memory_peak` and `cpu_usec` that `fleet-run` reads from its
+  cgroup), kept 30 days; `checks.size()` takes forks from `[checks]
+  memory_mb` and hosts per shard from half the shortest interval, the
+  configured values as ceilings (`docs/architecture.md`, "Checks",
+  "Sizing"). The health page reads that table.
 - Overlap: a state held by a queued or running cycle (`check_states.run_id`)
   is not planned again, so a slow cycle is never doubled; what is missing is
-  saying so (the item "skipped and reported").
+  saying so: the tick knows when a due state is held (it is left out of
+  `plan()`'s query), nothing records or tells it yet.
 - SSH: within a run `ControlMaster=auto`, `ControlPersist=60s`, sockets in
   the run's runtime directory (`runner.py`, `ANSIBLE_SSH_CONTROL_PATH_DIR`),
   gone when it ends. Reusing connections between cycles means a socket
@@ -50,7 +45,7 @@ says what exists and why, its last section how each phase was accepted.
 DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `db.py` schema 13), the queue and dispatch of jobs in
+`cli.py` the registry, `db.py` schema 14), the queue and dispatch of jobs in
 `jobs.py`, command lines of jobs in `runner.py`, `selfcheck` and the audit in
 `system.py`, checks in `checks.py` and
 `catalog.py`, time series in `metrics.py`, retention in `maintenance.py`,
@@ -64,8 +59,10 @@ on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
 `557dd22`, then `checks` on Debian and AlmaLinux and `runs` on Debian with
 the tree of `d7d3819`; the charts (`849303f`) with `checks` on Debian,
 then looked at in a browser on a container controller with a month of
-made-up values (one line and several, a gap, day to year). Phase 8 not yet
-on Fedora, nor on machines.
+made-up values (one line and several, a gap, day to year); the sizing of
+cycles (uncommitted tree after `55bfcca`) with `checks` on the three and
+`runs` on Debian, the memory and processor time read in the sandbox. Phase
+8 not yet on machines.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
@@ -104,9 +101,10 @@ except the rows that say "to confirm".
 | Schedules | One timer, `scheduler.tick` each minute; `OnCalendar` with time zone; admin edits, operator switches and runs now; answers stored, never secrets; missed > 5 min; overlap skip/queue/cancel |
 | Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs, check problem/recovery/reminder |
 | Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers (proposed 20 October, to confirm); charts under a check on the page of a host, `@patternfly/react-charts` in a chunk of its own (20 October, to confirm) |
+| Sizing of cycles | `fleet-run` reads `memory.peak` and `cpu.stat` of its cgroup into `result.json`; table `cycles`, 30 days; forks fit `[checks] memory_mb` (0: half the controller's) shared by `2 × max_concurrent`, hosts per shard what they get through in half the shortest interval; `shard_size` and `forks` stay ceilings, sizing only lowers (proposed 20 October, to confirm) |
 | Checks | Catalog + playbooks ending with `fleet_result`; one task per host, `checks.py` or `win_checks.ps1` by shell; thresholds at ingest; cycles as `check` jobs with their own limit, sharded by inventory/credential/become; soft/hard states, flapping, ack, maintenance; viewer sees, operator acks, admin configures |
 | CMDB, updates, drift | Kinds `cmdb`, `updates` and `compliance` (a playbook in `--check --diff`), slow: own cycles, `[checks] slow_timeout`, own dispatch lane; snapshot + changes tables; hardware change = warning for one cycle; viewer sees CMDB, drift diffs operator+ |
-| Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d, CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back (proposed 20 October, to confirm) |
+| Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d (what they took 30 d), CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back (proposed 20 October, to confirm) |
 | Discarded | MCP servers of projects (Ansible outside the sandbox, keys in clear); the chat as its own package, or hooked by `cockpit-samba-dc`; installing the agent per user from the page, from an apt repo or by a shell recipe; driving `claude` without ACP; a timer per schedule (root writing units from input); a second command name for `fleet` (Rancher's CLI in `/usr/local/bin` would shadow it, left as is); unloading failed run units (kept as systemd does, 15 October) |
 | Out of scope | External triggers (future) |
 
@@ -164,6 +162,10 @@ except the rows that say "to confirm".
   before phase 8 above 64 MB is never made incremental (none exists); rows
   of runs, state changes and the audit grow without end; deleting run
   output and giving pages back seen in unit tests and containers only.
+- Sizing: per group, whatever checks a shard holds (one task per host, so
+  close enough); a host's time is the cycle's spread evenly; the fit of
+  memory may come out flat with few cycles, then all of it counts per fork;
+  seen in unit tests and containers only, not with many hosts.
 - Charts: on the page of a host only, per check; no zoom, no chosen dates,
   no thresholds drawn; seen in a browser on a container only, with values
   made up for the past.
@@ -179,7 +181,7 @@ except the rows that say "to confirm".
 - [x] Maintenance: deletion (run directories too), vacuum (downsampling
       needs no pass: aggregates are kept at ingest)
 - [x] Charts (`@patternfly/react-charts` 8, a chunk loaded on demand)
-- [ ] Shards and forks sized on measured duration and RAM
+- [x] Shards and forks sized on measured duration and RAM
 - [ ] Fact caching, SSH connections reused between cycles
 - [ ] A cycle that does not end before the next is skipped and reported
 - [ ] "System health" page: cycle durations, queue, database size
