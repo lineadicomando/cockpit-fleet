@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Alert,
@@ -15,6 +15,7 @@ import {
     FormSelect,
     FormSelectOption,
     Label,
+    Spinner,
     TextInput,
     Title,
     ToggleGroup,
@@ -34,6 +35,18 @@ import { MaintenanceModal, StateCountLabels, StateLabel, useStateNames } from ".
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
 
 const POLL = 15_000;
+
+function ChartsMissing() {
+    const { t } = useTranslation();
+    return <Alert variant="warning" isInline isPlain title={t("The charts could not be loaded: reload the page.")} />;
+}
+
+// The charts bring their own library, loaded the first time one is shown. A
+// page loaded before an upgrade asks for a chunk that is gone: say so.
+const MetricHistory = lazy(() => import("./MetricHistory.tsx").then(
+    module => ({ default: module.MetricHistory }),
+    () => ({ default: ChartsMissing }),
+));
 
 function Flags({ state }: { state: CheckState }) {
     const { t } = useTranslation();
@@ -404,6 +417,11 @@ export function HostDetailPage({ id }: { id: string }) {
                                                     <Metrics state={state} />
                                                     {state.hard_state !== (state.state ?? "ok") && (
                                                         <Content component="small">{t("Confirmed state: {{state}}", { state: names[state.hard_state] })}</Content>
+                                                    )}
+                                                    {open && state.metrics.length > 0 && (
+                                                        <Suspense fallback={<Spinner size="md" aria-label={t("Loading")} />}>
+                                                            <MetricHistory hostId={id} checkId={state.check_id} version={state.checked_at} />
+                                                        </Suspense>
                                                     )}
                                                 </ExpandableRowContent>
                                             </Td>

@@ -773,5 +773,15 @@
   "Apply on this host…": "Applica su questo host…",
   "To apply them from here, make a job template on the inventory {{inventory}}.": "Per applicarli da qui, crea un template sull'inventario {{inventory}}.",
   "At a terminal": "Al terminale",
-  "Directories of local projects": "Directory dei progetti locali"
+  "Directories of local projects": "Directory dei progetti locali",
+  "Over time": "Nel tempo",
+  "Span": "Intervallo",
+  "Day": "Giorno",
+  "Week": "Settimana",
+  "Month": "Mese",
+  "Year": "Anno",
+  "No values in this span.": "Nessun valore in questo intervallo.",
+  "Too many values: only the first ones are drawn.": "Troppi valori: sono disegnati solo i primi.",
+  "Values of {{metric}} over time": "Valori di {{metric}} nel tempo",
+  "The charts could not be loaded: reload the page.": "Non è stato possibile caricare i grafici: ricarica la pagina."
 }

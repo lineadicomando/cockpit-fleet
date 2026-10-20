@@ -1,6 +1,6 @@
 import * as esbuild from "esbuild";
 import { sassPlugin } from "esbuild-sass-plugin";
-import { cpSync, mkdirSync } from "fs";
+import { cpSync, mkdirSync, rmSync } from "fs";
 
 const isWatch = process.argv.includes("--watch");
 const outdir = "dist";
@@ -32,6 +32,9 @@ const ctx = await esbuild.context({
     bundle: true,
     outdir,
     format: "esm",
+    // Heavy parts a page loads only when shown (the charts) go in chunks.
+    splitting: true,
+    chunkNames: "[name]-[hash]",
     platform: "browser",
     target: ["es2020"],
     plugins: [cockpitExternalPlugin, sassPlugin()],
@@ -48,6 +51,9 @@ const ctx = await esbuild.context({
     sourcemap: isWatch ? "inline" : false,
 });
 
+// Chunks are named by their hash: empty the directory so that old ones do
+// not end up in the package.
+if (!isWatch) rmSync(outdir, { recursive: true, force: true });
 mkdirSync(outdir, { recursive: true });
 cpSync("src/index.html", `${outdir}/index.html`);
 cpSync("src/manifest.json", `${outdir}/manifest.json`);

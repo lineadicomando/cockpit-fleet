@@ -955,6 +955,26 @@ span: as they came for up to two days within `raw_days`, hourly up to 62
 days within `hourly_days`, daily beyond, or as asked; at most 5000 values a
 series, saying when it was cut.
 
+**Charts.** The page of a host draws them under a check once its row is
+opened: a day, a week, a month or a year, one chart per metric and one line
+per instance (a mount point, a certificate), loaded again when the check has
+new values. Aggregates of a single line are drawn as their average with a
+band from the lowest to the highest. A line breaks where the distance from the
+previous value is more than two and a half times the usual one (the median,
+or the hour or day of an aggregate), so a host that could not be reached shows
+as a gap. A percentage is drawn from 0 to 100, anything else from 0 unless it
+goes below; bytes get ticks at round binary sizes. What turns the answer
+into lines is in `src/lib/metrics.ts`, tested apart from the page.
+
+They use `@patternfly/react-charts` 8 (Victory 37), the major that goes with
+PatternFly 6. It costs about 380 kB of minified bundle, a quarter of the rest;
+the bundle is therefore split (`splitting` in `build.js`) and the charts are a
+chunk of their own, loaded the first time a check is opened. A page that shows
+no chart loads as before. `build.js` empties `dist/` before a build, since
+chunks are named by their hash and the package copies the whole directory. A
+page loaded before an upgrade asks for a chunk that is no longer there: it
+then says to reload the page instead of failing.
+
 Measured on the development host (20 October), 500 hosts with 10 metrics
 each: a cycle's 5000 values are written in 0.12 s outside a transaction
 (0.06 s in one), the tick's deletion takes 12 ms when nothing is due and

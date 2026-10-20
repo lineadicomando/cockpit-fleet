@@ -2308,3 +2308,33 @@ msgstr "Al terminale"
 
 msgid "Directories of local projects"
 msgstr "Directory dei progetti locali"
+
+msgid "Over time"
+msgstr "Nel tempo"
+
+msgid "Span"
+msgstr "Intervallo"
+
+msgid "Day"
+msgstr "Giorno"
+
+msgid "Week"
+msgstr "Settimana"
+
+msgid "Month"
+msgstr "Mese"
+
+msgid "Year"
+msgstr "Anno"
+
+msgid "No values in this span."
+msgstr "Nessun valore in questo intervallo."
+
+msgid "Too many values: only the first ones are drawn."
+msgstr "Troppi valori: sono disegnati solo i primi."
+
+msgid "Values of {{metric}} over time"
+msgstr "Valori di {{metric}} nel tempo"
+
+msgid "The charts could not be loaded: reload the page."
+msgstr "Non è stato possibile caricare i grafici: ricarica la pagina."
