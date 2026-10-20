@@ -7,32 +7,37 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 ## Status (20 October 2026)
 
 Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
-under way**: time series (schema 12, `metrics.py`), maintenance (schema
-13, `maintenance.py`), the charts (`MetricHistory.tsx`,
-`src/lib/metrics.ts`), the sizing of cycles (schema 14, table `cycles`),
-cycles that skip and fall behind (schema 15, `cycle_lag`, events `late`
-and `caught_up`) and the health of the system (`health.py`,
-`system.health`, a section of the System tab) done, committed up to
-`94a0e0e`; pushed up to `17b945b`.
+under way**, all of it done but the load test: time series (schema 12,
+`metrics.py`), maintenance (schema 13, `maintenance.py`), the charts
+(`MetricHistory.tsx`, `src/lib/metrics.ts`), the sizing of cycles (schema
+14, table `cycles`), cycles that skip and fall behind (schema 15, table
+`cycle_lag`, events `late` and `caught_up`, `[checks] late_after`), the
+health of the system (`health.py`, `system.health`, the first section of
+the System tab, `src/lib/health.ts`) and the catalog pipelined
+(`runner.check_env`). All pushed, CI green, working tree clean.
 
-**Next: SSH connections and facts, then the load test** (below). The
-health section was not yet looked at in a browser: do it on a container
-controller (as with the charts) or at the close of the phase.
+**Next: the load test**, the last item of phase 8. Where it starts from:
 
-Then, in phase 8:
-
-- SSH and facts: within a run `ControlMaster=auto`, `ControlPersist=60s`,
-  sockets in the run's runtime directory (`runner.py`,
-  `ANSIBLE_SSH_CONTROL_PATH_DIR`), gone when it ends. Reusing connections
-  between cycles means a socket outliving a run: weigh it against rule 8 of
-  `CLAUDE.md` with the user before building anything. The checks' playbook
-  has `gather_facts: false` (host facts come from the checks), so "fact
-  caching" likely comes to nothing: say so rather than add it.
-- Load: `test/integration/measure-events.sh` (hosts as local aliases of the
-  controller, local connection) is where a load script starts from;
-  measured ~0.6 s per host on 2 vCPUs, CPU-bound. At the target, 14 days
-  of raw values are about 500 MB. The "done when" needs a controller with
-  4 GB and 24 hours: a machine, not a container.
+- Nothing yet drives real cycles at scale. `measure-events.sh` runs
+  `ansible-playbook` by itself on aliases of the controller (local
+  connection): it measured ~0.6 s per host on 2 vCPUs, CPU-bound, but
+  leaves out the timer, planning, `fleet-run`, ingest and the time series.
+  A load script should make a managed inventory of N aliases with
+  `ansible_connection=local` (accepted by cycles; the module then measures
+  the sandbox of the controller), the catalog checks of the target on them,
+  and let the timer run, reading `system.health` (durations, skipped,
+  queue, memory, database) as it goes.
+- To weigh SSH: a few nodes reached over SSH (`nodes.sh`, containers on
+  the controller) beside the aliases, to measure what opening connections
+  costs against the rest of a cycle; it decides whether connections kept
+  per group (Decisions, "SSH connections") are worth building.
+- Target and "done when": 500 hosts, 10 checks every 10 minutes, 24 hours
+  with no backlog and a responsive interface; 14 days of raw values are
+  then about 500 MB. It needs a controller with 4 GB and 24 hours: a machine, not a container. 200 and 1000 hosts too, shorter.
+- Then close the phase on the three machines (below, "At the close of
+  phase 8"), with the health section and the charts looked at in a
+  browser: the health section was never seen in one, and nothing of phase
+  8 has run on a machine yet.
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
@@ -59,7 +64,11 @@ made-up values (one line and several, a gap, day to year); the sizing of
 cycles (`6f20a5b`) with `checks` on the three and `runs` on Debian, the
 memory and processor time read in the sandbox; skipped cycles and health
 with `checks` on Debian and AlmaLinux (a playbook of 90 s every 60 s,
-told behind and back on time). Phase 8 not yet on machines.
+told behind and back on time); the catalog pipelined, the tree after
+`d0cb93f`, with `checks` and `cmdb` on Debian and AlmaLinux (no temporary
+file on a node, with become and without). Not run in containers since 16
+October: every script but `checks`, `cmdb`, `runs` and `chat`; Fedora had
+only `checks` (the sizing). Phase 8 not yet on machines.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
@@ -98,14 +107,15 @@ except the rows that say "to confirm".
 | Terminal | `fleet` for the three roles, `via: cli`; every command as `fleet AREA VERB --param`, names for ids, shortcuts `launch log result secret assistant help`, `project clone/pull/push`; secrets never on the command line; English only until a field-tested version |
 | Projects at a terminal | Admins only: `local_roots` dir of group `cockpit-fleet-admin` 2770 + ACL for the service, checked by `selfcheck`; managed projects as git bundles, push only as a fast forward of files the editor could write |
 | Schedules | One timer, `scheduler.tick` each minute; `OnCalendar` with time zone; admin edits, operator switches and runs now; answers stored, never secrets; missed > 5 min; overlap skip/queue/cancel |
-| Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs, check problem/recovery/reminder |
+| Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs, check problem/recovery/reminder, check cycles late/caught_up (scopes all and inventory) |
 | Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers; charts under a check on the page of a host, `@patternfly/react-charts` in a chunk of its own |
 | Sizing of cycles | `fleet-run` reads `memory.peak` and `cpu.stat` of its cgroup into `result.json`; table `cycles`, 30 days; forks fit `[checks] memory_mb` (0: half the controller's) shared by `2 × max_concurrent`, hosts per shard what they get through in half the shortest interval; `shard_size` and `forks` stay ceilings, sizing only lowers |
 | System health | `system.health` for viewers, like `selfcheck` (no configuration in it beyond the memory budget); a section of the System tab |
 | Cycles late | A due state held by a cycle is skipped, not doubled, and counted; `late` after `[checks] late_after` due times skipped in a row by a group, `caught_up` when one of its cycles ends with none; rules of scope all or inventory |
+| SSH connections | Kept within a run only; the catalog pipelined (playbooks of the user as their project says). Kept by the account: discarded (rule 8). Kept by a unit per group: only if the load test shows that opening connections is the limit. No fact cache: checks gather no facts |
 | Checks | Catalog + playbooks ending with `fleet_result`; one task per host, `checks.py` or `win_checks.ps1` by shell; thresholds at ingest; cycles as `check` jobs with their own limit, sharded by inventory/credential/become; soft/hard states, flapping, ack, maintenance; viewer sees, operator acks, admin configures |
 | CMDB, updates, drift | Kinds `cmdb`, `updates` and `compliance` (a playbook in `--check --diff`), slow: own cycles, `[checks] slow_timeout`, own dispatch lane; snapshot + changes tables; hardware change = warning for one cycle; viewer sees CMDB, drift diffs operator+ |
-| Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d (what they took 30 d), CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back; a limit on state changes later (phase 10), off by default |
+| Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d (what they took 30 d, a group's delay 30 d without a skip), CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back; a limit on state changes later (phase 10), off by default |
 | Discarded | MCP servers of projects (Ansible outside the sandbox, keys in clear); the chat as its own package, or hooked by `cockpit-samba-dc`; installing the agent per user from the page, from an apt repo or by a shell recipe; driving `claude` without ACP; a timer per schedule (root writing units from input); a second command name for `fleet` (Rancher's CLI in `/usr/local/bin` would shadow it, left as is); unloading failed run units (kept as systemd does, 15 October) |
 | Out of scope | External triggers (future) |
 
@@ -189,11 +199,12 @@ except the rows that say "to confirm".
       needs no pass: aggregates are kept at ingest)
 - [x] Charts (`@patternfly/react-charts` 8, a chunk loaded on demand)
 - [x] Shards and forks sized on measured duration and RAM
-- [ ] Fact caching, SSH connections reused between cycles
+- [x] SSH: the catalog pipelined; connections between cycles discarded or
+      left to the load test, no fact cache (nothing gathered)
 - [x] A cycle that does not end before the next is skipped and reported
 - [x] "System health" page: cycle durations, queue, database size
-- [ ] Load tests with 200, 500, 1000 simulated hosts (measured: ~0.6 s per
-      host on 2 vCPUs, CPU-bound; give the controller 4 GB)
+- [ ] Load tests with 200, 500, 1000 simulated hosts, through real cycles
+      (see "Next"; give the controller 4 GB)
 
 Done when: 500 simulated hosts with 10 checks every 10 minutes run 24 hours
 with no backlog and a responsive interface.
