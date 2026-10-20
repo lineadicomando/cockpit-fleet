@@ -9,7 +9,7 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 Phases 0–7 closed, the terminal's ideas done and seen live; pushed up to
 `557dd22`, CI green. **Phase 8 under way**: the time series are done
 (schema 12, `metrics.py`; `checks.sh` in containers of Debian and
-AlmaLinux, uncommitted);
+AlmaLinux, at `d287fa3`, not pushed);
 next is maintenance (run directories, vacuum).
 `test/integration/measure-events.sh` is where the load tests start from.
 
