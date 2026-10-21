@@ -70,6 +70,8 @@ expect_eq "a cron line is converted" "$(get "$preview" 'a["data"]["calendar"]')"
 expect_eq "with its next three times" "$(get "$preview" 'len(a["data"]["next"])')" 3
 
 # --- ten on the same minute -----------------------------------------------------
+# Created just after a tick, so that none of them is due before the others.
+next_minute
 for i in 0 1 2 3 4 5 6 7 8 9; do
     admin schedule.create "{\"name\":\"s$i\",\"template_id\":\"$tid\",\"calendar\":\"*:*:00\",\"answers\":{\"note\":\"n$i\"},\"priority\":$((i % 3))}" >/dev/null
 done

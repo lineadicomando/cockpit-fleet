@@ -15,7 +15,8 @@ table `cycle_lag`, events `late` and `caught_up`, `[checks] late_after`),
 the health of the system (`health.py`, `system.health`, the first section
 of the System tab, `src/lib/health.ts`), the catalog pipelined
 (`runner.check_env`), and the load test (`test/integration/load.sh`,
-`load-sample.py`). All pushed (`41604a3`), working tree clean.
+`load-sample.py`). Pushed up to `76a98b9`; the commit after it (Fedora
+and AlmaLinux closed, the fix of `schedules.sh`) not yet.
 
 **The load test so far** (numbers in `docs/architecture.md`, Checks, "At
 scale"): on a Debian machine with 2 vCPUs and 4 GB, every 10 minutes, 200
@@ -36,7 +37,9 @@ p95 with 10 000 states. What it showed:
 
 **Next:**
 
-1. **The 24 hours with 500 hosts**, the "done when" of the phase. It needs
+1. **The 24 hours with 500 hosts**, the "done when" of the phase: running
+   on the Debian machine since 21 October 14:05 (package of `76a98b9`),
+   to end on 22 October about 14:10. It needs
    a controller with 4 GB left on for a day: copy `test/integration` to
    it, start `load.sh` with `systemd-run` as its header says
    (`IT_LOAD_HOSTS=500`, `IT_LOAD_MINUTES=1440`), read
@@ -44,10 +47,12 @@ p95 with 10 000 states. What it showed:
    its samples there but no summary (its data is wiped by the next run):
    `python3 load-sample.py summary SAMPLES 600 1200` writes it. Look at
    the growth of the database and of the run directories over the day.
-2. Close the phase on the three machines: every script (they cover what is
-   listed under "Last test runs" as not yet on machines), and the health
-   section and the charts in a browser (the health section has never been
-   seen in one).
+2. Close the phase on the three machines: Fedora and AlmaLinux done (21
+   October, every script passed, below); left is Debian, after the 24
+   hours, the same way (on the machine of the load test: the scripts
+   wipe its data anyway).
+   The health section and the charts were seen in a browser during the
+   load test (below).
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
@@ -79,8 +84,20 @@ told behind and back on time); the catalog pipelined, the tree after
 file on a node, with become and without); `load` on Debian (30 hosts
 and 2 nodes every 60 s, 12 min). Not run in containers since 16
 October: every script but `checks`, `cmdb`, `runs`, `chat` and `load`;
-Fedora had only `checks` (the sizing). Phase 8 on a machine: only
-`load.sh`, on Debian at `eaeebc4` (21 October, above).
+Fedora had only `checks` (the sizing). Phase 8 on a machine: `load.sh`
+on Debian at `eaeebc4` (21 October, above), and its 24 hours at
+`76a98b9`; on 21 October every script but
+`windows`, `measure-events` and `load` on Fedora 44 and AlmaLinux 10 at
+`76a98b9`, all passed, no SELinux denial (`schedules` once the test
+created its ten schedules just after a tick: a minute crossed while it
+created them gave 17 runs, the scheduler right). Run as root from
+`systemd-run`, a script needs `-p
+SELinuxContext=unconfined_u:unconfined_r:unconfined_t:s0`: in
+`initrc_t`, `ssh-keygen` cannot write in `/run` and the nodes never
+start; and the RPM machines needed `acl` for `cli.sh` (installed). In a
+browser as a viewer, on Debian with the 500 hosts of the load test: the
+health section, the list of hosts, the page of a host and its charts
+with real values, all fine.
 On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
@@ -195,11 +212,10 @@ except the rows that say "to confirm".
   `become` within them; a group turned off while behind is never told back
   on time (its row goes after 30 days); a slow playbook of the user shares
   the lane of the other checks and makes them skip too.
-- Health: the last day only, no history; seen through `fleetctl` in a
-  container, not yet in a browser.
+- Health: the last day only, no history; three column headers of the
+  cycles cut short at 1400 px ("Inve…", "Interv…", "Durata, …").
 - Charts: on the page of a host only, per check; no zoom, no chosen dates,
-  no thresholds drawn; seen in a browser on a container only, with values
-  made up for the past.
+  no thresholds drawn; the labels of the axes faint on the dark theme.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.
@@ -239,7 +255,7 @@ approved by another user and completes.
 
 - [ ] Security review: root helpers, sandbox, sudoers, archives, git, bundles
 - [ ] Automated negative tests: injection, traversal, role escalation, secrets
-- [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle", "Copyable input")
+- [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle", "Copyable input", "Details" of an expandable row)
 - [ ] Docs: installation, security model, writing a check, backup
 - [ ] Upgrade and removal (`purge` too), `.deb` and `.rpm`
 - [ ] `.rpm` built in CI (runner is Debian)

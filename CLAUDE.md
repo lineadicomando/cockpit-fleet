@@ -165,8 +165,12 @@ Other `IT_*` variables of the caller are passed on; the logs go to
 only when named. On a machine, copy `test/integration` there and start one as root,
 e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
 integration/runs.sh`, where `USER` is an account of the controller that
-accepts password logins over SSH. The tests that go through `fleetctl` share
-helpers in `lib.sh` (`admin`, `get`, `expect_run`, `wipe`, `prepare`). A
+accepts password logins over SSH. To start one with `systemd-run` (to outlive
+the session) on Fedora or AlmaLinux, pass `-p
+SELinuxContext=unconfined_u:unconfined_r:unconfined_t:s0` and redirect its
+output in the shell, not with `StandardOutput=`: a unit runs in `initrc_t`,
+where `ssh-keygen` cannot write in `/run`. The tests that go through
+`fleetctl` share helpers in `lib.sh` (`admin`, `get`, `expect_run`, `wipe`, `prepare`). A
 failed `expect_run` prints the end of the run's output. With `IT_KEEP=yes`,
 `windows.sh` leaves its data in place so the same run can be launched from the
 interface; so does `checks.sh`, whose stand-in for the webhook then stays up
