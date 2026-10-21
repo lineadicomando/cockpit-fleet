@@ -867,7 +867,17 @@ with 10 000 of them answers in 0.44 s (median) and 2.9 s (p95, while
 cycles run), against 0.27 s and 1.3 s at 500 hosts and 0.16 s and 0.18 s
 at 200; the other calls stay at ~0.1 s median. Three nodes over SSH beside the aliases took ~2.1 s per cycle,
 0.33 s of processor per host: too few to weigh what opening connections
-costs at scale.
+costs at scale. Over 10 hours with 500 hosts (21–22 October, stopped by
+the host's shutdown, not by the test) the cycles held the same: 1289,
+every one successful, none skipped, the oldest result 1.13 intervals
+old, at least 2.8 GB of memory available and no swap. But `state.list`
+came out worse than in the first 1.6 h: 0.30 s median, 2.5 s at p95 and
+3.9 s at most, against 2 s and 5 s allowed (`host.list` 1.6 s at p95,
+the others under 0.5 s): the longer the run, the more samples fall on
+the ingest of a cycle. The database grew by ~65 MB a day (raw metrics are
+kept 14 days, so it levels off later), the run directories by ~400 MB a
+day, which levels off after the first day: those of check cycles go
+after a day (Retention), so a test of 24 hours ends just before it shows.
 
 **Skipped, and falling behind.** A cycle answers the due time it was queued
 for; when one interval later it has not ended (still queued counts too),
