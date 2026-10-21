@@ -15,10 +15,7 @@ table `cycle_lag`, events `late` and `caught_up`, `[checks] late_after`),
 the health of the system (`health.py`, `system.health`, the first section
 of the System tab, `src/lib/health.ts`), the catalog pipelined
 (`runner.check_env`), and the load test (`test/integration/load.sh`,
-`load-sample.py`). Pushed up to `eaeebc4`, CI green there. **Not
-committed yet**: `load.sh`, `load-sample.py`, `load` left out of the
-default list of `scripts/ct-test.sh`, and the docs that describe them and
-the results (this file, `CLAUDE.md`, `docs/architecture.md`).
+`load-sample.py`). All pushed (`41604a3`), working tree clean.
 
 **The load test so far** (numbers in `docs/architecture.md`, Checks, "At
 scale"): on a Debian machine with 2 vCPUs and 4 GB, every 10 minutes, 200
@@ -39,9 +36,7 @@ p95 with 10 000 states. What it showed:
 
 **Next:**
 
-1. Commit what is above: `make check` (383 backend, 91 frontend tests)
-   and ruff pass on it, ruff also on `load-sample.py`.
-2. **The 24 hours with 500 hosts**, the "done when" of the phase. It needs
+1. **The 24 hours with 500 hosts**, the "done when" of the phase. It needs
    a controller with 4 GB left on for a day: copy `test/integration` to
    it, start `load.sh` with `systemd-run` as its header says
    (`IT_LOAD_HOSTS=500`, `IT_LOAD_MINUTES=1440`), read
@@ -49,7 +44,7 @@ p95 with 10 000 states. What it showed:
    its samples there but no summary (its data is wiped by the next run):
    `python3 load-sample.py summary SAMPLES 600 1200` writes it. Look at
    the growth of the database and of the run directories over the day.
-3. Close the phase on the three machines: every script (they cover what is
+2. Close the phase on the three machines: every script (they cover what is
    listed under "Last test runs" as not yet on machines), and the health
    section and the charts in a browser (the health section has never been
    seen in one).
