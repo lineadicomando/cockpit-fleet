@@ -150,6 +150,7 @@ test/integration/notify.sh           # notifications to stand-ins of the four ch
 test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about, a cycle falling behind (about 10 min); WIPES
 test/integration/cmdb.sh             # the CMDB, updates and drift of container nodes, changes by hand (about 4 min); WIPES
 test/integration/measure-events.sh   # callback cost on N simulated hosts
+test/integration/load.sh             # real check cycles on IT_LOAD_HOSTS aliases and IT_LOAD_SSH nodes for IT_LOAD_MINUTES, the interface timed; WIPES
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
 test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
@@ -160,8 +161,8 @@ test/integration/nodes.sh            # the container nodes themselves: up N KEYS
 fresh container of that distribution (`test/containers/`), `CT_JOBS` at a
 time (2 by default), with `IT_WIPE=yes` and an account for `IT_SSH_USER`.
 Other `IT_*` variables of the caller are passed on; the logs go to
-`it-results/DISTRO/`. `windows.sh` and `measure-events.sh` run only when
-named. On a machine, copy `test/integration` there and start one as root,
+`it-results/DISTRO/`. `windows.sh`, `measure-events.sh` and `load.sh` run
+only when named. On a machine, copy `test/integration` there and start one as root,
 e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
 integration/runs.sh`, where `USER` is an account of the controller that
 accepts password logins over SSH. The tests that go through `fleetctl` share

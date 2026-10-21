@@ -6,7 +6,7 @@
 #   ct-test.sh DISTRO [SCRIPT...]   DISTRO is debian, fedora or alma; SCRIPT a
 #                                   name in test/integration without .sh;
 #                                   all of them when none is named, but
-#                                   windows and measure-events
+#                                   windows, measure-events and load
 #   ct-test.sh clean                remove the containers and images it made
 #
 # The package comes from deb/ or rpm/: run 'make deb' or 'make rpm' first.
@@ -78,7 +78,7 @@ shift
 if [ "$#" -eq 0 ]; then
     for file in test/integration/*.sh; do
         script=$(basename "$file" .sh)
-        case "$script" in lib|nodes|windows|measure-events) ;; *) set -- "$@" "$script" ;; esac
+        case "$script" in lib|nodes|windows|measure-events|load) ;; *) set -- "$@" "$script" ;; esac
     done
 fi
 for script in "$@"; do
