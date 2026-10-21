@@ -847,6 +847,28 @@ memory than the administrator agreed to, and a larger shard only saves the
 start of a playbook. What a cycle is too slow for, sizing cannot fix: it
 ends late, and the next is not planned until it does.
 
+**At scale.** `test/integration/load.sh` runs real cycles, started by the
+timer, on aliases of the controller with the local connection (the modules
+then measure the sandbox of a run) and a few container nodes over SSH, ten
+checks each: nine of the catalog (seven kinds, `disk` and `certificates`
+twice) in one task per host, and a playbook of the user in cycles of its
+own. Measured on a Debian 13 machine with 2 vCPUs and 4 GB, every 10
+minutes (21 October): a cycle of 50 hosts and 20 forks (`shard_size` and
+`forks` as configured; sizing kept both, half the interval being far off)
+takes ~9 s for the catalog and ~6 s for the playbook, ~680 MB at its peak,
+0.27 s of processor per host; its results are taken in within 0.3 s. With
+`[checks] max_concurrent = 1` the cycles of an interval run one after the
+other: 500 hosts make 20 of them, done in ~3 minutes, the processor at
+~93% meanwhile and idle the rest; the last waits ~160 s in the queue.
+1000 hosts make 40 and the last waits 266 s, near half the interval, which
+is where a second cycle at once (`max_concurrent = 2`) would be needed.
+What gives first is the interface: `state.list` returns every state, and
+with 10 000 of them answers in 0.44 s (median) and 2.9 s (p95, while
+cycles run), against 0.27 s and 1.3 s at 500 hosts and 0.16 s and 0.18 s
+at 200; the other calls stay at ~0.1 s median. Three nodes over SSH beside the aliases took ~2.1 s per cycle,
+0.33 s of processor per host: too few to weigh what opening connections
+costs at scale.
+
 **Skipped, and falling behind.** A cycle answers the due time it was queued
 for; when one interval later it has not ended (still queued counts too),
 the next due time of each state it holds is skipped, never doubled, and
@@ -1050,7 +1072,11 @@ each: a cycle's 5000 values are written in 0.12 s outside a transaction
 (0.06 s in one), the tick's deletion takes 12 ms when nothing is due and
 0.1 s for a day of 125 000 values. At the target of phase 8 (500 hosts, 10
 checks every 10 minutes, about 20 values per host) 14 days of values are
-some 20 million rows, about 500 MB.
+some 20 million rows, about 500 MB. The load test found the database
+growing faster than that: ~47 MB a day at 200 hosts over 1.5 hours,
+which would be ~120 MB a day at 500 and well above 500 MB in 14 days; the
+24 hours at 500 hosts are to say how much of it stays once retention
+deletes.
 
 ## Maintenance
 
@@ -1644,6 +1670,7 @@ Found on the way:
 | Checks of the hosts, a full disk told about, a cycle falling behind | `test/integration/checks.sh` | controller with podman, as root; wipes the database |
 | Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
 | Callback cost | `test/integration/measure-events.sh` | controller, as root |
+| Load: real cycles on many hosts, the interface timed | `test/integration/load.sh` | controller with podman, as root; wipes the database |
 | Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |
 
 The controller is a container or a machine. `make ct-test`
