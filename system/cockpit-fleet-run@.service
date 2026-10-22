@@ -15,6 +15,8 @@ ExecStart=/usr/libexec/cockpit-fleet/fleet-run %i
 WorkingDirectory=/var/lib/cockpit-fleet/runs/%i
 SyslogIdentifier=cockpit-fleet-run
 UMask=0077
+# A low share of the processor when others want it: see the slice.
+Slice=system-cockpitfleet.slice
 
 # Secrets of this run only: the files in creds/ are ciphertext copied there
 # when the run is queued; PID 1 decrypts them into a directory that no other

@@ -78,6 +78,7 @@ fi
 %{_unitdir}/cockpit-fleet-scheduler.timer
 %{_unitdir}/cockpit-fleet-notify.service
 %{_unitdir}/cockpit-fleet-notify.path
+%{_unitdir}/system-cockpitfleet.slice
 %{_presetdir}/80-cockpit-fleet.preset
 %{_sysusersdir}/cockpit-fleet.conf
 %{_tmpfilesdir}/cockpit-fleet.conf

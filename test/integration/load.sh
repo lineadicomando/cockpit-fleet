@@ -149,7 +149,8 @@ while [ "$(date +%s)" -lt "$end" ]; do
     next=$(($(date +%s) + SAMPLE))
     : > "$OUT/timings"
     timed host.list host.list
-    timed state.list state.list
+    timed state.list state.list '{"problems": true}'  # what the page asks by default
+    timed state.grid state.list  # every state, for its grid
     timed run.list run.list '{"kind": "check"}'
     timed metric.query metric.query "{\"host_id\": \"$host_id\", \"check_id\": \"$disk_id\", \"name\": \"used_pct\", \"instance\": \"/\"}"
     timed system.health system.health

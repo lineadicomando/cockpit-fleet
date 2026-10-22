@@ -45,26 +45,23 @@ be done again. Those 10 hours (package of `76a98b9`):
   connections costs. Connections kept per group stay unbuilt (Decisions,
   "SSH connections") unless a test with tens of SSH nodes says otherwise.
 
-**Next** (proposed on 22 October, to confirm with the user: fix first,
-then the 24 hours once, on the code that closes the phase; the other way
-is to run the 24 hours again now, which would fail on `state.list`):
+**Next**:
 
-1. **Make `state.list` fast at 500 hosts.** It is `checks.state_list`
-   (`backend/cockpit_fleet/checks.py`), called only by
-   `src/components/HostsPage.tsx` (`filter`: `problems`, `inventory_id`,
-   `check_id`, `host_id`) and timed by `load.sh` (line `timed state.list`,
-   with no filter: every state, the heaviest call; if the page stops
-   making it, time the calls it makes instead). The page's
-   default view, "Problems", needs only what is not ok and the counters;
-   the "Host" and "Grid" views need every state. Options: page it
-   (`limit`/`offset` or a cursor, the counters of the whole selection
-   kept), let the views ask only what they show, and look at what makes
-   it slow under ingest (`jobs.reconcile` at its start, `_states`
-   building one dict per row with maintenance windows per host). Measure
-   before and after on a database of 500 hosts (`load.sh` with
-   `IT_KEEP=yes`, or the samples' sizes). Then `host.list`, close to the
-   limit, the same way if needed.
-2. **Then the 24 hours with 500 hosts**, the "done when" of the phase. It
+1. **Done (22 October): `state.list` fast at 500
+   hosts.** The query was not the cause: timed in phases on the machine,
+   it took 0.17 s with no cycle and 1.1–1.7 s with one, Python's import
+   alone 0.07 → 0.9 s. The cpu controller was off in `system.slice`, so
+   the forks of a cycle starved fleetctl. Runs now go in
+   `system-cockpitfleet.slice` (`CPUWeight=20`); the page of hosts asks
+   only for problems but in its grid; `load.sh` times both
+   (`state.list` with `problems`, `state.grid` every state). `make
+   ct-test` of `sandbox privileges runs checks` passed on Debian,
+   Fedora and AlmaLinux.
+2. **The 24 hours with 500 hosts**, the "done when" of the phase:
+   **running** on `deb13-fleet` since 22 October 05:57 (VM time), the
+   package of the change above, samples in
+   `/var/tmp/fleet-load/20261022-0557-500/`; first cycles fine, the
+   slowest call 0.4 s while they ran. It
    needs a controller with 4 GB left on for a day (and the host that runs
    it too): deploy the package, copy `test/integration` to it, start
    `load.sh` with `systemd-run` as its header says (`IT_LOAD_HOSTS=500`,

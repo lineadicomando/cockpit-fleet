@@ -1,0 +1,11 @@
+[Unit]
+Description=Cockpit Fleet runs
+Documentation=https://github.com/lineadicomando/cockpit-fleet
+
+[Slice]
+# Runs are batch work. Under contention for the processor the interface and
+# what records the results come first: without a weight here, systemd leaves
+# the cpu controller off in system.slice, where every process then competes
+# on its own, and the forks of one check cycle make fleetctl ten times slower.
+# With nothing else to do, the runs still have all of it.
+CPUWeight=20

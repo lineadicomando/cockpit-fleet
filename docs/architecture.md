@@ -873,8 +873,18 @@ every one successful, none skipped, the oldest result 1.13 intervals
 old, at least 2.8 GB of memory available and no swap. But `state.list`
 came out worse than in the first 1.6 h: 0.30 s median, 2.5 s at p95 and
 3.9 s at most, against 2 s and 5 s allowed (`host.list` 1.6 s at p95,
-the others under 0.5 s): the longer the run, the more samples fall on
-the ingest of a cycle. The database grew by ~65 MB a day (raw metrics are
+the others under 0.5 s). Timed in phases on the same database (22
+October), the cause was not the query: with no cycle running `state.list`
+took 0.17 s inside fleetctl (5030 states, 3.6 MB of JSON), with one 1.1–1.7
+s, and importing Python alone went from 0.07 s to 0.9 s. systemd had left
+the cpu controller off in `system.slice`, so every process there competed
+on its own and the forks of a cycle took the processor from fleetctl. Runs
+now go in `system-cockpitfleet.slice`, with `CPUWeight=20`: under
+contention the interface and the units that record results come first,
+and with nothing else to do the runs still have all of it. Set at runtime
+on that machine, it brought `state.list` back to 0.17 s while a cycle ran.
+The page of hosts also stopped asking for every state but in its grid: the
+default view asks for the problems, with the counters of all. The database grew by ~65 MB a day (raw metrics are
 kept 14 days, so it levels off later), the run directories by ~400 MB a
 day, which levels off after the first day: those of check cycles go
 after a day (Retention), so a test of 24 hours ends just before it shows.

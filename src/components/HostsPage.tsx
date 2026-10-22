@@ -257,13 +257,14 @@ export function HostsPage() {
     const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
     const data = useLoad(async () => {
         const filter = inventoryId ? { inventory_id: inventoryId } : {};
+        // Only the grid shows every state: at hundreds of hosts they are thousands.
         const [states, hosts] = await Promise.all([
-            call<{ states: CheckState[]; counts: StateCounts }>("state.list", filter),
+            call<{ states: CheckState[]; counts: StateCounts }>("state.list", { ...filter, problems: view !== "grid" }),
             call<{ hosts: FleetHost[] }>("host.list", filter),
         ]);
-        return { ...states, hosts: hosts.hosts };
+        return { ...states, hosts: hosts.hosts, every: view === "grid" };
     });
-    useEffect(data.reload, [inventoryId]);
+    useEffect(data.reload, [inventoryId, view]);
     usePolling(() => data.reload(), POLL, true);
 
     return (
@@ -291,7 +292,7 @@ export function HostsPage() {
                         <Counters counts={loaded.counts} />
                         {view === "problems" && <Problems states={loaded.states} onChanged={data.reload} onError={setError} />}
                         {view === "hosts" && <HostList hosts={loaded.hosts} />}
-                        {view === "grid" && <Grid hosts={loaded.hosts} states={loaded.states} />}
+                        {view === "grid" && loaded.every && <Grid hosts={loaded.hosts} states={loaded.states} />}
                     </>
                 )}
             </ListState>
