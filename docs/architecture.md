@@ -113,6 +113,14 @@ Three settings are less strict than they could be, each for a measured reason:
 `/dev/null` here (it wants a `.cfg` extension), and setting it also keeps an
 `ansible.cfg` inside the project from being loaded.
 
+Runs go in `system-cockpitfleet.slice` (`system/`), whose `CPUWeight=20`
+puts them behind the interface and the units that record results when the
+processor is contended, and leaves them all of it otherwise. Without a
+weight systemd keeps the cpu controller off in `system.slice`, and the
+forks of one check cycle made each `fleetctl` call ten times slower
+(Checks, "At scale"). The weight changes no isolation: the slice holds only
+runs, each still in its own unit and namespaces.
+
 SSH uses `StrictHostKeyChecking=yes` with a known-hosts file in the run
 directory and no global file. A host with an unknown key is refused, including
 when a password is used. `ControlPersist` works inside the sandbox: several

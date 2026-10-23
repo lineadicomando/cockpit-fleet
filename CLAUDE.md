@@ -192,7 +192,7 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
   the memory and processor of the host, which is why `checks.sh` turns off
   the thresholds of those two checks.
 - A controller is a machine of one of the target distributions with
-  `cockpit`, the package, `podman` and `sshpass`; `nodes.sh` needs podman
+  `cockpit`, the package, `podman`, `sshpass` and `acl` (for `cli.sh`); `nodes.sh` needs podman
   there and starts Linux nodes on its default network, at 10.88.0.101
   onwards. Windows nodes are reached over SSH with a key: authorise a key
   pair made for the test on the node and store its private half as a

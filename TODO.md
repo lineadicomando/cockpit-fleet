@@ -6,104 +6,50 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
 ## Status (23 October 2026)
 
-Phases 0–8 closed, the terminal's ideas done and seen live. Phase 8
-(closed 23 October) brought time series (schema 12, `metrics.py`),
-maintenance (schema 13, `maintenance.py`), the charts
-(`MetricHistory.tsx`, `src/lib/metrics.ts`), the sizing of cycles (schema
-14, table `cycles`), cycles that skip and fall behind (schema 15, table
-`cycle_lag`, events `late` and `caught_up`, `[checks] late_after`), the
-health of the system (`health.py`, `system.health`, the first section of
-the System tab, `src/lib/health.ts`), the catalog pipelined
-(`runner.check_env`), and the load test (`test/integration/load.sh`,
-`load-sample.py`), and runs in a slice of a low processor weight
-(`system-cockpitfleet.slice`). All pushed (`3c42c70`), CI green.
+Phases 0–8 closed (how each was accepted: the last section of
+`docs/architecture.md`); the terminal's ideas done and seen live. All
+pushed (`2cb9996`), CI green. **Next: phase 9**, workflows and approvals
+(below); nothing of it exists yet.
 
-**The load test of phase 8** (numbers in `docs/architecture.md`, Checks, "At
-scale"): on a Debian machine with 2 vCPUs and 4 GB, 500 hosts, ten checks
-each every 10 minutes, 24 hours from 22 October 05:57, package of
-`3c42c70`. **All its checks passed**:
-
-- **The cycles hold**: 3124, all successful, none skipped, no group
-  behind, the oldest result 1.05 intervals old; 20 cycles per interval,
-  one at a time, the last waiting at most 176 s of the 300 allowed;
-  memory never under 2.5 GB available, no swap. At 1000 hosts (30 min,
-  earlier) the last cycle waited 266 s: beyond that, `max_concurrent = 2`.
-- **The interface**: every call under 0.4 s at p95 and 0.75 s at most
-  (`state.list` of the problems 0.17 s at p95, `state.grid` of every
-  state 0.38 s), against 2.5 s and 3.9 s for `state.list` in the 10
-  hours of 21 October, before runs had their slice.
-- **Disk**: the database +59 MB a day (raw metrics kept 14 days, so it
-  levels off later; state changes and runs' rows are kept for ever); run
-  directories +400 MB a day, but those of check cycles are deleted after
-  a day, so they level off at about a day's worth: a 24-hour run ends
-  just before the first deletion and cannot show it.
-- SSH is not settled: 3 nodes are too few to weigh what opening
-  connections costs. Connections kept per group stay unbuilt (Decisions,
-  "SSH connections") unless a test with tens of SSH nodes says otherwise.
-
-**Next**: phase 9, workflows and approvals (below).
+Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
+13, `maintenance.py`), the charts (`MetricHistory.tsx`,
+`src/lib/metrics.ts`), the sizing of cycles (schema 14, table `cycles`),
+cycles that skip and fall behind (schema 15, table `cycle_lag`, events
+`late` and `caught_up`), the health of the system (`health.py`,
+`system.health`, `src/lib/health.ts`), the catalog pipelined
+(`runner.check_env`), runs in `system-cockpitfleet.slice` (`CPUWeight=20`)
+and the load test (`test/integration/load.sh`, `load-sample.py`). Its
+target, 500 hosts with ten checks every 10 minutes for 24 hours, passed
+on a Debian machine of 2 vCPUs and 4 GB: no backlog, every call of the
+interface under 0.4 s at p95 (numbers in `docs/architecture.md`, Checks,
+"At scale").
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
-says what exists and why, its last section how each phase was accepted.
-`git status`, `git log origin/main..`; `make check`; `make ct-test
-DISTRO=debian` (then `fedora`, `alma`) around a change that needs it.
+says what exists and why. `git status`, `git log origin/main..`; `make
+check`; `make ct-test DISTRO=debian` (then `fedora`, `alma`) around a
+change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `db.py` schema 15), the queue and dispatch of jobs in
-`jobs.py`, command lines of jobs in `runner.py`, `selfcheck` and the audit in
-`system.py`, the health of the system in `health.py`, checks in `checks.py` and
-`catalog.py`, time series in `metrics.py`, retention in `maintenance.py`,
-the CMDB in `cmdb.py`, the terminal in `terminal.py`, node modules in
-`collection/.../plugins/modules/` (`checks.py`, `win_checks.ps1`), pages in
+`cli.py` the registry, `auth.py` the roles, `db.py` schema 15), templates
+and other resources in `resources.py`, launching in `runs.py`, the queue and
+dispatch of jobs in `jobs.py`, command lines of jobs in `runner.py`,
+`selfcheck` and the audit in `system.py`, the health of the system in
+`health.py`, checks in `checks.py` and `catalog.py`, time series in
+`metrics.py`, retention in `maintenance.py`, the CMDB in `cmdb.py`,
+notifications in `notify.py` and `channels.py`, the terminal in
+`terminal.py`, node modules in
+`collection/ansible_collections/lineadicomando/fleet/plugins/modules/`
+(`checks.py`, `win_checks.ps1`, `fleet_result.py`), pages in
 `src/components/`.
 
-Last test runs: in containers (`make ct-test`) on 16 October, the whole
-suite on Debian at `a551049`; `cli`, `chat`, `cmdb` on the three, `checks`
-on Debian and AlmaLinux; on 20 October `chat` on Debian and AlmaLinux at
-`557dd22`, then `checks` on Debian and AlmaLinux and `runs` on Debian with
-the tree of `d7d3819`; the charts (`849303f`) with `checks` on Debian,
-then looked at in a browser on a container controller with a month of
-made-up values (one line and several, a gap, day to year); the sizing of
-cycles (`6f20a5b`) with `checks` on the three and `runs` on Debian, the
-memory and processor time read in the sandbox; skipped cycles and health
-with `checks` on Debian and AlmaLinux (a playbook of 90 s every 60 s,
-told behind and back on time); the catalog pipelined, the tree after
-`d0cb93f`, with `checks` and `cmdb` on Debian and AlmaLinux (no temporary
-file on a node, with become and without); `load` on Debian (30 hosts
-and 2 nodes every 60 s, 12 min). Not run in containers since 16
-October: every script but `checks`, `cmdb`, `runs`, `chat` and `load`;
-Fedora had only `checks` (the sizing). Phase 8 on a machine: `load.sh`
-on Debian at `eaeebc4` (21 October), 10 hours at `76a98b9`, the 24
-hours at `3c42c70` (above), then on 23 October every script but
-`windows`, `measure-events` and `load` on Debian 13 at `3c42c70` (2 GB,
-all 17 passed in 19 minutes); on 21 October every script but
-`windows`, `measure-events` and `load` on Fedora 44 and AlmaLinux 10 at
-`76a98b9`, all passed, no SELinux denial (`schedules` once the test
-created its ten schedules just after a tick: a minute crossed while it
-created them gave 17 runs, the scheduler right). Run as root from
-`systemd-run`, a script needs `-p
-SELinuxContext=unconfined_u:unconfined_r:unconfined_t:s0`: in
-`initrc_t`, `ssh-keygen` cannot write in `/run` and the nodes never
-start; and the RPM machines needed `acl` for `cli.sh` (installed). In a
-browser as a viewer, on Debian with the 500 hosts of the load test: the
-health section, the list of hosts, the page of a host and its charts
-with real values, all fine.
-On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
-the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
-against Windows 11 the same day and again on 20 October. Not yet on
-machines: the schedules fix (`d7708be`); the terminal's changes only by
-hand on Debian, not `cli.sh`, and not on Fedora or AlmaLinux. All of
-that was then covered by every script on the three machines at the close
-of phase 8 (21 and 23 October); the charts and the health page were seen
-in a browser on Debian only.
-Live on Debian, 20 October: Linux and Windows nodes in one Assets list;
-"At a terminal" of a launch, a run and an upload, each command copied and
-run; the chat's agent installed by its playbook, the page and `fleet
-assistant` with Claude. Fixed then: the playbook failed on `os_family`;
-`fleet assistant` started in Claude's "auto" mode, calling tools unasked
-(now `--permission-mode manual`), and asked to trust the home at every
-start (now a directory of its own).
+Last test runs, all at `3c42c70` (the code of phase 8's close; `2cb9996`
+changed only the docs): every script but `windows`, `measure-events` and
+`load` on machines of the three distributions (Fedora 44 and AlmaLinux 10
+on 21 October at `76a98b9`, SELinux enforcing, no denial; Debian 13 on 23
+October), `make ct-test` of `sandbox privileges runs checks` on the
+three. `windows.sh` last on 20 October, on Debian against Windows 11. The
+health section and the charts seen in a browser on Debian only.
 
 ## Decisions
 
@@ -183,8 +129,9 @@ except the rows that say "to confirm".
   test retried 24 h; the default webhook body has no title; `fleet channel
   update` wants the name again.
 - Checks: host facts only from cycles; one `fleet_result` per host;
-  thresholds per check, not per host; `state.list` returns everything
-  (2.5 s at p95 with 5030 states over 10 h: Next, 1);
+  thresholds per check, not per host; `state.list` is not paged (the
+  grid of the page of hosts asks for every state: 0.38 s at p95 for 5030;
+  at many thousands more it will need paging);
   maintenance windows not exported; inventories re-read hourly, each a run;
   `certificates` on a Windows store lists every expired root it keeps, in
   one long summary.
@@ -195,6 +142,12 @@ except the rows that say "to confirm".
   before phase 8 above 64 MB is never made incremental (none exists); rows
   of runs, state changes and the audit grow without end; deleting run
   output and giving pages back seen in unit tests and containers only.
+- Scale: SSH not weighed (3 nodes beside 500 local aliases are too few to
+  say what opening connections costs; connections kept per group stay
+  unbuilt unless a test with tens of SSH nodes asks for them); beyond
+  ~1000 hosts every 10 minutes, `[checks] max_concurrent = 2`; the run
+  directories levelling off after a day not seen (the 24 hours end just
+  before the first deletion).
 - Sizing: per group, whatever checks a shard holds (one task per host, so
   close enough); a host's time is the cycle's spread evenly; the fit of
   memory may come out flat with few cycles, then all of it counts per fork;
@@ -215,6 +168,13 @@ except the rows that say "to confirm".
   the authors of the clone (who pushed is audited).
 
 ## Phase 9 — Workflows and approvals
+
+To decide with the user before starting: whether the approver is a fourth
+role in the order viewer < operator < admin (`auth.ROLES`) or a group that
+adds a right to any role; whether anyone may approve their own launch (the
+"done when" says another user); what a workflow step may override of its
+template (limit, survey answers). Each new group needs `sysusers`,
+`sudoers` (`fleetctl` only) and `GROUP_ROLES` in `auth.py`.
 
 - [ ] Approvals: critical template, run `pending_approval`, a second user of
       `cockpit-fleet-approver` (sysusers, sudoers), expiry, notification, audit
