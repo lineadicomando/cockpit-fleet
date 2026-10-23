@@ -4,11 +4,10 @@ Cockpit plugin that runs Ansible from the browser (Semaphore UI style) and
 collects, stores and notifies on data from the nodes, with Ansible only. Not
 a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
-## Status (22 October 2026)
+## Status (23 October 2026)
 
-Phases 0–7 closed, the terminal's ideas done and seen live. **Phase 8
-under way**, all of it done but the interface at 500 hosts and the 24
-hours of the load test: time series (schema 12, `metrics.py`),
+Phases 0–8 closed, the terminal's ideas done and seen live. Phase 8
+(closed 23 October) brought time series (schema 12, `metrics.py`),
 maintenance (schema 13, `maintenance.py`), the charts
 (`MetricHistory.tsx`, `src/lib/metrics.ts`), the sizing of cycles (schema
 14, table `cycles`), cycles that skip and fall behind (schema 15, table
@@ -16,64 +15,33 @@ maintenance (schema 13, `maintenance.py`), the charts
 health of the system (`health.py`, `system.health`, the first section of
 the System tab, `src/lib/health.ts`), the catalog pipelined
 (`runner.check_env`), and the load test (`test/integration/load.sh`,
-`load-sample.py`). All pushed (`864854c`), CI green.
+`load-sample.py`), and runs in a slice of a low processor weight
+(`system-cockpitfleet.slice`). All pushed (`3c42c70`), CI green.
 
-**The load test so far** (numbers in `docs/architecture.md`, Checks, "At
-scale"): on a Debian machine with 2 vCPUs and 4 GB, every 10 minutes. The
-24 hours with 500 hosts were started on 21 October at 14:05 and stopped
-after 10 hours by the shutdown of the host that runs the VM: they are to
-be done again. Those 10 hours (package of `76a98b9`):
+**The load test of phase 8** (numbers in `docs/architecture.md`, Checks, "At
+scale"): on a Debian machine with 2 vCPUs and 4 GB, 500 hosts, ten checks
+each every 10 minutes, 24 hours from 22 October 05:57, package of
+`3c42c70`. **All its checks passed**:
 
-- **The cycles hold**: 1289, all successful, none skipped, no group
-  behind, the oldest result 1.13 intervals old; 20 cycles per interval,
-  one at a time, done in ~3 minutes; memory never under 2.8 GB
-  available, no swap. At 1000 hosts (30 min, earlier) the last cycle
-  waited 266 s of the 300 allowed: beyond that, `max_concurrent = 2`.
-- **`state.list` fails at 500 hosts already**: 2.5 s at p95 and 3.9 s at
-  most, against the 2 s and 5 s of `load.sh` (in the first 1.6 h it had
-  passed). It returns every state, 5030 here, and is slowest while a
-  cycle's results are taken in. `host.list` passes, close (1.6 s at p95,
-  3.1 s at most); `run.list`, `metric.query`, `system.health` under 0.5 s
-  at p95. A 24-hour run on this code would fail on it again.
-- **Disk**: the database +65 MB a day (raw metrics kept 14 days, so it
+- **The cycles hold**: 3124, all successful, none skipped, no group
+  behind, the oldest result 1.05 intervals old; 20 cycles per interval,
+  one at a time, the last waiting at most 176 s of the 300 allowed;
+  memory never under 2.5 GB available, no swap. At 1000 hosts (30 min,
+  earlier) the last cycle waited 266 s: beyond that, `max_concurrent = 2`.
+- **The interface**: every call under 0.4 s at p95 and 0.75 s at most
+  (`state.list` of the problems 0.17 s at p95, `state.grid` of every
+  state 0.38 s), against 2.5 s and 3.9 s for `state.list` in the 10
+  hours of 21 October, before runs had their slice.
+- **Disk**: the database +59 MB a day (raw metrics kept 14 days, so it
   levels off later; state changes and runs' rows are kept for ever); run
   directories +400 MB a day, but those of check cycles are deleted after
-  a day (`checks.py`, not `prune_runs`), so they level off at about a
-  day's worth: a 24-hour run ends just before the first deletion and
-  cannot show it.
+  a day, so they level off at about a day's worth: a 24-hour run ends
+  just before the first deletion and cannot show it.
 - SSH is not settled: 3 nodes are too few to weigh what opening
   connections costs. Connections kept per group stay unbuilt (Decisions,
   "SSH connections") unless a test with tens of SSH nodes says otherwise.
 
-**Next**:
-
-1. **Done (22 October): `state.list` fast at 500
-   hosts.** The query was not the cause: timed in phases on the machine,
-   it took 0.17 s with no cycle and 1.1–1.7 s with one, Python's import
-   alone 0.07 → 0.9 s. The cpu controller was off in `system.slice`, so
-   the forks of a cycle starved fleetctl. Runs now go in
-   `system-cockpitfleet.slice` (`CPUWeight=20`); the page of hosts asks
-   only for problems but in its grid; `load.sh` times both
-   (`state.list` with `problems`, `state.grid` every state). `make
-   ct-test` of `sandbox privileges runs checks` passed on Debian,
-   Fedora and AlmaLinux.
-2. **The 24 hours with 500 hosts**, the "done when" of the phase:
-   **running** on `deb13-fleet` since 22 October 05:57 (VM time), the
-   package of the change above, samples in
-   `/var/tmp/fleet-load/20261022-0557-500/`; first cycles fine, the
-   slowest call 0.4 s while they ran. It
-   needs a controller with 4 GB left on for a day (and the host that runs
-   it too): deploy the package, copy `test/integration` to it, start
-   `load.sh` with `systemd-run` as its header says (`IT_LOAD_HOSTS=500`,
-   `IT_LOAD_MINUTES=1440`), read `/var/tmp/fleet-load/*/summary` at the
-   end. A run stopped early leaves its samples there but no summary (its
-   data is wiped by the next run): `python3 load-sample.py summary
-   SAMPLES 600 1200` writes it, read-only, also while the test runs. To
-   see the run directories level off, let it go a few hours past a day.
-3. **Close the phase on Debian**: every script on the machine of the load
-   test, after it (they wipe its data anyway), as on Fedora and AlmaLinux
-   (21 October, all passed, below). The health section and the charts
-   were seen in a browser during the load test (below).
+**Next**: phase 9, workflows and approvals (below).
 
 To resume: read `CLAUDE.md` (rules, commands, tests) and `CLAUDE.local.md`
 if present (this developer's VMs and their state); `docs/architecture.md`
@@ -106,8 +74,10 @@ file on a node, with become and without); `load` on Debian (30 hosts
 and 2 nodes every 60 s, 12 min). Not run in containers since 16
 October: every script but `checks`, `cmdb`, `runs`, `chat` and `load`;
 Fedora had only `checks` (the sizing). Phase 8 on a machine: `load.sh`
-on Debian at `eaeebc4` (21 October, above), and 10 hours of the 24 at
-`76a98b9`; on 21 October every script but
+on Debian at `eaeebc4` (21 October), 10 hours at `76a98b9`, the 24
+hours at `3c42c70` (above), then on 23 October every script but
+`windows`, `measure-events` and `load` on Debian 13 at `3c42c70` (2 GB,
+all 17 passed in 19 minutes); on 21 October every script but
 `windows`, `measure-events` and `load` on Fedora 44 and AlmaLinux 10 at
 `76a98b9`, all passed, no SELinux denial (`schedules` once the test
 created its ten schedules just after a tick: a minute crossed while it
@@ -123,9 +93,10 @@ On machines (SELinux enforcing, no denial): every script at `3dc0e38` on
 the three; `cmdb.sh` at `a26bd69` on the three; `windows.sh` on Debian
 against Windows 11 the same day and again on 20 October. Not yet on
 machines: the schedules fix (`d7708be`); the terminal's changes only by
-hand on Debian, not `cli.sh`, and not on Fedora or AlmaLinux. At the
-close of phase 8, on the three machines: every script (they cover all of
-the above), the charts and the health page in a browser.
+hand on Debian, not `cli.sh`, and not on Fedora or AlmaLinux. All of
+that was then covered by every script on the three machines at the close
+of phase 8 (21 and 23 October); the charts and the health page were seen
+in a browser on Debian only.
 Live on Debian, 20 October: Linux and Windows nodes in one Assets list;
 "At a terminal" of a launch, a run and an upload, each command copied and
 run; the chat's agent installed by its playbook, the page and `fleet
@@ -242,24 +213,6 @@ except the rows that say "to confirm".
   end not seen.
 - Terminal: survey choices not pickable or completed; pushed commits keep
   the authors of the clone (who pushed is audited).
-
-## Phase 8 — Time series and scale (under way)
-
-- [x] Narrow metrics table, hourly and daily aggregates, retention
-- [x] Maintenance: deletion (run directories too), vacuum (downsampling
-      needs no pass: aggregates are kept at ingest)
-- [x] Charts (`@patternfly/react-charts` 8, a chunk loaded on demand)
-- [x] Shards and forks sized on measured duration and RAM
-- [x] SSH: the catalog pipelined; connections between cycles discarded or
-      left to the load test, no fact cache (nothing gathered)
-- [x] A cycle that does not end before the next is skipped and reported
-- [x] "System health" page: cycle durations, queue, database size
-- [ ] Load tests with 200, 500, 1000 simulated hosts, through real cycles
-      (`load.sh`; 200, 500 and 1000 run for an hour or less, 500 for 10
-      hours; `state.list` too slow at 500; the 24 hours to do after it)
-
-Done when: 500 simulated hosts with 10 checks every 10 minutes run 24 hours
-with no backlog and a responsive interface.
 
 ## Phase 9 — Workflows and approvals
 

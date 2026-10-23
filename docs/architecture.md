@@ -884,10 +884,18 @@ contention the interface and the units that record results come first,
 and with nothing else to do the runs still have all of it. Set at runtime
 on that machine, it brought `state.list` back to 0.17 s while a cycle ran.
 The page of hosts also stopped asking for every state but in its grid: the
-default view asks for the problems, with the counters of all. The database grew by ~65 MB a day (raw metrics are
-kept 14 days, so it levels off later), the run directories by ~400 MB a
-day, which levels off after the first day: those of check cycles go
-after a day (Retention), so a test of 24 hours ends just before it shows.
+default view asks for the problems, with the counters of all. With both,
+24 hours with 500 hosts (22–23 October, the target of phase 8) passed
+every check of `load.sh`: 3124 cycles, every one successful, none
+skipped, no group behind, the oldest result 1.05 intervals old, the last
+cycle of an interval waiting at most 176 s, at least 2.5 GB of memory
+available and no swap; every call of the interface under 0.4 s at p95
+and 0.75 s at most (`state.list` of the problems 0.17 s at p95, every
+state for the grid 0.38 s). The database grew by ~60 MB a day (raw
+metrics are kept 14 days, so it levels off later), the run directories
+by ~400 MB a day, which levels off after the first day: those of check
+cycles go after a day (Retention), so a test of 24 hours ends just
+before it shows.
 
 **Skipped, and falling behind.** A cycle answers the due time it was queued
 for; when one interval later it has not ended (still queued counts too),
@@ -1095,8 +1103,8 @@ checks every 10 minutes, about 20 values per host) 14 days of values are
 some 20 million rows, about 500 MB. The load test found the database
 growing faster than that: ~47 MB a day at 200 hosts over 1.5 hours,
 which would be ~120 MB a day at 500 and well above 500 MB in 14 days; the
-24 hours at 500 hosts are to say how much of it stays once retention
-deletes.
+24 hours at 500 hosts measured ~60 MB a day, while retention had yet
+to delete anything.
 
 ## Maintenance
 
@@ -1759,3 +1767,10 @@ What each closed phase had to show, and how it was shown.
 - **7, inventory of hosts** (16 October): see "The inventory of hosts":
   `cmdb.sh` on the machines of the three distributions, drift from a file
   changed by hand at the next cycle, the CMDB of Windows by `windows.sh`.
+- **8, time series and scale** (23 October): 500 hosts with ten checks
+  each every 10 minutes ran 24 hours on a Debian machine of 2 vCPUs and
+  4 GB with no backlog and every call of the interface under 0.4 s at
+  p95 (`load.sh`; see "Checks", "At scale"), after runs were given a
+  slice of their own; then every script on the machines of the three
+  distributions, and the health section and the charts in a browser on
+  Debian with the 500 hosts.
