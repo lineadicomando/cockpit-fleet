@@ -20,7 +20,7 @@ if [ "${1:-}" = "--native" ]; then
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
     mkdir "$work/cockpit-fleet"
-    tar --exclude=./node_modules --exclude=./.git --exclude=./deb -cf - . |
+    tar --exclude=./node_modules --exclude=./.git --exclude=./deb --exclude=./.env -cf - . |
         tar -C "$work/cockpit-fleet" -xf -
     (cd "$work/cockpit-fleet" && dpkg-buildpackage -b --no-sign)
     root_flag=

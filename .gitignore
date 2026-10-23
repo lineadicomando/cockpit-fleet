@@ -13,3 +13,5 @@ debian/debhelper-build-stamp
 deb/
 rpm/
 it-results/
+.env
+.claude/settings.local.json

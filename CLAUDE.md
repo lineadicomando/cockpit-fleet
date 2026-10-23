@@ -20,9 +20,9 @@ Three documents, each with one job; do not repeat one in another:
 `docs/chat.md` is for the administrator of a controller: how the chat is
 turned on and its agent installed. Keep it in step with `[chat]`.
 
-`CLAUDE.local.md` and `Makefile.local`, when present, are not tracked: they
-describe one developer's own machines (test VMs, addresses, hosting, deploy
-targets). Nothing of them goes into tracked files, which must make sense to
+`CLAUDE.local.md`, `Makefile.local` and `.env`, when present, are not
+tracked: they describe one developer's own workstation (the state of its test
+VMs, passwords, paths, hosting, deploy targets). Nothing of them goes into tracked files, which must make sense to
 anyone who clones the repository.
 
 Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
@@ -32,7 +32,8 @@ Layout: `src/` frontend, `backend/cockpit_fleet/` Python package,
 (the callback of the runs, and roles an administrator runs on the controller),
 `system/` units, sudoers, sysusers, tmpfiles and the default config,
 `debian/` and `packaging/` (the RPM spec) packaging, `test/` frontend tests, `test/integration/` scripts for
-a controller, `po/` translations.
+a controller, `test/containers/` and `test/vm/` the controllers they run on
+(containers, VMs), `.claude/skills/` agent skills, `po/` translations.
 
 ## Non-negotiable rules
 
@@ -79,8 +80,8 @@ them needs the user's explicit agreement.
   verified with the package installed, not on the development host: with
   `make ct-test` on the three after a change to the unit, the helpers,
   `fleetctl`, sudoers or packaging (AlmaLinux above all, the only one with
-  ansible-core 2.16, the minimum), and on machines at the close of a phase,
-  for what a container cannot show (see "Test environment").
+  ansible-core 2.16, the minimum), and on the test VMs at the close of a
+  phase, for what a container cannot show (see "Test environment").
 - User-visible strings are English in source, translated in `po/it.po`.
 - Code, comments, commit messages and docs (`TODO.md` included) in English;
   conversation with the user in Italian.
@@ -162,7 +163,9 @@ fresh container of that distribution (`test/containers/`), `CT_JOBS` at a
 time (2 by default), with `IT_WIPE=yes` and an account for `IT_SSH_USER`.
 Other `IT_*` variables of the caller are passed on; the logs go to
 `it-results/DISTRO/`. `windows.sh`, `measure-events.sh` and `load.sh` run
-only when named. On a machine, copy `test/integration` there and start one as root,
+only when named. On a VM of the lab, `test/vm/lab.sh deploy TARGET` installs
+the package and `test/vm/lab.sh it TARGET SCRIPT...` runs scripts the same
+way, logs in `it-results/vm-TARGET/`. On another machine, copy `test/integration` there and start one as root,
 e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
 integration/runs.sh`, where `USER` is an account of the controller that
 accepts password logins over SSH. To start one with `systemd-run` (to outlive
@@ -191,6 +194,19 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
   8); the interface in a browser; Windows nodes. Container nodes also show
   the memory and processor of the host, which is why `checks.sh` turns off
   the thresholds of those two checks.
+- The machines are the VMs of the lab, dedicated to this project:
+  `cockpit-fleet-deb13`, `cockpit-fleet-fed44` and `cockpit-fleet-alma10`
+  (controllers) and `cockpit-fleet-win11` (a Windows node), on a libvirt
+  network of their own. `test/vm/` builds them from scratch (cloud images
+  with cloud-init; Windows Setup with an answer file, from the Evaluation
+  ISO) and drives them; `test/vm/lab.conf` says what they are, the same for
+  everyone, and `.env` (from `.env.example`) holds what belongs to one
+  workstation: the password and the path of the ISO. Load the skill
+  `vm-lab` before using them. An agent may build, rebuild, revert and
+  destroy the VMs named `cockpit-fleet-*` without asking; any other VM on
+  the host belongs to something else: do not touch it without the user's
+  agreement. Before starting VMs, check that the host can give what they
+  need (`lab.sh resources`), and shut down what you started.
 - A controller is a machine of one of the target distributions with
   `cockpit`, the package, `podman`, `sshpass` and `acl` (for `cli.sh`); `nodes.sh` needs podman
   there and starts Linux nodes on its default network, at 10.88.0.101

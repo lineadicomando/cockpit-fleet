@@ -63,7 +63,8 @@ except the rows that say "to confirm".
 | Backend | No daemon, no port: units on demand; account `cockpit-fleet`; root only in `fleet-unit`, `fleet-secret` |
 | Roles | Groups `cockpit-fleet-admin`, `-operator`, `-viewer`; `-approver` in phase 9. Viewer: outcomes, not output. Operator: launches, narrows hosts, dry run, answers surveys |
 | Controller | Debian 13 `.deb`; Fedora 44 and AlmaLinux 10 `.rpm` (one spec); SELinux enforcing with no policy of ours; distro `ansible-core` ≥ 2.16 |
-| Tests | `make ct-test` on the three after changes that need it; machines at the close of a phase (SELinux, sandbox on its own kernel, browser, Windows) |
+| Tests | `make ct-test` on the three after changes that need it; the lab's VMs at the close of a phase (SELinux, sandbox on its own kernel, browser, Windows) |
+| Test VMs | `cockpit-fleet-deb13`, `-fed44`, `-alma10` (controllers), `-win11` (Windows 11 Enterprise Evaluation node), on the libvirt network `cockpit-fleet`; built from scratch by `test/vm/` (cloud images and cloud-init, Windows Setup with an answer file), snapshot `baseline` without the package; `lab.conf` tracked, `.env` per workstation; agents may build and destroy them, never other VMs |
 | Secrets | `systemd-creds`, decrypted only by PID 1 per run; survey secrets via `fleet-secret answer` tickets; never on a command line; masked in output |
 | Projects | Git, local directory, written in the interface (git repo beside the tree, admin only), uploaded archive (base64 on stdin, 20 MB by default, `[projects] max_upload_mb` up to 50); `ansible.cfg` keys by allowlist; Galaxy collections installed beside the tree, copied into runs |
 | Inventories | A file, a directory of sources or a plugin file, of a project, read in the sandbox; scripts off unless `[inventories] scripts` |

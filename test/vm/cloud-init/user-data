@@ -1,0 +1,17 @@
+#cloud-config
+# First boot of a Linux VM of the lab (build-linux.sh): name, zone, the admin
+# account with a password and sudo, SSH with passwords. The rest is done by
+# provision.sh over SSH, where its errors show.
+hostname: @VM@
+fqdn: @VM@.@LAB_NET@
+prefer_fqdn_over_hostname: false
+timezone: @LAB_TIMEZONE@
+ssh_pwauth: true
+disable_root: true
+users:
+  - name: @LAB_USER@
+    gecos: Lab admin
+    groups: [@ADMIN_GROUP@]
+    shell: /bin/bash
+    lock_passwd: false
+    hashed_passwd: '@PASSWORD_HASH@'

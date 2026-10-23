@@ -1736,6 +1736,22 @@ bug: `systemd-analyze calendar` prints a time "(in UTC)" only when the local
 zone has an offset, and the schedules read only that line, so on a
 controller in UTC no schedule was ever due.
 
+The machines are VMs dedicated to the project and built from scratch by
+`test/vm/` (`lab.sh`, skill `vm-lab`): a controller of each distribution and
+a Windows 11 node, on a libvirt network of their own, each address reserved
+for the VM's MAC. A controller starts from the distribution's cloud image,
+verified against its checksum file, with cloud-init only for the name, the
+time zone and the admin account; the packages come from a script run over
+SSH, where its errors show. The controllers run in Europe/Rome, not UTC, so
+that between containers and machines both cases are covered. The Windows
+node is installed by Windows Setup with an answer file, on a SATA disk and
+an e1000e NIC, which need no driver from outside the ISO; its first logon
+installs OpenSSH Server. Each VM has one snapshot, `baseline`, internal to
+its disk and without the package, so that a test starts from a known
+system with the package of the commit under test (`lab.sh deploy`). What
+identifies the VMs is tracked (`test/vm/lab.conf`); what belongs to one
+workstation, the password and the path of the Windows ISO, is in `.env`.
+
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors
 and warnings. The `.rpm` is not built in CI: the runner is Debian. The

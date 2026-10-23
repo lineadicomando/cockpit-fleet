@@ -22,7 +22,7 @@ if [ "${1:-}" = "--native" ]; then
     mkdir -p "$top/SOURCES"
     # Makefile.local is not part of the project: it holds the VM targets.
     tar --exclude=./node_modules --exclude=./.git --exclude=./deb --exclude=./rpm \
-        --exclude=./Makefile.local --transform "s,^\.,cockpit-fleet-$version," \
+        --exclude=./Makefile.local --exclude=./.env --transform "s,^\.,cockpit-fleet-$version," \
         -czf "$top/SOURCES/cockpit-fleet-$version.tar.gz" .
     rpmbuild -bb --define "_topdir $top" packaging/cockpit-fleet.spec
     rpmlint -r packaging/cockpit-fleet.rpmlintrc "$top"/RPMS/noarch/*.rpm
