@@ -1918,3 +1918,13 @@ What each closed phase had to show, and how it was shown.
   slice of their own; then every script on the machines of the three
   distributions, and the health section and the charts in a browser on
   Debian with the 500 hosts.
+- **9, workflows and approvals** (24 October): a workflow of three steps
+  with an approval at the second stopped there, was approved by an account
+  that has only the approver's right, and completed, what the first step
+  passed on with `set_stats` reaching the next ones unrendered; a failed
+  step handled by a step for it, a resume that ran only the steps not yet
+  done, a cancel (`workflows.sh`), on containers and on the machines of the
+  three distributions with `sandbox`, `roles` and `runs`, SELinux enforcing
+  on Fedora 44 and AlmaLinux 10 with no denial; in a browser on Debian,
+  approving as an administrator and as an approver with no role, the steps
+  of a workflow run, the editor.

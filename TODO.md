@@ -6,19 +6,14 @@ a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
 ## Status (24 October 2026)
 
-Phases 0–8 closed (how each was accepted: the last section of
-`docs/architecture.md`); the terminal's ideas done and seen live. **Phase
-9** (below): approvals and workflows written, tested and committed on 24
-October (not pushed: `git log origin/main..` shows the commit). Its "done
-when" is met by `workflows.sh` in containers of the three and on the VM
-of Debian 13; only the close is left.
+Phases 0–9 closed (how each was accepted: the last section of
+`docs/architecture.md`); the terminal's ideas done and seen live. Phase 9
+(approvals and workflows) closed on 24 October: `sandbox roles runs
+workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
+AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next, in this order:** push and look at CI (see `CLAUDE.local.md`); on
-the VMs of Fedora 44 and AlmaLinux 10 (`lab.sh reset`, `deploy`, `it`)
-run `sandbox roles runs workflows` with SELinux enforcing and look for
-denials (`ausearch -m avc -ts recent`); then write the acceptance of phase
-9 in the last section of `docs/architecture.md`, tick the close below and
-move phase 9 out of this file; then phase 10.
+**Next:** the open point below (the chat's agent role on Fedora and
+AlmaLinux), then phase 10.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -57,8 +52,8 @@ Last test runs, on 24 October with the code of phase 9: unit tests (414
 backend, 93 frontend) and ruff clean; `make ct-test` of `workflows runs
 roles schedules notify sandbox privileges cli` on Fedora and AlmaLinux,
 `roles runs privileges sandbox notify schedules workflows` on Debian;
-`sandbox roles runs workflows` on the VM of Debian 13, and there in a
-browser: approving as an administrator and as an approver with no role,
+`sandbox roles runs workflows` on the VMs of the three, and on Debian's in
+a browser: approving as an administrator and as an approver with no role,
 the steps of a workflow run, the editor. Not run since phase 8: `checks`,
 `cmdb`, `multihost`, `galaxy`, `files`, `upload`, `adhoc`, `inventories`,
 `mcp`, `chat` (all of them at `3c42c70` on the three, 21-23 October);
@@ -193,27 +188,6 @@ except the rows that say "to confirm".
   not on the workflow's.
 - Terminal: survey choices not pickable or completed; pushed commits keep
   the authors of the clone (who pushed is audited).
-
-## Phase 9 — Workflows and approvals
-
-Decided on 24 October (table above): approver as a right, self-approval
-for administrators only, steps narrow the limit and answer the survey.
-
-- [x] Approvals: `needs_approval` on a template, run `pending_approval`,
-      `cockpit-fleet-approver` (sysusers, sudoers, `auth.GROUP_RIGHTS`),
-      expiry by the tick, rule event `approval`, audit; `approvals.py`,
-      schema 16, `ApprovalsPage.tsx`
-- [x] Workflows: graph of templates on success/failure/always, `set_stats`
-      between steps (callback `artifacts`, `!unsafe` extra vars), editor
-      (steps with "runs after") and view in columns; `workflows.py`, schema
-      17, `WorkflowsPage.tsx`, `workflows.sh`
-- [x] Cancel, and resume from a failed step (a new run, the steps that
-      succeeded carried)
-- [ ] Close: `workflows roles runs sandbox` on the VMs of Fedora 44 and
-      AlmaLinux 10 (SELinux), then the acceptance in `docs/architecture.md`
-
-Done when: a three-step workflow with an approval at the second stops, is
-approved by another user and completes.
 
 ## Phase 10 — Release 0.1.0
 
