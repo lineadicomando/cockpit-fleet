@@ -107,21 +107,37 @@ the key afterwards, or `reset win11`.
 
 No password may go into a browser tool call (it would end up in the
 conversation). With `lab.sh tunnel deb13` in the background, log in with
-`curl` and hand the browser only the session cookie, through a file:
+`curl` through the tunnel and hand the browser only the session cookie,
+through a file:
 
 ```bash
 . test/vm/env.sh && umask 077
 printf 'user = "%s:%s"\n' "$LAB_USER" "$LAB_PASSWORD" |
     curl -s -K - -c /tmp/cockpit-jar -o /dev/null http://127.0.0.1:9091/cockpit/login
-awk '$6=="cockpit" {printf "document.cookie = \"cockpit=%s; path=/\"; void 0;\n", $7}' /tmp/cockpit-jar > /tmp/cockpit-cookie.js
+awk '$6=="cockpit" {printf "() => { document.cookie = \"cockpit=%s; path=/\"; }\n", $7}' \
+    /tmp/cockpit-jar > dist/.ui-cookie.js
 rm /tmp/cockpit-jar
 ```
 
-Then open `http://127.0.0.1:9091/cockpit/login`, run `evaluate_script` with
-`sourcePath: /tmp/cockpit-cookie.js` (it must end in `void 0`, or the cookie
-is echoed back), navigate to `http://127.0.0.1:9091/fleet`, and delete the
-file at the end. To see a page as a role, use a throwaway account in the
-role's group, as `CLAUDE.md` says.
+Then open a new page in an isolated context of its own on a static file,
+`http://127.0.0.1:9091/cockpit/static/login.js`, run `evaluate_script` with
+`sourcePath` set to the absolute path of `dist/.ui-cookie.js`, delete the
+file, and navigate to `http://127.0.0.1:9091/fleet`. What makes it work:
+
+- the browser tools read files only under the work tree, and `dist/` is
+  ignored by git (and, on a synced folder, usually by the sync too);
+- the file holds a function, not a script;
+- never the login page first: it sets an HttpOnly `cockpit` cookie that
+  JavaScript cannot overwrite, and a page of Cockpit's own sends a policy
+  that refuses cookies from scripts. A fresh context per account;
+- the login through the tunnel, over HTTP: a cookie got over HTTPS on the
+  VM itself is not accepted at `http://127.0.0.1:9091`.
+
+To see a page as a role, use a throwaway account in the role's group, as
+`CLAUDE.md` says: give it a random password made on the host in a shell
+variable, set it with `printf 'NAME:%s\n' "$pw" | lab.sh root TARGET
+chpasswd`, log in as above with it, and `unset` it. `reset` removes the
+account with everything else.
 
 ## Notes
 

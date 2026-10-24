@@ -641,6 +641,7 @@ def _template(ctx: Context, row) -> dict:
                                       "verbosity")}
     data["vault_credential_ids"] = [vault["id"] for vault in template_vaults(ctx, row["id"])]
     data["become"] = bool(row["become"])
+    data["needs_approval"] = bool(row["needs_approval"])
     data["tags"] = store.loads(row["tags"], [])
     data["skip_tags"] = store.loads(row["skip_tags"], [])
     data["extra_vars"] = store.loads(row["extra_vars"], {})
@@ -663,6 +664,8 @@ _TEMPLATE_PARAMS = {
     "forks": Int(1, 200),
     "verbosity": Int(0, 4, default=0),
     "become": Bool(),
+    "needs_approval": Bool("Each run waits until someone other than who launched it approves it"
+                           " (an administrator may approve their own)"),
 }
 
 
@@ -697,6 +700,7 @@ def _template_values(ctx: Context, params: Values) -> dict:
         "forks": forks,
         "verbosity": check_int(params["verbosity"], "verbosity", 0, 4),
         "become": int(params["become"]),
+        "needs_approval": int(params["needs_approval"]),
         "updated_at": store.now(),
     }
 

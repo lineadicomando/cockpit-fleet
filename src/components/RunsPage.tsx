@@ -16,15 +16,17 @@ import type { Chunk, HostStats, Run, RunStatus } from "../lib/types.ts";
 import { AtTerminal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
 import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
+import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
+import { WorkflowSteps } from "./WorkflowsPage.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 
-const isActive = (status: RunStatus) => status === "queued" || status === "running";
+const isActive = (status: RunStatus) => status === "pending_approval" || status === "queued" || status === "running";
 // Past this, only the end of the output is drawn; the whole log stays on the server.
 const MAX_SHOWN = 400_000;
 
 function useKinds() {
     const { t } = useTranslation();
-    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation"), check: t("Check cycle") } as Record<Run["kind"], string>;
+    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation"), check: t("Check cycle"), workflow: t("Workflow") } as Record<Run["kind"], string>;
 }
 
 export function RunsPage() {
@@ -41,12 +43,14 @@ export function RunsPage() {
     const now = Date.now() / 1000;
 
     const statuses: Record<string, string> = {
-        "": t("Any status"), running: t("Running"), queued: t("Queued"), successful: t("Successful"),
-        failed: t("Failed"), canceled: t("Canceled"), error: t("Error"),
+        "": t("Any status"), pending_approval: t("Waiting for approval"), running: t("Running"), queued: t("Queued"),
+        successful: t("Successful"), failed: t("Failed"), canceled: t("Canceled"), error: t("Error"),
+        rejected: t("Rejected"), expired: t("Expired"),
     };
 
     return (
         <>
+            {can("approval.list") && <PendingApprovals />}
             <SectionHeader title={t("Runs")}>
                 <FormSelect value={status} onChange={(_e, value) => setStatus(value)} aria-label={t("Filter by status")} style={{ width: "12rem" }}>
                     {Object.entries(statuses).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
@@ -305,10 +309,12 @@ export function RunDetailPage({ id }: { id: string }) {
     if (!run.data) return null;
     const data = run.data;
     const hasTasks = data.kind === "playbook" || data.kind === "adhoc";
+    const isWorkflow = data.kind === "workflow";
 
     return (
         <>
             <SectionHeader title={data.title}>
+                {data.approval?.can_decide && <DecideButtons runId={data.id} title={data.title} onDone={run.reload} />}
                 {active && can("run.cancel") && (
                     <Button variant="danger" onClick={cancel} isLoading={canceling} isDisabled={canceling}>{t("Cancel run")}</Button>
                 )}
@@ -387,17 +393,40 @@ export function RunDetailPage({ id }: { id: string }) {
                                 <DescriptionListDescription><Answered answers={data.options.answers ?? {}} secrets={data.options.secret_answers} /></DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
+                        {data.workflow_run_id && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Step of")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", data.workflow_run_id!])}>{t("a workflow run")}</Button>
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
                         {data.revision && (
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{t("Revision")}</DescriptionListTerm>
                                 <DescriptionListDescription><code>{data.revision.slice(0, 10)}</code></DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
+                        {data.approval && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Approval")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    {data.approval.decision === "approved" && t("Approved by {{user}} on {{when}}", { user: data.approval.decided_by, when: formatTime(data.approval.decided_at, i18n.language) })}
+                                    {data.approval.decision === "rejected" && t("Rejected by {{user}} on {{when}}", { user: data.approval.decided_by, when: formatTime(data.approval.decided_at, i18n.language) })}
+                                    {data.approval.decision === "expired" && t("Nobody approved it by {{when}}", { when: formatTime(data.approval.expires_at, i18n.language) })}
+                                    {data.approval.decision === "" && (data.status === "pending_approval"
+                                        ? t("Waiting, until {{when}}", { when: formatTime(data.approval.expires_at, i18n.language) })
+                                        : t("Not decided"))}
+                                    {data.approval.comment && <Content component="small" style={{ display: "block" }}>{data.approval.comment}</Content>}
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
                     </DescriptionList>
                 </FlexItem>
+                {isWorkflow && <FlexItem><WorkflowSteps id={data.id} /></FlexItem>}
                 <FlexItem><Recap stats={data.stats} /></FlexItem>
                 <FlexItem>
-                    {mayRead && data.pruned_at ? (
+                    {isWorkflow ? null : mayRead && data.pruned_at ? (
                         <Alert variant="info" isInline title={t("The output of this run was deleted on {{when}}, as runs this old keep only their outcome.", { when: formatTime(data.pruned_at, i18n.language) })} />
                     ) : mayRead ? (
                         <Card isPlain>

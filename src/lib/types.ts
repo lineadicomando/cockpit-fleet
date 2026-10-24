@@ -2,9 +2,12 @@ export type Role = "viewer" | "operator" | "admin";
 
 export interface Session {
     user: string;
-    role: Role;
+    // None for an approver who has no role: such a session only approves.
+    role: Role | null;
+    // Rights apart from the role: "approve", from cockpit-fleet-approver.
+    rights: string[];
     version: string;
-    // Names of the backend commands this role may call.
+    // Names of the backend commands this role and these rights may call.
     commands: string[];
     // Whether config.toml names an agent for the chat page.
     chat: boolean;
@@ -180,6 +183,47 @@ export interface Template {
     forks: number | null;
     verbosity: number;
     become: boolean;
+    // Each run waits until someone other than who launched it approves it.
+    needs_approval: boolean;
+}
+
+export type StepCondition = "success" | "failure" | "always";
+
+export interface WorkflowNode {
+    id: string;
+    name: string;
+    template_id: string;
+    limit: string;
+    answers: Record<string, SurveyValue>;
+    needs_approval: boolean;
+}
+
+export interface WorkflowEdge {
+    from: string;
+    to: string;
+    condition: StepCondition;
+}
+
+export interface Workflow {
+    id: string;
+    name: string;
+    description: string;
+    nodes: WorkflowNode[];
+    edges: WorkflowEdge[];
+    created_at: number;
+    updated_at: number;
+    last_run: { id: string; status: RunStatus; created_at: number } | null;
+}
+
+// active, success and failure: the step has a run (or could not start: failure);
+// ready: it starts now; waiting: for the steps before it; skipped: none of its links held.
+export type StepState = "active" | "success" | "failure" | "ready" | "waiting" | "skipped";
+
+export interface WorkflowProgress {
+    run: Run;
+    nodes: (WorkflowNode & { state: StepState; run: Run | null; carried: boolean; error: string })[];
+    edges: WorkflowEdge[];
+    resumed_from: string | null;
 }
 
 export type Overlap = "skip" | "queue" | "cancel";
@@ -216,7 +260,29 @@ export interface SchedulePreview {
     next: number[];
 }
 
-export type RunStatus = "queued" | "running" | "successful" | "failed" | "canceled" | "error";
+export type RunStatus = "pending_approval" | "queued" | "running" | "successful" | "failed" | "canceled" | "error" | "rejected" | "expired";
+
+export interface Approval {
+    run_id: string;
+    requested_by: string;
+    requested_at: number;
+    expires_at: number;
+    decision: "" | "approved" | "rejected" | "expired";
+    decided_by: string;
+    decided_at: number | null;
+    comment: string;
+    // Whether the caller may approve or reject it now.
+    can_decide?: boolean;
+}
+
+// A run as approval.list gives it: with its approval and the names of what it uses.
+export interface ApprovalEntry extends Run {
+    approval: Approval;
+    template: string;
+    project: string;
+    inventory: string;
+    can_decide: boolean;
+}
 
 export interface HostStats {
     ok?: number;
@@ -230,7 +296,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check";
+    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -245,6 +311,12 @@ export interface Run {
     finished_at: number | null;
     // When its output was deleted, [runs] keep_days after it ended.
     pruned_at: number | null;
+    // run.get only, for a run of a template that needs approval.
+    approval?: Approval;
+    // A workflow run: its workflow. A step of one: the workflow run, and which step.
+    workflow_id: string | null;
+    workflow_run_id: string | null;
+    workflow_node: string;
     rc: number | null;
     revision: string;
     error: string;
@@ -312,7 +384,7 @@ export interface Chunk {
 }
 
 export type ChannelKind = "telegram" | "webhook" | "smtp" | "matrix";
-export type RunEvent = "failed" | "changed" | "succeeded" | "canceled";
+export type RunEvent = "failed" | "changed" | "succeeded" | "canceled" | "approval";
 // What the states of checks give.
 export type CheckEvent = "problem" | "recovery" | "reminder";
 // What the controller says of itself: check cycles falling behind, and back on time.

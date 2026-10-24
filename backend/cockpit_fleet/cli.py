@@ -20,7 +20,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import audit, db, journal, paths
-from .auth import ROLES, Caller, resolve_caller, role_at_least
+from .auth import ROLES, Caller, allowed, resolve_caller
 from .config import Config
 from .config import load as load_config
 from .errors import BadRequest, FleetError, Forbidden
@@ -158,6 +158,8 @@ class Command:
     params: Mapping[str, Field]
     # Whether an agent is offered this command as a tool.
     tool: bool = True
+    # A right that lets a caller use the command whatever their role.
+    right: str = ""
 
     def read(self, data: dict) -> Values:
         """Check the parameters of a call against the declaration."""
@@ -184,9 +186,10 @@ COMMANDS: dict[str, Command] = {}
 
 def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...] = (),
             max_input: int = MAX_INPUT, params: Mapping[str, Field] | None = None,
-            tool: bool = True):
+            tool: bool = True, right: str = ""):
     """Register a handler. Every command states the least role that may call
     it and the parameters it takes; the handler gets them checked, as Values.
+    A command that names a right may also be called by whoever has it.
 
     max_input is for the commands that take a file: the others never need
     more than the default.
@@ -194,7 +197,7 @@ def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...
 
     def register(handler: Callable) -> Callable:
         COMMANDS[name] = Command(name, role, handler, mutating, redact, max_input, params or {},
-                                 tool)
+                                 tool, right)
         return handler
 
     return register
@@ -336,7 +339,8 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     is lowered to the ceiling, never raised, and nothing goes through while
     agents are not enabled. Any other value is only recorded. Not saying it,
     or saying another, is not a way around anything the caller could not
-    already do by hand.
+    already do by hand. An agent has no right beyond its role: a person
+    approves a run, not a program acting for them.
     """
     via = params.pop("via", None)
     if via is None:
@@ -353,6 +357,7 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     ceiling = ctx.config.mcp_max_role
     if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
         ctx.caller = replace(ctx.caller, role=ceiling)
+    ctx.caller = replace(ctx.caller, rights=frozenset())
 
 
 def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
@@ -364,7 +369,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
             raise BadRequest(f"unknown command: {name}")
         params = _parse_input(raw, spec.max_input)
         _through(ctx, params, name, spec.redact)
-        if not role_at_least(ctx.caller.role, spec.role):
+        if not allowed(ctx.caller, spec.role, spec.right):
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
                          f"requires {spec.role}", spec.redact, ctx.via)
             raise Forbidden(f"{name} requires the {spec.role} role")
@@ -389,6 +394,7 @@ def load_commands() -> dict[str, Command]:
     """Every command, registered by importing the modules that declare them."""
     from . import (  # noqa: F401  (register the commands)
         agents,
+        approvals,
         chat,
         checks,
         cmdb,
@@ -402,6 +408,7 @@ def load_commands() -> dict[str, Command]:
         schedules,
         system,
         transfer,
+        workflows,
     )
 
     return COMMANDS

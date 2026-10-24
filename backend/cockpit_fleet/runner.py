@@ -298,6 +298,39 @@ def survey_vars_file(variables: object) -> str:
     return "".join(lines)
 
 
+def _unsafe_value(value: object, depth: int = 0) -> str:
+    if depth > 20:
+        raise BadRequest("workflow_vars: too deeply nested")
+    if isinstance(value, str):
+        return f"!unsafe {_yaml_string(value)}"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        text = repr(value)
+        return text.replace("e", ".0e") if "e" in text and "." not in text else text
+    if isinstance(value, list):
+        return "[" + ", ".join(_unsafe_value(item, depth + 1) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{_yaml_string(str(key))}: {_unsafe_value(item, depth + 1)}"
+                               for key, item in value.items()) + "}"
+    raise BadRequest("workflow_vars: a value is not JSON")
+
+
+def workflow_vars_file(variables: object) -> str:
+    """What the steps before this one in a workflow passed on, as a YAML file
+    of variables. A playbook wrote them: every string, at every depth, is
+    tagged !unsafe, so that none is rendered as a template here."""
+    if not isinstance(variables, dict) or len(variables) > 200:
+        raise BadRequest("workflow_vars must be an object")
+    lines = []
+    for name, value in variables.items():
+        check_variable(name)
+        lines.append(f"{name}: {_unsafe_value(value)}\n")
+    return "".join(lines)
+
+
 def survey_secrets(secrets: object, credentials_dir: Path | None) -> dict[str, str]:
     """The secret answers of a run, by variable, read from its credentials.
 
@@ -362,6 +395,13 @@ def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
         survey_file.touch(mode=0o600)
         survey_file.write_text(survey_vars_file({**answers, **secrets}))
         argv += ["--extra-vars", f"@{survey_file}"]
+    passed = spec.get("workflow_vars", {})
+    if passed:
+        # Last: what the steps before passed on wins, as in AWX.
+        passed_file = runtime_dir / "workflow_vars.yml"
+        passed_file.touch(mode=0o600)
+        passed_file.write_text(workflow_vars_file(passed))
+        argv += ["--extra-vars", f"@{passed_file}"]
 
     argv += _credential_args(
         credentials_dir, ("private_key", "connection_password", "become_password"))

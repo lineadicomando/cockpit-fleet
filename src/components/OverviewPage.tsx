@@ -36,7 +36,9 @@ export function OverviewPage({ session, onOpenSystem }: { session: Session; onOp
             allows: t("Everything an operator can do, plus configuring projects, inventories, credentials, schedules and notifications."),
         },
     };
-    const role = roles[session.role];
+    // The page is not shown to an approver without a role.
+    const role = roles[session.role ?? "viewer"];
+    const approves = session.rights.includes("approve");
 
     const count = (status: Check["status"]) =>
         checks.data?.checks.filter(check => check.status === status).length ?? 0;
@@ -53,11 +55,14 @@ export function OverviewPage({ session, onOpenSystem }: { session: Session; onOp
                         </DescriptionListGroup>
                         <DescriptionListGroup>
                             <DescriptionListTerm>{t("Role")}</DescriptionListTerm>
-                            <DescriptionListDescription>{role.name}</DescriptionListDescription>
+                            <DescriptionListDescription>{approves ? t("{{role}}, approver", { role: role.name }) : role.name}</DescriptionListDescription>
                         </DescriptionListGroup>
                         <DescriptionListGroup>
                             <DescriptionListTerm>{t("Allows")}</DescriptionListTerm>
-                            <DescriptionListDescription>{role.allows}</DescriptionListDescription>
+                            <DescriptionListDescription>
+                                {role.allows}
+                                {approves && <> {t("Also approving the runs of the job templates that need it, except those you launched.")}</>}
+                            </DescriptionListDescription>
                         </DescriptionListGroup>
                     </DescriptionList>
                 </CardBody>

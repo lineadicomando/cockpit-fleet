@@ -29,7 +29,7 @@ import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./c
 import { StatusLabel } from "./StatusLabel.tsx";
 
 const KINDS: ChannelKind[] = ["telegram", "webhook", "smtp", "matrix"];
-const RUN_EVENTS: RunEvent[] = ["failed", "changed", "succeeded", "canceled"];
+const RUN_EVENTS: RunEvent[] = ["failed", "changed", "succeeded", "canceled", "approval"];
 const CHECK_EVENTS: CheckEvent[] = ["problem", "recovery", "reminder"];
 const SYSTEM_EVENTS: SystemEvent[] = ["late", "caught_up"];
 // The scopes in which check cycles falling behind can be told about.
@@ -59,6 +59,7 @@ function useLabels() {
             changed: t("With changes"),
             succeeded: t("Successful"),
             canceled: t("Canceled"),
+            approval: t("Waiting for approval"),
             problem: t("A problem"),
             recovery: t("Its recovery"),
             reminder: t("A reminder of it"),

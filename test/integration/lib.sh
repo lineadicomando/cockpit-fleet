@@ -72,7 +72,7 @@ wipe() {
         [ "$id" = None ] || systemctl stop "cockpit-fleet-run@$id.service" 2>/dev/null
     done
     for name in $("$SECRET" list | grep -E '^(c|n)-'); do "$SECRET" delete "$name"; done
-    for user in itadmin itoperator; do userdel -r "$user" 2>/dev/null; done
+    for user in itadmin itoperator itapprover; do userdel -r "$user" 2>/dev/null; done
     [ -f "$CONFIG.it-backup" ] && mv "$CONFIG.it-backup" "$CONFIG"
     rm -rf /srv/fleet-it /var/lib/cockpit-fleet/runs/* /var/lib/cockpit-fleet/projects/* /var/lib/cockpit-fleet/cache
     rm -f "$DB" "$DB-wal" "$DB-shm"

@@ -29,8 +29,14 @@ watch_queue() {  # watch_queue SECONDS: the most runs seen running at once
         sleep 1; n=$((n + 1))
     done
 }
-next_minute() {  # sleep until a few seconds after the next tick
+next_minute() {  # sleep until the next tick has started and ended
     sleep $((62 - $(date +%-S)))
+    # On a busy machine, launching what is due takes more than those seconds.
+    n=0
+    # A oneshot unit is "activating" while it runs.
+    while [ "$n" -lt 60 ] && [ "$(systemctl show -P ActiveState cockpit-fleet-scheduler.service)" = activating ]; do
+        sleep 1; n=$((n + 1))
+    done
 }
 
 # --- the timer ------------------------------------------------------------------

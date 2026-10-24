@@ -2,7 +2,8 @@
 
 fleetctl runs as the service account through sudo, which sets SUDO_UID to the
 real caller and does not let the caller override it. Roles come from the
-caller's Unix groups; the highest one wins.
+caller's Unix groups; the highest one wins. A right comes from a group of its
+own and adds to whatever role the caller has, or stands alone.
 """
 
 import grp
@@ -19,16 +20,29 @@ GROUP_ROLES = {
     "cockpit-fleet-admin": "admin",
 }
 
+# Rights apart from the order of the roles: approving a run of a template that
+# asks for it is not more than launching it, nor less.
+GROUP_RIGHTS = {
+    "cockpit-fleet-approver": "approve",
+}
+
 
 @dataclass(frozen=True)
 class Caller:
     uid: int
     user: str
     role: str | None
+    rights: frozenset[str] = frozenset()
 
 
 def role_at_least(role: str | None, minimum: str) -> bool:
     return role is not None and ROLES.index(role) >= ROLES.index(minimum)
+
+
+def allowed(caller: Caller, minimum: str, right: str = "") -> bool:
+    """Whether the caller may use a command: by its role, or by the right the
+    command also accepts."""
+    return role_at_least(caller.role, minimum) or bool(right and right in caller.rights)
 
 
 def _group_names(user: str, gid: int) -> list[str]:
@@ -44,6 +58,10 @@ def _group_names(user: str, gid: int) -> list[str]:
 def role_from_groups(groups: list[str]) -> str | None:
     roles = [GROUP_ROLES[group] for group in groups if group in GROUP_ROLES]
     return max(roles, key=ROLES.index, default=None)
+
+
+def rights_from_groups(groups: list[str]) -> frozenset[str]:
+    return frozenset(GROUP_RIGHTS[group] for group in groups if group in GROUP_RIGHTS)
 
 
 def resolve_caller(
@@ -63,4 +81,5 @@ def resolve_caller(
         return Caller(-1, f"uid {sudo_uid}", None)
     if uid == 0:
         return Caller(0, entry.pw_name, "admin")
-    return Caller(uid, entry.pw_name, role_from_groups(group_names(entry.pw_name, entry.pw_gid)))
+    groups = group_names(entry.pw_name, entry.pw_gid)
+    return Caller(uid, entry.pw_name, role_from_groups(groups), rights_from_groups(groups))

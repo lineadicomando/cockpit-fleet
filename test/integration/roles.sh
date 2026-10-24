@@ -1,13 +1,13 @@
 #!/bin/sh
 # Roles come from Unix groups and are enforced by the backend, whatever the
-# frontend shows. Creates four temporary accounts and removes them at the end.
+# frontend shows. Creates five temporary accounts and removes them at the end.
 set -u
 . "$(dirname "$0")/lib.sh"
 require_root
 
 FLEETCTL=/usr/libexec/cockpit-fleet/fleetctl
 SECRET=/usr/libexec/cockpit-fleet/fleet-secret
-USERS="itviewer itoperator itadmin itnobody"
+USERS="itviewer itoperator itadmin itapprover itnobody"
 
 cleanup() {
     for user in $USERS; do userdel -r "$user" 2>/dev/null; done
@@ -20,6 +20,7 @@ cleanup
 useradd -m -G cockpit-fleet-viewer itviewer
 useradd -m -G cockpit-fleet-operator itoperator
 useradd -m -G cockpit-fleet-admin itadmin
+useradd -m -G cockpit-fleet-approver itapprover
 useradd -m itnobody
 
 ctl() {  # ctl USER COMMAND [JSON]: what that user gets from fleetctl
@@ -38,6 +39,14 @@ for pair in itviewer:viewer itoperator:operator itadmin:admin; do
     expect_eq "$user has the $role role" "$(field "$answer" 'a["data"]["role"]')" "$role"
     expect_eq "$user is identified by name" "$(field "$answer" 'a["data"]["user"]')" "$user"
 done
+
+answer=$(ctl itapprover whoami)
+expect_eq "an approver with no role has the right to approve" "$(field "$answer" 'a["data"]["role"], a["data"]["rights"]')" "None ['approve']"
+expect_eq "and the commands of approvals only" "$(field "$answer" 'sorted(a["data"]["commands"])')" \
+    "['approval.approve', 'approval.list', 'approval.reject', 'whoami']"
+expect_eq "an approver is refused the runs" "$(field "$(ctl itapprover run.list)" 'a["error"]["code"]')" forbidden
+expect_denied "an approver cannot hand over a secret answer" sh -c "printf value | sudo -u itapprover sudo -n $SECRET answer"
+expect_denied "an approver cannot run other commands as the service account" sudo -u itapprover sudo -n -u cockpit-fleet /usr/bin/id
 
 expect_eq "viewer may run the self-check" "$(field "$(ctl itviewer selfcheck)" 'a["ok"]')" True
 expect_eq "viewer is refused the audit log" "$(field "$(ctl itviewer audit.list)" 'a["error"]["code"]')" forbidden

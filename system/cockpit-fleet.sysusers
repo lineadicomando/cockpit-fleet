@@ -5,3 +5,6 @@ u cockpit-fleet - "Cockpit Fleet" /var/lib/cockpit-fleet /usr/sbin/nologin
 g cockpit-fleet-admin -
 g cockpit-fleet-operator -
 g cockpit-fleet-viewer -
+
+# A right, apart from the roles: approving the runs of templates that need it.
+g cockpit-fleet-approver -

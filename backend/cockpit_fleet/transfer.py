@@ -1,6 +1,6 @@
 """Export and import of the configuration: credentials, projects, inventories,
-trusted host keys, job templates, schedules, checks, notification channels and
-their rules, as one JSON document.
+trusted host keys, job templates, workflows, schedules, checks, notification
+channels and their rules, as one JSON document.
 
 No secret is in it: a credential or a channel travels without its secrets,
 which are entered again where it is imported. Neither are the files of a
@@ -15,8 +15,8 @@ from .errors import BadRequest, FleetError
 
 FORMAT = "cockpit-fleet-config"
 VERSION = 1
-SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates", "schedules",
-            "checks", "channels", "rules")
+SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates", "workflows",
+            "schedules", "checks", "channels", "rules")
 # What the scope of a rule names, by table.
 _SCOPES = {"project": "projects", "template": "templates", "schedule": "schedules",
            "inventory": "inventories", "group": "inventories", "check": "checks"}
@@ -66,8 +66,16 @@ def config_export(ctx: Context, params: Values) -> dict:
             "extra_vars": store.loads(row["extra_vars"], {}),
             "survey": store.loads(row["survey"], []), "forks": row["forks"],
             "verbosity": row["verbosity"], "become": bool(row["become"]),
+            "needs_approval": bool(row["needs_approval"]),
         })
     templates = _names(ctx, "templates")
+    document["workflows"] = [
+        {"name": row["name"], "description": row["description"],
+         "nodes": [{**{key: value for key, value in node.items() if key != "template_id"},
+                    "template": templates.get(node["template_id"], "")}
+                   for node in store.loads(row["nodes"], [])],
+         "edges": store.loads(row["edges"], [])}
+        for row in conn.execute("SELECT * FROM workflows ORDER BY name COLLATE NOCASE")]
     document["schedules"] = [
         {"name": row["name"], "template": templates.get(row["template_id"], ""),
          "calendar": row["calendar"], "timezone": row["timezone"],
@@ -209,12 +217,23 @@ class _Importer:
                                      for name in vaults],
         }
         for key in ("limit_hosts", "tags", "skip_tags", "extra_vars", "survey", "verbosity",
-                    "become"):
+                    "become", "needs_approval"):
             if key in item:
                 params[key] = item[key]
         if item.get("forks") is not None:
             params["forks"] = item["forks"]
         self._create("template.create", params)
+
+    def workflow(self, item: dict) -> None:
+        nodes = item.get("nodes") or []
+        if not isinstance(nodes, list) or not all(isinstance(node, dict) for node in nodes):
+            raise BadRequest("nodes must be a list of steps")
+        steps = [{**{key: value for key, value in node.items() if key != "template"},
+                  "template_id": self._id("templates", node.get("template"), "template", True)}
+                 for node in nodes]
+        self._create("workflow.create", {"name": item.get("name"), "nodes": steps,
+                                         "edges": item.get("edges") or [],
+                                         "description": item.get("description") or ""})
 
     def schedule(self, item: dict) -> None:
         params = {"name": item.get("name"), "calendar": item.get("calendar"),
@@ -279,6 +298,7 @@ def config_import(ctx: Context, params: Values) -> dict:
     work._each("inventories", document.get("inventories", []), "inventories", work.inventory)
     work._each("host_keys", document.get("host_keys", []), None, work.host_key)
     work._each("templates", document.get("templates", []), "templates", work.template)
+    work._each("workflows", document.get("workflows", []), "workflows", work.workflow)
     work._each("schedules", document.get("schedules", []), "schedules", work.schedule)
     work._each("checks", document.get("checks", []), "checks", work.check)
     work._each("channels", document.get("channels", []), "channels", work.channel)

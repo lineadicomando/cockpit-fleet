@@ -2447,3 +2447,186 @@ msgid "cycles_unsuccessful_count"
 msgid_plural "cycles_unsuccessful_count_plural"
 msgstr[0] "{{count}} non riuscito"
 msgstr[1] "{{count}} non riusciti"
+
+msgid "{{role}}, approver"
+msgstr "{{role}}, approvatore"
+
+msgid "A run waits until a member of cockpit-fleet-approver, or an administrator, other than who launched it approves it. An administrator may approve their own."
+msgstr "Una run attende finché un membro di cockpit-fleet-approver, o un amministratore, diverso da chi l'ha lanciata non la approva. Un amministratore può approvare le proprie."
+
+msgid "Also approving the runs of the job templates that need it, except those you launched."
+msgstr "Anche approvare le run dei job template che lo richiedono, tranne quelle lanciate da te."
+
+msgid "Another user must approve it"
+msgstr "Deve approvarla un altro utente"
+
+msgid "Approval"
+msgstr "Approvazione"
+
+msgid "Approve"
+msgstr "Approva"
+
+msgid "Approve {{name}}?"
+msgstr "Approvare {{name}}?"
+
+msgid "Approved by {{user}} on {{when}}"
+msgstr "Approvata da {{user}} il {{when}}"
+
+msgid "Each run needs approval"
+msgstr "Ogni run richiede un'approvazione"
+
+msgid "Expired"
+msgstr "Scaduta"
+
+msgid "Expires"
+msgstr "Scade"
+
+msgid "Nobody approved it by {{when}}"
+msgstr "Nessuno l'ha approvata entro il {{when}}"
+
+msgid "Not decided"
+msgstr "Non decisa"
+
+msgid "Nothing to approve"
+msgstr "Niente da approvare"
+
+msgid "Project {{name}}, revision {{revision}}"
+msgstr "Progetto {{name}}, revisione {{revision}}"
+
+msgid "Reject"
+msgstr "Rifiuta"
+
+msgid "Reject {{name}}?"
+msgstr "Rifiutare {{name}}?"
+
+msgid "Rejected"
+msgstr "Rifiutata"
+
+msgid "Rejected by {{user}} on {{when}}"
+msgstr "Rifiutata da {{user}} il {{when}}"
+
+msgid "Runs waiting for approval"
+msgstr "Run in attesa di approvazione"
+
+msgid "The run ends without starting."
+msgstr "La run termina senza essere avviata."
+
+msgid "The run starts as it was launched: with the project as it was then, on the hosts and with the answers shown."
+msgstr "La run parte così come è stata lanciata: con il progetto com'era allora, sugli host e con le risposte indicati."
+
+msgid "The runs of job templates that need approval wait here until someone approves them."
+msgstr "Le run dei job template che richiedono un'approvazione attendono qui finché qualcuno non le approva."
+
+msgid "Waiting for approval"
+msgstr "In attesa di approvazione"
+
+msgid "Waiting, until {{when}}"
+msgstr "In attesa, fino al {{when}}"
+
+msgid "You cannot approve it"
+msgstr "Non puoi approvarla"
+
+msgid "a workflow run"
+msgstr "una run di workflow"
+
+msgid "A workflow runs job templates one after the other: each step starts by how the steps before it ended."
+msgstr "Un workflow esegue job template uno dopo l'altro: ogni passo parte secondo come sono terminati i passi precedenti."
+
+msgid "Add a step"
+msgstr "Aggiungi un passo"
+
+msgid "Add a step it follows"
+msgstr "Aggiungi un passo che lo precede"
+
+msgid "after {{step}}, if it {{condition}}"
+msgstr "dopo {{step}}, se {{condition}}"
+
+msgid "Choose a step"
+msgstr "Scegli un passo"
+
+msgid "Could not start"
+msgstr "Non è partito"
+
+msgid "Done before"
+msgstr "Già fatto"
+
+msgid "Each step passes on to the steps after it the variables its playbook sets with set_stats (with per_host: false). They are kept in clear with the run: not for secrets."
+msgstr "Ogni passo trasmette ai passi successivi le variabili che il suo playbook imposta con set_stats (con per_host: false). Sono conservate in chiaro con la run: non per i segreti."
+
+msgid "Edit workflow"
+msgstr "Modifica workflow"
+
+msgid "ends, either way"
+msgstr "termina, comunque vada"
+
+msgid "fails"
+msgstr "fallisce"
+
+msgid "It runs as soon as the workflow is launched."
+msgstr "Parte appena il workflow viene lanciato."
+
+msgid "It runs once all these steps have ended, if one of them ended as said."
+msgstr "Parte quando tutti questi passi sono terminati, se uno di essi è terminato come indicato."
+
+msgid "Its past runs stay."
+msgstr "Le sue run passate restano."
+
+msgid "Last run"
+msgstr "Ultima run"
+
+msgid "New workflow"
+msgstr "Nuovo workflow"
+
+msgid "No workflows yet"
+msgstr "Ancora nessun workflow"
+
+msgid "Not yet"
+msgstr "Non ancora"
+
+msgid "Resume from the failed steps"
+msgstr "Riprendi dai passi falliti"
+
+msgid "Resumed from"
+msgstr "Ripresa da"
+
+msgid "Runs after"
+msgstr "Parte dopo"
+
+msgid "Starting"
+msgstr "In partenza"
+
+msgid "Step {{id}}"
+msgstr "Passo {{id}}"
+
+msgid "Step before"
+msgstr "Passo precedente"
+
+msgid "Step of"
+msgstr "Passo di"
+
+msgid "Steps"
+msgstr "Passi"
+
+msgid "succeeds"
+msgstr "riesce"
+
+msgid "This job template asks for a secret at launch, so it cannot be a step: a workflow never stores a secret."
+msgstr "Questo job template chiede un segreto al lancio, quindi non può essere un passo: un workflow non conserva mai un segreto."
+
+msgid "Wait for an approval before this step"
+msgstr "Attendi un'approvazione prima di questo passo"
+
+msgid "When it"
+msgstr "Quando"
+
+msgid "Workflow"
+msgstr "Workflow"
+
+msgid "Workflows"
+msgstr "Workflow"
+
+msgid "Not run"
+msgstr "Non eseguito"
+
+msgid "Project {{name}}"
+msgstr "Progetto {{name}}"

@@ -306,4 +306,11 @@ class CallbackModule(CallbackBase):
 
     def v2_playbook_on_stats(self, stats):
         hosts = {host: stats.summarize(host) for host in sorted(stats.processed)}
-        self._emit("stats", hosts=hosts)
+        # What set_stats set for the whole run (per_host: false), which a
+        # step of a workflow passes on to the steps after it.
+        custom = getattr(stats, "custom", None) or {}
+        artifacts = custom.get("_run", {}) if isinstance(custom, dict) else {}
+        if artifacts:
+            self._emit("stats", hosts=hosts, artifacts=self._trim(artifacts))
+        else:
+            self._emit("stats", hosts=hosts)

@@ -127,7 +127,7 @@ class ToolsTest(Base):
         self.assertEqual((tool["command"], tool["fixed"], tool["readOnly"]),
                          ("run.cancel", {}, False))
         self.assertEqual(tool["inputSchema"]["required"], ["id"])
-        self.assertEqual(tool["description"], "Cancel a run that is queued or running.")
+        self.assertEqual(tool["description"], "Cancel a run that is queued, running or waiting for approval.")
 
     def test_a_template_is_a_tool_whose_parameters_are_its_questions(self):
         template = self.template(limit_hosts="web*", survey=[

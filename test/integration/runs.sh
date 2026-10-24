@@ -179,6 +179,38 @@ expect_denied "the ticket is gone once used" test -e "/run/cockpit-fleet/answers
 expect_eq "a ticket serves one launch" \
     "$(get "$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")" 'a["error"]["code"]')" bad_request
 
+# --- approval: the run waits, prepared, until another user approves it ------------
+useradd -m -G cockpit-fleet-approver itapprover
+admin template.update "{\"id\": \"$secret_id\", \"name\": \"secret\", \"project_id\": \"$project_id\", \"playbook\": \"secret.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"survey\": [{\"name\": \"token\", \"type\": \"secret\", \"required\": true}], \"needs_approval\": true}" > /dev/null
+rm -f /tmp/fleet-it-marker
+ticket=$(printf '%s' 'Approved5ecret' | sudo -u itoperator sudo -n "$SECRET" answer)
+run=$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")
+run_id=$(get "$run" 'a["data"]["id"]')
+expect_eq "a run of a template that needs approval waits" "$(get "$run" 'a["data"]["status"]')" pending_approval
+sleep 3
+expect_eq "nothing starts it meanwhile" "$(db "SELECT status FROM runs WHERE id = '$run_id'")" pending_approval
+expect_denied "it has no unit" systemctl is-active --quiet "cockpit-fleet-run@$run_id.service"
+expect_ok "its secret answer waits in the run as ciphertext" test -s "/var/lib/cockpit-fleet/runs/$run_id/creds/survey_0"
+if grep -rqa 'Approved5ecret' /var/lib/cockpit-fleet /run/cockpit-fleet; then fail "the waiting secret answer is in clear"; else pass "the waiting secret answer is nowhere in clear"; fi
+expect_eq "who launched it cannot approve it" \
+    "$(get "$(ctl itoperator approval.approve "{\"id\": \"$run_id\"}")" 'a["error"]["code"]')" forbidden
+expect_eq "an approver with no role sees it" \
+    "$(get "$(ctl itapprover approval.list)" '[e["id"] for e in a["data"]["approvals"] if e["can_decide"]]')" "['$run_id']"
+expect_eq "and nothing else" "$(get "$(ctl itapprover run.list)" 'a["error"]["code"]')" forbidden
+approved=$(ctl itapprover approval.approve "{\"id\": \"$run_id\", \"comment\": \"checked\"}")
+expect_eq "the approver approves it and it starts" "$(get "$approved" 'a["data"]["status"]')" running
+expect_run "the approved run ends" "$run_id" 120 successful
+expect_eq "the playbook got the secret given at launch" "$(cat /tmp/fleet-it-marker 2>/dev/null)" Approved5ecret
+expect_eq "the decision is kept with the run" \
+    "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["approval"]["decision"], a["data"]["approval"]["decided_by"], a["data"]["approval"]["comment"]')" "approved itapprover checked"
+expect_eq "the approval is in the audit log" \
+    "$(get "$(admin audit.list)" 'any(e["command"]=="approval.approve" and e["user"]=="itapprover" and e["outcome"]=="ok" for e in a["data"]["entries"])')" True
+ticket=$(printf '%s' 'Rejected5ecret' | sudo -u itoperator sudo -n "$SECRET" answer)
+run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")" 'a["data"]["id"]')
+expect_eq "an administrator rejects one" \
+    "$(get "$(admin approval.reject "{\"id\": \"$run_id\"}")" 'a["data"]["status"]')" rejected
+expect_denied "what was prepared for it is gone, its secret with it" test -e "/var/lib/cockpit-fleet/runs/$run_id"
+
 # --- queue and cancel ----------------------------------------------------------
 admin template.create "{\"name\": \"wait\", \"project_id\": \"$project_id\", \"playbook\": \"wait.yml\", \"inventory_id\": \"$inventory_id\"}" > /tmp/fleet-it-wait.json
 wait_id=$(get "$(cat /tmp/fleet-it-wait.json)" 'a["data"]["id"]'); rm -f /tmp/fleet-it-wait.json

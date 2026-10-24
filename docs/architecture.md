@@ -142,6 +142,10 @@ own limit: `project.upload` and `config.import`.
 - **Roles.** `cockpit-fleet-viewer`, `-operator`, `-admin`; the highest group
   wins. Root is an administrator. Every command declares the least role that
   may call it, and the check happens in one place, before the handler runs.
+- **Rights.** A group that adds one thing to whatever role the caller has, or
+  stands for it alone: `cockpit-fleet-approver` gives `approve` (see
+  "Approvals"). A command may name a right besides its role, and is then
+  allowed to either. A call made for an agent has no right at all.
 - **Audit.** Commands that change something, and every refusal, are written to
   the `audit` table and to the journal (`journalctl -t cockpit-fleet`, with
   `FLEET_USER`, `FLEET_COMMAND`, `FLEET_OUTCOME` fields, and `FLEET_VIA` when
@@ -179,7 +183,8 @@ playbook written for the job), `inventory` (`ansible-inventory --list`, to
 learn hosts and groups), `sync` (fetch a git project), `syntax` (check a
 playbook without running it), `unpack` (extract an uploaded archive),
 `galaxy` (install the collections a project asks for) and `check` (a cycle
-of checks, see "Checks"). All of them need the sandbox, because all of them work on what a project
+of checks, see "Checks"). A run of a workflow is not a job: it has no
+unit, and its steps are runs of playbooks (see "Workflows"). All of them need the sandbox, because all of them work on what a project
 brings: inventory plugins and scripts, git itself, the rules a project gives
 to ansible-lint, an archive made by anyone, or a list of sources to download
 from.
@@ -586,7 +591,8 @@ foresaw is not retried every minute) and then:
 - more than five minutes late (`MISSED_AFTER`) means the controller was off:
   `missed`, unless the schedule catches up, in which case it is launched once
   for all the times lost;
-- if a run of the same schedule is still queued or running, `overlap` decides:
+- if a run of the same schedule is still waiting for approval, queued or
+  running, `overlap` decides:
   `skip` (the default), `queue` this one too, or `cancel` the previous one;
 - otherwise it is launched through `runs.launch`, the code of `run.start`,
   with the stored answers. The run's `created_by` is `schedule:NAME` and it
@@ -608,10 +614,123 @@ time is recorded as `error`, with the reason, and the schedule goes on. A
 secret is never stored: a template with a required secret question cannot be
 scheduled, and an optional one is left unanswered.
 
+## Approvals
+
+A job template may need approval (`needs_approval`): each of its runs waits
+until someone other than who launched it lets it start. What waits is the
+run as it will be: `runs.launch` prepares its directory as for any other
+run (the copy of the project, the ciphertext of its secrets, a secret answer
+taken from its ticket, `spec.json`) and records it as `pending_approval`,
+which `dispatch` never starts. So what is approved is what runs, whatever
+changes meanwhile in the template or the project, and no secret has to be
+asked for again. Approving it makes it `queued`, behind nothing (it keeps
+the time it was launched); rejecting it, or letting it expire, ends it as
+`rejected` or `expired` and removes its directory, ciphertext with it.
+
+```
+run.start ─▶ pending_approval ──approval.approve──▶ queued ─▶ running ─▶ …
+                    │ approval.reject
+                    ├──────────────▶ rejected          the directory is removed
+                    │ [approvals] expire_hours (24), by the tick
+                    ├──────────────▶ expired
+                    │ run.cancel
+                    └──────────────▶ canceled
+```
+
+**Who.** An administrator, or a member of `cockpit-fleet-approver` whatever
+their role, even none: an approver who is neither operator nor viewer gets
+`whoami` and the three commands of approvals, and the page shows them only
+the runs that wait, with what each would do (template, project and revision,
+inventory and limit, dry run, the answers and which secrets were given).
+Not the user who launched it, except an administrator, who could launch
+the same playbook without the approval anyway by changing the template. A
+run of a schedule is launched by `schedule:NAME`, so anyone allowed may
+approve it. An agent never approves: a call made for one has no right, and
+the commands refuse it whatever its role; `approval.list` is a tool,
+deciding is not. Through `fleet` at a terminal, a person does.
+
+**Records.** The table `approvals` (schema 16) has one row per run that
+waited: who asked and when, until when, the decision, who took it and when,
+and a comment. A decision is claimed by a conditional update, so two
+approvers at once give one decision and a conflict. Every decision made by
+a person is in the audit trail; an expiry is in the journal. `run.get`
+carries the approval of its run and whether the caller may decide.
+
+**Telling.** A rule may ask for `approval`: a run that starts waiting is
+told to its channel, with a link to the run. A rejected or expired run is
+told as `canceled`.
+
+## Workflows
+
+A workflow chains job templates into a graph. A step is a template with a
+limit that narrows its own and answers to its survey (no secret: as for a
+schedule, a template with a required secret question cannot be a step), and
+may wait for an approval even if its template does not ask for one. A link
+says when a step runs after another: when it succeeds, fails, or always. A
+step with no link to it runs at launch; one with several waits until all the
+steps before it have ended, then runs if one of its links holds, or is
+skipped, and so are those that only follow it. Loops are refused, so a step
+runs at most once.
+
+**Runs.** `workflow.launch` (operator) records a run of kind `workflow`.
+It has no unit and no place in the queue (the lanes of `dispatch` leave it
+out); it holds a copy of the steps and links, so that changing the workflow
+does not change a run under way. Its steps are runs of their templates,
+launched through `runs.launch` as the user who launched the workflow, with
+`workflow_run_id` and `workflow_node`; they queue, wait for approvals and
+are told about as any other run.
+
+```
+workflow.launch ─▶ run (kind workflow, running) ─▶ advance()
+                                                   │ steps whose links hold
+                                                   ▼
+                        runs.launch(step) ─▶ queued/pending_approval ─▶ … ─▶ _finish
+                                                   ▲                          │
+                                                   └──────── advance() ◀──────┘
+```
+
+`workflows.advance` looks at the latest run of each step, starts those whose
+time has come and records the end when nothing is left: it is called when a
+step ends (`jobs._finish`), at launch, and for every workflow still running
+by `reconcile`, so the tick takes up one left behind by a crash. One process
+at a time per workflow run (a lock file in its directory); a step that ends
+while the same process advances it (its unit could not start) asks for
+another pass. A step that cannot even be launched (its template changed and
+the stored answers no longer fit, its project has no files) counts as
+failed, with the reason kept in the run. The workflow ends `failed` when a
+step failed (or was rejected, expired, canceled) and no step runs for that
+failure: a link "always", such as one to a step that tells about the
+outcome, does not handle it. Otherwise `successful`.
+
+**Passing on.** A playbook that calls `set_stats` with `per_host: false`
+leaves data that the callback writes with the stats of the run
+(`artifacts`), and `_collect` keeps it with the run (at most 64 kB of
+JSON). A step gets what the steps before it in the graph passed on, merged
+in the order they ended, as an extra-vars file of its own, after the
+template's variables and the answers of its node: what was passed on wins,
+as in AWX. A playbook wrote it, so every string at every depth is tagged
+`!unsafe` and is never rendered as a template in the next step. It is kept
+in clear, like extra variables: not for secrets, which only the known ones
+are masked in.
+
+**Cancel and resume.** Canceling a workflow run (`run.cancel`) asks for it,
+cancels its steps under way and starts nothing more; it ends `canceled` once
+they have. `workflow.resume` (operator), on a run that failed or was
+canceled, makes a new run with the same steps and links as that one, where
+the steps that succeeded there count as done, with what they passed on, and
+the others run. The run it resumes stays as it ended.
+
+**Roles and records.** An administrator creates, changes and deletes; an
+operator launches, cancels and resumes; a viewer sees the workflows and the
+progress of their runs (`workflow.progress`). A template used by a workflow
+cannot be deleted (table `workflow_templates`). Workflows are in the
+exported document, their steps naming templates by name. Schema 17.
+
 ## Notifications
 
 A rule names the ends of a run to tell about (`failed`, which covers `error`
-too, `changed`, `succeeded`, `canceled`), which runs (every one, or those of
+too, `changed`, `succeeded`, `canceled`, which covers a run rejected or
+expired before it started), a run that waits for approval (`approval`), which runs (every one, or those of
 one project, template, schedule or inventory) and a channel; what a rule
 says about checks, and about check cycles falling behind (`late`,
 `caught_up`), is in "Checks". Channels are Telegram, a
@@ -651,7 +770,8 @@ masked before it is stored. A webhook URL may say `$secret`, for the
 services that put the token in the address (Slack, Discord); otherwise the
 secret goes in a header the channel names.
 
-**The outbox.** One row per run and channel, however many rules match; a
+**The outbox.** One row per run and channel, however many rules match (a
+workflow run and each of its steps are runs of their own); a
 run with changes that a rule wants as `changed` and another as `succeeded`
 is told once, as `changed`. Channels are tried one after the other in a
 delivery, each step of a request waiting 15 s at most, so one that does not

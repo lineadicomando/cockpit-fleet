@@ -43,7 +43,7 @@ from .mcp import Unreachable, fleetctl
 from .paths import LIBEXEC_DIR
 
 VIA = "cli"
-ACTIVE = ("queued", "running")
+ACTIVE = ("pending_approval", "queued", "running")
 
 # Exit status: what a script after "fleet launch" wants to tell apart.
 OK, NOT_SUCCESSFUL, USAGE, FAILED = 0, 1, 2, 3
@@ -161,7 +161,7 @@ class Terminal:
             answer = self.call(name, {**(params or {}), "via": VIA})
         except Unreachable as error:
             raise Failure(f"{error}\nfleet works for the members of the groups"
-                          " cockpit-fleet-viewer, -operator and -admin") from error
+                          " cockpit-fleet-viewer, -operator, -admin and -approver") from error
         if not answer["ok"]:
             raise Failure(f"{answer['error']['code']}: {answer['error']['message']}")
         return answer["data"]
@@ -669,6 +669,9 @@ def _launch(term: Terminal, args: list[str]) -> int:
         return OK
     if not term.as_json:
         term.err.write(f"run {run['id']}: {run['title']}, {run['status']}\n")
+        if run["status"] == "pending_approval":
+            term.err.write("It starts once another user approves it (fleet approval approve"
+                           f" --id {run['id']}); Ctrl-C stops following it.\n")
     return _follow(term, run["id"])
 
 
@@ -735,6 +738,12 @@ def _result(term: Terminal, args: list[str]) -> int:
     result = term("run.result", {"id": options.run, "wait": 50 if options.wait else 0})
     while options.wait and not result["done"]:
         result = term("run.result", {"id": options.run, "wait": 50})
+    while options.wait and result["status"] == "pending_approval":
+        # run.result does not hold a call while a person has to decide.
+        term.sleep(5)
+        result = term("run.result", {"id": options.run, "wait": 50})
+        while not result["done"]:
+            result = term("run.result", {"id": options.run, "wait": 50})
     if term.as_json:
         term.show(result)
         return _status_code(result["status"])

@@ -18,9 +18,9 @@ import unicodedata
 import zoneinfo
 from datetime import UTC, datetime
 
-from . import checks, jobs, journal, maintenance, notify, paths, runs, store, survey
+from . import approvals, checks, jobs, journal, maintenance, notify, paths, runs, store, survey
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
-from .errors import BadRequest, Conflict, FleetError, Unavailable
+from .errors import BadRequest, FleetError, Unavailable
 from .validators import check_limit
 
 OVERLAP = ("skip", "queue", "cancel")
@@ -231,22 +231,8 @@ def _schedule(ctx: Context, row) -> dict:
 
 
 def _answers(template, answers: dict) -> dict:
-    """The answers a schedule stores, checked against the template's survey.
-
-    A secret is never stored: a template that cannot do without one cannot be
-    scheduled, and a secret it may do without is left unanswered.
-    """
-    fields = store.loads(template["survey"], [])
-    for field in fields:
-        if field["type"] == "secret" and field["required"]:
-            raise Conflict(f"{template['name']} asks for a secret at launch"
-                           f" ({field['name']}): it cannot be scheduled")
-        if field["type"] == "secret" and answers.get(field["name"]) not in (None, ""):
-            raise BadRequest(f"{field['name']}: a secret answer cannot be stored with a schedule")
-    survey.answer(fields, answers)
-    if len(json.dumps(answers)) > 64 * 1024:
-        raise BadRequest("answers is too large")
-    return answers
+    """The answers a schedule stores, checked against the template's survey."""
+    return survey.stored_answers(template, answers, "scheduled", "a schedule")
 
 
 _SCHEDULE_PARAMS = {
@@ -410,7 +396,8 @@ def schedule_preview(ctx: Context, params: Values) -> dict:
 
 def _active_runs(ctx: Context, schedule_id: str) -> list[str]:
     return [row["id"] for row in ctx.conn.execute(
-        "SELECT id FROM runs WHERE schedule_id = ? AND status IN ('queued', 'running')"
+        "SELECT id FROM runs WHERE schedule_id = ?"
+        " AND status IN ('pending_approval', 'queued', 'running')"
         " ORDER BY created_at", (schedule_id,))]
 
 
@@ -468,6 +455,8 @@ def tick(ctx: Context) -> dict:
             return {"busy": True, "schedules": []}
         # What ended or was left queued, by a reboot too, is taken care of first.
         jobs.reconcile(ctx)
+        # Runs nobody approved in time.
+        approvals.expire(ctx)
         # Notifications whose time to be tried again has come.
         notify.wake_if_due(ctx)
         now = store.now()

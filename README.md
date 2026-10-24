@@ -51,7 +51,9 @@ sudo dnf install ./rpm/cockpit-fleet-*.fc44.noarch.rpm  # on Fedora; .el10 on Al
 ```
 
 The package creates the `cockpit-fleet` account and three role groups:
-`cockpit-fleet-admin`, `cockpit-fleet-operator`, `cockpit-fleet-viewer`.
+`cockpit-fleet-admin`, `cockpit-fleet-operator`, `cockpit-fleet-viewer`; and
+`cockpit-fleet-approver`, whose members approve the runs of the templates that
+need it, whatever their role.
 
 ## Development
 

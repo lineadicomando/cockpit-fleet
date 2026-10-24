@@ -8,7 +8,7 @@ import stat
 import subprocess
 
 from . import __version__, audit, db, paths
-from .auth import role_at_least
+from .auth import allowed
 from .cli import COMMANDS, Context, Int, Values, command
 from .errors import FleetError
 
@@ -17,10 +17,11 @@ _MIN_ANSIBLE = (2, 16)
 _MIN_SYSTEMD = 257
 
 
-@command("whoami", role="viewer")
+@command("whoami", role="viewer", right="approve")
 def whoami(ctx: Context, params: Values) -> dict:
-    """Who is calling, with which role, and the commands that role may use."""
-    allowed = sorted(c.name for c in COMMANDS.values() if role_at_least(ctx.caller.role, c.role))
+    """Who is calling, with which role and rights, and the commands they may use."""
+    commands = sorted(c.name for c in COMMANDS.values()
+                      if allowed(ctx.caller, c.role, c.right))
     try:
         chat = bool(ctx.config.chat_agents)
     except FleetError:
@@ -28,8 +29,9 @@ def whoami(ctx: Context, params: Values) -> dict:
     return {
         "user": ctx.caller.user,
         "role": ctx.caller.role,
+        "rights": sorted(ctx.caller.rights),
         "version": __version__,
-        "commands": allowed,
+        "commands": commands,
         "chat": chat,
     }
 

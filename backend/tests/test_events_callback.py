@@ -64,3 +64,29 @@ class UnifiedDiffTest(unittest.TestCase):
         text = events.unified_diff({"before": before, "after": before.replace("line 4990\n", "changed\n")})
         self.assertIn("-line 4990\n+changed\n", text)
         self.assertLess(len(text), 400)
+
+
+@unittest.skipIf(events is None, "ansible is not installed")
+class StatsTest(unittest.TestCase):
+    def emitted(self, custom):
+        import io
+        import json
+
+        class Stats:
+            processed = {"a": 1}
+
+            def summarize(self, host):
+                return {"ok": 1}
+
+        stats = Stats()
+        stats.custom = custom
+        plugin = events.CallbackModule()
+        plugin._out = io.StringIO()
+        plugin.v2_playbook_on_stats(stats)
+        return json.loads(plugin._out.getvalue())
+
+    def test_what_set_stats_set_for_the_run_goes_with_the_stats(self):
+        event = self.emitted({"_run": {"version": "1.2"}, "a": {"per_host": True}})
+        self.assertEqual((event["event"], event["hosts"], event["artifacts"]),
+                         ("stats", {"a": {"ok": 1}}, {"version": "1.2"}))
+        self.assertNotIn("artifacts", self.emitted({}))

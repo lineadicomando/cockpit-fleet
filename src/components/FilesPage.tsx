@@ -26,7 +26,7 @@ function CheckResult({ id }: { id: string }) {
     const { t } = useTranslation();
     const run = useLoad(() => call<Run>("run.get", { id }));
     const [log, setLog] = useState("");
-    const active = !run.data || run.data.status === "queued" || run.data.status === "running";
+    const active = !run.data || ["pending_approval", "queued", "running"].includes(run.data.status);
     usePolling(run.reload, 1000, active && !run.error);
 
     useEffect(() => {

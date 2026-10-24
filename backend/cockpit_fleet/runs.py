@@ -3,21 +3,23 @@
 import json
 import shutil
 
-from . import jobs, store, survey
+from . import approvals, jobs, store, survey
 from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command
 from .errors import BadRequest, Conflict
 from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
 from .validators import check_limit, check_module
 
 _CHUNK = 256 * 1024
-STATUSES = ("queued", "running", "successful", "failed", "canceled", "error")
+STATUSES = ("pending_approval", "queued", "running", "successful", "failed", "canceled", "error",
+            "rejected", "expired")
 
 
 def run_row(row) -> dict:
     data = {key: row[key] for key in ("id", "kind", "status", "title", "template_id", "project_id",
                                       "inventory_id", "created_by", "created_at", "started_at",
                                       "finished_at", "rc", "revision", "error", "schedule_id",
-                                      "priority", "pruned_at")}
+                                      "priority", "pruned_at", "workflow_id", "workflow_run_id",
+                                      "workflow_node")}
     data["options"] = store.loads(row["options"], {})
     data["stats"] = store.loads(row["stats"], {})
     return data
@@ -32,15 +34,18 @@ def run_row(row) -> dict:
              "answers": Obj(),
          })
 def run_start(ctx: Context, params: Values) -> dict:
-    """Launch a job template. The caller may narrow it, not widen it."""
+    """Launch a job template. The caller may narrow it, not widen it. A run of a
+    template that needs approval waits, as pending_approval, until another user
+    approves it."""
     return launch(ctx, params["template_id"], params["limit"], params["check"], params["diff"],
                   params["answers"])
 
 
 def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, answers: dict,
-           schedule=None, created_by: str | None = None) -> dict:
-    """Queue a run of a template: what run.start does, and what a schedule does
-    at its time, with the answers stored with it."""
+           schedule=None, created_by: str | None = None, workflow: dict | None = None) -> dict:
+    """Queue a run of a template: what run.start does, what a schedule does
+    at its time, with the answers stored with it, and what a workflow does for
+    one of its steps, with what the steps before it passed on."""
     template = store.fetch(ctx.conn, "templates", template_id, "template")
     project = store.fetch(ctx.conn, "projects", template["project_id"], "project")
     inventory = store.fetch(ctx.conn, "inventories", template["inventory_id"], "inventory")
@@ -62,6 +67,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         "extra_vars": store.loads(template["extra_vars"], {}),
         "survey_vars": variables,
         "survey_secrets": {},
+        "workflow_vars": workflow["vars"] if workflow else {},
     }
     machine = None
     if template["machine_credential_id"]:
@@ -103,7 +109,14 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         run.update(schedule_id=schedule["id"], priority=schedule["priority"])
     if created_by:
         run["created_by"] = created_by
-    jobs.enqueue(ctx, run, spec, directory)
+    if workflow:
+        run.update(workflow_run_id=workflow["run_id"], workflow_node=workflow["node"],
+                   title=workflow["title"] or template["name"])
+    if template["needs_approval"] or (workflow and workflow["needs_approval"]):
+        jobs.queue(ctx, run, spec, directory, jobs.WAITING)
+        approvals.request(ctx, run_id)
+    else:
+        jobs.enqueue(ctx, run, spec, directory)
     return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 
@@ -198,7 +211,7 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def run_cancel(ctx: Context, params: Values) -> dict:
-    """Cancel a run that is queued or running."""
+    """Cancel a run that is queued, running or waiting for approval."""
     run_id = params["id"]
     return {"status": jobs.cancel(ctx, run_id)}
 
@@ -234,10 +247,17 @@ def run_list(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def run_get(ctx: Context, params: Values) -> dict:
-    """One run: its status, its options and its outcome per host."""
+    """One run: its status, its options and its outcome per host, and its
+    approval when it needed one."""
     run_id = params["id"]
     jobs.reconcile(ctx)
-    return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
+    run = run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
+    approval = approvals.of_run(ctx, run_id)
+    if approval:
+        run["approval"] = {**approval, "can_decide": run["status"] == jobs.WAITING
+                           and not approval["decision"]
+                           and approvals.may_decide(ctx, approval["requested_by"])}
+    return run
 
 
 def _read_from(ctx: Context, params: Values, name: str) -> dict:

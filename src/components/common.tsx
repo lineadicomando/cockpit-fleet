@@ -138,18 +138,22 @@ export function ConfirmDelete({ what, name, onDelete, onClose }: {
 }
 
 const RUN_TONE: Record<RunStatus, Tone | null> = {
-    queued: null, running: null, successful: "good", failed: "bad", canceled: "warning", error: "bad",
+    pending_approval: "warning", queued: null, running: null, successful: "good", failed: "bad", canceled: "warning", error: "bad",
+    rejected: "warning", expired: "warning",
 };
 
 export function RunStatusLabel({ status }: { status: RunStatus }) {
     const { t } = useTranslation();
     const text: Record<RunStatus, string> = {
+        pending_approval: t("Waiting for approval"),
         queued: t("Queued"),
         running: t("Running"),
         successful: t("Successful"),
         failed: t("Failed"),
         canceled: t("Canceled"),
         error: t("Error"),
+        rejected: t("Rejected"),
+        expired: t("Expired"),
     };
     const tone = RUN_TONE[status];
     if (tone) return <StatusLabel tone={tone}>{text[status]}</StatusLabel>;

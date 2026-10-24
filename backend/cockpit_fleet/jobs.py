@@ -27,6 +27,8 @@ MAX_PROJECT_BYTES = 500 * 1024 * 1024
 _START_GRACE = 20
 
 ACTIVE = ("queued", "running")
+# Prepared, and held until someone approves it (see approvals.py).
+WAITING = "pending_approval"
 
 # Where a project may list the collections it needs; the first one found counts.
 REQUIREMENTS = ("collections/requirements.yml", "collections/requirements.yaml",
@@ -224,10 +226,12 @@ def write_known_hosts(conn, directory: Path) -> None:
     (directory / "known_hosts").write_text(text)
 
 
-def queue(ctx, run: dict, spec: dict, directory: Path) -> None:
-    """Record a job as queued, without starting anything: dispatch() will."""
+def queue(ctx, run: dict, spec: dict, directory: Path, status: str = "queued") -> None:
+    """Record a job as queued, without starting anything: dispatch() will.
+    One that waits for an approval is recorded as such, and dispatch() leaves
+    it alone until it is queued."""
     (directory / "spec.json").write_text(json.dumps(spec))
-    store.insert(ctx.conn, "runs", {"created_by": ctx.caller.user, **run, "status": "queued",
+    store.insert(ctx.conn, "runs", {"created_by": ctx.caller.user, **run, "status": status,
                                     "created_at": store.now()}, "run")
 
 
@@ -249,7 +253,8 @@ def lanes(config) -> list[tuple[str, str, int]]:
     """The lanes of the dispatch: a name, which runs are in it, how many of
     them may run at once."""
     slow = "coalesce(json_extract(options, '$.slow'), 0)"
-    return [("runs", "kind != 'check'", config.max_concurrent_runs),
+    # A workflow run has no unit of its own: only its steps count.
+    return [("runs", "kind NOT IN ('check', 'workflow')", config.max_concurrent_runs),
             ("checks", f"kind = 'check' AND {slow} = 0", config.checks_max_concurrent),
             ("slow", f"kind = 'check' AND {slow} != 0", config.checks_max_concurrent)]
 
@@ -291,8 +296,12 @@ def _unit_active(run_id: str) -> bool:
     return result.returncode == 0
 
 
-def _stats(directory: Path) -> dict:
-    """Per-host totals from the last line of the events file, if the play got there."""
+# What a playbook may pass on to the steps after it, as JSON.
+MAX_ARTIFACTS = 64 * 1024
+
+
+def _last_stats(directory: Path) -> dict:
+    """The last line of the events file, if the play got to its stats."""
     try:
         with open(directory / "events.jsonl", "rb") as events:
             events.seek(0, os.SEEK_END)
@@ -301,7 +310,19 @@ def _stats(directory: Path) -> dict:
         event = json.loads(last)
     except (OSError, ValueError, IndexError):
         return {}
-    return event.get("hosts", {}) if event.get("event") == "stats" else {}
+    return event if isinstance(event, dict) and event.get("event") == "stats" else {}
+
+
+def _stats(directory: Path) -> dict:
+    """Per-host totals from the last line of the events file, if the play got there."""
+    return _last_stats(directory).get("hosts", {})
+
+
+def _artifacts(directory: Path) -> str:
+    """What the playbook set with set_stats, as JSON: too much is dropped."""
+    found = _last_stats(directory).get("artifacts", {})
+    text = json.dumps(found if isinstance(found, dict) else {})
+    return text if len(text) <= MAX_ARTIFACTS else "{}"
 
 
 def _finish(ctx, run_id: str, status: str, rc: int | None, error: str = "",
@@ -316,6 +337,23 @@ def _finish(ctx, run_id: str, status: str, rc: int | None, error: str = "",
     except Exception:  # noqa: BLE001  (a rule must not keep a run from being recorded)
         journal.send(f"run {run_id}: cannot queue its notifications", 3, FLEET_RUN=run_id,
                      FLEET_TRACEBACK=traceback.format_exc())
+    row = ctx.conn.execute("SELECT workflow_run_id FROM runs WHERE id = ?", (run_id,)).fetchone()
+    if row is not None and row["workflow_run_id"]:
+        _advance(ctx, row["workflow_run_id"])
+
+
+def finish(ctx, run_id: str, status: str, error: str = "") -> None:
+    """Record the end of a run that has no unit: a workflow run."""
+    _finish(ctx, run_id, status, None, error)
+
+
+def _advance(ctx, workflow_run_id: str) -> None:
+    from . import workflows  # it builds on this module
+    try:
+        workflows.advance(ctx, workflow_run_id)
+    except Exception:  # noqa: BLE001  (the tick takes it up again)
+        journal.send(f"workflow run {workflow_run_id}: cannot advance", 3,
+                     FLEET_RUN=workflow_run_id, FLEET_TRACEBACK=traceback.format_exc())
 
 
 def _collect(ctx, run) -> None:
@@ -342,6 +380,8 @@ def _collect(ctx, run) -> None:
     else:
         status = "successful" if rc in done and not result.get("error") else "failed"
     extra = {"stats": json.dumps(_stats(directory))}
+    if run["kind"] == "playbook":
+        extra["artifacts"] = _artifacts(directory)
     error = str(result.get("error", ""))
     if run["kind"] == "syntax" and "lint_rc" in result:
         # ansible-lint ran too: what it found does not make the check fail.
@@ -510,18 +550,32 @@ def reconcile(ctx) -> None:
     descriptor = os.open(paths.RUNS_DIR, os.O_RDONLY | os.O_DIRECTORY)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
-        for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'").fetchall():
+        for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'"
+                                    " AND kind != 'workflow'").fetchall():
             _collect(ctx, run)
     finally:
         os.close(descriptor)
+    # A workflow whose step ended while nothing advanced it, after a crash.
+    for row in ctx.conn.execute("SELECT id FROM runs WHERE status = 'running'"
+                                " AND kind = 'workflow'").fetchall():
+        _advance(ctx, row["id"])
     dispatch(ctx)
+
+
+def end_unstarted(ctx, run_id: str, status: str, error: str = "") -> None:
+    """Record the end of a run that never started, and remove what was
+    prepared for it: the ciphertext of its secrets above all."""
+    _finish(ctx, run_id, status, None, error)
+    shutil.rmtree(run_dir(run_id), ignore_errors=True)
 
 
 def cancel(ctx, run_id: str) -> str:
     run = store.fetch(ctx.conn, "runs", run_id, "run")
-    if run["status"] == "queued":
-        _finish(ctx, run_id, "canceled", None)
-        shutil.rmtree(run_dir(run_id), ignore_errors=True)
+    if run["kind"] == "workflow" and run["status"] == "running":
+        from . import workflows
+        return workflows.cancel(ctx, run_id)
+    if run["status"] in ("queued", WAITING):
+        end_unstarted(ctx, run_id, "canceled")
         return "canceled"
     if run["status"] != "running":
         raise BadRequest("this run has already ended")

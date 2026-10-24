@@ -41,7 +41,15 @@ user has there: it is for the members of the groups
 .BR cockpit\-fleet\-viewer ,
 .B cockpit\-fleet\-operator
 and
-.BR cockpit\-fleet\-admin .
+.BR cockpit\-fleet\-admin ,
+and for those of
+.BR cockpit\-fleet\-approver ,
+who approve the runs of the job templates that need it
+.RB ( "fleet approval list" ,
+.BR "fleet approval approve \-\-id" " RUN)."
+A run launched with
+.B fleet launch
+from such a template waits for that, and is followed once it starts.
 It has no privilege of its own: every command is a call to the backend
 through
 .BR sudo (8),

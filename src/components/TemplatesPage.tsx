@@ -44,6 +44,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [forks, setForks] = useState(template?.forks ? String(template.forks) : "");
     const [verbosity, setVerbosity] = useState(String(template?.verbosity ?? 0));
     const [become, setBecome] = useState(template?.become ?? false);
+    const [needsApproval, setNeedsApproval] = useState(template?.needs_approval ?? false);
     const [survey, setSurvey] = useState(() => (template?.survey ?? []).map(toDraft));
     const files = useLoad(() => projectId
         ? call<{ files: string[] }>("project.files", { id: projectId }).catch(() => ({ files: [] }))
@@ -67,6 +68,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
             limit_hosts: limit.trim(), tags: words(tags), skip_tags: words(skipTags), extra_vars: vars,
             survey: survey.map(fromDraft),
             ...(forks ? { forks: Number(forks) } : {}), verbosity: Number(verbosity), become,
+            needs_approval: needsApproval,
         };
         await call(template ? "template.update" : "template.create", template ? { id: template.id, ...params } : params);
         onDone();
@@ -162,6 +164,10 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
             </Grid>
             <FormGroup fieldId="tpl-become">
                 <Checkbox id="tpl-become" label={t("Run with privilege escalation (become)")} isChecked={become} onChange={(_e, value) => setBecome(value)} />
+            </FormGroup>
+            <FormGroup fieldId="tpl-approval">
+                <Checkbox id="tpl-approval" label={t("Each run needs approval")} isChecked={needsApproval} onChange={(_e, value) => setNeedsApproval(value)}
+                    description={t("A run waits until a member of cockpit-fleet-approver, or an administrator, other than who launched it approves it. An administrator may approve their own.")} />
             </FormGroup>
             <FormGroup label={t("Extra variables")} fieldId="tpl-vars">
                 <CodeEditor className="fleet-code-field fleet-code-short" label={t("Extra variables")} path="vars.json" value={extraVars} onChange={setExtraVars} placeholder={'{\n  "version": "1.2"\n}'} />

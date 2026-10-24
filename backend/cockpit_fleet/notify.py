@@ -25,7 +25,9 @@ from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .validators import check_group
 
 # In the order of preference, when a run is more than one: with changes before succeeded.
-EVENTS = ("failed", "changed", "succeeded", "canceled")
+# The ends of a run, then a run that waits for someone to approve it.
+EVENTS = ("failed", "changed", "succeeded", "canceled", "approval")
+_ENDS = EVENTS[:4]
 # What the states of checks give: a problem, its end, and a problem nobody
 # acknowledged that is told again.
 CHECK_EVENTS = ("problem", "recovery", "reminder")
@@ -40,7 +42,7 @@ _SYSTEM_SCOPES = ("all", "inventory")
 LANGUAGES = ("en", "it")
 STATES = ("pending", "sent", "failed")
 # Runs that are about the nodes; the jobs that serve a project are not.
-RUN_KINDS = ("playbook", "adhoc")
+RUN_KINDS = ("playbook", "adhoc", "workflow")
 _SCOPE_TABLES = {"project": "projects", "template": "templates", "schedule": "schedules",
                  "inventory": "inventories", "group": "inventories", "check": "checks"}
 
@@ -60,7 +62,8 @@ _PASSES = 10
 _WORDS = {
     "en": {
         "failed": "Run failed", "succeeded": "Run succeeded", "changed": "Run with changes",
-        "canceled": "Run canceled", "test": "Test message",
+        "canceled": "Run canceled", "approval": "Run waiting for approval",
+        "test": "Test message",
         "test_text": "The channel {channel} of Fleet on {host} works.",
         "several": "{count} runs ended", "several_events": "{count} events",
         "template": "Template", "project": "Project",
@@ -74,7 +77,8 @@ _WORDS = {
     },
     "it": {
         "failed": "Run fallita", "succeeded": "Run riuscita", "changed": "Run con modifiche",
-        "canceled": "Run annullata", "test": "Messaggio di prova",
+        "canceled": "Run annullata", "approval": "Run in attesa di approvazione",
+        "test": "Messaggio di prova",
         "test_text": "Il canale {channel} di Fleet su {host} funziona.",
         "several": "{count} run terminate", "several_events": "{count} eventi",
         "template": "Template", "project": "Progetto",
@@ -183,7 +187,7 @@ def compose(language: str, events: list[dict], base: str, channel: str = "") -> 
     lines = [f"- {_headline(words, event)}\n  {event['link']}" for event in links[:_LISTED]]
     if len(events) > _LISTED:
         lines.append(words["more"].format(count=len(events) - _LISTED))
-    several = "several" if all(event["event"] in EVENTS for event in events) else "several_events"
+    several = "several" if all(event["event"] in _ENDS for event in events) else "several_events"
     return channels.Message(f"Fleet: {words[several].format(count=len(events))}",
                             "\n".join(lines), _link(base, None), links)
 
@@ -208,7 +212,8 @@ def _run_events(run) -> set[str]:
         return found
     if run["status"] in ("failed", "error"):
         return {"failed"}
-    return {"canceled"} if run["status"] == "canceled" else set()
+    # Rejected or expired before it started: it did not run, as if canceled.
+    return {"canceled"} if run["status"] in ("canceled", "rejected", "expired") else set()
 
 
 def _in_scope(rule, run) -> bool:
@@ -243,7 +248,18 @@ def run_ended(ctx: Context, run_id: str) -> int:
     run = ctx.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
     if run is None or run["kind"] not in RUN_KINDS:
         return 0
-    happened = _run_events(run)
+    return _tell_run(ctx, run, _run_events(run))
+
+
+def run_waits(ctx: Context, run_id: str) -> int:
+    """Put in the outbox what the rules say about a run that waits for an approval."""
+    run = ctx.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    if run is None or run["kind"] not in RUN_KINDS:
+        return 0
+    return _tell_run(ctx, run, {"approval"})
+
+
+def _tell_run(ctx: Context, run, happened: set[str]) -> int:
     if not happened:
         return 0
     chosen: dict[str, str] = {}
@@ -259,7 +275,7 @@ def run_ended(ctx: Context, run_id: str) -> int:
     windows = {rule["channel_id"]: rule["group_window"] for rule in rules}
     for channel_id, event in chosen.items():
         store.insert(ctx.conn, "notifications", {
-            "channel_id": channel_id, "event": event, "run_id": run_id,
+            "channel_id": channel_id, "event": event, "run_id": run["id"],
             "payload": json.dumps(_payload(ctx, run, event)), "state": "pending",
             "next_at": now + windows[channel_id], "created_at": now}, "notification")
     if chosen:
@@ -577,10 +593,11 @@ def _rule(ctx: Context, row) -> dict:
 _RULE_PARAMS = {
     "name": Str(required=True, max_length=200),
     "channel_id": Id("The channel the notifications go through"),
-    "events": Strs("What to tell about: the ends of a run, " + ", ".join(EVENTS)
+    "events": Strs("What to tell about: the ends of a run, " + ", ".join(_ENDS)
+                   + "; a run that waits for approval, approval"
                    + "; the states of checks, " + ", ".join(CHECK_EVENTS)
                    + "; check cycles that fall behind and catch up, " + ", ".join(SYSTEM_EVENTS),
-                   max_items=9),
+                   max_items=10),
     "scope": Choice(SCOPES, "Everything, or the runs of one project, template or schedule,"
                     " the runs and checks of an inventory, the checks of a group of an"
                     " inventory, or one check", default="all"),

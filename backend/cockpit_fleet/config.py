@@ -89,6 +89,8 @@ class Config:
     metrics_raw_days: int = 14
     metrics_hourly_days: int = 90
     metrics_daily_days: int = 730
+    # Hours a run waits for its approval before it expires.
+    approvals_expire_hours: int = 24
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -171,7 +173,8 @@ def parse(text: str) -> Config:
     except tomllib.TOMLDecodeError as error:
         raise ConfigError(f"not valid TOML: {error}") from error
     unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
-                                     "chat", "notifications", "checks", "metrics"})
+                                     "chat", "notifications", "checks", "metrics",
+                                     "approvals"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -232,6 +235,8 @@ def parse(text: str) -> Config:
     if not raw_days <= hourly_days <= daily_days:
         raise ConfigError("metrics: raw_days, hourly_days and daily_days must not decrease")
 
+    approvals = _section(data, "approvals", {"expire_hours"})
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -263,6 +268,8 @@ def parse(text: str) -> Config:
         metrics_raw_days=raw_days,
         metrics_hourly_days=hourly_days,
         metrics_daily_days=daily_days,
+        approvals_expire_hours=_int(approvals, "approvals", "expire_hours",
+                                    Config.approvals_expire_hours, 1, 24 * 30),
     )
 
 

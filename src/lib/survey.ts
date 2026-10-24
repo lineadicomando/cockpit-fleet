@@ -152,3 +152,11 @@ export function fromDraft(draft: FieldDraft): SurveyField {
     }
     return field;
 }
+
+// The answers stored with a schedule or a step of a workflow, as the form holds them.
+export function storedAnswers(template: { survey: SurveyField[] } | undefined, stored: Record<string, unknown>): Answers {
+    const answers = initialAnswers(template?.survey ?? []);
+    for (const [name, value] of Object.entries(stored))
+        answers[name] = typeof value === "boolean" ? value : String(value);
+    return answers;
+}

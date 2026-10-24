@@ -26,7 +26,7 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { DEFAULT_SHAPE, EVERY_MINUTES, WEEKDAYS, calendarOf, shapeOf, type Repeat, type Shape } from "../lib/schedule.ts";
 import { useCan } from "../lib/session.tsx";
-import { answerProblem, collectAnswers, initialAnswers, type Answers } from "../lib/survey.ts";
+import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
 import type { Overlap, Run, Schedule, SchedulePreview, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
@@ -34,13 +34,6 @@ import { SurveyAnswers } from "./SurveyEditor.tsx";
 
 // The time zones the browser knows, to pick from; the backend checks the name.
 const TIME_ZONES: string[] = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.("timeZone") ?? [];
-
-function storedAnswers(template: Template | undefined, stored: Record<string, unknown>): Answers {
-    const answers = initialAnswers(template?.survey ?? []);
-    for (const [name, value] of Object.entries(stored))
-        answers[name] = typeof value === "boolean" ? value : String(value);
-    return answers;
-}
 
 // When the calendar says, from the backend: the expression is systemd's to read.
 function Preview({ calendar, timezone }: { calendar: string; timezone: string }) {

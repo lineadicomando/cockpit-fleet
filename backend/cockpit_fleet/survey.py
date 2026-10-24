@@ -9,11 +9,12 @@ fleet-secret, which encrypts it and returns a ticket, and the ticket is what
 the launch carries.
 """
 
+import json
 import math
 import re
 import unicodedata
 
-from .errors import BadRequest
+from .errors import BadRequest, Conflict
 
 TYPES = ("text", "number", "choice", "boolean", "secret")
 MAX_FIELDS = 30
@@ -153,6 +154,26 @@ def _check_value(field: dict, value: object, what: str = "answer") -> object:
     if not isinstance(value, bool):
         raise BadRequest(f"{name}: the {what} must be true or false")
     return value
+
+
+def stored_answers(template, answers: dict, use: str, holder: str) -> dict:
+    """Answers kept to launch a template later, by a schedule or as a step of
+    a workflow, checked against the template's survey.
+
+    A secret is never stored: a template that cannot do without one cannot be
+    used so, and a secret it may do without is left unanswered.
+    """
+    fields = json.loads(template["survey"] or "[]")
+    for field in fields:
+        if field["type"] == "secret" and field["required"]:
+            raise Conflict(f"{template['name']} asks for a secret at launch"
+                           f" ({field['name']}): it cannot be {use}")
+        if field["type"] == "secret" and answers.get(field["name"]) not in (None, ""):
+            raise BadRequest(f"{field['name']}: a secret answer cannot be stored with {holder}")
+    answer(fields, answers)
+    if len(json.dumps(answers)) > 64 * 1024:
+        raise BadRequest("answers is too large")
+    return answers
 
 
 def answer(fields: list[dict], answers: dict) -> tuple[dict, dict]:

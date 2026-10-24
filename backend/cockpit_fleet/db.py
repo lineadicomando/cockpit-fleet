@@ -577,6 +577,103 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # Approvals: a template may ask that each of its runs be approved by
+        # someone else before it starts. Such a run waits, prepared, as
+        # pending_approval, and ends as rejected or expired if not approved;
+        # the status has to be rebuilt to admit them. Who asked and who
+        # decided are in a table of their own, one row per run that waited.
+        "ALTER TABLE templates ADD COLUMN needs_approval INTEGER NOT NULL DEFAULT 0",
+        """
+        CREATE TABLE runs_new (
+            id                TEXT PRIMARY KEY,
+            kind              TEXT NOT NULL,
+            status            TEXT NOT NULL CHECK (status IN
+                              ('pending_approval', 'queued', 'running', 'successful', 'failed',
+                               'canceled', 'error', 'rejected', 'expired')),
+            title             TEXT NOT NULL,
+            template_id       TEXT REFERENCES templates (id) ON DELETE SET NULL,
+            project_id        TEXT REFERENCES projects (id) ON DELETE SET NULL,
+            inventory_id      TEXT REFERENCES inventories (id) ON DELETE SET NULL,
+            created_by        TEXT NOT NULL,
+            created_at        REAL NOT NULL,
+            started_at        REAL,
+            finished_at       REAL,
+            rc                INTEGER,
+            revision          TEXT NOT NULL DEFAULT '',
+            options           TEXT NOT NULL DEFAULT '{}',
+            stats             TEXT NOT NULL DEFAULT '{}',
+            error             TEXT NOT NULL DEFAULT '',
+            cancel_requested  INTEGER NOT NULL DEFAULT 0,
+            schedule_id       TEXT REFERENCES schedules (id) ON DELETE SET NULL,
+            priority          INTEGER NOT NULL DEFAULT 0,
+            pruned_at         REAL
+        )
+        """,
+        """
+        INSERT INTO runs_new (rowid, id, kind, status, title, template_id, project_id,
+                              inventory_id, created_by, created_at, started_at, finished_at, rc,
+                              revision, options, stats, error, cancel_requested, schedule_id,
+                              priority, pruned_at)
+        SELECT rowid, id, kind, status, title, template_id, project_id, inventory_id, created_by,
+               created_at, started_at, finished_at, rc, revision, options, stats, error,
+               cancel_requested, schedule_id, priority, pruned_at
+        FROM runs
+        """,
+        "DROP TABLE runs",
+        "ALTER TABLE runs_new RENAME TO runs",
+        "CREATE INDEX runs_created ON runs (created_at)",
+        "CREATE INDEX runs_status ON runs (status)",
+        "CREATE INDEX runs_schedule ON runs (schedule_id)",
+        "CREATE INDEX runs_unpruned ON runs (finished_at) WHERE pruned_at IS NULL",
+        """
+        CREATE TABLE approvals (
+            run_id        TEXT PRIMARY KEY REFERENCES runs (id) ON DELETE CASCADE,
+            requested_by  TEXT NOT NULL,
+            requested_at  REAL NOT NULL,
+            expires_at    REAL NOT NULL,
+            decision      TEXT NOT NULL DEFAULT ''
+                          CHECK (decision IN ('', 'approved', 'rejected', 'expired')),
+            decided_by    TEXT NOT NULL DEFAULT '',
+            decided_at    REAL,
+            comment       TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        "CREATE INDEX approvals_open ON approvals (expires_at) WHERE decision = ''",
+    ],
+    [
+        # Workflows: a graph of templates. Its steps and links are kept as
+        # JSON, checked by the commands; which templates it uses is a table,
+        # so that a template in use cannot be deleted. A run of a workflow is
+        # a run of kind workflow; its steps are runs that refer to it, by the
+        # step of the graph they are. What a playbook passed on with
+        # set_stats is kept with its run.
+        """
+        CREATE TABLE workflows (
+            id           TEXT PRIMARY KEY,
+            name         TEXT NOT NULL UNIQUE,
+            description  TEXT NOT NULL DEFAULT '',
+            nodes        TEXT NOT NULL DEFAULT '[]',
+            edges        TEXT NOT NULL DEFAULT '[]',
+            created_at   REAL NOT NULL,
+            updated_at   REAL NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE workflow_templates (
+            workflow_id  TEXT NOT NULL REFERENCES workflows (id) ON DELETE CASCADE,
+            template_id  TEXT NOT NULL REFERENCES templates (id),
+            PRIMARY KEY (workflow_id, template_id)
+        )
+        """,
+        "CREATE INDEX workflow_templates_of ON workflow_templates (template_id)",
+        "ALTER TABLE runs ADD COLUMN workflow_id TEXT REFERENCES workflows (id) ON DELETE SET NULL",
+        "ALTER TABLE runs ADD COLUMN workflow_run_id TEXT REFERENCES runs (id) ON DELETE SET NULL",
+        "ALTER TABLE runs ADD COLUMN workflow_node TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE runs ADD COLUMN artifacts TEXT NOT NULL DEFAULT '{}'",
+        "CREATE INDEX runs_workflow ON runs (workflow_run_id) WHERE workflow_run_id IS NOT NULL",
+        "CREATE INDEX runs_of_workflow ON runs (workflow_id) WHERE workflow_id IS NOT NULL",
+    ],
 ]
 
 
