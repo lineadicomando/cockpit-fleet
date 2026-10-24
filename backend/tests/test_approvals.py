@@ -191,6 +191,13 @@ class ApprovalTest(ApprovalBase):
 
     def test_a_schedule_counts_a_waiting_run_as_active(self):
         template = self.template(needs_approval=True)
+        # No systemd-analyze needed (CI has none): one time, an hour on.
+        analyze = mock.patch.object(schedules, "analyze",
+                                    lambda calendar, timezone="", count=1:
+                                    (calendar, [START + 3600 * (index + 1)
+                                                for index in range(count)]))
+        analyze.start()
+        self.addCleanup(analyze.stop)
         schedule = self.ok("schedule.create", {"name": "nightly", "template_id": template["id"],
                                                "calendar": "daily", "overlap": "skip"})
         run = self.ok("schedule.run", {"id": schedule["id"]}, role="operator")
