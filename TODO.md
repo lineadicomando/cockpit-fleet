@@ -12,8 +12,9 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** the open point below (the chat's agent role on Fedora and
-AlmaLinux), then phase 10.
+**Next:** phase 10. The chat's agent role, the open point before it,
+ran on Fedora 44 and AlmaLinux 10 on 24 October (install, a second run,
+`fleet-chat` up to the login, `absent`; no denial).
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -96,11 +97,6 @@ except the rows that say "to confirm".
 | Retention | All in `maintenance.tidy` at each tick: metrics raw 14 d, hourly 90 d, daily 2 y (`[metrics]`); run output 90 d (`[runs] keep_days`, row kept); outbox 90 d, check cycles 1 d (what they took 30 d, a group's delay 30 d without a skip), CMDB changes 365 d; runs, state changes, audit kept. Incremental auto-vacuum, a quarter free before giving back; a limit on state changes later (phase 10), off by default |
 | Discarded | MCP servers of projects (Ansible outside the sandbox, keys in clear); the chat as its own package, or hooked by `cockpit-samba-dc`; installing the agent per user from the page, from an apt repo or by a shell recipe; driving `claude` without ACP; a timer per schedule (root writing units from input); a second command name for `fleet` (Rancher's CLI in `/usr/local/bin` would shadow it, left as is); unloading failed run units (kept as systemd does, 15 October) |
 | Out of scope | External triggers (future) |
-
-## Open point
-
-- The chat's agent role on Fedora and AlmaLinux (before phase 10): installs
-  `xz` there, never run on either (on Debian it now runs, 20 October).
 
 ## Leftovers (known limits, none blocking)
 

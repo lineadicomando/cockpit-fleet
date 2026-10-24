@@ -1659,6 +1659,13 @@ packaged; `ansible-lint` has nothing to say. With the agent so installed the
 page started it and reached the missing login; with the agent named and not
 installed it showed the command, copied it and opened the terminal.
 
+On Fedora 44 and AlmaLinux 10 (24 October, SELinux enforcing, ansible-core
+2.20 and 2.16), as `docs/chat.md` says: the role installs `xz` and the
+agent (about 505 MB), a second run changes nothing, `absent` leaves `/opt`
+empty; `fleet-chat`, as an operator with `[mcp] enabled`, started it with
+`fleet-mcp` named and reached the missing login; no denial. Its commands
+in `bin/` are `bin_t`, by the policy's own rules for `/opt`.
+
 With the model, through an agent installed by the role (14 October, as an
 operator with no earlier login): the page reached the missing login, the
 user logged in at Cockpit's terminal, and the assistant then launched a
