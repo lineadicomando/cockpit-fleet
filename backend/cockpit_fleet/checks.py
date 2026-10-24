@@ -196,7 +196,8 @@ def _events(directory) -> dict[str, dict]:
     """What each host answered in a cycle: its last result event."""
     found: dict[str, dict] = {}
     try:
-        with open(directory / "events.jsonl", encoding="utf-8", errors="replace") as source:
+        with jobs.open_run_file(directory, "events.jsonl", "r", encoding="utf-8",
+                                errors="replace") as source:
             for line in source:
                 try:
                     event = json.loads(line)
@@ -216,7 +217,8 @@ def _playbook_events(directory, check_id: str) -> dict[str, dict]:
     failed on it or it could not be reached."""
     found: dict[str, dict] = {}
     try:
-        with open(directory / "events.jsonl", encoding="utf-8", errors="replace") as source:
+        with jobs.open_run_file(directory, "events.jsonl", "r", encoding="utf-8",
+                                errors="replace") as source:
             lines = source.readlines()
     except OSError:
         return found
@@ -251,7 +253,8 @@ def _compliance_events(directory, check_id: str) -> dict[str, dict]:
     tasks: dict[str, str] = {}
     items: dict[tuple, list[str]] = defaultdict(list)
     try:
-        with open(directory / "events.jsonl", encoding="utf-8", errors="replace") as source:
+        with jobs.open_run_file(directory, "events.jsonl", "r", encoding="utf-8",
+                                errors="replace") as source:
             lines = source.readlines()
     except OSError:
         return found
@@ -309,7 +312,7 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
     now = store.now()
     since = run["created_at"]
     try:
-        spec = json.loads((directory / "spec.json").read_text())
+        spec = json.loads(jobs.read_run_file(directory, "spec.json", 16 * 1024 * 1024))
     except (OSError, ValueError):
         spec = {}
     plan = spec.get("plan", {}) if isinstance(spec, dict) else {}

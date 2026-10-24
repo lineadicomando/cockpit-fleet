@@ -11,7 +11,7 @@ from unittest import mock
 
 from test_notify import START, NotifyBase
 
-from cockpit_fleet import approvals, cli, db, jobs, paths, schedules  # noqa: F401
+from cockpit_fleet import agents, approvals, cli, db, jobs, paths, schedules  # noqa: F401
 from cockpit_fleet.auth import Caller, allowed, resolve_caller, rights_from_groups
 
 
@@ -156,6 +156,19 @@ class ApprovalTest(ApprovalBase):
         # Through the command fleet, a person does.
         self.ok_as("approval.approve", {"id": run["id"]}, user="piero", role="admin", via="cli")
 
+    def test_a_refusal_by_the_command_itself_is_audited_and_agents_get_no_hidden_tool(self):
+        run = self.waiting()
+        self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="olga",
+                                      rights=("approve",)), "forbidden")
+        self.config = replace(self.config, mcp_enabled=True, mcp_max_role="admin")
+        self.assertEqual(self.code_as("run.reconcile", {}, user="piero", role="admin",
+                                      via="mcp:test"), "forbidden")
+        self.ok_as("mcp.tools", {}, user="piero", role="viewer", via="mcp:test")
+        audit = [(entry["user"], entry["command"], entry["outcome"])
+                 for entry in self.ok("audit.list")["entries"]]
+        self.assertEqual(audit.count(("olga", "approval.approve", "denied")), 1)
+        self.assertEqual(audit.count(("piero", "run.reconcile", "denied")), 1)
+
     def test_deciding_is_not_a_tool_reading_is(self):
         for name in ("approval.approve", "approval.reject"):
             self.assertFalse(cli.COMMANDS[name].tool, name)
@@ -188,6 +201,22 @@ class ApprovalTest(ApprovalBase):
         updated = self.ok("template.update", {**{key: template[key] for key in (
             "id", "name", "project_id", "playbook", "inventory_id")}})
         self.assertFalse(updated["needs_approval"])
+
+    def test_only_an_administrator_turns_on_a_schedule_whose_runs_need_an_approval(self):
+        template = self.template(needs_approval=True)
+        analyze = mock.patch.object(schedules, "analyze",
+                                    lambda calendar, timezone="", count=1:
+                                    (calendar, [START + 3600 * (index + 1)
+                                                for index in range(count)]))
+        analyze.start()
+        self.addCleanup(analyze.stop)
+        schedule = self.ok("schedule.create", {"name": "nightly", "template_id": template["id"],
+                                               "calendar": "daily", "enabled": False})
+        self.assertEqual(self.code_as("schedule.enable", {"id": schedule["id"]}, user="olga",
+                                      rights=("approve",)), "forbidden")
+        self.ok_as("schedule.disable", {"id": schedule["id"]}, user="olga")
+        self.assertTrue(self.ok_as("schedule.enable", {"id": schedule["id"]}, user="anna",
+                                   role="admin")["enabled"])
 
     def test_a_schedule_counts_a_waiting_run_as_active(self):
         template = self.template(needs_approval=True)

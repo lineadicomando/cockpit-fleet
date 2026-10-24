@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 
 from . import approvals, checks, jobs, journal, maintenance, notify, paths, runs, store, survey
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
-from .errors import BadRequest, FleetError, Unavailable
+from .errors import BadRequest, FleetError, Forbidden, Unavailable
 from .validators import check_limit
 
 OVERLAP = ("skip", "queue", "cancel")
@@ -331,6 +331,13 @@ def schedule_delete(ctx: Context, params: Values) -> dict:
 
 def _set_enabled(ctx: Context, schedule_id: str, enabled: bool) -> dict:
     row = store.fetch(ctx.conn, "schedules", schedule_id, "schedule")
+    if enabled and ctx.caller.role != "admin":
+        template = store.fetch(ctx.conn, "templates", row["template_id"], "template")
+        if template["needs_approval"]:
+            # Its runs are launched by the schedule: whoever turned it on
+            # could then approve them, and one person would do both.
+            raise Forbidden("a schedule of a template whose runs need an approval"
+                            " is turned on by an administrator")
     values = {"enabled": int(enabled), "calendar": row["calendar"], "timezone": row["timezone"],
               "random_delay": row["random_delay"]}
     store.update(ctx.conn, "schedules", schedule_id,

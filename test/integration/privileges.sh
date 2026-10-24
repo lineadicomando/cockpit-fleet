@@ -28,6 +28,22 @@ chown -R cockpit-fleet:cockpit-fleet "$RUN"
 expect_ok     "start a run through fleet-unit"     as_fleet sudo -n "$FLEET_UNIT" start "$ID"
 expect_ok     "run unit is active"                 systemctl is-active "$UNIT"
 expect_ok     "stop a run through fleet-unit"      as_fleet sudo -n "$FLEET_UNIT" stop "$ID"
+expect_denied "and its ciphertext is not left in /run" test -e "/run/cockpit-fleet/creds/$ID"
+
+# PID 1 reads credentials as root and follows links: fleet-unit takes only
+# files of the account, reached with no link on the way.
+systemctl reset-failed "$UNIT" 2>/dev/null
+mv "$RUN/creds" "$RUN/creds.real"
+as_fleet ln -s /etc/cockpit-fleet "$RUN/creds"
+expect_denied "fleet-unit: creds/ a link"          as_fleet sudo -n "$FLEET_UNIT" start "$ID"
+expect_denied "and the unit did not start"         systemctl is-active --quiet "$UNIT"
+rm "$RUN/creds"; mv "$RUN/creds.real" "$RUN/creds"
+as_fleet ln -s /etc/cockpit-fleet/config.toml "$RUN/creds/link"
+expect_denied "fleet-unit: a link in creds/"       as_fleet sudo -n "$FLEET_UNIT" start "$ID"
+rm "$RUN/creds/link"
+mv "$RUN" "$RUN.real"; ln -s "$RUN.real" "$RUN"
+expect_denied "fleet-unit: the run directory a link" as_fleet sudo -n "$FLEET_UNIT" start "$ID"
+rm "$RUN"; mv "$RUN.real" "$RUN"
 
 expect_denied "fleet-unit: unknown verb"           as_fleet sudo -n "$FLEET_UNIT" restart "$ID"
 expect_denied "fleet-unit: option as run id"       as_fleet sudo -n "$FLEET_UNIT" start --version

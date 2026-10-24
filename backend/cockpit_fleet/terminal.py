@@ -184,7 +184,16 @@ def _when(value: object) -> str:
     return _cell("", value)
 
 
+# Control characters, which a host name or what a node said may hold: in a
+# table they would move the cursor, or with ESC set the title or the clipboard.
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
 def _cell(key: str, value: object) -> str:
+    return _CONTROL_RE.sub("?", _text(key, value))
+
+
+def _text(key: str, value: object) -> str:
     if key.endswith("_at") or key == "ts":
         return _when(value)
     if value is None or value == "":
@@ -876,6 +885,12 @@ def _fetch(term: Terminal, project_id: str, directory: str) -> str:
     return data["revision"]
 
 
+def clone_directory(project: dict) -> str:
+    """Where a clone goes by default. The name is another administrator's
+    choice: as a directory, only a plain one, in the current one."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", project["name"]).lstrip("-.") or project["id"]
+
+
 def _project_clone(term: Terminal, args: list[str]) -> int:
     parser = _parser("project clone", "Clone a project written in the interface, to work on"
                      " it with git and push the commits back with fleet project push.")
@@ -887,10 +902,10 @@ def _project_clone(term: Terminal, args: list[str]) -> int:
     if project["kind"] != "managed":
         raise Usage(f"{project['name']} is not written in the interface: only such a project"
                     " is cloned here (a git project is cloned from its URL)")
-    directory = options.directory or project["name"]
+    directory = options.directory or clone_directory(project)
     if Path(directory).exists():
         raise Usage(f"{directory} exists already")
-    _git(term, ["init", "--quiet", "--initial-branch=main", directory])
+    _git(term, ["init", "--quiet", "--initial-branch=main", "--", directory])
     _git(term, ["config", "fleet.project", project["id"]], directory)
     revision = _fetch(term, project["id"], directory)
     _git(term, ["reset", "--quiet", "--hard", _BASE], directory)

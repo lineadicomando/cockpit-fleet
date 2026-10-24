@@ -14,5 +14,7 @@ StandardOutput=null
 UMask=0077
 ProtectSystem=strict
 ReadWritePaths=/var/lib/cockpit-fleet
+# fleet-unit, through sudo, copies the ciphertext of the run it starts there.
+ReadWritePaths=-/run/cockpit-fleet/creds
 ProtectHome=yes
 PrivateTmp=yes

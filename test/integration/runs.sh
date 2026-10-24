@@ -62,6 +62,14 @@ cat > "$SRC/demo/wait.yml" <<'YAML'
         timeout: 300
       delegate_to: localhost
 YAML
+cat > "$SRC/demo/hosts.yml" <<'YAML'
+- hosts: all
+  gather_facts: false
+  connection: local
+  tasks:
+    - ansible.builtin.debug:
+        msg: here
+YAML
 chmod -R a+rX "$SRC"
 
 # --- credential, host key, project, inventory -----------------------------------
@@ -81,7 +89,7 @@ project_id=$(get "$project" 'a["data"]["id"]')
 expect_eq "local project is accepted under an allowed root" "$(get "$project" 'a["ok"]')" True
 expect_eq "local project is refused elsewhere" \
     "$(get "$(admin project.create '{"name": "etc", "kind": "local", "path": "/etc"}')" 'a["error"]["code"]')" conflict
-expect_eq "project files are listed" "$(get "$(admin project.files "{\"id\": \"$project_id\"}")" 'sorted(a["data"]["files"])')" "['secret.yml', 'site.yml', 'wait.yml']"
+expect_eq "project files are listed" "$(get "$(admin project.files "{\"id\": \"$project_id\"}")" 'sorted(a["data"]["files"])')" "['hosts.yml', 'secret.yml', 'site.yml', 'wait.yml']"
 
 inventory=$(admin inventory.create '{"name": "self", "kind": "managed", "format": "ini", "content": "[local]\nself ansible_host=127.0.0.1\n"}')
 inventory_id=$(get "$inventory" 'a["data"]["id"]')
@@ -211,6 +219,19 @@ expect_eq "an administrator rejects one" \
     "$(get "$(admin approval.reject "{\"id\": \"$run_id\"}")" 'a["data"]["status"]')" rejected
 expect_denied "what was prepared for it is gone, its secret with it" test -e "/var/lib/cockpit-fleet/runs/$run_id"
 
+# --- a limit narrows the template's, never widens it -----------------------------
+many=$(admin inventory.create '{"name": "many", "kind": "managed", "format": "ini", "content": "[web]\na1\na2\n[db]\nb1\n[all:vars]\nansible_connection=local\n"}')
+limited=$(admin template.create "{\"name\": \"limited\", \"project_id\": \"$project_id\", \"playbook\": \"hosts.yml\", \"inventory_id\": \"$(get "$many" 'a["data"]["id"]')\", \"limit_hosts\": \"web\"}")
+limited_id=$(get "$limited" 'a["data"]["id"]')
+for case in "all:all|['a1', 'a2']" "a1,b1|['a1']" "all:!a1|['a2']"; do
+    run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$limited_id\", \"limit\": \"${case%%|*}\"}")" 'a["data"]["id"]')
+    expect_run "a run limited to ${case%%|*} on a template limited to web" "$run_id" 120 successful
+    expect_eq "it reached only hosts of web" \
+        "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'sorted(a["data"]["stats"])')" "${case#*|}"
+done
+run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$limited_id\", \"limit\": \"b1\"}")" 'a["data"]["id"]')
+expect_run "a limit with no host of the template's fails the run" "$run_id" 120 failed
+
 # --- queue and cancel ----------------------------------------------------------
 admin template.create "{\"name\": \"wait\", \"project_id\": \"$project_id\", \"playbook\": \"wait.yml\", \"inventory_id\": \"$inventory_id\"}" > /tmp/fleet-it-wait.json
 wait_id=$(get "$(cat /tmp/fleet-it-wait.json)" 'a["data"]["id"]'); rm -f /tmp/fleet-it-wait.json
@@ -242,7 +263,7 @@ expect_eq "and exports the same again" \
     "$(get "$(admin config.export)" '{k: v for k, v in a["data"].items() if k != "exported_at"}')" \
     "$(get "$exported" '{k: v for k, v in a["data"].items() if k != "exported_at"}')"
 expect_eq "an imported credential has no secret" "$(get "$(admin credential.list)" '[c["secrets"]["password"] for c in a["data"]["credentials"] if c["name"] == "local ssh"]')" "[False]"
-expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 3
+expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 4
 
 # --- git project ---------------------------------------------------------------
 if [ -n "${IT_GIT_URL:-}" ]; then

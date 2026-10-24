@@ -329,10 +329,17 @@ def project_files(ctx: Context, params: Values) -> dict:
 
 # --- inventories -------------------------------------------------------------------
 
-def _inventory(row, with_hosts: bool = False) -> dict:
+# What others than administrators see of why an inventory could not be read.
+NOT_READ = "the inventory could not be read: an administrator can see why"
+
+
+def _inventory(row, with_hosts: bool = False, admin: bool = True) -> dict:
     hosts = store.loads(row["hosts"], [])
     data = {key: row[key] for key in ("id", "name", "kind", "project_id", "path", "format",
                                       "vault_credential_id", "parsed_at", "parse_error")}
+    if not admin and data["parse_error"]:
+        # Ansible quotes the lines it could not read, and they may hold passwords.
+        data["parse_error"] = NOT_READ
     data["host_count"] = len(hosts)
     if with_hosts:
         data["hosts"] = hosts
@@ -370,7 +377,7 @@ def inventory_list(ctx: Context, params: Values) -> dict:
     """The inventories, with how many hosts each was last read to have."""
     jobs.reconcile(ctx)
     rows = ctx.conn.execute("SELECT * FROM inventories ORDER BY name COLLATE NOCASE")
-    return {"inventories": [_inventory(row) for row in rows]}
+    return {"inventories": [_inventory(row, admin=ctx.caller.role == "admin") for row in rows]}
 
 
 @command("inventory.get", role="viewer",
@@ -382,7 +389,7 @@ def inventory_get(ctx: Context, params: Values) -> dict:
     inventory_id = params["id"]
     jobs.reconcile(ctx)
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-    data = _inventory(row, with_hosts=True)
+    data = _inventory(row, with_hosts=True, admin=ctx.caller.role == "admin")
     if ctx.caller.role != "admin":
         # The text of a managed inventory may hold connection passwords.
         data["content"] = ""

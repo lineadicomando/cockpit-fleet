@@ -165,3 +165,14 @@ class ProjectRootTest(unittest.TestCase):
             os.chmod(root, 0o757)  # noqa: S103
             self.assertEqual(system.check_project_root(root)[0], "fail")
         self.assertEqual(system.check_project_root("/nonexistent/fleet")[0], "fail")
+
+
+class AuditTextTest(unittest.TestCase):
+    def test_a_long_value_does_not_push_out_what_the_call_was_about(self):
+        from cockpit_fleet.audit import _params_text
+        text = _params_text({"answers": {"note": "x" * 2100}, "limit": "all:all",
+                             "template_id": "t1", "secret": "s"}, ("secret",))
+        self.assertTrue(text.startswith('{"limit": "all:all", "template_id": "t1"'), text)
+        self.assertIn('"secret": "***"', text)
+        self.assertLess(len(text), 400)
+

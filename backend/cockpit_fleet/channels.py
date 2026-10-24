@@ -17,6 +17,7 @@ import urllib.request
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
+from http import client as http_client
 
 from .errors import BadRequest
 
@@ -165,7 +166,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _mask(text: str, secret: str) -> str:
-    text = text.replace(secret, "********") if len(secret) >= 4 else text
+    if len(secret) >= 4:
+        # As it was given, and as an error may quote it: escaped, or in a URL.
+        for form in sorted({secret, repr(secret)[1:-1], urllib.parse.quote(secret),
+                            urllib.parse.quote(secret, safe="")}, key=len, reverse=True):
+            text = text.replace(form, "********")
     return text[:300]
 
 
@@ -174,7 +179,9 @@ def _reason(body: bytes) -> str:
     try:
         data = json.loads(body)
     except ValueError:
-        return body.decode(errors="replace").strip().splitlines()[0][:200] if body.strip() else ""
+        # Not an API's error: whatever the server said is not kept, as
+        # viewers read the error, and the URL may be one of the network's own.
+        return ""
     if isinstance(data, dict):
         for key in ("description", "error", "message"):
             if isinstance(data.get(key), str):
@@ -202,6 +209,8 @@ def http(method: str, url: str, body: bytes, headers: dict, proxy: str, secret: 
         raise SendError(_mask(f"cannot connect: {error.reason}", secret)) from None
     except (OSError, ValueError) as error:
         raise SendError(_mask(f"cannot connect: {error}", secret)) from None
+    except http_client.HTTPException as error:
+        raise SendError(f"not an HTTP answer ({type(error).__name__})") from None
 
 
 def _substitute(value: object, fields: dict, events: list) -> object:
@@ -231,6 +240,22 @@ def send(kind: str, settings: dict, secret: str, message: Message, proxy: str,
     when it is tried again, so that a server that has it already can tell."""
     if SECRET_REQUIRED[kind] and not secret:
         raise SendError("the secret of this channel is not set")
+    if any(ord(char) < 32 or ord(char) == 127 for char in secret) or (
+            kind in ("telegram", "matrix") and any(char.isspace() for char in secret)):
+        raise SendError("the secret of this channel holds a character it cannot have"
+                        " (a line break, a tab, or a space in a token): set it again")
+    try:
+        _send(kind, settings, secret, message, proxy, reference)
+    except SendError:
+        raise
+    except Exception as error:
+        # Nothing of what it says: it may quote the secret. Delivery goes on
+        # with the next channel, and this one is tried again.
+        raise SendError(f"cannot send ({type(error).__name__})") from None
+
+
+def _send(kind: str, settings: dict, secret: str, message: Message, proxy: str,
+          reference: str) -> None:
 
     if kind == "telegram":
         body = json.dumps({"chat_id": settings["chat_id"],
@@ -263,7 +288,8 @@ def send(kind: str, settings: dict, secret: str, message: Message, proxy: str,
 
 def _smtp(settings: dict, secret: str, message: Message) -> None:
     mail = EmailMessage()
-    mail["Subject"] = message.title
+    # On one line: a host name from an inventory may hold a line break.
+    mail["Subject"] = " ".join(message.title.splitlines())[:250]
     mail["From"] = settings["sender"]
     mail["To"] = ", ".join(settings["recipients"])
     mail["Date"] = formatdate(localtime=True)

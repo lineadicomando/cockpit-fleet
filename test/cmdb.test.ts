@@ -37,6 +37,8 @@ test("a cell of CSV is quoted when it must be and never starts a formula", () =>
     assert.equal(csvCell('say "hi", twice'), '"say ""hi"", twice"');
     assert.equal(csvCell("=HYPERLINK(\"x\")"), "\"'=HYPERLINK(\"\"x\"\")\"");
     assert.equal(csvCell("-1"), "'-1");
+    // A spreadsheet that splits on ";" must not find a formula after one.
+    assert.equal(csvCell("Dell;=cmd|' /C calc'!A0"), "\"Dell;=cmd|' /C calc'!A0\"");
     assert.equal(csvCell(null), "");
     assert.equal(csvCell(4), "4");
     assert.equal(toCsv([["a", "b"], [1, "x\ny"]]), 'a,b\r\n1,"x\ny"\r\n');

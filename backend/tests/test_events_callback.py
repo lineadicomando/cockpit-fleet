@@ -90,3 +90,13 @@ class StatsTest(unittest.TestCase):
         self.assertEqual((event["event"], event["hosts"], event["artifacts"]),
                          ("stats", {"a": {"ok": 1}}, {"version": "1.2"}))
         self.assertNotIn("artifacts", self.emitted({}))
+
+
+@unittest.skipIf(events is None, "ansible is not installed")
+class TrimTest(unittest.TestCase):
+    def test_a_secret_across_the_cut_is_masked_whole(self):
+        plugin = events.CallbackModule()
+        plugin._secrets = ["hunter2-secret"]
+        plugin._max_string = 10
+        self.assertEqual(plugin._trim("abcdefhunter2-secret"), "abcdef****…")
+        self.assertNotIn("hunt", plugin._trim(["xxxxxxxhunter2-secret"])[0])

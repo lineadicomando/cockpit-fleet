@@ -15,3 +15,7 @@ d /etc/cockpit-fleet/secrets/notify 0750 root cockpit-fleet -
 # is why it may write here. One that no run took is removed after an hour.
 d /run/cockpit-fleet              0755 root root -
 d /run/cockpit-fleet/answers      0770 root cockpit-fleet 1h
+
+# The ciphertext of a run while it starts, copied by fleet-unit, as root: only
+# PID 1 reads it here, and fleet-unit removes it once the run has started.
+d /run/cockpit-fleet/creds        0700 root root -

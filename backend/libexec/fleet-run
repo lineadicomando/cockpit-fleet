@@ -123,7 +123,18 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
     if kind == "inventory":
         command = runner.build_inventory_argv(spec, run_dir, credentials)
     elif kind == "playbook":
-        command = runner.build_argv(spec, run_dir, runtime_dir, credentials)
+        limit_file = None
+        plan = runner.limit_plan(spec, run_dir, runtime_dir, credentials)
+        if plan:
+            listings = []
+            for command, output in plan:
+                rc = execute(command, env, run_dir / "project", log)
+                if rc != 0:
+                    return {"rc": rc}
+                listings.append(json.loads(output.read_text()))
+            limit_file = runtime_dir / "limit"
+            limit_file.write_text(runner.limit_hosts(listings))
+        command = runner.build_argv(spec, run_dir, runtime_dir, credentials, limit_file)
     elif kind == "adhoc":
         command = runner.build_adhoc_argv(spec, run_dir, runtime_dir, credentials)
         env.update(runner.ADHOC_ENV)

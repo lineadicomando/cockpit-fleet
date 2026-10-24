@@ -19,9 +19,10 @@ UMask=0077
 Slice=system-cockpitfleet.slice
 
 # Secrets of this run only: the files in creds/ are ciphertext copied there
-# when the run is queued; PID 1 decrypts them into a directory that no other
-# unit can see.
-LoadCredentialEncrypted=fleet:/var/lib/cockpit-fleet/runs/%i/creds
+# when the run is queued, and by fleet-unit, as root, into a directory of its
+# own as the run starts (PID 1 follows links, and creds/ is the account's).
+# PID 1 decrypts them into a directory that no other unit can see.
+LoadCredentialEncrypted=fleet:/run/cockpit-fleet/creds/%i
 
 # Scratch space on tmpfs, removed when the run ends.
 RuntimeDirectory=cockpit-fleet-run-%i

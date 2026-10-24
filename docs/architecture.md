@@ -17,7 +17,7 @@ service account cockpit-fleet (unprivileged, no login shell)
    │                                     cockpit-fleet-notify.path sends what the rules say
    ▼
 cockpit-fleet-run@<id>.service        sandboxed, User=cockpit-fleet
-   │ PID 1 decrypts creds/ into /run/credentials/<unit>/
+   │ PID 1 decrypts creds/ (copied by fleet-unit, as root) into /run/credentials/<unit>/
    │ fleet-run builds the ansible-playbook command line from spec.json
    ▼
 ansible-playbook
@@ -35,7 +35,7 @@ Two programs run as root. Both validate their single argument against
 
 | Helper | Called by | Does |
 |---|---|---|
-| `fleet-unit start\|stop ID` | `cockpit-fleet`, through one sudoers line | `systemctl start\|stop cockpit-fleet-run@ID.service` |
+| `fleet-unit start\|stop ID` | `cockpit-fleet`, through one sudoers line | `systemctl start\|stop cockpit-fleet-run@ID.service`; before a start, copies the run's `creds/` into `/run/cockpit-fleet/creds/ID` (below) |
 | `fleet-secret set\|delete NAME`, `list` | administrators | encrypts stdin with `systemd-creds` into `/etc/cockpit-fleet/secrets/NAME.cred` (`secrets/notify/` for a name beginning with `n-`, a notification channel's) |
 | `fleet-secret answer` | operators and administrators | encrypts stdin into `/run/cockpit-fleet/answers/`, under a name it chooses and prints |
 
@@ -65,9 +65,27 @@ disables sudo.
 - When a run is queued, the ciphertext files it needs are copied into its
   `creds/` directory, named after their purpose: `private_key`,
   `connection_password`, `become_password`, `vault_password`.
-- The unit has `LoadCredentialEncrypted=fleet:/var/lib/cockpit-fleet/runs/%i/creds`.
-  systemd decrypts every file there into `/run/credentials/<unit>/fleet_<purpose>`,
-  a directory mounted for that unit only and removed when it stops.
+- The unit has `LoadCredentialEncrypted=fleet:/run/cockpit-fleet/creds/%i`.
+  `fleet-unit`, as root, fills that directory from the run's `creds/` just
+  before `systemctl start`, and empties it once the start has returned
+  (`Type=exec`: the credentials are read by then). The units that start
+  runs through it (`cockpit-fleet-finish@`, the scheduler) have that
+  directory among their `ReadWritePaths`: `fleet-unit` runs in their mount
+  namespace, where `ProtectSystem=strict` leaves `/run` read-only. systemd
+  decrypts every
+  file there into `/run/credentials/<unit>/fleet_<purpose>`, a directory
+  mounted for that unit only and removed when it stops.
+- Why the copy: PID 1 reads those paths as root and, with systemd 257
+  (Debian 13), follows symbolic links, so a `creds/` or a run directory that
+  the account turned into a link would have it decrypt root's own
+  credentials of other services (`/etc/credstore.encrypted`, say) into a run
+  (seen on 24 October; Fedora 44's 259 and AlmaLinux 10 refused). The copy
+  reaches each part of the path without following a link, and takes only
+  regular files of the account with one link, 256 KiB at most
+  (`credstage.py`). The run directory itself is still bound into the unit
+  by path: an account that swapped it for a link between the check and the
+  start could bind another directory, whose files the run reads only as far
+  as their own permissions let the account.
 - `fleet-run` passes those files to Ansible with `--private-key`,
   `--connection-password-file`, `--become-password-file` and
   `--vault-password-file`. A secret never appears in argv or in the environment.
@@ -146,11 +164,16 @@ own limit: `project.upload` and `config.import`.
   stands for it alone: `cockpit-fleet-approver` gives `approve` (see
   "Approvals"). A command may name a right besides its role, and is then
   allowed to either. A call made for an agent has no right at all.
-- **Audit.** Commands that change something, and every refusal, are written to
+- **Audit.** Commands that change something, and every refusal (by role, by
+  the ceiling of agents, or by the command itself, such as approving one's
+  own launch), are written to
   the `audit` table and to the journal (`journalctl -t cockpit-fleet`, with
   `FLEET_USER`, `FLEET_COMMAND`, `FLEET_OUTCOME` fields, and `FLEET_VIA` when
   the call was made for an agent). Parameters marked as
-  secret are replaced before being stored. `fleet-secret` runs as root and
+  secret are replaced before being stored; identifiers and the limit are
+  kept whole, other values cut at 200 characters each, so that a long
+  answer does not push them out. An agent's call to a command that is not a
+  tool (`tool=False`) is refused here too, not only by `fleet-mcp`. `fleet-secret` runs as root and
   cannot write to the database, so it logs to the journal only.
 - **Database.** SQLite in WAL mode at `/var/lib/cockpit-fleet/fleet.db`, mode
   0600. Migrations are an append-only list applied under a lock on connect; a
@@ -180,7 +203,9 @@ refuses those that mean nothing in the form asked for.
 A run unit executes one job, of one of eight kinds, described by `spec.json`
 in its directory: `playbook` (ansible-playbook), `adhoc` (one module, as a
 playbook written for the job), `inventory` (`ansible-inventory --list`, to
-learn hosts and groups), `sync` (fetch a git project), `syntax` (check a
+learn hosts and groups; when it fails, Ansible quotes the lines it could not
+read, which may hold passwords, so why is shown to administrators only,
+and so is its output), `sync` (fetch a git project), `syntax` (check a
 playbook without running it), `unpack` (extract an uploaded archive),
 `galaxy` (install the collections a project asks for) and `check` (a cycle
 of checks, see "Checks"). A run of a workflow is not a job: it has no
@@ -199,6 +224,18 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 | `known_hosts` | the host keys an administrator has trusted |
 | `inventory/` | the inventory, when it is written in the interface rather than a project file |
 | `collections/` | a copy of the collections installed for the project, when it asks for some |
+
+The copy of a local project opens each directory and file from the one
+that holds it, following no link, so a tree its owner changes while it is
+copied cannot lead outside it (an earlier `os.walk` could be raced into
+copying the database).
+
+The run can write in its own directory, so what it leaves there is read by
+`fleetctl`, outside the sandbox, through `jobs.open_run_file`: without
+following a link (the backend could otherwise be led to the database, or to
+another run's decrypted credentials through `/proc/PID/root`, both reachable
+by the account), without waiting on a FIFO, and with a size limit for the
+small files.
 
 The run then sees a self-contained directory and nothing else. `project/`,
 `creds/`, `collections/` and an uploaded `archive` are removed when the job
@@ -444,8 +481,16 @@ the unit's name in it, and Ansible would split it there (found running
 `ansible-win_edulab`, whose vault has no identifier).
 
 **Limits a launcher can change.** Launching a template, an operator may add a
-host limit and ask for a dry run. The limit is combined with the template's
-own (`template:&caller`), so it can narrow the target but not widen it.
+host limit and ask for a dry run. The limit narrows the template's own and
+cannot widen it. They are not joined into one pattern: Ansible reads the
+plain terms of a pattern as a union before its `&` ones, so
+`template:&all:other` would reach `other` (found by the security review of
+24 October). With both, the spec holds `limits`, and `fleet-run`, in the
+sandbox, lists the hosts of each with `ansible-inventory --list --limit`,
+keeps those in all of them, and runs the playbook with `--limit @FILE` of
+their names. A name that a limit file would read as a pattern (a group's,
+`all`, one with `*` or `[`) stops the run rather than widen it; so does an
+empty intersection. It costs one reading of the inventory per limit.
 
 **Ad-hoc commands.** `run.adhoc` runs one module on hosts of an inventory,
 with no template: an inventory, a host pattern, a module, its arguments, and
@@ -645,7 +690,9 @@ inventory and limit, dry run, the answers and which secrets were given).
 Not the user who launched it, except an administrator, who could launch
 the same playbook without the approval anyway by changing the template. A
 run of a schedule is launched by `schedule:NAME`, so anyone allowed may
-approve it. An agent never approves: a call made for one has no right, and
+approve it; for that, only an administrator turns on a schedule of a
+template that needs an approval (an operator who did could approve what it
+launches, one person doing both). An operator still turns one off. An agent never approves: a call made for one has no right, and
 the commands refuse it whatever its role; `approval.list` is a tool,
 deciding is not. Through `fleet` at a terminal, a person does.
 
@@ -782,7 +829,15 @@ for a day, then given up (`failed`), which an administrator can try again.
 Matrix gets the same transaction identifier when the same message is tried
 again, so a request that arrived but whose answer was lost is not posted
 twice. A redirect is an error, not followed: it would carry a token to
-another host. Ended notifications are kept 90 days.
+another host. Anything else that goes wrong while sending (a server that
+does not speak HTTP, a header a secret makes invalid) is a failed attempt
+like the others, said by the class of the error only, as its text may quote
+the secret; before, it stopped the whole delivery, every tick. An error
+keeps an API's own reason, never the raw body of an answer (viewers read
+errors, and the URL may be one of the network's own). A mail's subject is
+made one line: a host name from an inventory may hold a line break. A
+secret with a control character, or with a space for Telegram and Matrix,
+is refused before anything is sent. Ended notifications are kept 90 days.
 
 **Grouping and limit.** `window` (seconds, per channel) makes a run's
 notification wait: whatever else ends meanwhile leaves in the same message.

@@ -12,8 +12,9 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** phase 10. The chat's agent role, the open point before it,
-ran on Fedora 44 and AlmaLinux 10 on 24 October (install, a second run,
+**Next:** phase 10, from the automated negative tests (the security
+review is done). The chat's agent role, the open point before it, ran on
+Fedora 44 and AlmaLinux 10 on 24 October (install, a second run,
 `fleet-chat` up to the login, `absent`; no denial).
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
@@ -49,16 +50,13 @@ notifications in `notify.py` and `channels.py`, the terminal in
 (`checks.py`, `win_checks.ps1`, `fleet_result.py`), pages in
 `src/components/`.
 
-Last test runs, on 24 October with the code of phase 9: unit tests (414
-backend, 93 frontend) and ruff clean; `make ct-test` of `workflows runs
-roles schedules notify sandbox privileges cli` on Fedora and AlmaLinux,
-`roles runs privileges sandbox notify schedules workflows` on Debian;
-`sandbox roles runs workflows` on the VMs of the three, and on Debian's in
-a browser: approving as an administrator and as an approver with no role,
-the steps of a workflow run, the editor. Not run since phase 8: `checks`,
-`cmdb`, `multihost`, `galaxy`, `files`, `upload`, `adhoc`, `inventories`,
-`mcp`, `chat` (all of them at `3c42c70` on the three, 21-23 October);
-`windows.sh` last on 20 October.
+Last test runs, on 24 October with the fixes of the security review: unit
+tests (434 backend, 93 frontend) and ruff clean; `make ct-test` of every
+script on the three, all passing but `cmdb` on Fedora, where `podman
+network connect` fails in the container (netavark: "invalid namespace
+path"), so the interface it adds to a node never appears: the environment,
+not the code; `privileges sandbox roles runs workflows schedules` on the
+VMs of the three, no SELinux denial. `windows.sh` last on 20 October.
 
 ## Decisions
 
@@ -184,10 +182,26 @@ except the rows that say "to confirm".
   not on the workflow's.
 - Terminal: survey choices not pickable or completed; pushed commits keep
   the authors of the clone (who pushed is audited).
+- Security review (24 October), left as they are: a run directory swapped
+  for a link between `fleet-unit`'s check and the start binds another
+  directory (needs the account itself); the backend shares the runs' uid,
+  so anything of a run it followed would reach their credentials through
+  `/proc/PID/root` (the files of a run are read without following links);
+  webhook bodies carry what nodes said unescaped (Slack and Discord markup,
+  mentions); `http://` allowed for channels with a secret; webhook URLs and
+  template `extra_vars` visible to viewers (neither is for secrets);
+  `config.export` and `inventory.get` by an administrator not audited; an
+  operator can fill the 500 waiting secret answers for an hour; `fleet`
+  shows run output with its colours raw (escape sequences of nodes); unpack
+  jobs have no time limit.
 
 ## Phase 10 — Release 0.1.0
 
-- [ ] Security review: root helpers, sandbox, sudoers, archives, git, bundles
+- [x] Security review: root helpers, sandbox, sudoers, archives, git, bundles
+      (24 October; fixed: PID 1 following links in `creds/`, a limit that
+      widened the template's, run files read through links, notifications
+      stopped by a host name, races copying a local project and reading
+      its files, audit of refusals; what was left is under Leftovers)
 - [ ] Automated negative tests: injection, traversal, role escalation, secrets
 - [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle", "Copyable input", "Details" of an expandable row)
 - [ ] Docs: installation, security model, writing a check, backup

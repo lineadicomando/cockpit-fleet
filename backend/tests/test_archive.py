@@ -175,6 +175,9 @@ class ExtractTest(unittest.TestCase):
             self.refused(tar(("zeros", bytes(4 * 1024 * 1024))), "unpacks to more than")
             self.refused(zipped(("zeros", bytes(4 * 1024 * 1024))), "unpacks to more than")
             self.refused(tar(*((f"f{i}", bytes(300 * 1024)) for i in range(4))), "unpacks to more")
+            # What is left out is read through all the same.
+            self.refused(tar(("site.yml", PLAYBOOK), (".git/pack", bytes(2 * 1024 * 1024))),
+                         "in what is left out")
         with mock.patch.object(archive, "MAX_FILES", 3):
             self.refused(tar(*((f"f{i}", b"x") for i in range(4))), "more than 3 files")
         with mock.patch.object(archive, "MAX_MEMBERS", 3):

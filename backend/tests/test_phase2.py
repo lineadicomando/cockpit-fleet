@@ -203,14 +203,19 @@ class RunTest(Base):
         self.assertFalse((directory / "creds" / "connection_password").exists())
         self.assertEqual((directory / "known_hosts").read_text(), "10.0.0.5 ssh-ed25519 AAAA\n")
         self.assertEqual((directory / "inventory" / "hosts.yml").read_text(), "all:\n  hosts:\n    a:\n")
-        self.assertEqual(spec["limit"], "web*:&web01")
+        self.assertEqual(spec["limits"], ["web*", "web01"])
+        self.assertNotIn("limit", spec)
         self.assertEqual((spec["user"], spec["check"], spec["diff"]), ("maint", True, True))
         self.assertEqual(oct(directory.stat().st_mode & 0o777), "0o700")
 
         # The specification is exactly what the unit will turn into a command line.
         (directory / "runtime").mkdir()
-        argv = runner.build_argv(spec, directory, directory / "runtime", None)
-        self.assertEqual(argv[argv.index("--limit") + 1], "web*:&web01")
+        plan = runner.limit_plan(spec, directory, directory / "runtime", None)
+        self.assertEqual([command[command.index("--limit") + 1] for command, _ in plan],
+                         ["web*", "web01"])
+        limit = directory / "runtime" / "limit"
+        argv = runner.build_argv(spec, directory, directory / "runtime", None, limit)
+        self.assertEqual(argv[argv.index("--limit") + 1], f"@{limit}")
         self.assertIn("--check", argv)
 
     def test_outcome_is_collected_and_the_copy_removed(self):
@@ -278,6 +283,24 @@ class RunTest(Base):
         self.assertEqual(self.code("run.log", {"id": run["id"]}, role="viewer"), "forbidden")
         self.assertEqual(self.code("run.log", {"id": "../../etc"}), "bad_request")
 
+    def test_a_link_or_a_fifo_the_run_left_is_read_as_missing(self):
+        run = self.ok("run.start", {"template_id": self.template()["id"]})
+        directory = paths.RUNS_DIR / run["id"]
+        elsewhere = self.root / "fleet.db.copy"
+        elsewhere.write_text("not the run's")
+        (directory / "stdout.log").symlink_to(elsewhere)
+        os.mkfifo(directory / "events.jsonl")
+        os.mkfifo(directory / "result.json")
+        self.assertEqual(self.ok("run.log", {"id": run["id"]})["text"], "")
+        self.assertEqual(self.ok("run.events", {"id": run["id"]})["text"], "")
+        self.assertEqual(jobs._log_tail(directory), "no output")
+        self.assertEqual(jobs._last_stats(directory), {})
+        with self.assertRaises(FileNotFoundError):
+            jobs.read_run_file(directory, "result.json")
+        (directory / "big").write_bytes(b"x" * 11)
+        with self.assertRaises(ValueError):
+            jobs.read_run_file(directory, "big", 10)
+
     def test_history_lists_newest_first_and_filters(self):
         template = self.template()
         ids = [self.ok("run.start", {"template_id": template["id"]})["id"] for _ in range(3)]
@@ -311,6 +334,21 @@ class RunTest(Base):
         ])
         self.assertNotIn("hunter2", json.dumps(got))
         self.assertEqual(self.ok("inventory.list")["inventories"][0]["host_count"], 2)
+
+    def test_why_an_inventory_was_not_read_is_for_administrators(self):
+        inventory = self.ok("inventory.create", {"name": "inv", "kind": "managed", "content": "x"})
+        run_id = self.ok("inventory.parse", {"id": inventory["id"]}, role="operator")["run_id"]
+        quoted = "ERROR! could not parse\n  4  ansible_password: hunter2\n"
+        (paths.RUNS_DIR / run_id / "stdout.log").write_text(quoted)
+        self.finish(run_id, rc=1)
+        self.assertIn("hunter2", self.ok("inventory.get", {"id": inventory["id"]})["parse_error"])
+        for role in ("viewer", "operator"):
+            for name in ("inventory.get", "inventory.list"):
+                self.assertNotIn("hunter2", json.dumps(self.ok(name, {"id": inventory["id"]}
+                                                               if name == "inventory.get" else {},
+                                                               role=role)))
+        self.assertEqual(self.code("run.log", {"id": run_id}, role="operator"), "forbidden")
+        self.assertIn("hunter2", self.ok("run.log", {"id": run_id})["text"])
 
     def test_failed_inventory_job_keeps_the_error_for_the_interface(self):
         inventory = self.ok("inventory.create", {"name": "inv", "kind": "managed", "content": "x"})
@@ -514,6 +552,20 @@ class SnapshotTest(unittest.TestCase):
             self.assertTrue((copy / "leak").is_symlink())
             self.assertEqual(os.readlink(copy / "leak"), "/etc/shadow")
             self.assertTrue((copy / "linked-dir").is_symlink())
+
+    def test_a_tree_reached_through_a_link_is_not_copied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            (root / "elsewhere").mkdir()
+            (root / "elsewhere" / "fleet.db").write_text("not the project's")
+            (root / "tree").symlink_to(root / "elsewhere")
+            with self.assertRaises(Conflict):
+                jobs.snapshot(root / "tree", root / "copy")
+            (root / "src").mkdir()
+            (root / "src" / "sub").symlink_to(root / "elsewhere")
+            with self.assertRaises(Conflict):
+                jobs.snapshot(root / "src" / "sub" , root / "copy2")
+            self.assertFalse((root / "copy" / "fleet.db").exists())
 
     def test_oversized_project_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:

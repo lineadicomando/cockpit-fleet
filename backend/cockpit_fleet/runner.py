@@ -353,14 +353,17 @@ def survey_secrets(secrets: object, credentials_dir: Path | None) -> dict[str, s
 
 
 def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
-                   credentials_dir: Path | None, playbook: Path) -> list[str]:
+                   credentials_dir: Path | None, playbook: Path,
+                   limit_file: Path | None = None) -> list[str]:
     argv = [
         "/usr/bin/ansible-playbook",
         "--inventory", str(_inventory(spec, run_dir)),
         "--forks", str(check_int(spec.get("forks", 5), "forks", 1, 200)),
     ]
 
-    if spec.get("limit"):
+    if limit_file is not None:
+        argv += ["--limit", f"@{limit_file}"]
+    elif spec.get("limit"):
         argv += ["--limit", check_limit(spec["limit"])]
     if spec.get("user"):
         argv += ["--user", check_user(spec["user"])]
@@ -411,11 +414,63 @@ def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
 
 
 def build_argv(
-    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None
+    spec: dict, run_dir: Path, runtime_dir: Path, credentials_dir: Path | None,
+    limit_file: Path | None = None,
 ) -> list[str]:
-    """ansible-playbook for a "playbook" job."""
+    """ansible-playbook for a "playbook" job; LIMIT_FILE, when its limits
+    were resolved by limit_plan(), lists the hosts it is for."""
     playbook = resolve_inside(run_dir / "project", spec.get("playbook"), "playbook")
-    return _playbook_argv(spec, run_dir, runtime_dir, credentials_dir, playbook)
+    return _playbook_argv(spec, run_dir, runtime_dir, credentials_dir, playbook, limit_file)
+
+
+def limit_plan(spec: dict, run_dir: Path, runtime_dir: Path,
+               credentials_dir: Path | None) -> list[tuple[list[str], Path]]:
+    """For a run with several limits (the template's, the caller's), one
+    ansible-inventory per limit, with the file where it writes the hosts it
+    selects. A host must be in all of them: see limit_hosts()."""
+    limits = spec.get("limits")
+    if not limits:
+        return []
+    if not isinstance(limits, list) or len(limits) > 4:
+        raise BadRequest("limits must be a list")
+    plan = []
+    for index, pattern in enumerate(limits):
+        output = runtime_dir / f"limit-{index}.json"
+        plan.append(([
+            "/usr/bin/ansible-inventory",
+            "--inventory", str(_inventory(spec, run_dir)),
+            "--list", "--limit", check_limit(pattern),
+            "--output", str(output),
+            *_vault_args(spec, credentials_dir),
+        ], output))
+    return plan
+
+
+# A name that a limit file reads as that host and nothing else.
+_LITERAL_HOST_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,252}|[0-9A-Fa-f]*:[0-9A-Fa-f:.]+")
+
+
+def limit_hosts(listings: list[dict]) -> str:
+    """The hosts in every listing, as a limit file: one name per line."""
+    chosen = None
+    groups: set[str] = {"all", "ungrouped"}
+    for listing in listings:
+        if not isinstance(listing, dict):
+            raise BadRequest("ansible-inventory gave no listing")
+        hosts = set(listing.get("_meta", {}).get("hostvars", {}))
+        for name, group in listing.items():
+            if name != "_meta" and isinstance(group, dict):
+                groups.add(name)
+                hosts.update(group.get("hosts", []))
+        chosen = hosts if chosen is None else chosen & hosts
+    if not chosen:
+        raise BadRequest("no host matches both the template's limit and the one given")
+    for host in chosen:
+        # A line of the file is a pattern: a group's name would bring the group.
+        if not isinstance(host, str) or not _LITERAL_HOST_RE.fullmatch(host) or host in groups:
+            raise BadRequest(f"the host {host!r} has a name a limit cannot hold:"
+                             " launch with no limit of your own")
+    return "".join(f"{host}\n" for host in sorted(chosen))
 
 
 # An ad-hoc command prints what each host answered, the way "ansible" does.

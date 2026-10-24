@@ -206,6 +206,8 @@ class CallbackModule(CallbackBase):
 
     def _trim(self, value, depth=0):
         if isinstance(value, str):
+            # Masked before it is cut: a secret across the cut would keep its start.
+            value = mask(value, self._secrets)
             if len(value) > self._max_string:
                 return value[: self._max_string] + "…"
             return value
@@ -232,6 +234,7 @@ class CallbackModule(CallbackBase):
             return {}
         if not text:
             return {}
+        text = mask(text, self._secrets)
         if len(text) > self._max_diff:
             return {"diff": text[: self._max_diff], "diff_cut": True}
         return {"diff": text}

@@ -67,7 +67,8 @@ class WorkflowTest(WorkflowBase):
         # The workflow run has no unit and takes no place in the queue.
         self.assertEqual(self.started, [steps["a"][1]])
 
-        self.end(steps["a"][1], artifacts={"version": "1.2", "tpl": "{{ lookup('pipe', 'id') }}"})
+        self.end(steps["a"][1], artifacts={"version": "1.2", "tpl": "{{ lookup('pipe', 'id') }}",
+                                           "ansible_user": "root", "not a name": 1})
         steps = self.steps(run["id"])
         self.assertEqual((steps["b"][0], steps["x"][0]), ("active", "skipped"))
         spec = json.loads((paths.RUNS_DIR / steps["b"][1] / "spec.json").read_text())

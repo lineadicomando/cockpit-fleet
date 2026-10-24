@@ -30,7 +30,8 @@ export function bySystem(hosts: CmdbHost[]): [string, number][] {
 export function csvCell(value: unknown): string {
     let text = value === null || value === undefined ? "" : String(value);
     if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
-    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    // Quoted also with ";" and tabs, which a spreadsheet may take for separators.
+    return /[",;\t\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export function toCsv(rows: unknown[][]): string {

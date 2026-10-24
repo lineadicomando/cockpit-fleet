@@ -83,8 +83,10 @@
 #]
 
 [inventories]
-# Let an executable file of a project be run as an inventory script. Off: a
-# project's inventory is then only read, by the plugins that take a file.
+# Let an executable file of a project be run as an inventory script. Off, an
+# executable file is read like any other. Not a line around code: a plugin
+# file of a project still runs the plugin it names, which may come from the
+# project's own collections; all of it in the sandbox of a run.
 #scripts = false
 
 [mcp]

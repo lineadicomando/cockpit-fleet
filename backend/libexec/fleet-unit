@@ -3,16 +3,21 @@
 
 This is the only way the unprivileged cockpit-fleet account can act on
 systemd: the unit name is built here from a validated identifier, so nothing
-but an instance of the packaged template can be reached.
+but an instance of the packaged template can be reached. Before a start, the
+run's ciphertext is copied where only root can reach it (credstage.py), and
+removed once the unit has its credentials.
 """
 
 import os
+import pwd
+import subprocess
 import sys
 
 sys.path.insert(0, "/usr/lib/cockpit-fleet")
 
+from cockpit_fleet import credstage  # noqa: E402
 from cockpit_fleet.names import check_id  # noqa: E402
-from cockpit_fleet.paths import RUN_UNIT  # noqa: E402
+from cockpit_fleet.paths import CREDS_STAGING_DIR, RUN_UNIT, SERVICE_USER, STATE_DIR  # noqa: E402
 
 
 def main(argv: list[str]) -> None:
@@ -21,10 +26,26 @@ def main(argv: list[str]) -> None:
     if len(argv) != 3 or argv[1] not in ("start", "stop"):
         sys.exit("usage: fleet-unit start|stop RUN_ID")
     try:
-        unit = RUN_UNIT.format(check_id(argv[2], "run id"))
+        run_id = check_id(argv[2], "run id")
     except ValueError as error:
         sys.exit(f"fleet-unit: {error}")
-    os.execv("/usr/bin/systemctl", ["systemctl", argv[1], "--", unit])  # noqa: S606
+    unit = RUN_UNIT.format(run_id)
+    if argv[1] == "stop":
+        credstage.discard(CREDS_STAGING_DIR, run_id)
+        os.execv("/usr/bin/systemctl", ["systemctl", "stop", "--", unit])  # noqa: S606
+
+    try:
+        uid = pwd.getpwnam(SERVICE_USER).pw_uid
+        credstage.stage(STATE_DIR, run_id, CREDS_STAGING_DIR, uid)
+    except (ValueError, OSError, KeyError) as error:
+        sys.exit(f"fleet-unit: {error}")
+    try:
+        # Type=exec: this returns once the run has started, its credentials read.
+        code = subprocess.run(["/usr/bin/systemctl", "start", "--", unit],
+                              check=False, stdin=subprocess.DEVNULL).returncode
+    finally:
+        credstage.discard(CREDS_STAGING_DIR, run_id)
+    sys.exit(code)
 
 
 if __name__ == "__main__":

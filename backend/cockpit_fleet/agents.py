@@ -179,8 +179,8 @@ def run_result(ctx: Context, params: Values) -> dict:
             break
         time.sleep(1)
     try:
-        with open(jobs.run_dir(run_id) / "events.jsonl", encoding="utf-8",
-                  errors="replace") as events:
+        with jobs.open_run_file(jobs.run_dir(run_id), "events.jsonl", "r", encoding="utf-8",
+                                errors="replace") as events:
             tasks = summarize(events)
     except OSError:
         tasks = []

@@ -2,6 +2,7 @@
 sending replaced by a fake, and a real HTTP server for the requests."""
 
 import json
+import socket
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -417,6 +418,51 @@ class HttpTest(unittest.TestCase):
             channels.send("telegram", {"chat_id": "1", "server": self.base}, "", self.message,
                           "", "ref")
         self.assertRaises(BadRequest, channels.check_url, "javascript:alert(1)")
+
+    def test_what_a_server_or_a_secret_makes_go_wrong_is_a_send_error_naming_no_secret(self):
+        # A server that does not speak HTTP.
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        self.addCleanup(listener.close)
+
+        def answer():
+            connection, _ = listener.accept()
+            with connection:
+                connection.recv(65536)
+                connection.sendall(b"garbage\r\n\r\n")
+        threading.Thread(target=answer, daemon=True).start()
+        settings = channels.check_settings(
+            "webhook", {"url": f"http://127.0.0.1:{listener.getsockname()[1]}/x"})
+        with self.assertRaises(channels.SendError):
+            channels.send("webhook", settings, "", self.message, "", "ref")
+
+        # Secrets with what a header or a URL cannot hold.
+        matrix = channels.check_settings("matrix", {"homeserver": self.base,
+                                                    "room_id": "!room:example.org"})
+        telegram = channels.check_settings("telegram", {"chat_id": "42", "server": self.base})
+        for kind, settings, secret in (("matrix", matrix, "syt_one\ntwo"),
+                                       ("telegram", telegram, "123:ABC DEF")):
+            with self.assertRaises(channels.SendError) as raised:
+                channels.send(kind, settings, secret, self.message, "", "ref")
+            self.assertNotIn("ABC", str(raised.exception))
+            self.assertNotIn("syt_", str(raised.exception))
+        self.assertEqual(self.server.seen, [])
+
+        # A host name with a line break in the subject of a mail.
+        mail = channels.check_settings("smtp", {"host": "127.0.0.1", "port": 1,
+                                                "security": "none", "sender": "f@example.org",
+                                                "recipients": ["a@example.org"]})
+        title = channels.Message("disk on evil\nBcc: x@example.org", "t", "", [])
+        with self.assertRaises(channels.SendError):
+            channels.send("smtp", mail, "", title, "", "ref")
+
+    def test_an_error_quotes_no_form_of_the_secret_and_no_body_that_is_not_an_api_error(self):
+        self.assertEqual(channels._mask("b'Bearer tok\\nen' and tok:en", "tok\nen"),
+                         "b'Bearer ********' and tok:en")
+        self.assertEqual(channels._mask("x 123%3AABC y 123:ABC", "123:ABC"), "x ******** y ********")
+        self.assertEqual(channels._reason(b"<html>internal page</html>"), "")
+        self.assertEqual(channels._reason(b'{"error": "no such room"}'), "no such room")
 
 
 if __name__ == "__main__":

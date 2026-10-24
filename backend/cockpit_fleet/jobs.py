@@ -5,6 +5,7 @@ and is brought up to date by reconcile(), which is called when a run unit
 ends (cockpit-fleet-finish@.service) and whenever runs are read.
 """
 
+import errno
 import fcntl
 import hashlib
 import json
@@ -41,6 +42,40 @@ def run_dir(run_id: str) -> Path:
     return paths.RUNS_DIR / check_id(run_id, "run id")
 
 
+# What a run leaves of its own beyond its output: result.json, inventory.json.
+MAX_RUN_FILE = 64 * 1024 * 1024
+
+
+def open_run_file(directory: Path, name: str, mode: str = "rb", **options):
+    """A file in a run's directory, opened for reading. The run may write
+    there, so it may have put a link in its place, which is not followed, or
+    a FIFO, which is not waited on: either is as if the file were missing."""
+    dir_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                     dir_fd=dir_fd)
+    except OSError as error:
+        if error.errno == errno.ELOOP:
+            raise FileNotFoundError(errno.ENOENT, "not a regular file", name) from None
+        raise
+    finally:
+        os.close(dir_fd)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise FileNotFoundError(errno.ENOENT, "not a regular file", name)
+    os.set_blocking(fd, True)
+    return os.fdopen(fd, mode, **options)
+
+
+def read_run_file(directory: Path, name: str, limit: int = MAX_RUN_FILE) -> bytes:
+    """The whole of a small file of a run, refused above LIMIT bytes."""
+    with open_run_file(directory, name) as source:
+        data = source.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError(f"{name} is larger than {limit} bytes")
+    return data
+
+
 def secret_name(credential_id: str, field: str) -> str:
     return f"c-{credential_id}-{field}"
 
@@ -68,18 +103,26 @@ def add_secret(directory: Path, credential_id: str | None, field: str, purpose: 
 def take_answer(directory: Path, ticket: str, purpose: str) -> None:
     """Move the ciphertext of a secret answer into the run. It serves one run."""
     source = paths.ANSWERS_DIR / f"{ticket}.cred"
+    # Taken first by a rename, which only one of two launches with it can do;
+    # then copied, as /run is another file system, and the copy the account's.
+    claimed = paths.ANSWERS_DIR / f".{ticket}.{os.getpid()}"
     try:
-        shutil.copyfile(source, directory / "creds" / purpose)
-        source.unlink()
+        os.rename(source, claimed)
     except FileNotFoundError:
         raise BadRequest(
             "a secret answer has expired or was already used: enter it again") from None
+    try:
+        shutil.copyfile(claimed, directory / "creds" / purpose)
+    finally:
+        claimed.unlink(missing_ok=True)
 
 
 def project_tree(project, config) -> Path:
     """Where the files of a project are on this machine."""
     if project["kind"] in ("git", "managed", "archive"):
-        tree = paths.PROJECTS_DIR / project["id"] / "tree"
+        # The account's own: resolved only so that a link of the system on the
+        # way (/var, say) does not stop snapshot(), which follows none.
+        tree = (paths.PROJECTS_DIR / project["id"] / "tree").resolve()
         if not tree.is_dir():
             raise Conflict("this project has no files yet: upload an archive"
                            if project["kind"] == "archive"
@@ -94,28 +137,82 @@ def project_tree(project, config) -> Path:
     return tree
 
 
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def open_tree(tree: Path) -> int:
+    """A directory, opened part by part from /, following no link: TREE is a
+    resolved path, and what changed since it was resolved is refused."""
+    fd = os.open("/", _DIR_FLAGS)
+    try:
+        for part in tree.parts[1:]:
+            child = os.open(part, _DIR_FLAGS, dir_fd=fd)
+            os.close(fd)
+            fd = child
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
 def snapshot(tree: Path, destination: Path) -> None:
-    """Copy a project for one run. Symbolic links are copied, never followed."""
-    files = size = 0
-    for current, directories, names in os.walk(tree):
-        directories[:] = [name for name in directories if name != ".git"]
-        target = destination / os.path.relpath(current, tree)
-        target.mkdir(mode=0o700, parents=True, exist_ok=True)
-        for name in names:
-            source = Path(current) / name
-            files += 1
-            if not source.is_symlink():
-                if not source.is_file():
-                    continue  # sockets, devices, fifos
-                size += source.stat().st_size
-            if files > MAX_PROJECT_FILES or size > MAX_PROJECT_BYTES:
-                raise Conflict("the project is too large to be copied for a run")
-            shutil.copy2(source, target / name, follow_symlinks=False)
-        for name in directories:
-            source = Path(current) / name
-            if source.is_symlink():
-                os.symlink(os.readlink(source), target / name)
-        directories[:] = [name for name in directories if not (Path(current) / name).is_symlink()]
+    """Copy a project for one run. Symbolic links are copied, never followed:
+    each directory and file is opened from the one that holds it, so a local
+    tree that its owner changes while it is copied cannot lead outside it."""
+    counts = [0, 0]
+    try:
+        fd = open_tree(tree)
+    except OSError as error:
+        raise Conflict(f"cannot read the project: {error.strerror}") from None
+    try:
+        _copy_tree(fd, destination, counts)
+    finally:
+        os.close(fd)
+
+
+def _copy_tree(source: int, target: Path, counts: list[int]) -> None:
+    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with os.scandir(source) as entries:
+        names = sorted(entry.name for entry in entries)
+    for name in names:
+        try:
+            info = os.stat(name, dir_fd=source, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        if stat.S_ISDIR(info.st_mode):
+            if name == ".git":
+                continue
+            child = os.open(name, _DIR_FLAGS, dir_fd=source)
+            try:
+                _copy_tree(child, target / name, counts)
+            finally:
+                os.close(child)
+            continue
+        if not (stat.S_ISLNK(info.st_mode) or stat.S_ISREG(info.st_mode)):
+            continue  # sockets, devices, fifos
+        counts[0] += 1
+        if stat.S_ISLNK(info.st_mode):
+            os.symlink(os.readlink(name, dir_fd=source), target / name)
+        else:
+            _copy_file(source, name, target / name, counts)
+        if counts[0] > MAX_PROJECT_FILES or counts[1] > MAX_PROJECT_BYTES:
+            raise Conflict("the project is too large to be copied for a run")
+
+
+def _copy_file(source: int, name: str, target: Path, counts: list[int]) -> None:
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=source)
+    with os.fdopen(fd, "rb") as reader:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            return  # changed into something else since it was listed
+        counts[1] += info.st_size
+        if counts[1] > MAX_PROJECT_BYTES:
+            raise Conflict("the project is too large to be copied for a run")
+        out = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                      info.st_mode & 0o777)
+        with os.fdopen(out, "wb") as writer:
+            shutil.copyfileobj(reader, writer)
+        os.utime(target, ns=(info.st_atime_ns, info.st_mtime_ns), follow_symlinks=False)
 
 
 def requirements(tree: Path) -> tuple[str, str] | None:
@@ -303,7 +400,7 @@ MAX_ARTIFACTS = 64 * 1024
 def _last_stats(directory: Path) -> dict:
     """The last line of the events file, if the play got to its stats."""
     try:
-        with open(directory / "events.jsonl", "rb") as events:
+        with open_run_file(directory, "events.jsonl") as events:
             events.seek(0, os.SEEK_END)
             events.seek(max(events.tell() - 256 * 1024, 0))
             last = events.read().splitlines()[-1]
@@ -321,7 +418,18 @@ def _stats(directory: Path) -> dict:
 def _artifacts(directory: Path) -> str:
     """What the playbook set with set_stats, as JSON: too much is dropped."""
     found = _last_stats(directory).get("artifacts", {})
-    text = json.dumps(found if isinstance(found, dict) else {})
+    if not isinstance(found, dict):
+        found = {}
+    # Only what the next steps can take as variables: a name Ansible reads
+    # itself, or no name at all, would make the next step fail.
+    from .survey import check_variable
+    kept = {}
+    for name, value in found.items():
+        try:
+            kept[check_variable(name)] = value
+        except BadRequest:
+            continue
+    text = json.dumps(kept)
     return text if len(text) <= MAX_ARTIFACTS else "{}"
 
 
@@ -363,7 +471,7 @@ def _collect(ctx, run) -> None:
     if _unit_active(run_id):
         return
     try:
-        result = json.loads((directory / "result.json").read_text())
+        result = json.loads(read_run_file(directory, "result.json", 1024 * 1024))
     except (OSError, ValueError):
         if store.now() - (run["started_at"] or 0) < _START_GRACE:
             return  # the unit may not have started yet
@@ -441,14 +549,17 @@ def _collect(ctx, run) -> None:
 
 def _log_tail(directory: Path, limit: int = 2000) -> str:
     try:
-        return (directory / "stdout.log").read_text(errors="replace")[-limit:]
+        with open_run_file(directory, "stdout.log") as source:
+            source.seek(0, os.SEEK_END)
+            source.seek(max(source.tell() - 4 * limit, 0))
+            return source.read().decode(errors="replace")[-limit:]
     except OSError:
         return "no output"
 
 
 def _store_inventory(ctx, run, directory: Path) -> None:
     from . import checks  # it builds on this module
-    hosts = parse_inventory(json.loads((directory / "inventory.json").read_text()))
+    hosts = parse_inventory(json.loads(read_run_file(directory, "inventory.json")))
     store.update(ctx.conn, "inventories", run["inventory_id"],
                  {"hosts": json.dumps(hosts), "parsed_at": store.now(), "parse_error": ""},
                  "inventory")

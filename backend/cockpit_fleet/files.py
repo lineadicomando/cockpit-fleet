@@ -493,8 +493,10 @@ def file_push(ctx: Context, params: Values) -> dict:
         bundle.write_bytes(data)
         if _git(project_id, "bundle", "verify", "--quiet", str(bundle), check=False) is None:
             raise BadRequest("this is not a bundle of commits on top of the project")
-        _git(project_id, "fetch", "--quiet", "--no-tags", str(bundle),
-             f"+main:{_INCOMING}")
+        # Every object checked, not only those of the tree that is looked at.
+        _git(project_id, "fetch", "--quiet", "--no-tags", str(bundle), f"+main:{_INCOMING}",
+             env={"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "transfer.fsckObjects",
+                  "GIT_CONFIG_VALUE_0": "true"})
         try:
             changed = _incoming_files(project_id, expected)
             _git(project_id, "merge", "--quiet", "--ff-only", _INCOMING)

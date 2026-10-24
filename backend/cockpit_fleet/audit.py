@@ -11,9 +11,30 @@ _MAX_PARAMS = 2000
 _PRIORITY = {"ok": 6, "denied": 4, "error": 3}
 
 
+_MAX_VALUE = 200
+
+
+def _short(value: object, depth: int = 0) -> object:
+    """A value cut down, so that a long one does not push the others out."""
+    if isinstance(value, str):
+        return value if len(value) <= _MAX_VALUE else value[:_MAX_VALUE] + "…"
+    if depth > 3:
+        return "…"
+    if isinstance(value, list):
+        return [_short(item, depth + 1) for item in value[:20]] + (["…"] if len(value) > 20 else [])
+    if isinstance(value, dict):
+        return {key: _short(item, depth + 1) for key, item in list(value.items())[:30]}
+    return value
+
+
 def _params_text(params: dict, redact: tuple[str, ...]) -> str:
-    shown = {key: ("***" if key in redact else value) for key, value in params.items()}
-    text = json.dumps(shown, ensure_ascii=False, sort_keys=True, default=str)
+    # Identifiers and limits first and whole: they say what the call was about.
+    order = sorted(params, key=lambda key: (not (key == "id" or key.endswith("_id")
+                                                 or key == "limit"), key))
+    shown = {key: ("***" if key in redact else
+                   params[key] if key == "id" or key.endswith("_id") or key == "limit"
+                   else _short(params[key])) for key in order}
+    text = json.dumps(shown, ensure_ascii=False, default=str)
     return text if len(text) <= _MAX_PARAMS else text[:_MAX_PARAMS] + "…"
 
 

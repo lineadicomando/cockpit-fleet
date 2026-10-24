@@ -19,6 +19,9 @@ NOTIFY_SECRET_PREFIX = "n-"  # noqa: S105  (a prefix of names, not a secret)
 # the launch of the run that takes them. On tmpfs: what is never used is gone
 # at the next boot, and tmpfiles removes it after an hour.
 ANSWERS_DIR = Path("/run/cockpit-fleet/answers")
+# The ciphertext of a run being started, copied there by fleet-unit, as root,
+# for PID 1 to read: see credstage.py.
+CREDS_STAGING_DIR = Path("/run/cockpit-fleet/creds")
 
 COLLECTIONS_DIR = Path("/usr/share/cockpit-fleet/collections")
 

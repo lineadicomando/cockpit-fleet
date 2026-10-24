@@ -5,7 +5,7 @@ import shutil
 
 from . import approvals, jobs, store, survey
 from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command
-from .errors import BadRequest, Conflict
+from .errors import BadRequest, Conflict, Forbidden
 from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
 from .validators import check_limit, check_module
 
@@ -56,7 +56,10 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         "kind": "playbook",
         "playbook": template["playbook"],
         # Both limits apply: a host must match the template's and the caller's.
-        "limit": ":&".join(value for value in limits if value),
+        # Not joined into one pattern, which Ansible would read as a union of
+        # their plain terms: fleet-run resolves each and keeps the hosts in both.
+        **({"limits": [value for value in limits if value]}
+           if all(limits) else {"limit": "".join(limits)}),
         "check": check,
         "diff": diff or check,
         "become": bool(template["become"]),
@@ -264,9 +267,12 @@ def _read_from(ctx: Context, params: Values, name: str) -> dict:
     """A chunk of one of the run's files, from a byte offset, for polling."""
     run_id = params["id"]
     offset = params["offset"]
-    store.fetch(ctx.conn, "runs", run_id, "run")
+    run = store.fetch(ctx.conn, "runs", run_id, "run")
+    if run["kind"] == "inventory" and ctx.caller.role != "admin":
+        # Ansible quotes the lines it could not read, and they may hold passwords.
+        raise Forbidden("the output of reading an inventory is for administrators")
     try:
-        with open(jobs.run_dir(run_id) / name, "rb") as source:
+        with jobs.open_run_file(jobs.run_dir(run_id), name) as source:
             source.seek(offset)
             data = source.read(_CHUNK)
     except FileNotFoundError:

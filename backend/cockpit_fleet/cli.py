@@ -329,6 +329,12 @@ def is_agent(via: str) -> bool:
     return via == "mcp" or via.startswith("mcp:")
 
 
+def _recorded(error: FleetError) -> FleetError:
+    """An error whose refusal is in the audit trail already."""
+    error.audited = True
+    return error
+
+
 def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> None:
     """Take "via" out of the parameters of a call that does not come from the
     interface, and hold a call made for an agent to what config.toml lets
@@ -353,7 +359,14 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     if not ctx.config.mcp_enabled:
         audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
                      "agents are not enabled", redact, via)
-        raise Forbidden("agents are not enabled on this controller ([mcp] in config.toml)")
+        raise _recorded(Forbidden("agents are not enabled on this controller"
+                                  " ([mcp] in config.toml)"))
+    spec = COMMANDS.get(name)
+    if spec is not None and not spec.tool and name != "mcp.tools":
+        # fleet-mcp offers no such tool; a call that names one anyway is refused.
+        audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
+                     "not a tool for agents", redact, via)
+        raise _recorded(Forbidden(f"{name} is not for agents"))
     ceiling = ctx.config.mcp_max_role
     if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
         ctx.caller = replace(ctx.caller, role=ceiling)
@@ -372,13 +385,19 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         if not allowed(ctx.caller, spec.role, spec.right):
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
                          f"requires {spec.role}", spec.redact, ctx.via)
-            raise Forbidden(f"{name} requires the {spec.role} role")
+            raise _recorded(Forbidden(f"{name} requires the {spec.role} role"))
         data = spec.call(ctx, params)
         if spec.mutating:
             audit.record(ctx.conn, ctx.caller, name, params, "ok", redact=spec.redact, via=ctx.via)
         return {"ok": True, "data": data}
     except FleetError as error:
-        if spec is not None and spec.mutating and not isinstance(error, Forbidden):
+        if spec is not None and getattr(error, "audited", False):
+            pass
+        elif spec is not None and isinstance(error, Forbidden):
+            # Refused by the command itself: approving one's own launch, say.
+            audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
+                         str(error), spec.redact, ctx.via)
+        elif spec is not None and spec.mutating:
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "error",
                          str(error), spec.redact, ctx.via)
         return {"ok": False, "error": {"code": error.code, "message": str(error)}}

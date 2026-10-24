@@ -407,3 +407,19 @@ class BackendTest(Base):
 if __name__ == "__main__":
     unittest.main()
 
+
+class CloneDirectoryTest(unittest.TestCase):
+    def test_a_name_becomes_a_plain_directory_here(self):
+        from cockpit_fleet.terminal import clone_directory
+        for name, expected in (("site", "site"), ("--upload-pack=x", "upload-pack-x"),
+                               ("../../etc", "etc"), ("my site/one", "my-site-one"),
+                               ("..", "p1")):
+            self.assertEqual(clone_directory({"name": name, "id": "p1"}), expected, name)
+
+
+class CellTest(unittest.TestCase):
+    def test_a_cell_holds_no_control_character(self):
+        from cockpit_fleet.terminal import _cell
+        self.assertEqual(_cell("name", "web\x1b]52;c;ZXZpbA==\x07\n01"), "web?]52;c;ZXZpbA==??01")
+        self.assertEqual(_cell("name", ["a\x9bb"]), "a?b")
+

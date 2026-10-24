@@ -46,6 +46,9 @@ class Member(NamedTuple):
     executable: bool = False
     target: str = ""
     read: Callable[[], BinaryIO | None] | None = None
+    # What it says it holds: a tar read as a stream goes through all of it,
+    # even for a member that is left out.
+    size: int = 0
 
 
 def member_path(name: str) -> PurePosixPath | None:
@@ -78,7 +81,7 @@ def _tar_members(source: BinaryIO) -> Iterator[Member]:
         for info in archive:
             if info.isreg():
                 yield Member(info.name, "file", bool(info.mode & 0o111),
-                             read=lambda info=info: archive.extractfile(info))
+                             read=lambda info=info: archive.extractfile(info), size=info.size)
             elif info.isdir():
                 yield Member(info.name, "directory")
             elif info.issym():
@@ -204,7 +207,7 @@ def extract(archive: Path, destination: Path) -> dict:
 
 
 def _unpack(archive: Path, staging: Path) -> tuple[dict, Path]:
-    files = size = skipped = 0
+    files = size = skipped = passed = 0
     links: dict[PurePosixPath, str] = {}
     top: set[str] = set()
     try:
@@ -218,6 +221,10 @@ def _unpack(archive: Path, staging: Path) -> tuple[dict, Path]:
                 path = member_path(member.name)
                 if path is None:
                     skipped += 1
+                    passed += member.size
+                    if passed > MAX_BYTES:
+                        raise BadRequest("the archive holds more than"
+                                         f" {MAX_BYTES // (1024 * 1024)} MB in what is left out")
                     continue
                 if member.kind not in ("file", "directory", "link"):
                     raise BadRequest(f"the archive has a {member.kind}: {path}")

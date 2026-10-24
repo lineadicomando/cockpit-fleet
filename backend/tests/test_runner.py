@@ -1,8 +1,11 @@
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from cockpit_fleet import runner
 from cockpit_fleet.errors import BadRequest
 from cockpit_fleet.runner import build_argv, build_env, mask, secret_values, usage
 
@@ -207,3 +210,48 @@ class UsageTest(unittest.TestCase):
         self.proc.write_text("1:name=systemd:/x\n")
         self.assertEqual(usage(self.proc, self.root), {})
         self.assertEqual(usage(Path(self.tmp.name) / "missing", self.root), {})
+
+
+class LimitTest(unittest.TestCase):
+    """The template's limit and the caller's: the hosts in both, never a
+    pattern Ansible would read as their union."""
+
+    LISTING = {"_meta": {"hostvars": {"w1": {"x": 1}}},
+               "all": {"children": ["ungrouped", "web", "db"]},
+               "web": {"hosts": ["w1", "w2"]}, "db": {"hosts": ["d1"]}}
+
+    def test_the_hosts_in_every_listing_are_kept(self):
+        narrowed = {"web": {"hosts": ["w2"]}, "db": {"hosts": ["d1"]}}
+        self.assertEqual(runner.limit_hosts([self.LISTING, narrowed]), "d1\nw2\n")
+        with self.assertRaises(BadRequest):
+            runner.limit_hosts([self.LISTING, {"db": {"hosts": ["d9"]}}])
+
+    def test_a_host_a_limit_file_would_read_as_a_pattern_is_refused(self):
+        for name in ("web", "all", "*", "w~1", "&x", "!x", "w[1]"):
+            with self.subTest(name), self.assertRaises(BadRequest):
+                runner.limit_hosts([{**self.LISTING, "g": {"hosts": [name]}},
+                                    {"g": {"hosts": [name]}}])
+        self.assertEqual(runner.limit_hosts([{"g": {"hosts": ["fe80::1", "10.0.0.1"]}}] * 2),
+                         "10.0.0.1\nfe80::1\n")
+
+    @unittest.skipUnless(os.path.exists("/usr/bin/ansible-inventory"), "needs ansible-core")
+    def test_ansible_keeps_only_the_template_hosts_whatever_the_caller_gives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run, runtime = Path(tmp) / "run", Path(tmp) / "runtime"
+            (run / "project").mkdir(parents=True)
+            runtime.mkdir()
+            (run / "project" / "hosts").write_text("[web]\nw1\nw2\n[db]\nd1\n")
+            cases = {"all:all": "w1\nw2\n", "x,d1": None, "w1,d1": "w1\n",
+                     "all:!w1": "w2\n", "w*": "w1\nw2\n"}
+            for caller, expected in cases.items():
+                with self.subTest(caller):
+                    spec = {"inventory": "hosts", "limits": ["web", caller]}
+                    listings = []
+                    for command, output in runner.limit_plan(spec, run, runtime, None):
+                        subprocess.run(command, check=True, capture_output=True,
+                                       env={"PATH": "/usr/bin:/bin", "HOME": tmp})
+                        listings.append(json.loads(output.read_text()))
+                    if expected is None:
+                        self.assertRaises(BadRequest, runner.limit_hosts, listings)
+                    else:
+                        self.assertEqual(runner.limit_hosts(listings), expected)
