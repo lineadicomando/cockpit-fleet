@@ -52,7 +52,7 @@ build() {  # build TREE: the bundle and the package of DISTRO
 echo "older package: $old_ref"
 git worktree add --detach --quiet "$work/old" "$old_ref"
 ln -s "$PWD/node_modules" "$work/old/node_modules"
-# Below the current version: 0.0.1 becomes 0.0.0, 0.1.0 becomes 0.0.99, and so on.
+# Below any version of the project: 0.0.0.
 sed -i '1s/(\([^)]*\))/(0.0.0~old)/' "$work/old/debian/changelog"
 sed -i 's/^Version:.*/Version:        0.0.0/' "$work/old/packaging/cockpit-fleet.spec"
 build "$work/old"

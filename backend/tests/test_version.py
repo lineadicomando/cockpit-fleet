@@ -19,6 +19,13 @@ class VersionTest(unittest.TestCase):
         self.assertIsNotNone(match, first_line)
         self.assertEqual(match.group(1), cockpit_fleet.__version__)
 
+    def test_collection_matches(self):
+        galaxy = (ROOT / "collection" / "ansible_collections" / "lineadicomando" / "fleet"
+                  / "galaxy.yml").read_text()
+        match = re.search(r"^version:\s*(\S+)$", galaxy, re.MULTILINE)
+        self.assertIsNotNone(match, "no version in galaxy.yml")
+        self.assertEqual(match.group(1), cockpit_fleet.__version__)
+
     def test_rpm_spec_matches(self):
         spec = (ROOT / "packaging" / "cockpit-fleet.spec").read_text()
         match = re.search(r"^Version:\s*(\S+)$", spec, re.MULTILINE)

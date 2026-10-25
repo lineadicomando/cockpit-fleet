@@ -3,9 +3,20 @@
 Cockpit plugin to run Ansible from the web console and to watch a fleet of
 nodes through Ansible alone, without installing an agent on them.
 
-> **Status: before its first release.** Everything below works and is
-> tested on Debian 13, Fedora 44 and AlmaLinux 10; what is left before
-> 0.1.0 is in [TODO.md](TODO.md).
+> **Status: 0.1.0, the first release.** Tested on Debian 13, Fedora 44 and
+> AlmaLinux 10; what changed is in [CHANGELOG.md](CHANGELOG.md), what is
+> planned in [TODO.md](TODO.md).
+
+| | |
+|---|---|
+| ![The problems of the hosts, with what can be done about each](docs/screenshots/hosts.png) | ![A host: what it is and the state of its checks](docs/screenshots/host.png) |
+| Problems of the hosts | A host and its checks |
+| ![A job template launched with the answers to its survey](docs/screenshots/launch.png) | ![A run: its outcome by host and its output](docs/screenshots/run.png) |
+| Launching a template | A run |
+| ![A workflow run, its steps and how they follow each other](docs/screenshots/workflow.png) | ![A project written in the browser, in its editor](docs/screenshots/editor.png) |
+| A workflow | Writing a playbook in the browser |
+| ![Runs, and a run waiting for approval](docs/screenshots/runs.png) | ![Assets: system, hardware, packages and updates of each host](docs/screenshots/assets.png) |
+| Runs and approvals | Assets |
 
 ## Documentation
 

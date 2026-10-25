@@ -33,9 +33,9 @@ README) and installed with the distribution's tool, which brings what it
 depends on:
 
 ```sh
-sudo apt-get install ./cockpit-fleet_0.0.1_all.deb            # Debian
-sudo dnf install ./cockpit-fleet-0.0.1-1.fc44.noarch.rpm      # Fedora
-sudo dnf install ./cockpit-fleet-0.0.1-1.el10.noarch.rpm      # AlmaLinux
+sudo apt-get install ./cockpit-fleet_0.1.0_all.deb            # Debian
+sudo dnf install ./cockpit-fleet-0.1.0-1.fc44.noarch.rpm      # Fedora
+sudo dnf install ./cockpit-fleet-0.1.0-1.el10.noarch.rpm      # AlmaLinux
 ```
 
 It installs:

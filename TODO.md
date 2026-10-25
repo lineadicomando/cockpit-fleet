@@ -12,10 +12,9 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** phase 10, from the screenshots, `CHANGELOG` and the tag
-`v0.1.0`; the security review, the negative tests, accessibility, the
-Italian, the docs for administrators, upgrade and removal, and the `.rpm`
-in CI are done.
+**Next:** the last item of phase 10, publication on GitHub: its Actions
+workflow, the license confirmed, a history with no secrets or real
+environments. 0.1.0 is tagged; everything else of phase 10 is done.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -172,7 +171,10 @@ except the rows that say "to confirm".
   the states on the page of hosts are headings; a page left open across an
   upgrade of the package cannot load the new bundle's chunks until the user
   logs in again (Cockpit lists a package's files when the session starts);
-  pages not seen as a viewer or an operator, nor the chat, in this audit.
+  pages not seen as a viewer or an operator, nor the chat, in this audit;
+  the header "Which check" of the tables of states cut short at 1440 px
+  beside Cockpit's menu; with a few hours of values a chart of a day is
+  mostly empty.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.
@@ -232,8 +234,10 @@ except the rows that say "to confirm".
       and on the AlmaLinux VM)
 - [x] `.rpm` built in CI (25 October: runners for Fedora 44 and AlmaLinux 10
       on the Gitea host, a job each, rpm-build and rpmlint)
-- [ ] Screenshots, `CHANGELOG`, tag `v0.1.0` (version is `0.0.1` in
-      `package.json`, `debian/changelog`, the spec)
+- [x] Screenshots, `CHANGELOG`, tag `v0.1.0` (25 October: eight
+      screenshots of the Debian VM in `docs/screenshots/`, in the README;
+      `CHANGELOG.md`; the version 0.1.0 wherever it is written, the
+      collection's included)
 - [ ] GitHub Actions workflow; publication with license confirmed and a
       history with no secrets or real environments
 
