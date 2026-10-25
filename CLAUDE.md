@@ -249,9 +249,11 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
   real (non-test) environments or of a developer's machines, in files or in
   commit messages.
 - License: `LGPL-2.1-or-later`, same as `cockpit-samba-dc` (provisional).
-- CI: `.gitea/workflows/ci.yml`, on a runner labelled `cockpit-fleet`: a
-  Debian 13 arm64 container where jobs run directly, as a non-root user.
-  Tools with a version (Node.js, ruff) are pinned in the workflow.
+- CI: `.gitea/workflows/ci.yml`, on runners labelled `cockpit-fleet`
+  (Debian 13: tests, the `.deb`), `cockpit-fleet-fedora` and
+  `cockpit-fleet-alma` (the `.rpm` with rpmlint): arm64 containers where
+  jobs run directly, as a non-root user. Tools with a version (Node.js,
+  ruff) are pinned in the workflow and installed by `scripts/ci-tool.sh`.
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material

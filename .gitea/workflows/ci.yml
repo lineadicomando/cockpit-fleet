@@ -28,39 +28,10 @@ jobs:
 
       # Tools with a version are not in the runner image: the version is pinned
       # here and the files stay in /data/tools (persistent), one directory each.
-      - name: Setup Node.js
-        shell: bash
+      - name: Setup Node.js and ruff
         run: |
-          set -euo pipefail
-          dir="/data/tools/node/${NODE_VERSION}"
-          if [ ! -x "$dir/bin/node" ]; then
-            case "$(uname -m)" in
-              x86_64) arch="linux-x64" ;;
-              aarch64) arch="linux-arm64" ;;
-              *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;;
-            esac
-            file="node-v${NODE_VERSION}-${arch}.tar.xz"
-            url="https://nodejs.org/dist/v${NODE_VERSION}"
-            tmp="$(mktemp -d)"
-            curl -fsSL -o "$tmp/$file" "$url/$file"
-            curl -fsSL -o "$tmp/SHASUMS256.txt" "$url/SHASUMS256.txt"
-            (cd "$tmp" && grep " $file\$" SHASUMS256.txt | sha256sum -c)
-            mkdir -p "$dir"
-            tar -xJf "$tmp/$file" -C "$dir" --strip-components=1
-            rm -rf "$tmp"
-          fi
-          echo "$dir/bin" >> "$GITHUB_PATH"
-
-      - name: Setup ruff
-        shell: bash
-        run: |
-          set -euo pipefail
-          dir="/data/tools/ruff/${RUFF_VERSION}"
-          if [ ! -x "$dir/bin/ruff" ]; then
-            python3 -m venv "$dir"
-            "$dir/bin/pip" install --quiet "ruff==${RUFF_VERSION}"
-          fi
-          echo "$dir/bin" >> "$GITHUB_PATH"
+          scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"
+          scripts/ci-tool.sh ruff "$RUFF_VERSION" >> "$GITHUB_PATH"
 
       - name: Show versions
         run: |
@@ -90,3 +61,35 @@ jobs:
 
       - name: Build and check the .deb
         run: scripts/build-deb.sh --native
+
+  rpm:
+    # One runner per distribution, Fedora 44 and AlmaLinux 10, with rpm-build
+    # and rpmlint; the job runs in its container, as the one above.
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [fedora, alma]
+    runs-on: cockpit-fleet-${{ matrix.distro }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        run: scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: |
+          cat /etc/os-release | grep PRETTY_NAME
+          node --version
+          rpmbuild --version
+          rpmlint --version
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Build and check the .rpm
+        run: scripts/build-rpm.sh --native

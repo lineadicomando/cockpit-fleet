@@ -7,6 +7,7 @@ addFilter(r"incorrect-fsf-address /usr/share/licenses/cockpit-fleet/LICENSE")
 # English, but not in rpmlint's dictionary.
 addFilter(r"spelling-error .*sandboxed")
 # The state, the secrets and the survey answers belong to the service account
-# and are closed to others on purpose: see the security model.
+# and are closed to others on purpose, and the ciphertext of a run while it
+# starts is root's alone: see the security model.
 addFilter(r"non-standard-(uid|gid) .* cockpit-fleet$")
-addFilter(r"non-standard-dir-perm /(etc/cockpit-fleet/secrets|var/lib/cockpit-fleet|run/cockpit-fleet/answers)")
+addFilter(r"non-standard-dir-perm /(etc/cockpit-fleet/secrets|var/lib/cockpit-fleet|run/cockpit-fleet/answers|run/cockpit-fleet/creds)")

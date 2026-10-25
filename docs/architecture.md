@@ -2058,7 +2058,11 @@ environment and working directory cannot bring into fleetctl.
 
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors
-and warnings. The `.rpm` is not built in CI: the runner is Debian. The
+and warnings, on a Debian 13 runner; and the `.rpm` built natively and
+checked with rpmlint on two more runners, Fedora 44 and AlmaLinux 10, one
+job each. The runners are containers where jobs run directly, as a user
+that is not root; tools with a version (Node.js, ruff) are pinned in the
+workflow and installed once per runner by `scripts/ci-tool.sh`. The
 integration scripts are not part of CI: they need podman able to start
 privileged containers, which the runner, itself a container where jobs run
 as a non-root user, was not set up for.

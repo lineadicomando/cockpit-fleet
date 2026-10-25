@@ -44,7 +44,8 @@ test -f dist/index.js || { echo "dist/ is missing: run 'make build' first"; exit
 install -d %{buildroot}%{_sysconfdir}/cockpit-fleet/secrets/notify \
     %{buildroot}%{_sharedstatedir}/cockpit-fleet/runs \
     %{buildroot}%{_sharedstatedir}/cockpit-fleet/projects \
-    %{buildroot}/run/cockpit-fleet/answers
+    %{buildroot}/run/cockpit-fleet/answers \
+    %{buildroot}/run/cockpit-fleet/creds
 install -D -m 0644 system/cockpit-fleet.preset %{buildroot}%{_presetdir}/80-cockpit-fleet.preset
 
 # rpm creates the account and groups from the sysusers.d file before the files
@@ -106,6 +107,7 @@ fi
 %dir %attr(0750,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/projects
 %ghost %dir %attr(0755,root,root) /run/cockpit-fleet
 %ghost %dir %attr(0770,root,cockpit-fleet) /run/cockpit-fleet/answers
+%ghost %dir %attr(0700,root,root) /run/cockpit-fleet/creds
 %config(noreplace) %{_sysconfdir}/cockpit-fleet/config.toml
 %attr(0440,root,root) %config(noreplace) %{_sysconfdir}/sudoers.d/cockpit-fleet
 
