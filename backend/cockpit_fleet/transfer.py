@@ -195,6 +195,8 @@ class _Importer:
 
     def host_key(self, item: dict) -> str:
         params = {key: item.get(key) for key in ("host", "key_type", "key")}
+        if not all(isinstance(value, str) for value in params.values()):
+            raise BadRequest("host, key_type and key must be strings")
         row = self.ctx.conn.execute("SELECT key FROM host_keys WHERE host = ? AND key_type = ?",
                                     (params["host"], params["key_type"])).fetchone()
         if row is not None and row["key"] == params["key"]:

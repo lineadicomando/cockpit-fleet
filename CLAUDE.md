@@ -137,6 +137,7 @@ Integration tests run as root on a controller, with the package installed:
 test/integration/privileges.sh       # what the service account can reach
 test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD)
 test/integration/roles.sh            # roles, audit, sudoers (creates and removes test accounts)
+test/integration/negative.sh         # hostile input to every command as each role, the caller's environment, secrets typed in clear; WIPES
 test/integration/runs.sh             # a whole run through fleetctl; WIPES the database (IT_WIPE=yes)
 test/integration/files.sh            # a project written in the interface, syntax checks; WIPES
 test/integration/upload.sh           # a project uploaded as an archive, hostile archives; WIPES

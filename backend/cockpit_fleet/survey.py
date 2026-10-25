@@ -14,7 +14,7 @@ import math
 import re
 import unicodedata
 
-from .errors import BadRequest, Conflict
+from .errors import BadRequest, Conflict, FleetError, hiding
 
 TYPES = ("text", "number", "choice", "boolean", "secret")
 MAX_FIELDS = 30
@@ -114,7 +114,8 @@ def _check_field(raw: object) -> dict:
     default = raw.get("default")
     if default is not None and default != "":
         if kind == "secret":
-            raise BadRequest(f"{name}: a secret field has no default, it would be stored in clear")
+            raise hiding(BadRequest(f"{name}: a secret field has no default, it would be"
+                                    " stored in clear"), default)
         field["default"] = _check_value(field, default, "default")
     return field
 
@@ -164,6 +165,18 @@ def stored_answers(template, answers: dict, use: str, holder: str) -> dict:
     used so, and a secret it may do without is left unanswered.
     """
     fields = json.loads(template["survey"] or "[]")
+    try:
+        return _stored_answers(template, fields, answers, use, holder)
+    except FleetError as error:
+        raise hiding(error, *_secret_answers(fields, answers)) from None
+
+
+def _secret_answers(fields: list[dict], answers: dict) -> list[object]:
+    """What was given for the secret fields: never to be recorded."""
+    return [answers.get(field["name"]) for field in fields if field["type"] == "secret"]
+
+
+def _stored_answers(template, fields: list[dict], answers: dict, use: str, holder: str) -> dict:
     for field in fields:
         if field["type"] == "secret" and field["required"]:
             raise Conflict(f"{template['name']} asks for a secret at launch"
@@ -184,6 +197,13 @@ def answer(fields: list[dict], answers: dict) -> tuple[dict, dict]:
     unless it is required. An answer to a question that was not asked is an
     error, not something to ignore.
     """
+    try:
+        return _answer(fields, answers)
+    except FleetError as error:
+        raise hiding(error, *_secret_answers(fields, answers)) from None
+
+
+def _answer(fields: list[dict], answers: dict) -> tuple[dict, dict]:
     unknown = set(answers) - {field["name"] for field in fields}
     if unknown:
         raise BadRequest(f"not a field of this template's survey: {', '.join(sorted(unknown))}")

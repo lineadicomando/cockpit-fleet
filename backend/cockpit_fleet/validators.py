@@ -61,6 +61,28 @@ def check_host(value: object) -> str:
     return _match(_HOST_RE, value, "host name or address")
 
 
+_KNOWN_HOST_RE = re.compile(r"\[([^\]]+)\]:([0-9]{1,5})")
+_KEY_TYPE_RE = re.compile(r"[a-z0-9][a-z0-9@.-]{0,63}")
+
+
+def check_known_host(value: object) -> str:
+    """A host as known_hosts names it: a name or an address, or either in
+    brackets with a port. Nothing that known_hosts reads as a pattern, a
+    list or a marker, which would trust a key for other hosts."""
+    if isinstance(value, str):
+        bracketed = _KNOWN_HOST_RE.fullmatch(value)
+        if bracketed is None:
+            return check_host(value)
+        if 1 <= int(bracketed.group(2)) <= 65535:
+            check_host(bracketed.group(1))
+            return value
+    raise BadRequest(f"invalid host name or address: {value!r}")
+
+
+def check_key_type(value: object) -> str:
+    return _match(_KEY_TYPE_RE, value, "key type")
+
+
 # A group of an inventory, and a host as a line of a file given to --limit:
 # nothing that reads as a pattern, but an IPv6 address.
 _GROUP_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")

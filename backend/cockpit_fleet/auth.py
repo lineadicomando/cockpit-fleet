@@ -74,11 +74,16 @@ def resolve_caller(
     if sudo_uid is None:
         # Not through sudo: the service account itself, e.g. a scheduled job.
         return Caller(own_uid, "system", "admin")
+    # sudo writes it in plain decimal: anything else int() would take (a
+    # sign, spaces, other digits) is not from sudo.
     try:
+        if not (sudo_uid.isascii() and sudo_uid.isdigit()) or len(sudo_uid) > 10 \
+                or (len(sudo_uid) > 1 and sudo_uid.startswith("0")):
+            raise ValueError(sudo_uid)
         uid = int(sudo_uid)
         entry = getpwuid(uid)
-    except (ValueError, KeyError):
-        return Caller(-1, f"uid {sudo_uid}", None)
+    except (ValueError, KeyError, OverflowError):
+        return Caller(-1, f"uid {sudo_uid!r}", None)
     if uid == 0:
         return Caller(0, entry.pw_name, "admin")
     groups = group_names(entry.pw_name, entry.pw_gid)

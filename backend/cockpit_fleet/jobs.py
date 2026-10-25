@@ -21,6 +21,7 @@ from . import journal, notify, paths, store
 from .errors import BadRequest, Conflict, FleetError, Unavailable
 from .names import check_id
 from .runner import CHECK_RCS
+from .validators import check_key_type, check_known_host
 
 MAX_PROJECT_FILES = 20_000
 MAX_PROJECT_BYTES = 500 * 1024 * 1024
@@ -317,10 +318,25 @@ def install_missing(ctx, project_id: str | None, created_by: str | None = None,
     return queue_collections(ctx, row, created_by, start)
 
 
+_KEY_RE = re.compile(r"[A-Za-z0-9+/]+={0,2}")
+
+
+def _known_host_line(row) -> str:
+    """One line of known_hosts, or nothing for a row stored before hostkey.add
+    checked what it does now: such a row could trust its key for other hosts."""
+    try:
+        check_known_host(row["host"])
+        check_key_type(row["key_type"])
+    except BadRequest:
+        return ""
+    if not isinstance(row["key"], str) or not _KEY_RE.fullmatch(row["key"]):
+        return ""
+    return f"{row['host']} {row['key_type']} {row['key']}\n"
+
+
 def write_known_hosts(conn, directory: Path) -> None:
     rows = conn.execute("SELECT host, key_type, key FROM host_keys ORDER BY host")
-    text = "".join(f"{row['host']} {row['key_type']} {row['key']}\n" for row in rows)
-    (directory / "known_hosts").write_text(text)
+    (directory / "known_hosts").write_text("".join(_known_host_line(row) for row in rows))
 
 
 def queue(ctx, run: dict, spec: dict, directory: Path, status: str = "queued") -> None:

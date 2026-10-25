@@ -319,6 +319,8 @@ def _parse_input(raw: bytes, limit: int = MAX_INPUT) -> dict:
         data = json.loads(raw)
     except (ValueError, UnicodeDecodeError) as error:
         raise BadRequest(f"input is not valid JSON: {error}") from error
+    except RecursionError:
+        raise BadRequest("input is nested too deeply") from None
     if not isinstance(data, dict):
         raise BadRequest("input must be a JSON object")
     return data
@@ -396,10 +398,10 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         elif spec is not None and isinstance(error, Forbidden):
             # Refused by the command itself: approving one's own launch, say.
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                         str(error), spec.redact, ctx.via)
+                         str(error), spec.redact, ctx.via, error.secrets)
         elif spec is not None and spec.mutating:
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "error",
-                         str(error), spec.redact, ctx.via)
+                         str(error), spec.redact, ctx.via, error.secrets)
         return {"ok": False, "error": {"code": error.code, "message": str(error)}}
     except Exception:
         # The details go to the journal, not to the browser.

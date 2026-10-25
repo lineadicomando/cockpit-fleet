@@ -103,7 +103,8 @@ def _check_edges(nodes: list[dict], edges: list[dict]) -> list[dict]:
         if unknown:
             raise BadRequest(f"unknown key in a link: {', '.join(sorted(unknown))}")
         parent, child, condition = edge.get("from"), edge.get("to"), edge.get("condition")
-        if parent not in ids or child not in ids:
+        if not isinstance(parent, str) or not isinstance(child, str) or \
+                parent not in ids or child not in ids:
             raise BadRequest("a link joins two steps of the workflow")
         if parent == child:
             raise BadRequest("a step cannot follow itself")

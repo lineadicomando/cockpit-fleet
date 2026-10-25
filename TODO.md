@@ -4,7 +4,7 @@ Cockpit plugin that runs Ansible from the browser (Semaphore UI style) and
 collects, stores and notifies on data from the nodes, with Ansible only. Not
 a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
-## Status (24 October 2026)
+## Status (25 October 2026)
 
 Phases 0–9 closed (how each was accepted: the last section of
 `docs/architecture.md`); the terminal's ideas done and seen live. Phase 9
@@ -12,10 +12,8 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** phase 10, from the automated negative tests (the security
-review is done). The chat's agent role, the open point before it, ran on
-Fedora 44 and AlmaLinux 10 on 24 October (install, a second run,
-`fleet-chat` up to the login, `absent`; no denial).
+**Next:** phase 10, from accessibility and the Italian left (the security
+review and the negative tests are done).
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -50,13 +48,14 @@ notifications in `notify.py` and `channels.py`, the terminal in
 (`checks.py`, `win_checks.ps1`, `fleet_result.py`), pages in
 `src/components/`.
 
-Last test runs, on 24 October with the fixes of the security review: unit
-tests (434 backend, 93 frontend) and ruff clean; `make ct-test` of every
-script on the three, all passing but `cmdb` on Fedora, where `podman
-network connect` fails in the container (netavark: "invalid namespace
-path"), so the interface it adds to a node never appears: the environment,
-not the code; `privileges sandbox roles runs workflows schedules` on the
-VMs of the three, no SELinux denial. `windows.sh` last on 20 October.
+Last test runs, on 25 October with the negative tests and their fixes:
+unit tests (461 backend, 93 frontend) and ruff clean; `make ct-test` of
+every script on the three, `negative` included, all passing but `cmdb` on
+Fedora, where `podman network connect` fails in the container (netavark:
+"invalid namespace path"), so the interface it adds to a node never
+appears: the environment, not the code. On the VMs of the three, last on
+24 October (`privileges sandbox roles runs workflows schedules`, no SELinux
+denial), before these fixes. `windows.sh` last on 20 October.
 
 ## Decisions
 
@@ -194,6 +193,11 @@ except the rows that say "to confirm".
   operator can fill the 500 waiting secret answers for an hour; `fleet`
   shows run output with its colours raw (escape sequences of nodes); unpack
   jobs have no time limit.
+- Negative tests (25 October): a value typed in clear for a secret is
+  masked in the audit wherever it appears, so a short one masks other text
+  of that record too; the fuzzer gives one hostile value at a time, never
+  two together; `chat.start`, `state.ack`, `workflow.resume` and the
+  deletes of things in use stop before most of their checks in it.
 
 ## Phase 10 — Release 0.1.0
 
@@ -202,7 +206,11 @@ except the rows that say "to confirm".
       widened the template's, run files read through links, notifications
       stopped by a host name, races copying a local project and reading
       its files, audit of refusals; what was left is under Leftovers)
-- [ ] Automated negative tests: injection, traversal, role escalation, secrets
+- [x] Automated negative tests: injection, traversal, role escalation, secrets
+      (25 October; `test_negative.py` over the whole registry and
+      `negative.sh`; fixed: a secret typed in clear recorded in the audit,
+      `hostkey.add` taking a pattern, `SUDO_UID` read by `int()`, three
+      internal errors on malformed input)
 - [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle", "Copyable input", "Details" of an expandable row)
 - [ ] Docs: installation, security model, writing a check, backup
 - [ ] Upgrade and removal (`purge` too), `.deb` and `.rpm`

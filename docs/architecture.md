@@ -156,7 +156,9 @@ own limit: `project.upload` and `config.import`.
 
 - **Who is calling.** fleetctl refuses to run as anything but the service
   account, so it is always reached through sudo, which sets `SUDO_UID` and does
-  not let the caller override it.
+  not let the caller override it. Only plain decimal digits are read as an
+  account: whatever else `int()` would take (spaces, a sign, other scripts'
+  digits) gives no role.
 - **Roles.** `cockpit-fleet-viewer`, `-operator`, `-admin`; the highest group
   wins. Root is an administrator. Every command declares the least role that
   may call it, and the check happens in one place, before the handler runs.
@@ -170,7 +172,11 @@ own limit: `project.upload` and `config.import`.
   the `audit` table and to the journal (`journalctl -t cockpit-fleet`, with
   `FLEET_USER`, `FLEET_COMMAND`, `FLEET_OUTCOME` fields, and `FLEET_VIA` when
   the call was made for an agent). Parameters marked as
-  secret are replaced before being stored; identifiers and the limit are
+  secret are replaced before being stored, and so is a value typed where a
+  secret was expected (an answer to a secret field of a survey, given in
+  clear rather than as a ticket, or a default for it): the error that
+  refuses it carries the value, and the record masks it wherever it
+  appears. Identifiers and the limit are
   kept whole, other values cut at 200 characters each, so that a long
   answer does not push them out. An agent's call to a command that is not a
   tool (`tool=False`) is refused here too, not only by `fleet-mcp`. `fleet-secret` runs as root and
@@ -459,7 +465,13 @@ SSH host of an inventory, with their fingerprints; nothing is trusted until an
 administrator confirms with `hostkey.add`. A run connects only to hosts listed
 there. Each scanned key is marked new, already trusted, or changed: a key that
 differs from the trusted one is refused unless the replacement is asked for
-explicitly, because that is also what an impersonated host looks like.
+explicitly, because that is also what an impersonated host looks like. A
+host is a name or an address, alone or in brackets with a port, and a key
+type a plain name: each key is one line of `known_hosts`, and nothing in it
+may read as a pattern, a list of hosts, a marker such as `@cert-authority`
+or a second line, any of which would trust the key for other hosts. An
+import takes host keys through the same checks, and a row stored before
+them that fails one is left out of the `known_hosts` of a run.
 
 **SSH keys with a passphrase.** Ansible has no option to read a passphrase from
 a file, so `fleet-run` starts an `ssh-agent` inside the unit and loads the key
@@ -1871,6 +1883,8 @@ Found on the way:
 |---|---|---|
 | Frontend unit tests | `test/*.test.ts` | development host, CI |
 | Backend unit tests | `backend/tests/` | development host, CI |
+| Negative tests over the whole registry | `backend/tests/test_negative.py` | development host, CI |
+| The same on the installed package, through sudo | `test/integration/negative.sh` | controller, as root; wipes the database |
 | Privilege boundaries | `test/integration/privileges.sh` | controller, as root |
 | Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
 | Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
@@ -1933,6 +1947,38 @@ its disk and without the package, so that a test starts from a known
 system with the package of the commit under test (`lab.sh deploy`). What
 identifies the VMs is tracked (`test/vm/lab.conf`); what belongs to one
 workstation, the password and the path of the Windows ISO, is in `.env`.
+
+The negative tests take the registry as a whole, so that a command added
+later is covered without a test of its own. A table in the test gives every
+command its least role and whether it is audited as a change: a command
+added, or a role lowered, fails until the table says so. Every command is
+then called below its role, by an approver alone, for an agent above the
+ceiling, and with a "via" that would claim more, and must be refused, with
+its handler never reached and the refusal audited. A fuzzer gives each
+parameter of each command, and each leaf of its objects (the commands with
+several forms in each of them), values of the wrong type, out of bounds,
+too long, and strings made to become an option, leave a directory, run a
+shell or render a template, all aimed at a directory nothing may write to;
+the commands run against a controller with one of everything, so that an id
+reaches past its lookup. What must not happen: an internal error, a write in
+that directory, one of those strings as an argument of its own before `--`
+in any command line spawned (git really runs), a redacted value in the
+audit trail or the journal. The same is done to `spec.json` for each
+builder of `runner.py`, since `fleet-run` reads it back: every value is
+checked again, and no command line gets an option or a path outside the
+run. Secrets are planted where they live (the store, the channels', the
+waiting answers, a run's `creds/`), every command is called by each role
+allowed to, and none answers with one, nor does the journal or any file of
+the database hold it. `fleet-unit` and `fleet-secret` are loaded from
+`backend/libexec` and given every form of their arguments. They found that
+nesting deep enough to stop the JSON parser, and objects of the wrong type
+in the links of a workflow or in the host keys of an import, gave an
+internal error; that a secret typed in clear was refused but recorded with
+the call; that `hostkey.add` took a pattern that trusted its key for every
+host; and that `SUDO_UID` was read by `int()`. `negative.sh` gives every
+command, through sudo as each role, an empty object, one hostile value per
+parameter and input that is not an object, and checks what the caller's
+environment and working directory cannot bring into fleetctl.
 
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors

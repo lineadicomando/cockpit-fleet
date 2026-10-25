@@ -27,7 +27,22 @@ def _short(value: object, depth: int = 0) -> object:
     return value
 
 
-def _params_text(params: dict, redact: tuple[str, ...]) -> str:
+def _masked(value: object, secrets: tuple[str, ...]) -> object:
+    """VALUE with every one of SECRETS in its strings replaced by ***."""
+    if isinstance(value, str):
+        for secret in sorted(secrets, key=len, reverse=True):
+            value = value.replace(secret, "***")
+        return value
+    if isinstance(value, list):
+        return [_masked(item, secrets) for item in value]
+    if isinstance(value, dict):
+        return {key: _masked(item, secrets) for key, item in value.items()}
+    return value
+
+
+def _params_text(params: dict, redact: tuple[str, ...], secrets: tuple[str, ...] = ()) -> str:
+    if secrets:
+        params = _masked(params, secrets)
     # Identifiers and limits first and whole: they say what the call was about.
     order = sorted(params, key=lambda key: (not (key == "id" or key.endswith("_id")
                                                  or key == "limit"), key))
@@ -47,8 +62,9 @@ def record(
     detail: str = "",
     redact: tuple[str, ...] = (),
     via: str = "",
+    secrets: tuple[str, ...] = (),
 ) -> None:
-    text = _params_text(params, redact)
+    text = _params_text(params, redact, secrets)
     # The journal first: it still gets the record when the database is unusable.
     journal.send(
         f"{caller.user}{f' via {via}' if via else ''} {command}: {outcome}"

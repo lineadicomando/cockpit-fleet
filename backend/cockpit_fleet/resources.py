@@ -20,6 +20,8 @@ from .validators import (
     check_git_url,
     check_host,
     check_int,
+    check_key_type,
+    check_known_host,
     check_limit,
     check_relative_path,
     check_tag,
@@ -602,10 +604,8 @@ def hostkey_add(ctx: Context, params: Values) -> dict:
     key_type = params["key_type"]
     key = params["key"]
     replace = params["replace"]
-    bare = host[1:].split("]:")[0] if host.startswith("[") else host
-    check_host(bare)
-    if not key_type.replace("-", "").replace("@", "").replace(".", "").isalnum():
-        raise BadRequest("invalid key type")
+    check_known_host(host)
+    check_key_type(key_type)
     _fingerprint(key)
     # A different key for a host already trusted is what an attack looks like:
     # it is only accepted when asked for explicitly.
