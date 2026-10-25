@@ -1877,6 +1877,50 @@ Found on the way:
   write its audit record, and ansible-core 2.16 asks for a terminal (`-tt`).
   Real nodes are not concerned.
 
+## The interface: language and accessibility
+
+The page is in English or Italian, as the Cockpit session is (the
+`CockpitLang` cookie, then the shell's language, then the browser's). Every
+string goes through `t()`; the backend's messages, and what the nodes
+write in the summary of a check, stay in English, like the terminal.
+
+PatternFly falls back on English text of its own: labels only a screen
+reader says (an alert's kind, a close button, the value of a spinner, the
+menu of a row, the toggle of an expandable row), tooltips, the buttons of an
+upload. `src/components/pf.tsx` wraps those components with translated text,
+and pages import them from there, never from PatternFly: `Alert`,
+`AlertActionCloseButton`, `ClipboardCopy`, `FileUpload`, `Modal`,
+`NumberInput`, `SearchInput`, `Spinner`, `Tabs`, `ActionsColumn`, and
+`ExpandCell` for the cell that opens a row (`Td`'s own `expand` takes no
+label). The wrappers also mend what an audit found:
+
+- a modal's close button is drawn by the wrapper, since PatternFly gives it
+  no label of ours; Escape still closes it;
+- tabs whose content is drawn apart name it: `Tabs` takes a `panelId`, and
+  the content goes in a `TabPanel` of the same id, which the tabs'
+  `aria-controls` point to;
+- an alert's title is a paragraph, not a heading: an alert sits at any depth
+  of the page, and a heading of a fixed level broke their order;
+- a `NumberInput` given an `id` puts it on the field, where the label of its
+  `FormGroup` reaches it, and no name of its own over that label;
+- a `FormGroup` around something that is not a field (a code editor, the
+  links of a workflow step, an upload) is `role="group"`, so that its label
+  names the group instead of pointing at nothing.
+
+`<html lang>` of the frame is the language of the page, not the "en" of
+`index.html`, so that a screen reader reads Italian as Italian. The
+placeholder of the code editor uses the theme's subtle text colour: its
+own grey fell short of 4.5:1.
+
+Checked on 25 October on the Debian VM, in Italian, with data from
+`checks.sh` and a project, a template and a schedule: Lighthouse scores
+accessibility 100 on every tab, on the page of a host with a chart open, on
+a run, on the modal of a new template, and in the dark theme; a scan of
+the DOM on every tab and on each modal for a new item finds no English text
+of PatternFly, no label pointing at nothing and no field without a name.
+What Lighthouse does not judge: the text of the charts (an SVG), and the
+order of focus beyond what PatternFly gives.
+
 ## Tests
 
 | What | Where | Runs on |

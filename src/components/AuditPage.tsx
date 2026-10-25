@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, EmptyState, EmptyStateBody, Flex, FlexItem, Label, Spinner, Title } from "@patternfly/react-core";
+import { Button, EmptyState, EmptyStateBody, Flex, FlexItem, Label, Title } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
 import type { AuditEntry, AuditOutcome } from "../lib/types.ts";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
+import { Alert, Spinner } from "./pf.tsx";
 
 const PAGE = 50;
 const TONE: Record<AuditOutcome, Tone> = { ok: "good", denied: "warning", error: "bad" };

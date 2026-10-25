@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
     Button,
     Content,
     DescriptionList,
@@ -16,12 +15,10 @@ import {
     FormSelect,
     FormSelectOption,
     Label,
-    Modal,
     ModalBody,
     ModalFooter,
     ModalHeader,
     ModalVariant,
-    Spinner,
     TextArea,
 } from "@patternfly/react-core";
 import type { Item, ToolItem, ToolStatus } from "../lib/acp.ts";
@@ -34,6 +31,7 @@ import { useSession } from "../lib/session.tsx";
 import type { ChatAgentInfo, ChatInfo } from "../lib/types.ts";
 import { SectionHeader, TerminalCommand as Command } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
+import { Alert, Modal, Spinner } from "./pf.tsx";
 
 function shown(value: unknown): string {
     return typeof value === "string" ? value : JSON.stringify(value, null, 2);

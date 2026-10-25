@@ -11,12 +11,12 @@ import {
     DescriptionListTerm,
     Flex,
     Gallery,
-    Spinner,
 } from "@patternfly/react-core";
 import { call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { Check, Session } from "../lib/types.ts";
 import { StatusLabel } from "./StatusLabel.tsx";
+import { Spinner } from "./pf.tsx";
 
 export function OverviewPage({ session, onOpenSystem }: { session: Session; onOpenSystem: () => void }) {
     const { t } = useTranslation();

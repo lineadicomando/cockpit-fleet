@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, TextArea, TextInput } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call, deleteSecret, setSecret } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Credential, CredentialKind } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
+import { ActionsColumn } from "./pf.tsx";
 
 const FIELDS: Record<CredentialKind, string[]> = {
     machine: ["private_key", "key_passphrase", "password", "become_password"],

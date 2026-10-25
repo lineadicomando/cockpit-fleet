@@ -2,9 +2,7 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import cockpit from "cockpit";
 import {
-    Alert,
     Button,
-    ClipboardCopy,
     Content,
     EmptyState,
     EmptyStateBody,
@@ -12,12 +10,10 @@ import {
     Flex,
     FlexItem,
     Form,
-    Modal,
     ModalBody,
     ModalFooter,
     ModalHeader,
     ModalVariant,
-    Spinner,
     Title,
 } from "@patternfly/react-core";
 import { ExternalLinkAltIcon } from "@patternfly/react-icons";
@@ -26,6 +22,7 @@ import { shellPage } from "../lib/shell.ts";
 import type { RunStatus } from "../lib/types.ts";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { Label } from "@patternfly/react-core";
+import { Alert, ClipboardCopy, Modal, Spinner } from "./pf.tsx";
 
 export function message(ex: unknown): string {
     return ex instanceof Error ? ex.message : String(ex);

@@ -106,7 +106,10 @@ them needs the user's explicit agreement.
   queues it, and handle the result in `jobs._collect`.
 - **A page**: a component under `src/components/`, a tab in `TABS` in
   `src/app.tsx`. Use `useLoad`, `ListState`, `FormModal` and `ConfirmDelete`
-  from `common.tsx`, and `useCan()` to decide which actions to offer.
+  from `common.tsx`, and `useCan()` to decide which actions to offer. Take
+  `Alert`, `Modal`, `Spinner`, `Tabs`, `ActionsColumn` and the other
+  components `src/components/pf.tsx` wraps from there, not from PatternFly:
+  they carry translated text where PatternFly has English of its own.
 - **A string**: English in the source through `t()`, Italian in `po/it.po`, then
   `make pot && make po-compile`. Plurals use a symbolic key (`things_count`)
   whose English forms are edited by hand in `src/locales/en/translation.json`.

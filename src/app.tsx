@@ -5,9 +5,7 @@ import {
     Bullseye,
     Page,
     PageSection,
-    Spinner,
     Tab,
-    Tabs,
     TabTitleText,
     Title,
 } from "@patternfly/react-core";
@@ -34,6 +32,7 @@ import { SchedulesPage } from "./components/SchedulesPage.tsx";
 import { TemplatesPage } from "./components/TemplatesPage.tsx";
 import { WorkflowsPage } from "./components/WorkflowsPage.tsx";
 import { SessionContext } from "./lib/session.tsx";
+import { Spinner, TabPanel, Tabs } from "./components/pf.tsx";
 
 const TABS = ["overview", "hosts", "assets", "checks", "runs", "templates", "workflows", "schedules", "notifications", "inventories", "projects", "credentials", "hostkeys", "chat", "system", "audit"];
 
@@ -92,35 +91,37 @@ export function App() {
         return (
             <SessionContext.Provider value={data}>
                 <PageSection type="tabs" padding={{ default: "noPadding" }}>
-                    <Tabs activeKey={section} onSelect={(_event, key) => go(String(key))}>
+                    <Tabs panelId="fleet-section" activeKey={section} onSelect={(_event, key) => go(String(key))}>
                         {tabs.map(tab => (
                             <Tab key={tab} eventKey={tab} title={<TabTitleText>{titles[tab]}</TabTitleText>} />
                         ))}
                     </Tabs>
                 </PageSection>
                 <PageSection>
-                    {section === "overview" && <OverviewPage session={data} onOpenSystem={() => go("system")} />}
-                    {section === "hosts" && (location.path[1]
-                        ? <HostDetailPage key={location.path[1]} id={location.path[1]} />
-                        : <HostsPage />)}
-                    {section === "assets" && <AssetsPage />}
-                    {section === "checks" && <ChecksPage />}
-                    {section === "runs" && (location.path[1]
-                        ? <RunDetailPage key={location.path[1]} id={location.path[1]} />
-                        : <RunsPage />)}
-                    {section === "templates" && <TemplatesPage />}
-                    {section === "workflows" && <WorkflowsPage />}
-                    {section === "schedules" && <SchedulesPage />}
-                    {section === "notifications" && <NotificationsPage />}
-                    {section === "inventories" && <InventoriesPage />}
-                    {section === "projects" && (location.path[1]
-                        ? <FilesPage key={location.path[1]} id={location.path[1]} />
-                        : <ProjectsPage />)}
-                    {section === "credentials" && <CredentialsPage />}
-                    {section === "hostkeys" && <HostKeysPage />}
-                    {section === "chat" && <ChatPage />}
-                    {section === "system" && <SystemPage />}
-                    {section === "audit" && <AuditPage />}
+                    <TabPanel panelId="fleet-section" active={section}>
+                        {section === "overview" && <OverviewPage session={data} onOpenSystem={() => go("system")} />}
+                        {section === "hosts" && (location.path[1]
+                            ? <HostDetailPage key={location.path[1]} id={location.path[1]} />
+                            : <HostsPage />)}
+                        {section === "assets" && <AssetsPage />}
+                        {section === "checks" && <ChecksPage />}
+                        {section === "runs" && (location.path[1]
+                            ? <RunDetailPage key={location.path[1]} id={location.path[1]} />
+                            : <RunsPage />)}
+                        {section === "templates" && <TemplatesPage />}
+                        {section === "workflows" && <WorkflowsPage />}
+                        {section === "schedules" && <SchedulesPage />}
+                        {section === "notifications" && <NotificationsPage />}
+                        {section === "inventories" && <InventoriesPage />}
+                        {section === "projects" && (location.path[1]
+                            ? <FilesPage key={location.path[1]} id={location.path[1]} />
+                            : <ProjectsPage />)}
+                        {section === "credentials" && <CredentialsPage />}
+                        {section === "hostkeys" && <HostKeysPage />}
+                        {section === "chat" && <ChatPage />}
+                        {section === "system" && <SystemPage />}
+                        {section === "audit" && <AuditPage />}
+                    </TabPanel>
                 </PageSection>
             </SessionContext.Provider>
         );

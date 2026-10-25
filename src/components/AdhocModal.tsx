@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, Spinner, TextInput } from "@patternfly/react-core";
+import { Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextInput } from "@patternfly/react-core";
 import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { Credential, Inventory, Project, Run } from "../lib/types.ts";
 import { FormModal } from "./common.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
+import { Alert, Spinner } from "./pf.tsx";
 
 interface Choices {
     modules: string[];

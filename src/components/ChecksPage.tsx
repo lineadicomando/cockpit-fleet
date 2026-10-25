@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
     Button,
     Checkbox,
     Content,
@@ -19,7 +18,7 @@ import {
     TextArea,
     TextInput,
 } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, OutlinedClockIcon, QuestionCircleIcon } from "@patternfly/react-icons";
 import { call } from "../lib/fleet.ts";
 import { formatInterval, fromLocalInput, linesOf, ownThresholds, thresholdFields, thresholdsValid, toLocalInput, type ThresholdField } from "../lib/checks.ts";
@@ -28,6 +27,7 @@ import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CatalogEntry, CheckDef, CheckKind, Credential, FleetHost, Inventory, Maintenance, Project, StateCounts, StateName } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ActionsColumn, Alert } from "./pf.tsx";
 
 const LOOK = {
     ok: { color: "green", icon: <CheckCircleIcon /> },

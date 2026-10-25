@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Content, Flex, FlexItem, Spinner, Title, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
+import { Content, Flex, FlexItem, Title, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
 import {
     Chart, ChartArea, ChartAxis, ChartGroup, ChartLine, ChartThemeColor, ChartVoronoiContainer,
 } from "@patternfly/react-charts/victory";
@@ -12,6 +12,7 @@ import {
     SPANS, chartsOf, formatPointTime, formatTick, formatValue, valueDomain, valueTicks,
 } from "../lib/metrics.ts";
 import type { Datum, MetricChart, MetricQuery, Resolution, Span } from "../lib/metrics.ts";
+import { Alert, Spinner } from "./pf.tsx";
 
 const HEIGHT = 180;
 const PADDING = { top: 10, bottom: 40, left: 70, right: 20 };

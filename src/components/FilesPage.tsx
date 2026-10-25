@@ -1,8 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert, AlertActionLink, Button, Content, ExpandableSection, Flex, FlexItem, FormGroup, FormHelperText, HelperText, HelperTextItem,
-    Label, Modal, ModalBody, ModalHeader, ModalVariant, Spinner, TextInput, TreeView, type TreeViewDataItem,
+    AlertActionLink,
+    Button,
+    Content,
+    ExpandableSection,
+    Flex,
+    FlexItem,
+    FormGroup,
+    FormHelperText,
+    HelperText,
+    HelperTextItem,
+    Label,
+    ModalBody,
+    ModalHeader,
+    ModalVariant,
+    TextInput,
+    TreeView,
+    type TreeViewDataItem,
 } from "@patternfly/react-core";
 import { FileIcon, FolderIcon, FolderOpenIcon } from "@patternfly/react-icons";
 import cockpit from "cockpit";
@@ -17,6 +32,7 @@ import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
+import { Alert, Modal, Spinner } from "./pf.tsx";
 
 // Up to this many files the tree starts open: there is nothing to look for.
 const OPEN_ALL = 40;

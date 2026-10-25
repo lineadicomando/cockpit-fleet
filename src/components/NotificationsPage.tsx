@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
     Button,
     Checkbox,
     Content,
@@ -12,12 +11,11 @@ import {
     HelperText,
     HelperTextItem,
     Label,
-    NumberInput,
     Switch,
     TextArea,
     TextInput,
 } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { call, deleteSecret, setSecret } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
@@ -27,6 +25,7 @@ import { useCan } from "../lib/session.tsx";
 import type { Channel, ChannelKind, CheckDef, CheckEvent, FleetHost, Inventory, Notification, NotifyEvent, NotifyRule, Project, RuleScope, RunEvent, Schedule, SystemEvent, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
+import { ActionsColumn, Alert, NumberInput } from "./pf.tsx";
 
 const KINDS: ChannelKind[] = ["telegram", "webhook", "smtp", "matrix"];
 const RUN_EVENTS: RunEvent[] = ["failed", "changed", "succeeded", "canceled", "approval"];

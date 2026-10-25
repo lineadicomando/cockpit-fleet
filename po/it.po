@@ -2630,3 +2630,51 @@ msgstr "Non eseguito"
 
 msgid "Project {{name}}"
 msgstr "Progetto {{name}}"
+
+msgid "Clear the search"
+msgstr "Svuota la ricerca"
+
+msgid "Close"
+msgstr "Chiudi"
+
+msgid "Content of the file"
+msgstr "Contenuto del file"
+
+msgid "Error:"
+msgstr "Errore:"
+
+msgid "File name"
+msgstr "Nome del file"
+
+msgid "Information:"
+msgstr "Informazione:"
+
+msgid "Less"
+msgstr "Meno"
+
+msgid "More"
+msgstr "Più"
+
+msgid "Next tabs"
+msgstr "Schede successive"
+
+msgid "Notice:"
+msgstr "Nota:"
+
+msgid "Previous tabs"
+msgstr "Schede precedenti"
+
+msgid "Search"
+msgstr "Cerca"
+
+msgid "Show all"
+msgstr "Mostra tutto"
+
+msgid "Success:"
+msgstr "Riuscito:"
+
+msgid "Text to copy"
+msgstr "Testo da copiare"
+
+msgid "Warning:"
+msgstr "Avviso:"

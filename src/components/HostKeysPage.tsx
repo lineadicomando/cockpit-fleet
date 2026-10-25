@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Checkbox, Content, FormGroup, FormSelect, FormSelectOption, Label, Radio, Split, SplitItem, TextInput } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Button, Checkbox, Content, FormGroup, FormSelect, FormSelectOption, Label, Radio, Split, SplitItem, TextInput } from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { HostKey, Inventory, ScannedKey } from "../lib/types.ts";
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ActionsColumn, Alert } from "./pf.tsx";
 
 interface Scan {
     keys: ScannedKey[];

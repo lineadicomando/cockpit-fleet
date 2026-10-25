@@ -12,8 +12,9 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** phase 10, from accessibility and the Italian left (the security
-review and the negative tests are done).
+**Next:** phase 10, from the docs (installation, security model, writing
+a check, backup); the security review, the negative tests, accessibility
+and the Italian are done.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -165,6 +166,12 @@ except the rows that say "to confirm".
   cycles cut short at 1400 px ("Inve…", "Interv…", "Durata, …").
 - Charts: on the page of a host only, per check; no zoom, no chosen dates,
   no thresholds drawn; the labels of the axes faint on the dark theme.
+- Interface (25 October): the summary a node writes for a check is English
+  ("accounts 2 (warning 2)"), as are the backend's messages; the counts of
+  the states on the page of hosts are headings; a page left open across an
+  upgrade of the package cannot load the new bundle's chunks until the user
+  logs in again (Cockpit lists a package's files when the session starts);
+  pages not seen as a viewer or an operator, nor the chat, in this audit.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.
@@ -211,7 +218,10 @@ except the rows that say "to confirm".
       `negative.sh`; fixed: a secret typed in clear recorded in the audit,
       `hostkey.add` taking a pattern, `SUDO_UID` read by `int()`, three
       internal errors on malformed input)
-- [ ] Accessibility; complete Italian (PatternFly's "Input", "Kebab toggle", "Copyable input", "Details" of an expandable row)
+- [x] Accessibility; complete Italian (25 October: PatternFly's English
+      text replaced through `pf.tsx`, `<html lang>`, tab panels, alert
+      titles, labels of number inputs and groups, contrast of the editor's
+      placeholder; Lighthouse 100 on every tab, light and dark)
 - [ ] Docs: installation, security model, writing a check, backup
 - [ ] Upgrade and removal (`purge` too), `.deb` and `.rpm`
 - [ ] `.rpm` built in CI (runner is Debian)

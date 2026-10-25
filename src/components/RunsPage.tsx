@@ -1,8 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert, Button, Card, CardBody, Content, DescriptionList, DescriptionListDescription, DescriptionListGroup,
-    DescriptionListTerm, ExpandableSection, Flex, FlexItem, FormSelect, FormSelectOption, Label, Tab, Tabs, TabTitleText,
+    Button,
+    Card,
+    CardBody,
+    Content,
+    DescriptionList,
+    DescriptionListDescription,
+    DescriptionListGroup,
+    DescriptionListTerm,
+    ExpandableSection,
+    Flex,
+    FlexItem,
+    FormSelect,
+    FormSelectOption,
+    Label,
+    Tab,
+    TabTitleText,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
@@ -19,6 +33,7 @@ import { AdhocModal } from "./AdhocModal.tsx";
 import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
 import { WorkflowSteps } from "./WorkflowsPage.tsx";
 import { Answered } from "./SurveyEditor.tsx";
+import { Alert, TabPanel, Tabs } from "./pf.tsx";
 
 const isActive = (status: RunStatus) => status === "pending_approval" || status === "queued" || status === "running";
 // Past this, only the end of the output is drawn; the whole log stays on the server.
@@ -430,15 +445,17 @@ export function RunDetailPage({ id }: { id: string }) {
                         <Alert variant="info" isInline title={t("The output of this run was deleted on {{when}}, as runs this old keep only their outcome.", { when: formatTime(data.pruned_at, i18n.language) })} />
                     ) : mayRead ? (
                         <Card isPlain>
-                            <Tabs activeKey={tab} onSelect={(_event, key) => setTab(String(key))}>
+                            <Tabs panelId="run-detail" activeKey={tab} onSelect={(_event, key) => setTab(String(key))}>
                                 <Tab eventKey="output" title={<TabTitleText>{t("Output")}</TabTitleText>} />
                                 {hasTasks && <Tab eventKey="tasks" title={<TabTitleText>{t("Tasks")}</TabTitleText>} />}
                                 {hasTasks && <Tab eventKey="changes" title={<TabTitleText>{t("Differences")}</TabTitleText>} />}
                             </Tabs>
                             <CardBody style={{ paddingInline: 0 }}>
-                                {tab === "output" && <Output text={log} />}
-                                {tab === "tasks" && <Tasks tasks={tasks} />}
-                                {tab === "changes" && <Changes tasks={tasks} run={data} />}
+                                <TabPanel panelId="run-detail" active={tab}>
+                                    {tab === "output" && <Output text={log} />}
+                                    {tab === "tasks" && <Tasks tasks={tasks} />}
+                                    {tab === "changes" && <Changes tasks={tasks} run={data} />}
+                                </TabPanel>
                             </CardBody>
                         </Card>
                     ) : (

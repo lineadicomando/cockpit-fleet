@@ -1,10 +1,27 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert, Button, Card, CardBody, CardTitle, Checkbox, Content, Flex, FlexItem, FormGroup, FormHelperText,
-    FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, Label, TextArea, TextInput,
+    Button,
+    Card,
+    CardBody,
+    CardTitle,
+    Checkbox,
+    Content,
+    Flex,
+    FlexItem,
+    FormGroup,
+    FormHelperText,
+    FormSelect,
+    FormSelectOption,
+    Grid,
+    GridItem,
+    HelperText,
+    HelperTextItem,
+    Label,
+    TextArea,
+    TextInput,
 } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { TimesIcon } from "@patternfly/react-icons";
 import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
@@ -17,6 +34,7 @@ import type { Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProg
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
+import { ActionsColumn, Alert } from "./pf.tsx";
 
 interface StepDraft {
     id: string;
@@ -94,7 +112,7 @@ function StepEditor({ step, steps, templates, onChange, onRemove }: {
                     <Checkbox id={`wf-${step.id}-approval`} label={t("Wait for an approval before this step")} isChecked={step.needs_approval || !!template?.needs_approval}
                         isDisabled={!!template?.needs_approval} onChange={(_e, value) => onChange({ ...step, needs_approval: value })} />
                 </FormGroup>
-                <FormGroup label={t("Runs after")} fieldId={`wf-${step.id}-after`}>
+                <FormGroup label={t("Runs after")} fieldId={`wf-${step.id}-after`} role="group">
                     {step.after.map((link, index) => (
                         <Grid key={index} hasGutter style={{ marginBlockEnd: "0.5rem" }}>
                             <GridItem span={6}>

@@ -883,5 +883,21 @@
   "Workflow": "Workflow",
   "Workflows": "Workflow",
   "Not run": "Non eseguito",
-  "Project {{name}}": "Progetto {{name}}"
+  "Project {{name}}": "Progetto {{name}}",
+  "Clear the search": "Svuota la ricerca",
+  "Close": "Chiudi",
+  "Content of the file": "Contenuto del file",
+  "Error:": "Errore:",
+  "File name": "Nome del file",
+  "Information:": "Informazione:",
+  "Less": "Meno",
+  "More": "Più",
+  "Next tabs": "Schede successive",
+  "Notice:": "Nota:",
+  "Previous tabs": "Schede precedenti",
+  "Search": "Cerca",
+  "Show all": "Mostra tutto",
+  "Success:": "Riuscito:",
+  "Text to copy": "Testo da copiare",
+  "Warning:": "Avviso:"
 }

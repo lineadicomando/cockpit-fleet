@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
     Button,
     Checkbox,
     Content,
@@ -19,7 +18,7 @@ import {
     Switch,
     TextInput,
 } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
@@ -31,6 +30,7 @@ import type { Overlap, Run, Schedule, SchedulePreview, Template } from "../lib/t
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
+import { ActionsColumn, Alert } from "./pf.tsx";
 
 // The time zones the browser knows, to pick from; the backend checks the name.
 const TIME_ZONES: string[] = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.("timeZone") ?? [];

@@ -1,8 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
-    AlertActionCloseButton,
     Button,
     Content,
     DescriptionList,
@@ -15,7 +13,6 @@ import {
     FormSelect,
     FormSelectOption,
     Label,
-    Spinner,
     TextInput,
     Title,
     ToggleGroup,
@@ -33,6 +30,7 @@ import type { CheckState, FleetHost, HostDetail, Inventory, StateCounts } from "
 import { HostInventory } from "./AssetsPage.tsx";
 import { MaintenanceModal, StateCountLabels, StateLabel, useStateNames } from "./ChecksPage.tsx";
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { Alert, AlertActionCloseButton, ExpandCell, Spinner } from "./pf.tsx";
 
 const POLL = 15_000;
 
@@ -404,7 +402,7 @@ export function HostDetailPage({ id }: { id: string }) {
                                 return (
                                     <Tbody key={key} isExpanded={open}>
                                         <Tr>
-                                            <Td expand={{ rowIndex: index, isExpanded: open, onToggle: () => toggle(key) }} />
+                                            <ExpandCell isExpanded={open} onToggle={() => toggle(key)} />
                                             <Td dataLabel={t("State")}><StateLabel state={state.state} /><Flags state={state} /></Td>
                                             <Td dataLabel={t("Which check")}>{state.check}</Td>
                                             <Td dataLabel={t("What it found")}>{state.summary}</Td>

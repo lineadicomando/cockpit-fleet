@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextInput } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { answerSecret, call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
@@ -12,6 +12,7 @@ import { CodeEditor } from "./CodeEditor.tsx";
 import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
 import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
+import { ActionsColumn } from "./pf.tsx";
 
 const words = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
@@ -169,7 +170,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <Checkbox id="tpl-approval" label={t("Each run needs approval")} isChecked={needsApproval} onChange={(_e, value) => setNeedsApproval(value)}
                     description={t("A run waits until a member of cockpit-fleet-approver, or an administrator, other than who launched it approves it. An administrator may approve their own.")} />
             </FormGroup>
-            <FormGroup label={t("Extra variables")} fieldId="tpl-vars">
+            <FormGroup label={t("Extra variables")} fieldId="tpl-vars" role="group">
                 <CodeEditor className="fleet-code-field fleet-code-short" label={t("Extra variables")} path="vars.json" value={extraVars} onChange={setExtraVars} placeholder={'{\n  "version": "1.2"\n}'} />
                 <FormHelperText><HelperText><HelperTextItem>{t("A JSON object. Not for secrets: they would be stored in clear.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>

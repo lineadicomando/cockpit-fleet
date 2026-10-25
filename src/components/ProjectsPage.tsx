@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Content, FileUpload, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, ModalVariant, Radio, TextInput } from "@patternfly/react-core";
-import { ActionsColumn, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { Button, Content, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, ModalVariant, Radio, TextInput } from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
@@ -11,6 +11,7 @@ import type { Credential, Project } from "../lib/types.ts";
 import { uploadArchive } from "../lib/upload.ts";
 import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { uploadCommand } from "../lib/terminal.ts";
+import { ActionsColumn, Alert, FileUpload } from "./pf.tsx";
 
 interface ProjectList {
     projects: Project[];
@@ -39,7 +40,7 @@ function UploadModal({ project, maxMb, onClose }: { project: Project; maxMb: num
                     ? t("The files of the archive replace the ones this project has now, all of them.")
                     : t("The files of the archive become the files of this project.")}
             </Content>
-            <FormGroup label={t("Archive")} isRequired fieldId="proj-archive">
+            <FormGroup label={t("Archive")} isRequired fieldId="proj-archive" role="group">
                 <FileUpload id="proj-archive" filename={file?.name ?? ""} filenamePlaceholder={t("Choose a file")} browseButtonText={t("Browse…")} clearButtonText={t("Clear")}
                     hideDefaultPreview onFileInputChange={(_e, chosen) => setFile(chosen)} onClearClick={() => setFile(null)}
                     validated={tooLarge ? "error" : "default"} />

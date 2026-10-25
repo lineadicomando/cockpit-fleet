@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "@patternfly/patternfly/patternfly.css";
 import "@patternfly/patternfly/patternfly-addons.css";
 import "./app.scss";
-import "./i18n.ts";
+import i18n from "./i18n.ts";
 import { App } from "./app.tsx";
 
 // Mirror pf-v6-theme-dark from the Cockpit shell parent frame onto this iframe
@@ -24,6 +24,20 @@ function syncDarkTheme() {
 }
 
 syncDarkTheme();
+
+// A screen reader reads the page in the language of <html lang>, which
+// index.html gives as "en" and Cockpit does not change for a package with no
+// Cockpit catalog: set it to the language of the page, and keep it so.
+function keepLanguage(language: string) {
+    const html = document.documentElement;
+    const apply = () => {
+        if (html.lang !== language) html.lang = language;
+    };
+    apply();
+    new MutationObserver(apply).observe(html, { attributes: true, attributeFilter: ["lang"] });
+}
+
+keepLanguage(i18n.language);
 
 document.addEventListener("DOMContentLoaded", () => {
     const appEl = document.getElementById("app");

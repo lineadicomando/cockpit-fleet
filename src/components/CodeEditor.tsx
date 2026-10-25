@@ -53,6 +53,8 @@ const look = EditorView.theme({
     ".cm-scroller": { fontFamily: color("font--family--mono"), lineHeight: "1.5" },
     ".cm-content": { caretColor: color("text--color--regular") },
     ".cm-cursor": { borderLeftColor: color("text--color--regular") },
+    // CodeMirror's own grey falls short of the contrast text needs (4.5:1) on the active line.
+    ".cm-placeholder": { color: color("text--color--subtle") },
     ".cm-gutters": {
         color: color("text--color--subtle"),
         backgroundColor: color("background--color--secondary--default"),

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Content, Label, Modal, ModalBody, ModalHeader, ModalVariant, Spinner, TextInput, Title } from "@patternfly/react-core";
+import { Button, Content, Label, ModalBody, ModalHeader, ModalVariant, TextInput, Title } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { loadModules } from "../lib/ansible-source.ts";
 import { call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { ModuleHelp, ModuleOption, ModuleReturn } from "../lib/types.ts";
+import { Alert, Modal, Spinner } from "./pf.tsx";
 
 function Paragraphs({ text }: { text: string[] }) {
     return <>{text.map((paragraph, index) => <Content key={index} component="p">{paragraph}</Content>)}</>;

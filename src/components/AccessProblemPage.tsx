@@ -2,7 +2,6 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import {
     Button,
-    ClipboardCopy,
     Content,
     EmptyState,
     EmptyStateActions,
@@ -11,6 +10,7 @@ import {
 } from "@patternfly/react-core";
 import { LockIcon, ExclamationCircleIcon } from "@patternfly/react-icons";
 import type { AccessProblem } from "../lib/fleet.ts";
+import { ClipboardCopy } from "./pf.tsx";
 
 interface Props {
     problem: AccessProblem;

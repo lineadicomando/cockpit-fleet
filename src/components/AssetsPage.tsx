@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
     Button,
     Content,
     DescriptionList,
@@ -12,9 +11,7 @@ import {
     FormSelect,
     FormSelectOption,
     Label,
-    SearchInput,
     Tab,
-    Tabs,
     TabTitleText,
     Title,
     Tooltip,
@@ -30,6 +27,7 @@ import { useCan } from "../lib/session.tsx";
 import type { CmdbChange, CmdbDetail, CmdbHost, Drift, Inventory, PackageHit, Template } from "../lib/types.ts";
 import { ListState, SectionHeader, message } from "./common.tsx";
 import { LaunchModal } from "./TemplatesPage.tsx";
+import { Alert, SearchInput, TabPanel, Tabs } from "./pf.tsx";
 
 // Long lists are shown this many rows at a time, with a filter.
 const PAGE = 200;
@@ -148,60 +146,62 @@ export function AssetsPage() {
                     {t("Export JSON")}
                 </Button>
             </SectionHeader>
-            <Tabs activeKey={tab} onSelect={(_e, key) => setTab(key)} isSubtab style={{ marginBlockEnd: "1rem" }}>
+            <Tabs panelId="assets-view" activeKey={tab} onSelect={(_e, key) => setTab(key)} isSubtab style={{ marginBlockEnd: "1rem" }}>
                 <Tab eventKey="hosts" title={<TabTitleText>{t("Hosts")}</TabTitleText>} />
                 <Tab eventKey="packages" title={<TabTitleText>{t("Find a package")}</TabTitleText>} />
             </Tabs>
-            {tab === "packages" && <PackageSearch inventoryId={inventoryId} />}
-            {tab === "hosts" && (
-                <ListState loaded={data} isEmpty={loaded => loaded.hosts.length === 0}
-                    emptyTitle={t("No hosts yet")}
-                    emptyBody={t("The hosts of an inventory are listed here once it has been read. What they are made of comes from a check of the kind Hardware and software, their updates from one of the kind Updates.")}>
-                    {loaded => (
-                        <>
-                            <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} style={{ marginBlockEnd: "1rem" }}>
-                                <SearchInput aria-label={t("Filter")} placeholder={t("Name, system, model, address…")} value={filter}
-                                    style={{ minWidth: "20rem" }} onChange={(_e, value) => setFilter(value)} onClear={() => setFilter("")} />
-                                {bySystem(loaded.hosts).map(([system, count]) => (
-                                    <Label key={system} isCompact color={system ? "blue" : "grey"} onClick={() => setFilter(system)}>
-                                        {`${system || t("Not known yet")}: ${count}`}
-                                    </Label>
-                                ))}
-                            </Flex>
-                            {!loaded.hosts.some(host => host.hardware.collected_at) && (
-                                <Alert variant="info" isInline isPlain style={{ marginBlockEnd: "1rem" }}
-                                    title={t("Nothing collected yet: apply a check of the kind Hardware and software to the hosts, in Checks.")} />
-                            )}
-                            <Table variant="compact" aria-label={t("Assets")}>
-                                <Thead>
-                                    <Tr>
-                                        {[t("Host"), t("System"), t("Hardware"), t("CPUs"), t("Memory"), t("Packages"), t("Updates"), t("Compliance"), t("Collected")]
-                                            .map(name => <Th key={name} modifier="wrap">{name}</Th>)}
-                                    </Tr>
-                                </Thead>
-                                <Tbody>
-                                    {shown.map(host => (
-                                        <Tr key={host.id}>
-                                            <Td dataLabel={t("Host")}>
-                                                <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
-                                                {(inventories.data?.inventories.length ?? 0) > 1 && <Content component="small"> ({host.inventory})</Content>}
-                                            </Td>
-                                            <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>
-                                            <Td dataLabel={t("Hardware")}><Hardware host={host} /></Td>
-                                            <Td dataLabel={t("CPUs")}>{host.hardware.cpus ?? ""}</Td>
-                                            <Td dataLabel={t("Memory")}>{host.hardware.memory ? formatBytes(host.hardware.memory) : ""}</Td>
-                                            <Td dataLabel={t("Packages")}>{host.hardware.collected_at ? host.packages : ""}</Td>
-                                            <Td dataLabel={t("Updates")}><Updates host={host} /></Td>
-                                            <Td dataLabel={t("Compliance")}><Compliance compliant={host.compliant} /></Td>
-                                            <Td dataLabel={t("Collected")}>{formatTime(host.hardware.collected_at, i18n.language)}</Td>
-                                        </Tr>
+            <TabPanel panelId="assets-view" active={tab}>
+                {tab === "packages" && <PackageSearch inventoryId={inventoryId} />}
+                {tab === "hosts" && (
+                    <ListState loaded={data} isEmpty={loaded => loaded.hosts.length === 0}
+                        emptyTitle={t("No hosts yet")}
+                        emptyBody={t("The hosts of an inventory are listed here once it has been read. What they are made of comes from a check of the kind Hardware and software, their updates from one of the kind Updates.")}>
+                        {loaded => (
+                            <>
+                                <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} style={{ marginBlockEnd: "1rem" }}>
+                                    <SearchInput aria-label={t("Filter")} placeholder={t("Name, system, model, address…")} value={filter}
+                                        style={{ minWidth: "20rem" }} onChange={(_e, value) => setFilter(value)} onClear={() => setFilter("")} />
+                                    {bySystem(loaded.hosts).map(([system, count]) => (
+                                        <Label key={system} isCompact color={system ? "blue" : "grey"} onClick={() => setFilter(system)}>
+                                            {`${system || t("Not known yet")}: ${count}`}
+                                        </Label>
                                     ))}
-                                </Tbody>
-                            </Table>
-                        </>
-                    )}
-                </ListState>
-            )}
+                                </Flex>
+                                {!loaded.hosts.some(host => host.hardware.collected_at) && (
+                                    <Alert variant="info" isInline isPlain style={{ marginBlockEnd: "1rem" }}
+                                        title={t("Nothing collected yet: apply a check of the kind Hardware and software to the hosts, in Checks.")} />
+                                )}
+                                <Table variant="compact" aria-label={t("Assets")}>
+                                    <Thead>
+                                        <Tr>
+                                            {[t("Host"), t("System"), t("Hardware"), t("CPUs"), t("Memory"), t("Packages"), t("Updates"), t("Compliance"), t("Collected")]
+                                                .map(name => <Th key={name} modifier="wrap">{name}</Th>)}
+                                        </Tr>
+                                    </Thead>
+                                    <Tbody>
+                                        {shown.map(host => (
+                                            <Tr key={host.id}>
+                                                <Td dataLabel={t("Host")}>
+                                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
+                                                    {(inventories.data?.inventories.length ?? 0) > 1 && <Content component="small"> ({host.inventory})</Content>}
+                                                </Td>
+                                                <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>
+                                                <Td dataLabel={t("Hardware")}><Hardware host={host} /></Td>
+                                                <Td dataLabel={t("CPUs")}>{host.hardware.cpus ?? ""}</Td>
+                                                <Td dataLabel={t("Memory")}>{host.hardware.memory ? formatBytes(host.hardware.memory) : ""}</Td>
+                                                <Td dataLabel={t("Packages")}>{host.hardware.collected_at ? host.packages : ""}</Td>
+                                                <Td dataLabel={t("Updates")}><Updates host={host} /></Td>
+                                                <Td dataLabel={t("Compliance")}><Compliance compliant={host.compliant} /></Td>
+                                                <Td dataLabel={t("Collected")}>{formatTime(host.hardware.collected_at, i18n.language)}</Td>
+                                            </Tr>
+                                        ))}
+                                    </Tbody>
+                                </Table>
+                            </>
+                        )}
+                    </ListState>
+                )}
+            </TabPanel>
         </>
     );
 }
@@ -383,7 +383,7 @@ export function HostInventory({ hostId }: { hostId: string }) {
     const tab = available.includes(String(chosen)) ? chosen : available[0];
     return (
         <>
-            <Tabs activeKey={tab} onSelect={(_e, key) => setTab(key)} isSubtab style={{ marginBlockEnd: "1rem" }}>
+            <Tabs panelId="host-assets" activeKey={tab} onSelect={(_e, key) => setTab(key)} isSubtab style={{ marginBlockEnd: "1rem" }}>
                 {collected && <Tab eventKey="hardware" title={<TabTitleText>{t("Hardware")}</TabTitleText>} />}
                 {collected && <Tab eventKey="packages" title={<TabTitleText>{t("Packages ({{n}})", { n: host.packages })}</TabTitleText>} />}
                 {collected && <Tab eventKey="services" title={<TabTitleText>{t("Services ({{n}})", { n: host.services })}</TabTitleText>} />}
@@ -391,41 +391,43 @@ export function HostInventory({ hostId }: { hostId: string }) {
                 {collected && <Tab eventKey="changes" title={<TabTitleText>{t("Changes")}</TabTitleText>} />}
                 {can("drift.get") && <Tab eventKey="drift" title={<TabTitleText>{t("Drift")}</TabTitleText>} />}
             </Tabs>
-            {tab === "hardware" && <HardwareDetail host={host} />}
-            {tab === "packages" && (
-                <Filtered items={host.package_list} label={t("Packages")} keyOf={item => `${item.name} ${item.arch}`} text={item => item.name}
-                    columns={[t("Package"), t("Version"), t("Architecture")]}
-                    row={item => <><Td dataLabel={t("Package")}>{item.name}</Td><Td dataLabel={t("Version")}>{item.version}</Td><Td dataLabel={t("Architecture")}>{item.arch}</Td></>} />
-            )}
-            {tab === "services" && (
-                <Filtered items={host.service_list} label={t("Services")} keyOf={item => item.name} text={item => `${item.name} ${item.state} ${item.enabled}`}
-                    columns={[t("Service"), t("State"), t("At boot")]}
-                    row={item => <><Td dataLabel={t("Service")}>{item.name}</Td><Td dataLabel={t("State")}>{item.state}</Td><Td dataLabel={t("At boot")}>{item.enabled}</Td></>} />
-            )}
-            {tab === "updates" && (host.update_list.length === 0
-                ? <Content component="p">{t("Up to date.")}</Content>
-                : (
-                    <>
-                        {can("run.start") && <ApplyUpdates host={host} />}
-                        <Filtered items={host.update_list} label={t("Updates")} keyOf={item => item.name} text={item => `${item.name} ${item.source}`}
-                            columns={[t("Update"), t("Installed"), t("Available"), t("From")]}
-                            row={item => (
-                                <>
-                                    <Td dataLabel={t("Update")}>
-                                        {item.name}
-                                        {item.security && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Security")}</Label>}
-                                    </Td>
-                                    <Td dataLabel={t("Installed")}>{item.current}</Td>
-                                    <Td dataLabel={t("Available")}>{item.available}</Td>
-                                    <Td dataLabel={t("From")}>
-                                        <Tooltip content={item.source}><span>{item.source.length > 40 ? item.source.slice(0, 40) + "…" : item.source}</span></Tooltip>
-                                    </Td>
-                                </>
-                            )} />
-                    </>
-                ))}
-            {tab === "changes" && <ChangeList changes={host.changes} />}
-            {tab === "drift" && (drift.error ? <Alert variant="danger" isInline title={drift.error.message} /> : <DriftList drift={driftItems} />)}
+            <TabPanel panelId="host-assets" active={tab}>
+                {tab === "hardware" && <HardwareDetail host={host} />}
+                {tab === "packages" && (
+                    <Filtered items={host.package_list} label={t("Packages")} keyOf={item => `${item.name} ${item.arch}`} text={item => item.name}
+                        columns={[t("Package"), t("Version"), t("Architecture")]}
+                        row={item => <><Td dataLabel={t("Package")}>{item.name}</Td><Td dataLabel={t("Version")}>{item.version}</Td><Td dataLabel={t("Architecture")}>{item.arch}</Td></>} />
+                )}
+                {tab === "services" && (
+                    <Filtered items={host.service_list} label={t("Services")} keyOf={item => item.name} text={item => `${item.name} ${item.state} ${item.enabled}`}
+                        columns={[t("Service"), t("State"), t("At boot")]}
+                        row={item => <><Td dataLabel={t("Service")}>{item.name}</Td><Td dataLabel={t("State")}>{item.state}</Td><Td dataLabel={t("At boot")}>{item.enabled}</Td></>} />
+                )}
+                {tab === "updates" && (host.update_list.length === 0
+                    ? <Content component="p">{t("Up to date.")}</Content>
+                    : (
+                        <>
+                            {can("run.start") && <ApplyUpdates host={host} />}
+                            <Filtered items={host.update_list} label={t("Updates")} keyOf={item => item.name} text={item => `${item.name} ${item.source}`}
+                                columns={[t("Update"), t("Installed"), t("Available"), t("From")]}
+                                row={item => (
+                                    <>
+                                        <Td dataLabel={t("Update")}>
+                                            {item.name}
+                                            {item.security && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Security")}</Label>}
+                                        </Td>
+                                        <Td dataLabel={t("Installed")}>{item.current}</Td>
+                                        <Td dataLabel={t("Available")}>{item.available}</Td>
+                                        <Td dataLabel={t("From")}>
+                                            <Tooltip content={item.source}><span>{item.source.length > 40 ? item.source.slice(0, 40) + "…" : item.source}</span></Tooltip>
+                                        </Td>
+                                    </>
+                                )} />
+                        </>
+                    ))}
+                {tab === "changes" && <ChangeList changes={host.changes} />}
+                {tab === "drift" && (drift.error ? <Alert variant="danger" isInline title={drift.error.message} /> : <DriftList drift={driftItems} />)}
+            </TabPanel>
         </>
     );
 }
