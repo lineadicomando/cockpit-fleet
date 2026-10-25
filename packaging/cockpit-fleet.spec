@@ -64,7 +64,7 @@ fi
 
 %files
 %license LICENSE
-%doc README.md SECURITY.md
+%doc README.md SECURITY.md docs
 %{_datadir}/cockpit/fleet
 %{_prefix}/lib/cockpit-fleet
 %{_libexecdir}/cockpit-fleet

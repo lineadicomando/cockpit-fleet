@@ -3,18 +3,24 @@
 Cockpit plugin to run Ansible from the web console and to watch a fleet of
 nodes through Ansible alone, without installing an agent on them.
 
-> **Status: early development.** Playbooks can be run from the interface:
-> projects (git, a local directory, written in the browser, an uploaded
-> archive), collections from a requirements file, inventories, credentials,
-> trusted host keys, job templates with surveys, ad-hoc commands, and runs
-> with live output, a queue and cancellation. Agents can use it as a set of
-> tools, a chat page starts one for the user
-> ([docs/chat.md](docs/chat.md)), and the command `fleet` does the same
-> from a terminal (`man fleet`). Schedules, notifications and everything
-> about watching the fleet are still to come. See [TODO.md](TODO.md) for the
-> plan.
+> **Status: before its first release.** Everything below works and is
+> tested on Debian 13, Fedora 44 and AlmaLinux 10; what is left before
+> 0.1.0 is in [TODO.md](TODO.md).
 
-## What it is meant to do
+## Documentation
+
+- [docs/install.md](docs/install.md): installing a controller, giving
+  people access, the configuration, the first steps
+- [docs/security.md](docs/security.md): what it protects, from whom, and
+  what it does not
+- [docs/checks.md](docs/checks.md): watching nodes, and writing a check as a
+  playbook
+- [docs/backup.md](docs/backup.md): what to back up and how to restore it
+- [docs/chat.md](docs/chat.md): turning on the assistant
+- `man fleet`: the command for a terminal
+- [docs/architecture.md](docs/architecture.md): how it is built, and why
+
+## What it does
 
 - **Run playbooks** — projects from git, a local directory, an in-browser
   editor or an uploaded archive; inventories, credentials, job templates with
@@ -32,7 +38,7 @@ No daemon and no listening port. A run is a systemd unit started on demand,
 sandboxed, under an unprivileged account; secrets are encrypted with
 `systemd-creds` and only PID 1 can decrypt them, for the one run that needs
 them. Details and measurements are in [docs/architecture.md](docs/architecture.md),
-the security model in [SECURITY.md](SECURITY.md).
+the security model in [docs/security.md](docs/security.md).
 
 ## Requirements
 
@@ -53,7 +59,8 @@ sudo dnf install ./rpm/cockpit-fleet-*.fc44.noarch.rpm  # on Fedora; .el10 on Al
 The package creates the `cockpit-fleet` account and three role groups:
 `cockpit-fleet-admin`, `cockpit-fleet-operator`, `cockpit-fleet-viewer`; and
 `cockpit-fleet-approver`, whose members approve the runs of the templates that
-need it, whatever their role.
+need it, whatever their role. What each may do, and what to set up first, is
+in [docs/install.md](docs/install.md).
 
 ## Development
 

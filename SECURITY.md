@@ -21,18 +21,11 @@ You will receive a response within 5 business days. Once the issue is confirmed 
 ## Security model
 
 Whoever can launch a playbook is effectively root on the managed nodes, so the
-design keeps the controller's own privileged surface as small as possible:
+design keeps the controller's own privileged surface as small as possible: no
+daemon and no listening port, runs in sandboxed systemd units under an
+unprivileged account, two small root helpers that take one identifier each,
+and secrets that only PID 1 can decrypt, for the one run that needs them.
 
-- No daemon and no listening port. Runs execute in sandboxed systemd units
-  under the unprivileged `cockpit-fleet` account.
-- Two helpers run as root, both a few dozen lines: `fleet-unit` starts or stops
-  an instance of the packaged run unit, `fleet-secret` encrypts a secret read
-  from stdin. Neither accepts a path, an option or a unit name from its caller.
-- Secrets are encrypted with `systemd-creds` and can only be decrypted by PID 1,
-  which hands them to the one run that references them. They cannot be read
-  back, by the web interface or by the service account.
-- A run sees its own directory only: not the database, not other projects, not
-  other runs, not the system bus.
-
-See [docs/architecture.md](docs/architecture.md) for the details and for how
-each of these properties is tested.
+What it protects, from whom, and its known limits are in
+[docs/security.md](docs/security.md); how each property is built and tested is
+in [docs/architecture.md](docs/architecture.md).

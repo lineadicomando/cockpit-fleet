@@ -12,9 +12,9 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** phase 10, from the docs (installation, security model, writing
-a check, backup); the security review, the negative tests, accessibility
-and the Italian are done.
+**Next:** phase 10, from upgrade and removal of the packages; the
+security review, the negative tests, accessibility, the Italian and the
+docs for administrators are done.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -222,7 +222,9 @@ except the rows that say "to confirm".
       text replaced through `pf.tsx`, `<html lang>`, tab panels, alert
       titles, labels of number inputs and groups, contrast of the editor's
       placeholder; Lighthouse 100 on every tab, light and dark)
-- [ ] Docs: installation, security model, writing a check, backup
+- [x] Docs: installation, security model, writing a check, backup
+      (25 October: `docs/install.md`, `security.md`, `checks.md`,
+      `backup.md`; the backup and restore tried on the Debian VM)
 - [ ] Upgrade and removal (`purge` too), `.deb` and `.rpm`
 - [ ] `.rpm` built in CI (runner is Debian)
 - [ ] Screenshots, `CHANGELOG`, tag `v0.1.0` (version is `0.0.1` in

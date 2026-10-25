@@ -17,8 +17,12 @@ Three documents, each with one job; do not repeat one in another:
   measured. Update it with every change of design.
 - This file: how to work on the project.
 
-`docs/chat.md` is for the administrator of a controller: how the chat is
-turned on and its agent installed. Keep it in step with `[chat]`.
+`docs/install.md`, `docs/security.md`, `docs/checks.md`, `docs/backup.md`
+and `docs/chat.md` are for the administrator of a controller: installing and
+giving access, what is protected and what is not, writing checks, backups,
+turning the chat on. Keep them in step with what they describe (roles,
+`config.toml`, the catalog, `fleet_result`, the files a controller keeps,
+`[chat]`) when that changes.
 
 `CLAUDE.local.md`, `Makefile.local` and `.env`, when present, are not
 tracked: they describe one developer's own workstation (the state of its test
