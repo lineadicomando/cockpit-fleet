@@ -135,6 +135,7 @@ make check                      # frontend (node --test) and backend (unittest) 
 make deb                        # .deb built in a Debian 13 container (podman), into deb/
 make rpm                        # .rpm for Fedora 44 and AlmaLinux 10, in containers, into rpm/
 make ct-test DISTRO=alma TESTS="sandbox runs"   # integration scripts in containers (all by default)
+make ct-lifecycle DISTRO=alma OLD=<ref>   # upgrade from OLD (default: latest tag), removal, purge
 make ct-clean                   # remove the containers and images of ct-test
 ```
 
@@ -164,6 +165,7 @@ test/integration/load.sh             # real check cycles on IT_LOAD_HOSTS aliase
 test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
 test/integration/windows.sh          # Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
 test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
+test/integration/lifecycle.sh        # upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed): scripts/ct-lifecycle.sh
 ```
 
 `make ct-test` is the usual way to run them: it builds the package of
@@ -172,7 +174,9 @@ fresh container of that distribution (`test/containers/`), `CT_JOBS` at a
 time (2 by default), with `IT_WIPE=yes` and an account for `IT_SSH_USER`.
 Other `IT_*` variables of the caller are passed on; the logs go to
 `it-results/DISTRO/`. `windows.sh`, `measure-events.sh` and `load.sh` run
-only when named. On a VM of the lab, `test/vm/lab.sh deploy TARGET` installs
+only when named; `lifecycle.sh` only through `make ct-lifecycle`, which
+builds an older package too (`CT_KEEP_PACKAGES=DIR` keeps both, to run it
+on a VM). On a VM of the lab, `test/vm/lab.sh deploy TARGET` installs
 the package and `test/vm/lab.sh it TARGET SCRIPT...` runs scripts the same
 way, logs in `it-results/vm-TARGET/`. On another machine, copy `test/integration` there and start one as root,
 e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh

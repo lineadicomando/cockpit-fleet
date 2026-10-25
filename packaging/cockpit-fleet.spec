@@ -58,9 +58,24 @@ fi
 
 %preun
 %systemd_preun cockpit-fleet-scheduler.timer cockpit-fleet-notify.path
+# On removal, not on upgrade: runs still going would be left without their
+# programs, and the scheduler or the delivery of notifications midway.
+if [ $1 -eq 0 ] && [ -d /run/systemd/system ]; then
+    systemctl stop 'cockpit-fleet-run@*.service' 'cockpit-fleet-finish@*.service' \
+        cockpit-fleet-scheduler.service cockpit-fleet-notify.service \
+        system-cockpitfleet.slice >/dev/null 2>&1 || :
+    # A run stopped midway is failed, and would keep the system degraded.
+    systemctl reset-failed 'cockpit-fleet-run@*.service' 'cockpit-fleet-finish@*.service' \
+        >/dev/null 2>&1 || :
+fi
 
 %postun
 %systemd_postun_with_restart cockpit-fleet-scheduler.timer cockpit-fleet-notify.path
+# Removed, the units stayed loaded until the next reload (AlmaLinux 10, a
+# machine and a container alike).
+if [ $1 -eq 0 ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || :
+fi
 
 %files
 %license LICENSE

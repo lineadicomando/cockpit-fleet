@@ -78,7 +78,7 @@ shift
 if [ "$#" -eq 0 ]; then
     for file in test/integration/*.sh; do
         script=$(basename "$file" .sh)
-        case "$script" in lib|nodes|windows|measure-events|load) ;; *) set -- "$@" "$script" ;; esac
+        case "$script" in lib|nodes|windows|measure-events|load|lifecycle) ;; *) set -- "$@" "$script" ;; esac
     done
 fi
 for script in "$@"; do

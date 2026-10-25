@@ -1835,6 +1835,38 @@ files that belong to them. The package also owns the directories that
 `cockpit-fleet-notify.path`, and `%post` starts them on the first install, as
 the `.deb` does.
 
+**Upgrade, removal, purge.** An upgrade keeps the database, the projects,
+the secrets and a configuration changed by the administrator (a conffile on
+Debian, `%config(noreplace)` with an `.rpmnew` beside it on rpm), restarts
+the timer and the path unit, and leaves a run going alone: it keeps the unit
+it was started with and is recorded when it ends. The database is brought to
+the new schema by the first backend call that opens it, which the timer
+makes within a minute. Removal stops what the package's programs would no
+longer be there for: the runs still going, the scheduler and the delivery
+of notifications midway, and the slice of the runs; a run stopped so is
+failed, and its unit is reset so as not to leave the system degraded (the
+`prerm` of the `.deb`, with a lintian override since only a pattern names
+those units, and `%preun`). Data, secrets and the configuration stay; dnf
+removes the directories it owns that are empty, and saves a changed
+`config.toml` as `config.toml.rpmsave`. On AlmaLinux 10 the removed units
+stayed loaded until the next reload, on a machine as in a container, so
+`%postun` reloads systemd. `purge` of the `.deb` also deletes
+`/var/lib/cockpit-fleet`, `/etc/cockpit-fleet` (the secrets with it) and
+`/run/cockpit-fleet`; rpm has no purge, and `docs/install.md` says what to
+delete. The account and its groups stay on both: files elsewhere, a
+directory of local projects, may belong to them.
+
+`scripts/ct-lifecycle.sh` (`make ct-lifecycle DISTRO=… OLD=…`) checks all of
+it, `test/integration/lifecycle.sh` in a container where the package was
+never installed: a package built from an older commit (or the latest tag),
+its version set below the current one, installed and used (a project, an
+inventory, a secret, templates, a schedule, a run); the current package
+installed over it with a run going; then removal with a run going,
+installing again, and purge. From the commit that closed phase 8 (schema 15
+to 17) it passed on the three on 25 October, and on the AlmaLinux VM, with
+no SELinux denial. In the Debian container the script removes the
+`policy-rc.d` of Debian's images, which forbids packages to start services.
+
 ### Other distributions
 
 The same code runs on the three controllers; what differs:

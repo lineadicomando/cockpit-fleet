@@ -1,0 +1,4 @@
+# On removal, prerm stops the instances of the run unit still going, which
+# only a pattern names (cockpit-fleet-run@*.service); deb-systemd-invoke
+# takes unit names, not patterns.
+cockpit-fleet: maintainer-script-calls-systemctl [prerm:*]

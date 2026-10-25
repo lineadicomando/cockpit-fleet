@@ -12,9 +12,9 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** phase 10, from upgrade and removal of the packages; the
-security review, the negative tests, accessibility, the Italian and the
-docs for administrators are done.
+**Next:** phase 10, from the `.rpm` built in CI; the security review,
+the negative tests, accessibility, the Italian, the docs for
+administrators, upgrade and removal are done.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -225,7 +225,10 @@ except the rows that say "to confirm".
 - [x] Docs: installation, security model, writing a check, backup
       (25 October: `docs/install.md`, `security.md`, `checks.md`,
       `backup.md`; the backup and restore tried on the Debian VM)
-- [ ] Upgrade and removal (`purge` too), `.deb` and `.rpm`
+- [x] Upgrade and removal (`purge` too), `.deb` and `.rpm` (25 October:
+      removal stops runs, purge deletes the data on Debian, rpm reloads
+      systemd; `make ct-lifecycle` from phase 8's commit passed on the three
+      and on the AlmaLinux VM)
 - [ ] `.rpm` built in CI (runner is Debian)
 - [ ] Screenshots, `CHANGELOG`, tag `v0.1.0` (version is `0.0.1` in
       `package.json`, `debian/changelog`, the spec)

@@ -127,6 +127,48 @@ and in **Notifications** a channel and a rule that says what to tell it.
 The same can be done at a terminal: `fleet help` lists what the role of the
 user may do.
 
+## Upgrading
+
+Install the newer package as the first one. The database, the projects, the
+secrets and a changed `config.toml` are kept (on Fedora and AlmaLinux the
+packaged one is then written beside it as `config.toml.rpmnew`, to compare);
+runs going finish and are recorded. The database is brought up to date by
+the backend within a minute. A page left open before the upgrade loads the
+new version once the user logs in to Cockpit again.
+
+On Debian, `apt` stops to ask about `config.toml` when it was changed here
+and in the package too: keep yours, and compare with the packaged
+`config.toml.dpkg-dist`.
+
+## Removing
+
+Removing the package stops the runs still going, and keeps the data, the
+secrets and the configuration, so that installing it again brings
+everything back:
+
+```sh
+sudo apt-get remove cockpit-fleet       # Debian
+sudo dnf remove cockpit-fleet           # Fedora, AlmaLinux
+```
+
+To remove everything on Debian, purge it: the database, the projects, the
+runs, the configuration and the encrypted secrets go too.
+
+```sh
+sudo apt-get purge cockpit-fleet
+```
+
+Fedora and AlmaLinux have no purge; after `dnf remove`, delete what is left:
+
+```sh
+sudo rm -rf /var/lib/cockpit-fleet /etc/cockpit-fleet /run/cockpit-fleet
+```
+
+On all of them the account `cockpit-fleet` and the four groups stay, since
+files elsewhere (a directory of local projects) may belong to them; remove
+them, if nothing does, with `userdel cockpit-fleet` and `groupdel` for each
+`cockpit-fleet-*` group.
+
 ## Backups
 
 See [backup.md](backup.md): the database and the projects are copied as

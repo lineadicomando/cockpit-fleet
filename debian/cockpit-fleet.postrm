@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+# Purge takes what the controller kept: the database, projects, runs, the
+# configuration and the encrypted secrets. The account and its groups stay:
+# files elsewhere (a directory of local projects) may belong to them.
+if [ "$1" = purge ]; then
+    rm -rf /var/lib/cockpit-fleet /etc/cockpit-fleet /run/cockpit-fleet
+fi
+
+#DEBHELPER#

@@ -11,7 +11,7 @@ COLLECTION := ansible_collections/lineadicomando/fleet
 
 -include Makefile.local
 
-.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-clean pot po-compile help
+.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-lifecycle ct-clean pot po-compile help
 
 all: build
 
@@ -106,6 +106,10 @@ TESTS ?=
 ct-test: ## Integration scripts in containers: DISTRO=debian|fedora|alma, TESTS="runs ..." (all)
 	$(MAKE) $(if $(filter debian,$(DISTRO)),deb,rpm)
 	scripts/ct-test.sh $(DISTRO) $(TESTS)
+
+OLD ?=
+ct-lifecycle: ## Upgrade from OLD (a commit or tag; the latest tag by default), removal and purge, in a container of DISTRO
+	scripts/ct-lifecycle.sh $(DISTRO) $(OLD)
 
 ct-clean: ## Remove the containers and images of ct-test
 	scripts/ct-test.sh clean
