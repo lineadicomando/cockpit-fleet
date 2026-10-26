@@ -7,11 +7,13 @@ import { answerSecret, call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers, secretAnswers, toDraft } from "../lib/survey.ts";
-import type { Credential, Inventory, Project, Run, Template } from "../lib/types.ts";
+import { playbookChoices } from "../lib/files.ts";
+import type { Credential, Inventory, Project, ProjectPaths, Run, Template } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
 import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
+import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn } from "./pf.tsx";
 
 const words = (text: string) => text.split(/[\s,]+/).filter(Boolean);
@@ -48,8 +50,8 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [needsApproval, setNeedsApproval] = useState(template?.needs_approval ?? false);
     const [survey, setSurvey] = useState(() => (template?.survey ?? []).map(toDraft));
     const files = useLoad(() => projectId
-        ? call<{ files: string[] }>("project.files", { id: projectId }).catch(() => ({ files: [] }))
-        : Promise.resolve({ files: [] as string[] }));
+        ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
+        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }));
 
     // After the render that has the new project, not in the change handler.
     useEffect(files.reload, [projectId]);
@@ -97,10 +99,8 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 </GridItem>
                 <GridItem>
                     <FormGroup label={t("Playbook")} isRequired fieldId="tpl-playbook">
-                        <TextInput id="tpl-playbook" value={playbook} onChange={(_e, value) => setPlaybook(value)} list="tpl-playbook-files" placeholder="playbooks/site.yaml" />
-                        <datalist id="tpl-playbook-files">
-                            {(files.data?.files ?? []).map(file => <option key={file} value={file} />)}
-                        </datalist>
+                        <PathInput id="tpl-playbook" label={t("Playbook")} value={playbook} onChange={setPlaybook} placeholder="playbooks/site.yaml"
+                            choices={playbookChoices(files.data?.files ?? [])} />
                     </FormGroup>
                 </GridItem>
                 <GridItem>

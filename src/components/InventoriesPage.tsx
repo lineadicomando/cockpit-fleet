@@ -6,9 +6,11 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Credential, Inventory, Project } from "../lib/types.ts";
+import { inventoryChoices } from "../lib/files.ts";
+import type { Credential, Inventory, Project, ProjectPaths } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
 
 function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory; onClose: () => void; onDone: () => void }) {
@@ -23,8 +25,8 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     const [path, setPath] = useState(inventory?.path ?? "");
     const [vaultId, setVaultId] = useState(inventory?.vault_credential_id ?? "");
     const files = useLoad(() => projectId
-        ? call<{ files: string[] }>("project.files", { id: projectId }).catch(() => ({ files: [] }))
-        : Promise.resolve({ files: [] as string[] }));
+        ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
+        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }));
 
     // After the render that has the new project, not in the change handler.
     useEffect(files.reload, [projectId]);
@@ -78,10 +80,8 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                         </FormSelect>
                     </FormGroup>
                     <FormGroup label={t("Inventory file or directory")} isRequired fieldId="inv-path">
-                        <TextInput id="inv-path" value={path} onChange={(_e, value) => setPath(value)} list="inv-path-files" placeholder="inventories/production/hosts.yaml" />
-                        <datalist id="inv-path-files">
-                            {(files.data?.files ?? []).map(file => <option key={file} value={file} />)}
-                        </datalist>
+                        <PathInput id="inv-path" label={t("Inventory file or directory")} value={path} onChange={setPath} placeholder="inventories/production/hosts.yaml"
+                            choices={inventoryChoices(files.data?.files ?? [], files.data?.directories ?? [])} />
                         <FormHelperText><HelperText><HelperTextItem>{t("Path inside the project: a file, a directory of sources, or the YAML file of an inventory plugin. Its group_vars and host_vars are used too.")}</HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>
                 </>

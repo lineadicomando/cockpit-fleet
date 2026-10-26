@@ -312,21 +312,24 @@ def project_upload(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def project_files(ctx: Context, params: Values) -> dict:
-    """YAML files of a project, to choose a playbook or an inventory from."""
+    """YAML and INI files of a project and its directories, to choose a playbook
+    or an inventory from (an inventory can be a directory of sources)."""
     project_id = params["id"]
     tree = jobs.project_tree(store.fetch(ctx.conn, "projects", project_id, "project"), ctx.config)
-    found = []
+    found, folders = [], []
     for current, directories, names in os.walk(tree):
-        depth = len(Path(current).relative_to(tree).parts)
+        relative = Path(current).relative_to(tree)
+        if relative.parts:
+            folders.append(str(relative))
         directories[:] = sorted(d for d in directories
                                 if not d.startswith(".") and d not in ("roles", "node_modules")
-                                and depth < 3)
+                                and len(relative.parts) < 3)
         for name in sorted(names):
             if name.endswith((".yml", ".yaml", ".ini")) or name == "hosts":
-                found.append(str((Path(current) / name).relative_to(tree)))
-        if len(found) > 500:
+                found.append(str(relative / name))
+        if len(found) > 500 or len(folders) > 500:
             break
-    return {"files": found[:500]}
+    return {"files": found[:500], "directories": folders[:500]}
 
 
 # --- inventories -------------------------------------------------------------------

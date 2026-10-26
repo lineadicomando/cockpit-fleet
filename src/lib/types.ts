@@ -69,6 +69,12 @@ export interface Credential {
     secret_names: Record<string, string>;
 }
 
+// What project.files offers to choose a playbook or an inventory from.
+export interface ProjectPaths {
+    files: string[];
+    directories: string[];
+}
+
 export interface Project {
     id: string;
     name: string;

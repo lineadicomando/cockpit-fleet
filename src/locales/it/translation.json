@@ -899,5 +899,10 @@
   "Show all": "Mostra tutto",
   "Success:": "Riuscito:",
   "Text to copy": "Testo da copiare",
-  "Warning:": "Avviso:"
+  "Warning:": "Avviso:",
+  "Show the project's paths": "Mostra i percorsi del progetto",
+  "No file of this project to suggest": "Nessun file di questo progetto da suggerire",
+  "paths_more_count_one": "Ancora {{count}}: continua a scrivere per restringere",
+  "paths_more_count_many": "Altri {{count}}: continua a scrivere per restringere",
+  "paths_more_count_other": "Altri {{count}}: continua a scrivere per restringere"
 }

@@ -207,6 +207,17 @@ class ManagedProjectTest(Managed):
         self.assertEqual(sorted(os.listdir(paths.RUNS_DIR / run["id"] / "project")), ["site.yml"])
         self.assertEqual(self.ok("project.files", {"id": self.id})["files"], ["site.yml"])
 
+    def test_project_files_lists_the_files_to_choose_and_the_directories(self):
+        for path in ("site.yml", "inventories/prod/hosts.yml", "inventories/prod/group_vars/all.yml",
+                     "roles/web/tasks/main.yml", "notes.txt"):
+            (self.tree / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.tree / path).write_text("x\n")
+        listed = self.ok("project.files", {"id": self.id})
+        self.assertEqual(listed["files"], ["site.yml", "inventories/prod/hosts.yml",
+                                           "inventories/prod/group_vars/all.yml"])
+        self.assertEqual(listed["directories"], ["inventories", "inventories/prod",
+                                                 "inventories/prod/group_vars"])
+
     def test_rename_and_delete_of_the_project(self):
         renamed = self.ok("project.update", {"id": self.id, "name": "renamed"})
         self.assertEqual((renamed["name"], renamed["kind"]), ("renamed", "managed"))

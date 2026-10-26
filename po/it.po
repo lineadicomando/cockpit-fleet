@@ -2678,3 +2678,14 @@ msgstr "Testo da copiare"
 
 msgid "Warning:"
 msgstr "Avviso:"
+
+msgid "Show the project's paths"
+msgstr "Mostra i percorsi del progetto"
+
+msgid "No file of this project to suggest"
+msgstr "Nessun file di questo progetto da suggerire"
+
+msgid "paths_more_count"
+msgid_plural "paths_more_count_plural"
+msgstr[0] "Ancora {{count}}: continua a scrivere per restringere"
+msgstr[1] "Altri {{count}}: continua a scrivere per restringere"
