@@ -2689,3 +2689,6 @@ msgid "paths_more_count"
 msgid_plural "paths_more_count_plural"
 msgstr[0] "Ancora {{count}}: continua a scrivere per restringere"
 msgstr[1] "Altri {{count}}: continua a scrivere per restringere"
+
+msgid "The inventory was saved, but it could not be read: {{reason}}"
+msgstr "L'inventario è stato salvato, ma non è stato possibile leggerlo: {{reason}}"

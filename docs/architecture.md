@@ -234,7 +234,12 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 The copy of a local project opens each directory and file from the one
 that holds it, following no link, so a tree its owner changes while it is
 copied cannot lead outside it (an earlier `os.walk` could be raced into
-copying the database).
+copying the database). What the service account cannot read there (logs or
+reports that a tool of the owner writes with mode 0600, in a directory git
+ignores) is left out of the copy instead of failing the job, and the paths
+left out head the run's output, written to `stdout.log` before the unit
+starts: a variables file left out says so there, not silently. Failing
+instead made every run of such a project fail on files it never used.
 
 The run can write in its own directory, so what it leaves there is read by
 `fleetctl`, outside the sandbox, through `jobs.open_run_file`: without

@@ -904,5 +904,6 @@
   "No file of this project to suggest": "Nessun file di questo progetto da suggerire",
   "paths_more_count_one": "Ancora {{count}}: continua a scrivere per restringere",
   "paths_more_count_many": "Altri {{count}}: continua a scrivere per restringere",
-  "paths_more_count_other": "Altri {{count}}: continua a scrivere per restringere"
+  "paths_more_count_other": "Altri {{count}}: continua a scrivere per restringere",
+  "The inventory was saved, but it could not be read: {{reason}}": "L'inventario è stato salvato, ma non è stato possibile leggerlo: {{reason}}"
 }

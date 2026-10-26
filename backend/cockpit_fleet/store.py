@@ -61,7 +61,8 @@ def delete(conn: sqlite3.Connection, table: str, row_id: str, what: str) -> None
 def _integrity_message(error: sqlite3.IntegrityError, what: str) -> str:
     text = str(error)
     if "UNIQUE" in text:
-        return f"a {what} with this name already exists"
+        article = "an" if what[:1] in "aeiou" else "a"
+        return f"{article} {what} with this name already exists"
     if "FOREIGN KEY" in text:
         return f"this {what} refers to something that does not exist"
     return f"invalid {what}: {text}"

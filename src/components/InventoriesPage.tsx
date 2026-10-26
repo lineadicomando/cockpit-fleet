@@ -13,7 +13,7 @@ import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./c
 import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
 
-function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory; onClose: () => void; onDone: () => void }) {
+function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory; onClose: () => void; onDone: (problem: string | null) => void }) {
     const { t } = useTranslation();
     const projects = useLoad(() => call<{ projects: Project[] }>("project.list"));
     const credentials = useLoad(() => call<{ credentials: Credential[] }>("credential.list"));
@@ -39,9 +39,16 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
         const saved = inventory
             ? await call<Inventory>("inventory.update", { id: inventory.id, ...params })
             : await call<Inventory>("inventory.create", { kind, ...params });
-        // Read it straight away, so that its hosts show up and mistakes are reported.
-        await call("inventory.parse", { id: saved.id });
-        onDone();
+        // Read it straight away, so that its hosts show up and mistakes are
+        // reported. Saved already: if that fails, the dialog closes all the
+        // same, or saving it again would make it twice.
+        let problem: string | null = null;
+        try {
+            await call("inventory.parse", { id: saved.id });
+        } catch (ex) {
+            problem = message(ex);
+        }
+        onDone(problem);
         onClose();
     }
 
@@ -148,6 +155,10 @@ export function InventoriesPage() {
     }
 
     const refresh = () => { list.reload(); setWaiting(8); };
+    const saved = (problem: string | null) => {
+        refresh();
+        setError(problem && t("The inventory was saved, but it could not be read: {{reason}}", { reason: problem }));
+    };
     const read = (inventory: Inventory) => act(async () => { await call("inventory.parse", { id: inventory.id }); refresh(); });
     const edit = (inventory: Inventory) => act(async () => setEditing(await call<Inventory>("inventory.get", { id: inventory.id })));
 
@@ -195,8 +206,8 @@ export function InventoriesPage() {
                     </Table>
                 )}
             </ListState>
-            {creating && <InventoryModal onClose={() => setCreating(false)} onDone={refresh} />}
-            {editing && <InventoryModal inventory={editing} onClose={() => setEditing(null)} onDone={refresh} />}
+            {creating && <InventoryModal onClose={() => setCreating(false)} onDone={saved} />}
+            {editing && <InventoryModal inventory={editing} onClose={() => setEditing(null)} onDone={saved} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The inventory is deleted. Files of a project are not touched.")}
                     onDelete={async () => { await call("inventory.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}

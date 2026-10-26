@@ -761,6 +761,7 @@
   "The hosts of an inventory are listed here once it has been read. What they are made of comes from a check of the kind Hardware and software, their updates from one of the kind Updates.": "The hosts of an inventory are listed here once it has been read. What they are made of comes from a check of the kind Hardware and software, their updates from one of the kind Updates.",
   "The identifier of the room, like !abcdef:example.org (or !abcdef in newer rooms), which the account of the token has joined.": "The identifier of the room, like !abcdef:example.org (or !abcdef in newer rooms), which the account of the token has joined.",
   "The inventory is deleted. Files of a project are not touched.": "The inventory is deleted. Files of a project are not touched.",
+  "The inventory was saved, but it could not be read: {{reason}}": "The inventory was saved, but it could not be read: {{reason}}",
   "The job template is deleted. Its past runs stay in the history.": "The job template is deleted. Its past runs stay in the history.",
   "The key of a host already trusted has changed": "The key of a host already trusted has changed",
   "The label the data was encrypted with (ansible-vault --vault-id). Needed only when a template uses several vaults.": "The label the data was encrypted with (ansible-vault --vault-id). Needed only when a template uses several vaults.",

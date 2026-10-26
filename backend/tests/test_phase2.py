@@ -567,6 +567,33 @@ class SnapshotTest(unittest.TestCase):
                 jobs.snapshot(root / "src" / "sub" , root / "copy2")
             self.assertFalse((root / "copy" / "fleet.db").exists())
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads everything")
+    def test_what_cannot_be_read_is_left_out_and_told_in_the_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, run = Path(tmp) / "tree", Path(tmp) / "run"
+            (tree / "logs").mkdir(parents=True)
+            (tree / "logs" / "a.log").write_text("x")
+            (tree / "reports").mkdir()
+            (tree / "reports" / "secret.log").write_text("x")
+            (tree / "site.yml").write_text("play")
+            (tree / "logs").chmod(0o000)
+            (tree / "reports" / "secret.log").chmod(0o000)
+            try:
+                skipped = jobs.snapshot(tree, run / "project")
+            finally:
+                (tree / "logs").chmod(0o700)
+            self.assertEqual(skipped, ["logs/", "reports/secret.log"])
+            self.assertEqual((run / "project" / "site.yml").read_text(), "play")
+            self.assertFalse((run / "project" / "reports" / "secret.log").exists())
+            self.assertEqual((run / "stdout.log").read_text().splitlines(), [
+                "fleet: 2 paths of the project were left out of this run:"
+                " the service account cannot read them",
+                "  logs/", "  reports/secret.log"])
+            # Nothing is said of a project read whole.
+            (tree / "reports" / "secret.log").chmod(0o600)
+            self.assertEqual(jobs.snapshot(tree, Path(tmp) / "whole" / "project"), [])
+            self.assertFalse((Path(tmp) / "whole" / "stdout.log").exists())
+
     def test_oversized_project_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = Path(tmp) / "tree"

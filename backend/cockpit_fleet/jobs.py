@@ -156,22 +156,48 @@ def open_tree(tree: Path) -> int:
     return fd
 
 
-def snapshot(tree: Path, destination: Path) -> None:
+def snapshot(tree: Path, destination: Path) -> list[str]:
     """Copy a project for one run. Symbolic links are copied, never followed:
     each directory and file is opened from the one that holds it, so a local
-    tree that its owner changes while it is copied cannot lead outside it."""
+    tree that its owner changes while it is copied cannot lead outside it.
+
+    What the service account cannot read (logs a tool of the owner left in a
+    local project, say) is left out rather than failing the run, and told at
+    the start of the run's output, in the directory DESTINATION is in.
+    Returns the paths left out, relative to the project."""
     counts = [0, 0]
+    skipped: list[str] = []
     try:
         fd = open_tree(tree)
     except OSError as error:
         raise Conflict(f"cannot read the project: {error.strerror}") from None
     try:
-        _copy_tree(fd, destination, counts)
+        _copy_tree(fd, destination, counts, skipped, "")
     finally:
         os.close(fd)
+    if skipped:
+        _tell_skipped(destination.parent, skipped)
+    return skipped
 
 
-def _copy_tree(source: int, target: Path, counts: list[int]) -> None:
+# How many of the paths left out a run's output names.
+SKIPPED_SHOWN = 20
+
+
+def _tell_skipped(directory: Path, skipped: list[str]) -> None:
+    lines = [f"fleet: {len(skipped)} paths of the project were left out of this run:"
+             " the service account cannot read them\n"]
+    lines += [f"  {path}\n" for path in skipped[:SKIPPED_SHOWN]]
+    if len(skipped) > SKIPPED_SHOWN:
+        lines.append(f"  and {len(skipped) - SKIPPED_SHOWN} more\n")
+    fd = os.open(directory / "stdout.log",
+                 os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    with os.fdopen(fd, "w", errors="replace") as log:
+        log.write("".join(lines))
+
+
+def _copy_tree(source: int, target: Path, counts: list[int], skipped: list[str],
+               prefix: str) -> None:
     target.mkdir(mode=0o700, parents=True, exist_ok=True)
     with os.scandir(source) as entries:
         names = sorted(entry.name for entry in entries)
@@ -183,9 +209,13 @@ def _copy_tree(source: int, target: Path, counts: list[int]) -> None:
         if stat.S_ISDIR(info.st_mode):
             if name == ".git":
                 continue
-            child = os.open(name, _DIR_FLAGS, dir_fd=source)
             try:
-                _copy_tree(child, target / name, counts)
+                child = os.open(name, _DIR_FLAGS, dir_fd=source)
+            except PermissionError:
+                skipped.append(prefix + name + "/")
+                continue
+            try:
+                _copy_tree(child, target / name, counts, skipped, prefix + name + "/")
             finally:
                 os.close(child)
             continue
@@ -195,7 +225,10 @@ def _copy_tree(source: int, target: Path, counts: list[int]) -> None:
         if stat.S_ISLNK(info.st_mode):
             os.symlink(os.readlink(name, dir_fd=source), target / name)
         else:
-            _copy_file(source, name, target / name, counts)
+            try:
+                _copy_file(source, name, target / name, counts)
+            except PermissionError:
+                skipped.append(prefix + name)
         if counts[0] > MAX_PROJECT_FILES or counts[1] > MAX_PROJECT_BYTES:
             raise Conflict("the project is too large to be copied for a run")
 
