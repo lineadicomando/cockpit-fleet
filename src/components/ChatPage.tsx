@@ -98,8 +98,10 @@ function useHeightBelow(active: boolean): [React.RefObject<HTMLDivElement>, numb
         const measure = () => {
             const element = ref.current;
             if (!element) return;
-            // Where it begins in the page, however the page is scrolled.
-            const scroller = element.closest(".pf-v6-c-page__main") ?? document.documentElement;
+            // Where it begins in the page, however the page is scrolled. In
+            // PatternFly 6 what scrolls is the rounded box around the page,
+            // which ends above the bottom of the window.
+            const scroller = element.closest(".pf-v6-c-page__main-container") ?? document.documentElement;
             const top = element.getBoundingClientRect().top + scroller.scrollTop;
             // What comes after it is the padding of what holds it.
             let below = 0;
