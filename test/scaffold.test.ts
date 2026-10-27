@@ -38,3 +38,8 @@ test("manifest declares the menu entry and the minimum Cockpit version", () => {
     assert.equal(manifest.menu.index.label, "Fleet");
     assert.ok(Number(manifest.requires.cockpit) >= 337);
 });
+
+test("manifest lets Firefox download the exports made as blob: links", () => {
+    const manifest = readJson("../src/manifest.json") as { "content-security-policy": string };
+    assert.match(manifest["content-security-policy"], /frame-src 'self' blob:/);
+});

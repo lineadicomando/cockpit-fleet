@@ -3,6 +3,7 @@
   "requires": {
     "cockpit": "337"
   },
+  "content-security-policy": "frame-src 'self' blob:",
   "menu": {
     "index": {
       "label": "Fleet",

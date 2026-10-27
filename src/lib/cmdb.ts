@@ -60,11 +60,16 @@ export function hostRows(hosts: CmdbHost[]): unknown[][] {
     })];
 }
 
-// Save text as a file the browser downloads.
+// Save text as a file the browser downloads. Firefox checks a download in
+// the page's iframe against frame-src, hence blob: in the manifest's policy;
+// it also reads the URL after click() returns, so it is revoked later.
 export function download(text: string, name: string, type: string): void {
     const link = window.document.createElement("a");
     link.href = URL.createObjectURL(new Blob([text], { type }));
     link.download = name;
+    link.style.display = "none";
+    window.document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(link.href);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
 }

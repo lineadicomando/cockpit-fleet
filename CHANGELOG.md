@@ -41,6 +41,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- Exporting assets as CSV or JSON, and the configuration from the System
+  tab, did nothing in Firefox: Cockpit's content security policy blocked
+  the file. The page's policy now allows it.
 - The message box of the Assistant could still fall below the bottom of
   the window: the chat now takes the room left in the page with no
   measuring, and keeps it when the window or what is above it changes.

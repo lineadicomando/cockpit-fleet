@@ -13,6 +13,7 @@ import {
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { formatBytes, formatInterval } from "../lib/checks.ts";
+import { download } from "../lib/cmdb.ts";
 import { call } from "../lib/fleet.ts";
 import { formatDuration, formatTime } from "../lib/format.ts";
 import { keeping, keepingTone, share, type Keeping } from "../lib/health.ts";
@@ -193,11 +194,7 @@ function Transfer() {
 
     const save = () => act(async () => {
         const document = await call<object>("config.export");
-        const link = window.document.createElement("a");
-        link.href = URL.createObjectURL(new Blob([JSON.stringify(document, null, 2) + "\n"], { type: "application/json" }));
-        link.download = "cockpit-fleet-config.json";
-        link.click();
-        URL.revokeObjectURL(link.href);
+        download(JSON.stringify(document, null, 2) + "\n", "cockpit-fleet-config.json", "application/json");
     });
 
     const load = (file: File) => act(async () => {
