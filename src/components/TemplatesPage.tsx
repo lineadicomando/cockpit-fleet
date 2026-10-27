@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextInput } from "@patternfly/react-core";
+import { Button, Checkbox, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, Label, TextInput } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { answerSecret, call } from "../lib/fleet.ts";
@@ -8,13 +8,19 @@ import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers, secretAnswers, toDraft } from "../lib/survey.ts";
 import { playbookChoices } from "../lib/files.ts";
-import type { Credential, Inventory, Project, ProjectPaths, Run, Template } from "../lib/types.ts";
+import { formatTime } from "../lib/format.ts";
+import {
+    filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, readTemplatesView, sortTemplates, withoutTemplateFilters, withTemplateGroupsOpen,
+    type Outcome, type TemplateGroup, type TemplateNames, type TemplateSort, type TemplatesView, type Trait,
+} from "../lib/templates.ts";
+import type { Credential, Inventory, Project, ProjectPaths, Run, Schedule, Template } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader } from "./common.tsx";
 import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 import { PathInput } from "./PathInput.tsx";
-import { ActionsColumn } from "./pf.tsx";
+import { FilterChips, GroupByChoice, GroupRow, NothingMatches, useStoredView } from "./ListView.tsx";
+import { ActionsColumn, SearchInput } from "./pf.tsx";
 
 const words = (text: string) => text.split(/[\s,]+/).filter(Boolean);
 
@@ -219,18 +225,119 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
     );
 }
 
-export function TemplatesPage() {
+function useOutcomeNames(): Record<Outcome, string> {
     const { t } = useTranslation();
+    return {
+        failed: t("Last run failed"), active: t("Last run under way"), canceled: t("Last run canceled"),
+        successful: t("Last run successful"), never: t("Never launched"),
+    };
+}
+
+interface Listed {
+    templates: Template[];
+    schedules: Schedule[];
+    projects: Project[];
+    inventories: Inventory[];
+}
+
+function loadListed(): Promise<Listed> {
+    return Promise.all([
+        call<{ templates: Template[] }>("template.list"),
+        call<{ schedules: Schedule[] }>("schedule.list"),
+        call<{ projects: Project[] }>("project.list"),
+        call<{ inventories: Inventory[] }>("inventory.list"),
+    ]).then(([templates, schedules, projects, inventories]) => ({
+        templates: templates.templates, schedules: schedules.schedules, projects: projects.projects, inventories: inventories.inventories,
+    }));
+}
+
+// The filters and the grouping above the list of templates.
+function TemplatesToolbar({ view, onChange, projects, inventories, groups, shown, total }: {
+    view: TemplatesView;
+    onChange: (view: TemplatesView) => void;
+    // Those that some template uses.
+    projects: { id: string; name: string }[];
+    inventories: { id: string; name: string }[];
+    groups: TemplateGroup[];
+    shown: number;
+    total: number;
+}) {
+    const { t } = useTranslation();
+    const outcomeNames = useOutcomeNames();
+    const set = (change: Partial<TemplatesView>) => onChange({ ...view, ...change });
+    const traitNames: Record<Exclude<Trait, "">, string> = {
+        approval: t("With approval"), survey: t("With questions"), scheduled: t("Scheduled"), unscheduled: t("Not scheduled"),
+    };
+    const nameIn = (items: { id: string; name: string }[], id: string) => items.find(item => item.id === id)?.name ?? "";
+    const allOpen = groups.every(group => isTemplateGroupOpen(view, group));
+    const chip = (key: string, text: string, clear: Partial<TemplatesView>) => ({ key, text, onClear: () => set(clear) });
+    const chips = [
+        ...(view.search.trim() ? [chip("search", t("Text: {{text}}", { text: view.search.trim() }), { search: "" })] : []),
+        ...(view.project ? [chip("project", t("Project: {{value}}", { value: nameIn(projects, view.project) }), { project: "" })] : []),
+        ...(view.inventory ? [chip("inventory", t("Inventory: {{value}}", { value: nameIn(inventories, view.inventory) }), { inventory: "" })] : []),
+        ...(view.trait ? [chip("trait", traitNames[view.trait], { trait: "" })] : []),
+        ...(view.outcome ? [chip("outcome", outcomeNames[view.outcome], { outcome: "" })] : []),
+    ];
+
+    return (
+        <div style={{ marginBlockEnd: "1rem" }}>
+            <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
+                <FlexItem style={{ width: "18rem" }}>
+                    <SearchInput aria-label={t("Filter job templates")} placeholder={t("Name, playbook, project, inventory, tag…")} value={view.search}
+                        onChange={(_e, value) => set({ search: value })} onClear={() => set({ search: "" })} />
+                </FlexItem>
+                {projects.length > 1 && (
+                    <FlexItem style={{ width: "12rem" }}>
+                        <FormSelect aria-label={t("Project")} value={view.project} onChange={(_e, value) => set({ project: value })}>
+                            <FormSelectOption value="" label={t("Every project")} />
+                            {projects.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FlexItem>
+                )}
+                {inventories.length > 1 && (
+                    <FlexItem style={{ width: "12rem" }}>
+                        <FormSelect aria-label={t("Inventory")} value={view.inventory} onChange={(_e, value) => set({ inventory: value })}>
+                            <FormSelectOption value="" label={t("Every inventory")} />
+                            {inventories.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FlexItem>
+                )}
+                <FlexItem style={{ width: "12rem" }}>
+                    <FormSelect aria-label={t("Filter by feature")} value={view.trait} onChange={(_e, value) => set({ trait: value as Trait })}>
+                        <FormSelectOption value="" label={t("Any feature")} />
+                        {Object.entries(traitNames).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
+                    </FormSelect>
+                </FlexItem>
+                <FlexItem style={{ width: "13rem" }}>
+                    <FormSelect aria-label={t("Filter by last run")} value={view.outcome} onChange={(_e, value) => set({ outcome: value as TemplatesView["outcome"] })}>
+                        <FormSelectOption value="" label={t("Any outcome")} />
+                        {OUTCOMES.map(item => <FormSelectOption key={item} value={item} label={outcomeNames[item]} />)}
+                    </FormSelect>
+                </FlexItem>
+                <GroupByChoice id="tpl-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
+                    options={[["project", t("Project")], ["inventory", t("Inventory")], ["outcome", t("Last run")], ["none", t("Nothing")]]}
+                    groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withTemplateGroupsOpen(view, groups, !allOpen))} />
+            </Flex>
+            <FilterChips chips={chips} onClearAll={() => onChange(withoutTemplateFilters(view))} shown={shown} total={total} />
+        </div>
+    );
+}
+
+export function TemplatesPage() {
+    const { t, i18n } = useTranslation();
     const can = useCan();
-    const list = useLoad(() => call<{ templates: Template[] }>("template.list"));
+    const outcomeNames = useOutcomeNames();
+    const [stored, setView] = useStoredView("templates-view", readTemplatesView);
+    const list = useLoad(loadListed);
     const choices = useLoad(loadChoices);
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<Template | null>(null);
     const [launching, setLaunching] = useState<Template | null>(null);
     const [deleting, setDeleting] = useState<Template | null>(null);
 
-    const nameOf = (items: { id: string; name: string }[] | undefined, id: string) =>
-        items?.find(item => item.id === id)?.name ?? "";
+    function reload() {
+        list.reload();
+    }
 
     return (
         <>
@@ -242,41 +349,120 @@ export function TemplatesPage() {
             <ListState loaded={list} isEmpty={data => data.templates.length === 0}
                 emptyTitle={t("No job templates")}
                 emptyBody={t("A job template puts together a playbook, an inventory and the credentials to run it. Once defined, it is launched with one click.")}>
-                {data => (
-                    <Table variant="compact" aria-label={t("Job templates")}>
-                        <Thead>
-                            <Tr><Th>{t("Name")}</Th><Th>{t("Project")}</Th><Th>{t("Playbook")}</Th><Th>{t("Inventory")}</Th><Th screenReaderText={t("Launch")} /><Th screenReaderText={t("Actions")} /></Tr>
-                        </Thead>
-                        <Tbody>
-                            {data.templates.map(template => (
-                                <Tr key={template.id}>
-                                    <Td dataLabel={t("Name")}>{template.name}</Td>
-                                    <Td dataLabel={t("Project")}>{nameOf(choices.data?.projects, template.project_id)}</Td>
-                                    <Td dataLabel={t("Playbook")}><code>{template.playbook}</code></Td>
-                                    <Td dataLabel={t("Inventory")}>{nameOf(choices.data?.inventories, template.inventory_id)}</Td>
-                                    <Td isActionCell style={{ whiteSpace: "nowrap" }}>
-                                        {can("run.start") && <Button variant="secondary" size="sm" onClick={() => setLaunching(template)}>{t("Launch")}</Button>}
-                                    </Td>
-                                    <Td isActionCell>
-                                        {can("template.update") && (
-                                            <ActionsColumn items={[
-                                                { title: t("Edit"), onClick: () => setEditing(template) },
-                                                { title: t("Delete"), onClick: () => setDeleting(template) },
-                                            ]} />
-                                        )}
-                                    </Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
+                {data => {
+                    const projectName = new Map(data.projects.map(item => [item.id, item.name]));
+                    const inventoryName = new Map(data.inventories.map(item => [item.id, item.name]));
+                    const scheduleCount = new Map<string, number>();
+                    for (const schedule of data.schedules)
+                        scheduleCount.set(schedule.template_id, (scheduleCount.get(schedule.template_id) ?? 0) + 1);
+                    const names: TemplateNames = {
+                        project: id => projectName.get(id) ?? "",
+                        inventory: id => inventoryName.get(id) ?? "",
+                        schedules: id => scheduleCount.get(id) ?? 0,
+                    };
+                    const used = (ids: string[], name: (id: string) => string) => [...new Set(ids)]
+                        .map(id => ({ id, name: name(id) })).sort((a, b) => a.name.localeCompare(b.name));
+                    const projects = used(data.templates.map(item => item.project_id), names.project);
+                    const inventories = used(data.templates.map(item => item.inventory_id), names.inventory);
+                    // A stored project or inventory that no template uses any more is not a filter.
+                    const view = {
+                        ...stored,
+                        project: projects.some(item => item.id === stored.project) ? stored.project : "",
+                        inventory: inventories.some(item => item.id === stored.inventory) ? stored.inventory : "",
+                    };
+                    const shown = filterTemplates(data.templates, view, names);
+                    const groups = groupTemplates(sortTemplates(shown, view.sort, view.descending, names), view.groupBy, names);
+                    const grouped = view.groupBy !== "none";
+                    const width = grouped ? 9 : 8;
+                    const columns: TemplateSort[] = ["name", "project", "inventory", "last_run"];
+                    const sortBy = (column: TemplateSort) => ({
+                        columnIndex: columns.indexOf(column),
+                        sortBy: { index: columns.indexOf(view.sort), direction: view.descending ? "desc" as const : "asc" as const },
+                        onSort: (_e: unknown, _index: number, direction: "asc" | "desc") => setView({ ...view, sort: column, descending: direction === "desc" }),
+                    });
+                    const title = (group: TemplateGroup) => view.groupBy === "outcome" ? outcomeNames[group.key as Outcome] : group.name;
+
+                    const row = (template: Template, open: boolean) => {
+                        const count = names.schedules(template.id);
+                        return (
+                            <Tr key={template.id} isExpanded={grouped ? open : undefined}>
+                                {grouped && <Td />}
+                                <Td dataLabel={t("Name")}>
+                                    {template.name}
+                                    <Flex gap={{ default: "gapXs" }} style={{ display: "inline-flex", marginInlineStart: "0.5rem" }}>
+                                        {template.needs_approval && <Label isCompact color="purple">{t("Approval")}</Label>}
+                                        {template.survey.length > 0 && <Label isCompact color="blue">{t("Questions")}</Label>}
+                                        {template.become && <Label isCompact color="grey">become</Label>}
+                                    </Flex>
+                                </Td>
+                                <Td dataLabel={t("Project")}>{names.project(template.project_id)}</Td>
+                                <Td dataLabel={t("Playbook")}><code>{template.playbook}</code></Td>
+                                <Td dataLabel={t("Inventory")}>{names.inventory(template.inventory_id)}</Td>
+                                <Td dataLabel={t("Last run")}>
+                                    {template.last_run
+                                        ? (
+                                            <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", template.last_run!.id])}>
+                                                <RunStatusLabel status={template.last_run.status} /> {formatTime(template.last_run.created_at, i18n.language)}
+                                            </Button>
+                                        )
+                                        : t("Never")}
+                                </Td>
+                                <Td dataLabel={t("Schedules")}>
+                                    {count > 0 && <Button variant="link" isInline onClick={() => cockpit.location.go(["schedules"])}>{count}</Button>}
+                                </Td>
+                                <Td isActionCell style={{ whiteSpace: "nowrap" }}>
+                                    {can("run.start") && <Button variant="secondary" size="sm" onClick={() => setLaunching(template)}>{t("Launch")}</Button>}
+                                </Td>
+                                <Td isActionCell>
+                                    {can("template.update") && (
+                                        <ActionsColumn items={[
+                                            { title: t("Edit"), onClick: () => setEditing(template), isDisabled: !choices.data },
+                                            { title: t("Delete"), onClick: () => setDeleting(template) },
+                                        ]} />
+                                    )}
+                                </Td>
+                            </Tr>
+                        );
+                    };
+
+                    return (
+                        <>
+                            <TemplatesToolbar view={view} onChange={setView} projects={projects} inventories={inventories} groups={groups}
+                                shown={shown.length} total={data.templates.length} />
+                            {shown.length === 0 ? (
+                                <NothingMatches title={t("No job template matches the filters")} onClearAll={() => setView(withoutTemplateFilters(view))} />
+                            ) : (
+                                <Table variant="compact" aria-label={t("Job templates")}>
+                                    <Thead>
+                                        <Tr>
+                                            {grouped && <Th screenReaderText={t("Group")} />}
+                                            <Th sort={sortBy("name")}>{t("Name")}</Th><Th sort={sortBy("project")}>{t("Project")}</Th><Th>{t("Playbook")}</Th>
+                                            <Th sort={sortBy("inventory")}>{t("Inventory")}</Th><Th sort={sortBy("last_run")}>{t("Last run")}</Th><Th>{t("Schedules")}</Th>
+                                            <Th screenReaderText={t("Launch")} /><Th screenReaderText={t("Actions")} />
+                                        </Tr>
+                                    </Thead>
+                                    {grouped ? groups.map(group => {
+                                        const open = isTemplateGroupOpen(view, group);
+                                        return (
+                                            <Tbody key={group.key} isExpanded={open}>
+                                                <GroupRow title={title(group)} count={t("templates_count", { count: group.items.length })} open={open} width={width}
+                                                    onToggle={() => setView(withTemplateGroupsOpen(view, [group], !open))} />
+                                                {group.items.map(template => row(template, open))}
+                                            </Tbody>
+                                        );
+                                    }) : <Tbody>{groups[0].items.map(template => row(template, true))}</Tbody>}
+                                </Table>
+                            )}
+                        </>
+                    );
+                }}
             </ListState>
-            {creating && choices.data && <TemplateModal choices={choices.data} onClose={() => setCreating(false)} onDone={list.reload} />}
-            {editing && choices.data && <TemplateModal template={editing} choices={choices.data} onClose={() => setEditing(null)} onDone={list.reload} />}
+            {creating && choices.data && <TemplateModal choices={choices.data} onClose={() => setCreating(false)} onDone={reload} />}
+            {editing && choices.data && <TemplateModal template={editing} choices={choices.data} onClose={() => setEditing(null)} onDone={reload} />}
             {launching && <LaunchModal template={launching} onClose={() => setLaunching(null)} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The job template is deleted. Its past runs stay in the history.")}
-                    onDelete={async () => { await call("template.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}
+                    onDelete={async () => { await call("template.delete", { id: deleting.id }); setDeleting(null); reload(); }}
                     onClose={() => setDeleting(null)} />
             )}
         </>

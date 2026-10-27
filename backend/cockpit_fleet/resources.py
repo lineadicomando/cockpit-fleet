@@ -645,7 +645,25 @@ def template_vaults(ctx: Context, template_id: str) -> list:
         " WHERE v.template_id = ? ORDER BY v.position", (template_id,)).fetchall()
 
 
-def _template(ctx: Context, row) -> dict:
+_LAST_RUN = ("SELECT r.template_id, r.id, r.status, r.created_at, r.finished_at FROM runs r"
+             " JOIN (SELECT MAX(rowid) AS last FROM runs WHERE template_id IS NOT NULL{only}"
+             " GROUP BY template_id) m ON r.rowid = m.last")
+
+
+def _last_runs(ctx: Context, template_id: str | None = None) -> dict:
+    """The last run of each template, or of one, by template id."""
+    if template_id is None:
+        rows = ctx.conn.execute(_LAST_RUN.format(only="")).fetchall()
+    else:
+        rows = ctx.conn.execute(_LAST_RUN.format(only=" AND template_id = ?"),
+                                (template_id,)).fetchall()
+    return {row["template_id"]: {key: row[key] for key in ("id", "status", "created_at",
+                                                           "finished_at")} for row in rows}
+
+
+def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
+    if last_runs is None:
+        last_runs = _last_runs(ctx, row["id"])
     data = {key: row[key] for key in ("id", "name", "project_id", "playbook", "inventory_id",
                                       "machine_credential_id", "limit_hosts", "forks",
                                       "verbosity")}
@@ -656,6 +674,7 @@ def _template(ctx: Context, row) -> dict:
     data["skip_tags"] = store.loads(row["skip_tags"], [])
     data["extra_vars"] = store.loads(row["extra_vars"], {})
     data["survey"] = store.loads(row["survey"], [])
+    data["last_run"] = last_runs.get(row["id"])
     return data
 
 
@@ -755,9 +774,11 @@ def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[st
 
 @command("template.list", role="viewer")
 def template_list(ctx: Context, params: Values) -> dict:
-    """The job templates: playbook, inventory, credentials and the questions each asks."""
+    """The job templates: playbook, inventory, credentials, the questions each asks,
+    and its last run (id, status, created_at, finished_at), or null."""
     rows = ctx.conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE").fetchall()
-    return {"templates": [_template(ctx, row) for row in rows]}
+    last_runs = _last_runs(ctx)
+    return {"templates": [_template(ctx, row, last_runs) for row in rows]}
 
 
 @command("template.create", role="admin", mutating=True, params=_TEMPLATE_PARAMS)

@@ -247,6 +247,27 @@ class RunTest(Base):
         self.ctx().conn.execute("UPDATE runs SET started_at = started_at - 60 WHERE id = ?", (lost["id"],))
         self.assertEqual(self.ok("run.get", {"id": lost["id"]})["status"], "error")
 
+    def test_templates_tell_their_last_run(self):
+        template = self.template()
+        other = self.ok("template.create", {"name": "other", "project_id": template["project_id"],
+                                            "playbook": "site.yml",
+                                            "inventory_id": template["inventory_id"]})
+        self.assertIsNone(other["last_run"])
+        failed = self.ok("run.start", {"template_id": template["id"]})
+        self.finish(failed["id"], rc=2)
+        self.ok("run.get", {"id": failed["id"]})
+        listed = {item["name"]: item for item in self.ok("template.list", role="viewer")["templates"]}
+        self.assertEqual((listed["deploy"]["last_run"]["id"], listed["deploy"]["last_run"]["status"]),
+                         (failed["id"], "failed"))
+        self.assertIsNotNone(listed["deploy"]["last_run"]["finished_at"])
+        self.assertIsNone(listed["other"]["last_run"])
+        again = self.ok("run.start", {"template_id": template["id"]})
+        listed = {item["name"]: item for item in self.ok("template.list")["templates"]}
+        self.assertEqual((listed["deploy"]["last_run"]["id"], listed["deploy"]["last_run"]["status"]),
+                         (again["id"], "running"))
+        self.assertEqual(self.ok("template.update", {**{key: template[key] for key in (
+            "id", "name", "project_id", "playbook", "inventory_id")}})["last_run"]["id"], again["id"])
+
     def test_queue_respects_the_concurrency_limit(self):
         template = self.template()
         ids = [self.ok("run.start", {"template_id": template["id"]})["id"] for _ in range(4)]

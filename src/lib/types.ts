@@ -191,6 +191,8 @@ export interface Template {
     become: boolean;
     // Each run waits until someone other than who launched it approves it.
     needs_approval: boolean;
+    // Its latest run, a step of a workflow included; null when never launched.
+    last_run: { id: string; status: RunStatus; created_at: number; finished_at: number | null } | null;
 }
 
 export type StepCondition = "success" | "failure" | "always";

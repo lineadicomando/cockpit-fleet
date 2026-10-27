@@ -5,6 +5,7 @@ import {
     Checkbox,
     Content,
     Flex,
+    FlexItem,
     FormGroup,
     FormHelperText,
     FormSelect,
@@ -17,17 +18,24 @@ import {
     Radio,
     TextArea,
     TextInput,
+    ToggleGroup,
+    ToggleGroupItem,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, OutlinedClockIcon, QuestionCircleIcon } from "@patternfly/react-icons";
 import { call } from "../lib/fleet.ts";
-import { formatInterval, fromLocalInput, linesOf, ownThresholds, thresholdFields, thresholdsValid, toLocalInput, type ThresholdField } from "../lib/checks.ts";
+import {
+    filterChecks, formatInterval, fromLocalInput, groupChecks, isGroupOpen, KIND_CATEGORIES, linesOf, ownThresholds,
+    readView, sortChecks, sumCounts, withGroupsOpen, withoutFilters, thresholdFields, thresholdsValid, toLocalInput,
+    type CheckGroup, type ChecksView, type EnabledFilter, type KindCategory, type SortColumn, type StateFilter, type ThresholdField,
+} from "../lib/checks.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CatalogEntry, CheckDef, CheckKind, Credential, FleetHost, Inventory, Maintenance, Project, StateCounts, StateName } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
-import { ActionsColumn, Alert } from "./pf.tsx";
+import { FilterChips, GroupByChoice, GroupRow, NothingMatches, useStoredView } from "./ListView.tsx";
+import { ActionsColumn, Alert, SearchInput } from "./pf.tsx";
 
 const LOOK = {
     ok: { color: "green", icon: <CheckCircleIcon /> },
@@ -409,10 +417,178 @@ export function MaintenanceModal({ inventories, hosts, host, onClose, onDone }: 
     );
 }
 
+function useCategoryNames(): Record<KindCategory, string> {
+    const { t } = useTranslation();
+    return {
+        resources: t("Resources"), system: t("Services and system"), inventory: t("Inventory and compliance"), own: t("Playbooks of your own"),
+    };
+}
+
+// The filters and the grouping above the list of checks, and what they leave out.
+function ChecksToolbar({ view, onChange, inventories, groups, shown, total }: {
+    view: ChecksView;
+    onChange: (view: ChecksView) => void;
+    inventories: { id: string; name: string }[];
+    // The groups the table shows, to open or close them all.
+    groups: CheckGroup[];
+    shown: number;
+    total: number;
+}) {
+    const { t } = useTranslation();
+    const categoryNames = useCategoryNames();
+    const set = (change: Partial<ChecksView>) => onChange({ ...view, ...change });
+    const stateNames: Record<Exclude<StateFilter, "">, string> = {
+        problems: t("With problems"), critical: t("Critical only"), ok: t("All OK"), pending: t("Not checked yet"),
+    };
+    const enabledNames: Record<Exclude<EnabledFilter, "">, string> = { enabled: t("Enabled only"), disabled: t("Not enabled only") };
+    const allOpen = groups.every(group => isGroupOpen(view, group, groups.length));
+    const inventoryName = inventories.find(item => item.id === view.inventory)?.name ?? "";
+    const chip = (key: string, text: string, clear: Partial<ChecksView>) => ({ key, text, onClear: () => set(clear) });
+    const chips = [
+        ...(view.search.trim() ? [chip("search", t("Text: {{text}}", { text: view.search.trim() }), { search: "" })] : []),
+        ...(view.state ? [chip("state", t("State: {{value}}", { value: stateNames[view.state] }), { state: "" })] : []),
+        ...(view.inventory ? [chip("inventory", t("Inventory: {{value}}", { value: inventoryName }), { inventory: "" })] : []),
+        ...(view.category ? [chip("category", t("Kind: {{value}}", { value: categoryNames[view.category] }), { category: "" })] : []),
+        ...(view.enabled ? [chip("enabled", enabledNames[view.enabled], { enabled: "" })] : []),
+    ];
+
+    return (
+        <div style={{ marginBlockEnd: "1rem" }}>
+            <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
+                <FlexItem style={{ width: "18rem" }}>
+                    <SearchInput aria-label={t("Filter checks")} placeholder={t("Name, kind, inventory, group…")} value={view.search}
+                        onChange={(_e, value) => set({ search: value })} onClear={() => set({ search: "" })} />
+                </FlexItem>
+                <FlexItem style={{ width: "11rem" }}>
+                    <FormSelect aria-label={t("Filter by state")} value={view.state} onChange={(_e, value) => set({ state: value as StateFilter })}>
+                        <FormSelectOption value="" label={t("Any state")} />
+                        {Object.entries(stateNames).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
+                    </FormSelect>
+                </FlexItem>
+                {inventories.length > 1 && (
+                    <FlexItem style={{ width: "12rem" }}>
+                        <FormSelect aria-label={t("Inventory")} value={view.inventory} onChange={(_e, value) => set({ inventory: value })}>
+                            <FormSelectOption value="" label={t("Every inventory")} />
+                            {inventories.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FlexItem>
+                )}
+                <FlexItem style={{ width: "13rem" }}>
+                    <FormSelect aria-label={t("Filter by kind")} value={view.category} onChange={(_e, value) => set({ category: value as ChecksView["category"] })}>
+                        <FormSelectOption value="" label={t("Any kind")} />
+                        {KIND_CATEGORIES.map(item => <FormSelectOption key={item} value={item} label={categoryNames[item]} />)}
+                    </FormSelect>
+                </FlexItem>
+                <FlexItem style={{ width: "11rem" }}>
+                    <FormSelect aria-label={t("Enabled or not")} value={view.enabled} onChange={(_e, value) => set({ enabled: value as EnabledFilter })}>
+                        <FormSelectOption value="" label={t("Enabled or not")} />
+                        {Object.entries(enabledNames).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
+                    </FormSelect>
+                </FlexItem>
+                <GroupByChoice id="chk-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
+                    options={[["inventory", t("Inventory")], ["kind", t("Kind")], ["state", t("Worst state")], ["none", t("Nothing")]]}
+                    groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withGroupsOpen(view, groups, !allOpen))} />
+            </Flex>
+            <FilterChips chips={chips} onClearAll={() => onChange(withoutFilters(view))} shown={shown} total={total} />
+        </div>
+    );
+}
+
+function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRun, onEdit, onDelete }: {
+    groups: CheckGroup[];
+    view: ChecksView;
+    onChange: (view: ChecksView) => void;
+    canRun: boolean;
+    canEdit: boolean;
+    // The lists a form needs have arrived.
+    canEditNow: boolean;
+    onRun: (check: CheckDef) => void;
+    onEdit: (check: CheckDef) => void;
+    onDelete: (check: CheckDef) => void;
+}) {
+    const { t } = useTranslation();
+    const kindNames = useKindNames();
+    const categoryNames = useCategoryNames();
+    const stateNames = useStateNames();
+    const grouped = view.groupBy !== "none";
+    const columns: SortColumn[] = ["name", "interval", "states"];
+    const width = grouped ? 8 : 7;
+
+    function sortBy(column: SortColumn, index: number) {
+        return {
+            columnIndex: index,
+            sortBy: { index: columns.indexOf(view.sort), direction: view.descending ? "desc" as const : "asc" as const },
+            onSort: (_e: unknown, _index: number, direction: "asc" | "desc") => onChange({ ...view, sort: column, descending: direction === "desc" }),
+        };
+    }
+
+    const isOpen = (group: CheckGroup) => isGroupOpen(view, group, groups.length);
+    const toggle = (group: CheckGroup) => onChange(withGroupsOpen(view, [group], !isOpen(group)));
+
+    function title(group: CheckGroup): string {
+        if (view.groupBy === "inventory") return group.name;
+        if (view.groupBy === "kind") return categoryNames[group.key as KindCategory];
+        return group.key === "disabled" ? t("Not enabled") : stateNames[group.key as StateName | "pending"];
+    }
+
+    const row = (check: CheckDef, open: boolean) => (
+        <Tr key={check.id} isExpanded={grouped ? open : undefined}>
+            {grouped && <Td />}
+            <Td dataLabel={t("Name")}>
+                {check.name}
+                {!check.enabled && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Not enabled")}</Label>}
+            </Td>
+            <Td dataLabel={t("What")}>{kindNames[check.kind] ?? check.kind}</Td>
+            <Td dataLabel={t("Hosts")}>
+                {check.inventory}{check.group !== "all" && <Content component="small"> / {check.group}</Content>}
+            </Td>
+            <Td dataLabel={t("Every")}>{formatInterval(check.interval)}</Td>
+            <Td dataLabel={t("States")}><StateCountLabels counts={check.states} /></Td>
+            <Td isActionCell style={{ whiteSpace: "nowrap" }}>
+                {canRun && check.enabled && <Button variant="secondary" size="sm" onClick={() => onRun(check)}>{t("Check now")}</Button>}
+            </Td>
+            <Td isActionCell>
+                {canEdit && (
+                    <ActionsColumn items={[
+                        { title: t("Edit"), onClick: () => onEdit(check), isDisabled: !canEditNow },
+                        { title: t("Delete"), onClick: () => onDelete(check) },
+                    ]} />
+                )}
+            </Td>
+        </Tr>
+    );
+
+    return (
+        <Table variant="compact" aria-label={t("Checks")}>
+            <Thead>
+                <Tr>
+                    {grouped && <Th screenReaderText={t("Group")} />}
+                    <Th sort={sortBy("name", 0)}>{t("Name")}</Th><Th>{t("What")}</Th><Th>{t("Hosts")}</Th>
+                    <Th sort={sortBy("interval", 1)}>{t("Every")}</Th><Th sort={sortBy("states", 2)}>{t("States")}</Th>
+                    <Th screenReaderText={t("Check now")} /><Th screenReaderText={t("Actions")} />
+                </Tr>
+            </Thead>
+            {grouped ? groups.map(group => {
+                const open = isOpen(group);
+                return (
+                    <Tbody key={group.key} isExpanded={open}>
+                        <GroupRow title={title(group)} count={t("checks_count", { count: group.items.length })} open={open}
+                            onToggle={() => toggle(group)} width={width}>
+                            <StateCountLabels counts={sumCounts(group.items)} />
+                        </GroupRow>
+                        {group.items.map(check => row(check, open))}
+                    </Tbody>
+                );
+            }) : <Tbody>{groups[0].items.map(check => row(check, true))}</Tbody>}
+        </Table>
+    );
+}
+
 export function ChecksPage() {
     const { t, i18n } = useTranslation();
     const can = useCan();
     const kindNames = useKindNames();
+    const [stored, setView] = useStoredView("checks-view", readView);
     const list = useLoad(() => call<{ checks: CheckDef[] }>("check.list"));
     const windows = useLoad(() => call<{ maintenances: Maintenance[]; now: number }>("maintenance.list"));
     const refs = useLoad(async () => {
@@ -431,6 +607,12 @@ export function ChecksPage() {
     const [opening, setOpening] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+
+    // The inventories that have checks; a stored one that has none any more is not a filter.
+    const inventories = [...new Map((list.data?.checks ?? []).map(check => [check.inventory_id, check.inventory])).entries()]
+        .map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    const view = !list.data || stored.inventory === "" || inventories.some(item => item.id === stored.inventory)
+        ? stored : { ...stored, inventory: "" };
 
     async function runNow(check: CheckDef) {
         setError(null);
@@ -459,6 +641,8 @@ export function ChecksPage() {
     }
 
     const now = windows.data?.now ?? Date.now() / 1000;
+    const current = (windows.data?.maintenances ?? []).filter(item => item.starts_at <= now && now < item.ends_at).length;
+    const planned = (windows.data?.maintenances ?? []).filter(item => now < item.starts_at).length;
 
     return (
         <>
@@ -472,47 +656,37 @@ export function ChecksPage() {
             <ListState loaded={list} isEmpty={data => data.checks.length === 0}
                 emptyTitle={t("No checks")}
                 emptyBody={t("A check looks at the hosts of a group of an inventory at regular intervals: disk space, memory, services, certificates. Ansible does it over the connection the inventory gives, with nothing to install on the hosts.")}>
-                {data => (
-                    <Table variant="compact" aria-label={t("Checks")}>
-                        <Thead>
-                            <Tr>
-                                <Th>{t("Name")}</Th><Th>{t("What")}</Th><Th>{t("Hosts")}</Th><Th>{t("Every")}</Th><Th>{t("States")}</Th>
-                                <Th screenReaderText={t("Check now")} /><Th screenReaderText={t("Actions")} />
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {data.checks.map(check => (
-                                <Tr key={check.id}>
-                                    <Td dataLabel={t("Name")}>
-                                        {check.name}
-                                        {!check.enabled && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Not enabled")}</Label>}
-                                    </Td>
-                                    <Td dataLabel={t("What")}>{kindNames[check.kind] ?? check.kind}</Td>
-                                    <Td dataLabel={t("Hosts")}>
-                                        {check.inventory}{check.group !== "all" && <Content component="small"> / {check.group}</Content>}
-                                    </Td>
-                                    <Td dataLabel={t("Every")}>{formatInterval(check.interval)}</Td>
-                                    <Td dataLabel={t("States")}><StateCountLabels counts={check.states} /></Td>
-                                    <Td isActionCell style={{ whiteSpace: "nowrap" }}>
-                                        {can("check.run") && check.enabled && <Button variant="secondary" size="sm" onClick={() => runNow(check)}>{t("Check now")}</Button>}
-                                    </Td>
-                                    <Td isActionCell>
-                                        {can("check.update") && (
-                                            <ActionsColumn items={[
-                                                { title: t("Edit"), onClick: () => setEditing(check), isDisabled: !refs.data },
-                                                { title: t("Delete"), onClick: () => setDeleting(check) },
-                                            ]} />
-                                        )}
-                                    </Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
+                {data => {
+                    const shown = filterChecks(data.checks, view, kind => kindNames[kind] ?? kind);
+                    const groups = groupChecks(sortChecks(shown, view.sort, view.descending), view.groupBy);
+                    return (
+                        <>
+                            <ChecksToolbar view={view} onChange={setView} inventories={inventories} groups={groups} shown={shown.length} total={data.checks.length} />
+                            {shown.length === 0 ? (
+                                <NothingMatches title={t("No check matches the filters")} onClearAll={() => setView(withoutFilters(view))} />
+                            ) : (
+                                <ChecksTable groups={groups} view={view} onChange={setView}
+                                    canRun={can("check.run")} canEdit={can("check.update")} canEditNow={!!refs.data}
+                                    onRun={runNow} onEdit={setEditing} onDelete={setDeleting} />
+                            )}
+                        </>
+                    );
+                }}
             </ListState>
 
             <div style={{ marginBlockStart: "2rem" }}>
                 <SectionHeader title={t("Maintenance windows")}>
+                    {windows.data && windows.data.maintenances.length > 0 && (
+                        <>
+                            <Content component="small" style={{ alignSelf: "center" }}>
+                                {t("Now: {{now}} · Planned: {{planned}}", { now: current, planned })}
+                            </Content>
+                            <ToggleGroup aria-label={t("Which maintenance windows")} isCompact>
+                                <ToggleGroupItem text={t("Current and planned")} isSelected={!view.ended} onChange={() => setView({ ...view, ended: false })} />
+                                <ToggleGroupItem text={t("Ended too")} isSelected={view.ended} onChange={() => setView({ ...view, ended: true })} />
+                            </ToggleGroup>
+                        </>
+                    )}
                     {can("maintenance.create") && (
                         <Button variant="secondary" onClick={() => setOpening(true)} isDisabled={!refs.data || refs.data.hosts.length === 0}>{t("New maintenance window")}</Button>
                     )}
@@ -520,38 +694,43 @@ export function ChecksPage() {
                 <ListState loaded={windows} isEmpty={data => data.maintenances.length === 0}
                     emptyTitle={t("No maintenance windows")}
                     emptyBody={t("During a maintenance window nothing is told about its hosts: for a planned reboot, or work on a disk.")}>
-                    {data => (
-                        <Table variant="compact" aria-label={t("Maintenance windows")}>
-                            <Thead>
-                                <Tr><Th>{t("For")}</Th><Th>{t("Begins")}</Th><Th>{t("Ends")}</Th><Th>{t("Why")}</Th><Th>{t("By")}</Th><Th screenReaderText={t("Actions")} /></Tr>
-                            </Thead>
-                            <Tbody>
-                                {data.maintenances.map(item => {
-                                    const open = item.starts_at <= now && now < item.ends_at;
-                                    const over = item.ends_at <= now;
-                                    return (
-                                        <Tr key={item.id}>
-                                            <Td dataLabel={t("For")}>
-                                                {item.host_id ? item.host : (item.group === "all" ? t("Every host") : t("Group {{group}}", { group: item.group }))}
-                                                <Content component="small"> ({item.inventory})</Content>
-                                                {open && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Now")}</Label>}
-                                                {over && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Ended")}</Label>}
-                                            </Td>
-                                            <Td dataLabel={t("Begins")}>{formatTime(item.starts_at, i18n.language)}</Td>
-                                            <Td dataLabel={t("Ends")}>{formatTime(item.ends_at, i18n.language)}</Td>
-                                            <Td dataLabel={t("Why")}>{item.comment}</Td>
-                                            <Td dataLabel={t("By")}>{item.created_by}</Td>
-                                            <Td isActionCell>
-                                                {can("maintenance.delete") && !over && (
-                                                    <Button variant="secondary" size="sm" onClick={() => close(item)}>{open ? t("End now") : t("Take back")}</Button>
-                                                )}
-                                            </Td>
-                                        </Tr>
-                                    );
-                                })}
-                            </Tbody>
-                        </Table>
-                    )}
+                    {data => {
+                        const shown = data.maintenances.filter(item => view.ended || now < item.ends_at);
+                        if (shown.length === 0)
+                            return <Content component="p">{t("No window is open or planned. Choose \"Ended too\" to see those that have ended.")}</Content>;
+                        return (
+                            <Table variant="compact" aria-label={t("Maintenance windows")}>
+                                <Thead>
+                                    <Tr><Th>{t("For")}</Th><Th>{t("Begins")}</Th><Th>{t("Ends")}</Th><Th>{t("Why")}</Th><Th>{t("By")}</Th><Th screenReaderText={t("Actions")} /></Tr>
+                                </Thead>
+                                <Tbody>
+                                    {shown.map(item => {
+                                        const open = item.starts_at <= now && now < item.ends_at;
+                                        const over = item.ends_at <= now;
+                                        return (
+                                            <Tr key={item.id}>
+                                                <Td dataLabel={t("For")}>
+                                                    {item.host_id ? item.host : (item.group === "all" ? t("Every host") : t("Group {{group}}", { group: item.group }))}
+                                                    <Content component="small"> ({item.inventory})</Content>
+                                                    {open && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Now")}</Label>}
+                                                    {over && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Ended")}</Label>}
+                                                </Td>
+                                                <Td dataLabel={t("Begins")}>{formatTime(item.starts_at, i18n.language)}</Td>
+                                                <Td dataLabel={t("Ends")}>{formatTime(item.ends_at, i18n.language)}</Td>
+                                                <Td dataLabel={t("Why")}>{item.comment}</Td>
+                                                <Td dataLabel={t("By")}>{item.created_by}</Td>
+                                                <Td isActionCell>
+                                                    {can("maintenance.delete") && !over && (
+                                                        <Button variant="secondary" size="sm" onClick={() => close(item)}>{open ? t("End now") : t("Take back")}</Button>
+                                                    )}
+                                                </Td>
+                                            </Tr>
+                                        );
+                                    })}
+                                </Tbody>
+                            </Table>
+                        );
+                    }}
                 </ListState>
             </div>
 

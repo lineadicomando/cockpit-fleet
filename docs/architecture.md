@@ -1162,6 +1162,18 @@ done about each, the hosts, and a grid of hosts and checks; the page of a
 host (`#/hosts/ID`) has what it is, its checks with their metrics, and its
 last changes. "Checks" has the checks and the maintenance windows.
 
+The list of checks is filtered, grouped and sorted in the browser, from
+what `check.list` already returns (see "Long lists" under the interface):
+a text searched in the name, the kind, the inventory, the group and the
+playbook; the state (with a problem, critical, all OK, not checked yet);
+the inventory; the kind, in four families (resources: disk, cpu, memory;
+services and system: reachability, services, uptime, certificates, clock;
+inventory and compliance: cmdb, updates, compliance; playbooks of the
+user); enabled or not. It is grouped by inventory (the default), family,
+worst state or not at all; a group with a problem starts open, one all OK
+closed, and every group is open while a filter is on. Ended maintenance
+windows are hidden unless asked for. The logic is in `src/lib/checks.ts`.
+
 Checked on Debian 13 (`checks.sh`, four Linux containers and an address
 with no host): every kind of the catalog and a playbook of the user, an
 unreachable host told about once, a disk of 16 MB filled up told about in
@@ -1977,6 +1989,33 @@ label). The wrappers also mend what an audit found:
 - a `FormGroup` around something that is not a field (a code editor, the
   links of a workflow step, an upload) is `role="group"`, so that its label
   names the group instead of pointing at nothing.
+
+**Long lists.** Checks and job templates are filtered, grouped and sorted
+in the browser, from what their `list` command returns: neither is paged,
+and at the sizes measured (hundreds of each) there is no reason to ask the
+backend again for each change of a filter. The pieces they share are in
+`src/lib/listview.ts` (groups, the stored view read back defensively) and
+`src/components/ListView.tsx` (the filters in use as labels that remove
+them, the choice of grouping with a button that opens or closes every group,
+the first row of a group, nothing matching). What a user chose, the order,
+and the groups opened or closed by hand, are kept in the browser's
+`localStorage` under `cockpit-fleet.NAME.USER`, so that they outlive a
+change of tab and a reload; a link carries none of them, and a stored
+value that is not understood (an older version, an edit by hand) falls
+back to the default. PatternFly's toolbar filters are not used: their
+labels ("Show Filters", "Close …") are English that cannot be translated.
+
+Job templates are grouped by project (the default), inventory, outcome of
+the last run or not at all, every group open at first; filtered by text
+(name, playbook, project, inventory, tags), project, inventory, a feature
+(an approval, questions, scheduled or not, from `schedule.list`) and the
+outcome of the last run (failed or error; under way, waiting for approval
+included; canceled, rejected or expired; successful; never launched).
+`template.list` gives each template its `last_run`, any run with its
+`template_id` (a step of a workflow too), in one query over the index
+`runs_template` (schema 19); it does not reconcile runs as `run.list` does,
+so a run whose unit died unseen shows as running until a page of runs is
+opened.
 
 `<html lang>` of the frame is the language of the page, not the "en" of
 `index.html`, so that a screen reader reads Italian as Italian. The

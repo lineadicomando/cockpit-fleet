@@ -15,6 +15,18 @@ entries go under `[Unreleased]`, under the heading of their kind.
   checks unknown and so told about by no rule on problems, and when they
   can again (`prepared`); the System tab shows such a group with the
   reason.
+- The Checks tab filters its checks by text, state, inventory, kind and
+  whether they are enabled, groups them by inventory (the default), kind
+  or worst state, with a button to open or close every group, and sorts
+  them by name, interval or state; maintenance
+  windows that have ended are hidden unless asked for. The browser
+  remembers these choices between tabs and visits.
+- The Job templates tab does the same: filters by text, project,
+  inventory, a feature (an approval, questions, scheduled or not) and the
+  outcome of the last run; groups by project (the default), inventory or
+  last run; and shows each template's last run, its schedules and whether
+  it asks for an approval or questions. `template.list` gives each
+  template its `last_run`.
 
 ### Changed
 

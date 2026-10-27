@@ -36,7 +36,7 @@ check`; `make ct-test DISTRO=debian` (then `fedora`, `alma`) around a
 change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `auth.py` the roles and rights, `db.py` schema 18),
+`cli.py` the registry, `auth.py` the roles and rights, `db.py` schema 19),
 approvals in `approvals.py`, workflows in `workflows.py`, templates
 and other resources in `resources.py`, launching in `runs.py`, the queue and
 dispatch of jobs in `jobs.py`, command lines of jobs in `runner.py`,

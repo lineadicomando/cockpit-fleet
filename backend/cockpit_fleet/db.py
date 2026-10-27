@@ -687,6 +687,10 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The last run of each template, which template.list shows.
+        "CREATE INDEX runs_template ON runs (template_id) WHERE template_id IS NOT NULL",
+    ],
 ]
 
 

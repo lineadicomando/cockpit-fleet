@@ -76,3 +76,25 @@ export function usePolling(tick: () => Promise<unknown> | void, ms: number, acti
         };
     }, [ms, active]);
 }
+
+// State kept in the browser's localStorage under `key`, so that it outlives
+// a change of tab or a reload. read() turns what is stored, or null, into a
+// value; a browser that refuses storage keeps it for the page only.
+export function useStoredState<T>(key: string, read: (text: string | null) => T): [T, (value: T) => void] {
+    const [value, setValue] = useState<T>(() => {
+        try {
+            return read(window.localStorage.getItem(key));
+        } catch {
+            return read(null);
+        }
+    });
+    const store = useCallback((next: T) => {
+        setValue(next);
+        try {
+            window.localStorage.setItem(key, JSON.stringify(next));
+        } catch {
+            // kept in memory only
+        }
+    }, [key]);
+    return [value, store];
+}

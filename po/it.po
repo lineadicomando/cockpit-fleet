@@ -2701,3 +2701,172 @@ msgstr[1] "Altri {{count}}: continua a scrivere per restringere"
 
 msgid "The inventory was saved, but it could not be read: {{reason}}"
 msgstr "L'inventario è stato salvato, ma non è stato possibile leggerlo: {{reason}}"
+
+msgid "Resources"
+msgstr "Risorse"
+
+msgid "Services and system"
+msgstr "Servizi e sistema"
+
+msgid "Inventory and compliance"
+msgstr "Inventario e conformità"
+
+msgid "Playbooks of your own"
+msgstr "Playbook propri"
+
+msgid "With problems"
+msgstr "Con problemi"
+
+msgid "Critical only"
+msgstr "Solo critici"
+
+msgid "All OK"
+msgstr "Tutto OK"
+
+msgid "Text: {{text}}"
+msgstr "Testo: {{text}}"
+
+msgid "State: {{value}}"
+msgstr "Stato: {{value}}"
+
+msgid "Inventory: {{value}}"
+msgstr "Inventario: {{value}}"
+
+msgid "Kind: {{value}}"
+msgstr "Tipo: {{value}}"
+
+msgid "Filter checks"
+msgstr "Filtra i check"
+
+msgid "Name, kind, inventory, group…"
+msgstr "Nome, tipo, inventario, gruppo…"
+
+msgid "Filter by state"
+msgstr "Filtra per stato"
+
+msgid "Any state"
+msgstr "Qualsiasi stato"
+
+msgid "Filter by kind"
+msgstr "Filtra per tipo"
+
+msgid "Any kind"
+msgstr "Qualsiasi tipo"
+
+msgid "Enabled or not"
+msgstr "Attivi e non attivi"
+
+msgid "Group by"
+msgstr "Raggruppa per"
+
+msgid "Worst state"
+msgstr "Stato peggiore"
+
+msgid "Nothing"
+msgstr "Nulla"
+
+msgid "Remove the filter {{filter}}"
+msgstr "Togli il filtro {{filter}}"
+
+msgid "Clear all filters"
+msgstr "Togli tutti i filtri"
+
+msgid "Shown: {{shown}} of {{total}}"
+msgstr "Mostrati: {{shown}} di {{total}}"
+
+msgid "Enabled only"
+msgstr "Solo attivi"
+
+msgid "Not enabled only"
+msgstr "Solo non attivi"
+
+msgid "checks_count"
+msgid_plural "checks_count_plural"
+msgstr[0] "{{count}} check"
+msgstr[1] "{{count}} check"
+
+msgid "No check matches the filters"
+msgstr "Nessun check corrisponde ai filtri"
+
+msgid "Now: {{now}} · Planned: {{planned}}"
+msgstr "In corso: {{now}} · Programmate: {{planned}}"
+
+msgid "Which maintenance windows"
+msgstr "Quali finestre di manutenzione"
+
+msgid "Current and planned"
+msgstr "In corso e programmate"
+
+msgid "Ended too"
+msgstr "Anche terminate"
+
+msgid "No window is open or planned. Choose \"Ended too\" to see those that have ended."
+msgstr "Nessuna finestra in corso o programmata. Scegli \"Anche terminate\" per vedere quelle finite."
+
+msgid "Open all groups"
+msgstr "Apri tutti i gruppi"
+
+msgid "Close all groups"
+msgstr "Chiudi tutti i gruppi"
+
+msgid "Last run failed"
+msgstr "Ultima run fallita"
+
+msgid "Last run under way"
+msgstr "Ultima run in corso"
+
+msgid "Last run canceled"
+msgstr "Ultima run annullata"
+
+msgid "Last run successful"
+msgstr "Ultima run riuscita"
+
+msgid "Never launched"
+msgstr "Mai lanciati"
+
+msgid "With approval"
+msgstr "Con approvazione"
+
+msgid "With questions"
+msgstr "Con domande"
+
+msgid "Scheduled"
+msgstr "Pianificati"
+
+msgid "Not scheduled"
+msgstr "Non pianificati"
+
+msgid "Project: {{value}}"
+msgstr "Progetto: {{value}}"
+
+msgid "Filter job templates"
+msgstr "Filtra i template"
+
+msgid "Name, playbook, project, inventory, tag…"
+msgstr "Nome, playbook, progetto, inventario, tag…"
+
+msgid "Every project"
+msgstr "Tutti i progetti"
+
+msgid "Filter by feature"
+msgstr "Filtra per caratteristica"
+
+msgid "Any feature"
+msgstr "Qualsiasi caratteristica"
+
+msgid "Filter by last run"
+msgstr "Filtra per ultima run"
+
+msgid "Any outcome"
+msgstr "Qualsiasi esito"
+
+msgid "Questions"
+msgstr "Domande"
+
+msgid "No job template matches the filters"
+msgstr "Nessun template corrisponde ai filtri"
+
+msgid "templates_count"
+msgid_plural "templates_count_plural"
+msgstr[0] "{{count}} template"
+msgstr[1] "{{count}} template"
