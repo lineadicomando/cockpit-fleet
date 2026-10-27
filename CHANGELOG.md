@@ -14,6 +14,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   playbooks: its files and directories, narrowed down as one types; a path
   that is not listed is still taken. `group_vars` and `host_vars` are never
   offered.
+- A package built between two releases has a version of its own, from git:
+  `0.1.0+3.gabc1234` for the `.deb`, `0.1.0^3.gabc1234` for the `.rpm`,
+  above the last release and below the next, so installing it is an
+  upgrade; the Overview tab shows `0.1.0-3-gabc1234`.
 
 ### Fixed
 

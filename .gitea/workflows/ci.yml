@@ -23,8 +23,11 @@ jobs:
     runs-on: cockpit-fleet
 
     steps:
+      # The tags too: the packages take their version from git describe.
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Tools with a version are not in the runner image: the version is pinned
       # here and the files stay in /data/tools (persistent), one directory each.
@@ -72,8 +75,11 @@ jobs:
     runs-on: cockpit-fleet-${{ matrix.distro }}
 
     steps:
+      # The tags too: the packages take their version from git describe.
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         run: scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"

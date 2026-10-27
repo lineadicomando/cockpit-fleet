@@ -240,12 +240,6 @@ except the rows that say "to confirm".
       collection's included)
 - [ ] GitHub Actions workflow; publication with license confirmed and a
       history with no secrets or real environments
-- [ ] Releases by script, after `cockpit-samba-dc`'s `scripts/release.mjs`:
-      `make next-version` (the version computed from `[Unreleased]`) and
-      `make release` (the version in every file, `debian/changelog` and
-      `%changelog` included, commit, tag); a build between two tags
-      named after `git describe`, in a form rpm and dpkg accept
-      (`0.1.0^3.gabc1234`, `0.1.0+3.gabc1234`)
 
 ## Future
 

@@ -141,6 +141,8 @@ make rpm                        # .rpm for Fedora 44 and AlmaLinux 10, in contai
 make ct-test DISTRO=alma TESTS="sandbox runs"   # integration scripts in containers (all by default)
 make ct-lifecycle DISTRO=alma OLD=<ref>   # upgrade from OLD (default: latest tag), removal, purge
 make ct-clean                   # remove the containers and images of ct-test
+make next-version               # version of the next release, from CHANGELOG.md
+make release                    # check, set the version, commit and tag it (only when asked)
 ```
 
 Integration tests run as root on a controller, with the package installed:
@@ -263,13 +265,22 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
 - The version is written in `backend/cockpit_fleet/__init__.py`,
   `package.json` and `package-lock.json`, the collection's `galaxy.yml`,
   `packaging/cockpit-fleet.spec` (`Version:`, and an entry of
-  `%changelog`) and `debian/changelog`; `test_version.py` checks that they
-  agree. They change only in a release, not between two.
-- A release is made only when the user asks: on a clean `main` with
-  `make check` passing, the version in the files above, the `[Unreleased]`
-  entries moved under `## [X.Y.Z] - YYYY-MM-DD` (and the links at the end
-  of the file), one commit `Release X.Y.Z`, an annotated tag `vX.Y.Z`.
-  Nothing is pushed unless asked.
+  `%changelog`) and `debian/changelog` (`scripts/versions.mjs`);
+  `test_version.py` checks that they agree. They change only in a release,
+  never by hand.
+- A package built between two releases says how far from the last one it
+  is: `scripts/version.sh` turns `git describe` into `0.1.0+3.gabc1234` for
+  the `.deb` and `0.1.0^3.gabc1234` for the `.rpm` (`.dirty` with changes
+  not committed), above the release and below the next one, and
+  `build-deb.sh` and `build-rpm.sh` write it, with a changelog entry, into
+  their copy of the tree; the Overview tab shows `0.1.0-3-gabc1234`.
+- A release is made only when the user asks, with `make release` on a clean
+  `main`: it runs the checks, moves the `[Unreleased]` entries under
+  `## [X.Y.Z] - YYYY-MM-DD` with the links at the end of the file, sets the
+  version in the files above, commits `Release X.Y.Z` and tags `vX.Y.Z`.
+  `make next-version` says beforehand which version it will be;
+  `VERSION=X.Y.Z` only goes higher. Nothing is pushed unless asked: then
+  `git push origin main vX.Y.Z`.
 
 ## Repository
 

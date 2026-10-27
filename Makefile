@@ -11,7 +11,7 @@ COLLECTION := ansible_collections/lineadicomando/fleet
 
 -include Makefile.local
 
-.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-lifecycle ct-clean pot po-compile help
+.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-lifecycle ct-clean pot po-compile next-version release help
 
 all: build
 
@@ -119,6 +119,13 @@ pot: ## Extract translatable strings from src/ into src/locales/*/translation.js
 
 po-compile: ## Compile po/it.po into src/locales/it/translation.json
 	npm run po-compile
+
+VERSION ?=
+next-version: ## Version of the next release, from the kinds of change under [Unreleased] in CHANGELOG.md
+	node scripts/release.mjs next $(VERSION)
+
+release: ## Check, date the changelog, set the version everywhere, commit and tag (VERSION=x.y.z only to go higher); nothing is pushed
+	node scripts/release.mjs prepare $(VERSION)
 
 help:
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F ':.*?## ' '{printf "  %-18s %s\n", $$1, $$2}'

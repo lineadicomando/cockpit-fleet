@@ -1828,6 +1828,21 @@ bundled collection, and `fleet` with its completion for bash and its manual.
 Of the units only `cockpit-fleet-scheduler.timer` and `cockpit-fleet-notify.path`
 are enabled and started.
 
+A package carries its version in what it installs, so that a controller says
+which build it runs. At a release tag that is the release, `X.Y.Z`. Between
+two releases `scripts/version.sh` derives it from `git describe`:
+`0.1.0+3.gabc1234` for dpkg and `0.1.0^3.gabc1234` for rpm, the commits
+since the tag and the commit, `.dirty` when the tree has changes not
+committed. Both forms sort above `0.1.0` and below `0.1.1`, so an upgrade to
+the next release, or from one build to a later one, is an upgrade and not a
+reinstall. The build scripts write it into their copy of the tree, with an
+entry of `debian/changelog` or of the spec's `%changelog` and into
+`__init__.py`, never into the repository; a container that builds has no
+git, so the host passes `FLEET_DESCRIBE` into it. A release itself is
+`scripts/release.mjs` (`make release`): the version computed from the kinds
+of change in `CHANGELOG.md`, set in the six files that carry it, a commit
+and a tag.
+
 The `.rpm` for Fedora 44 and AlmaLinux 10 comes from `packaging/cockpit-fleet.spec`,
 built in a container of each (`make rpm`, output in `rpm/`) and checked with
 rpmlint, whose exceptions are in `packaging/cockpit-fleet.rpmlintrc`, each with
