@@ -97,7 +97,7 @@ export function App() {
                         ))}
                     </Tabs>
                 </PageSection>
-                <PageSection>
+                <PageSection isFilled={filled} className={filled ? "fleet-fill" : undefined}>
                     <TabPanel panelId="fleet-section" active={section}>
                         {section === "overview" && <OverviewPage session={data} onOpenSystem={() => go("system")} />}
                         {section === "hosts" && (location.path[1]
@@ -127,8 +127,10 @@ export function App() {
         );
     }
 
+    // The chat takes what is left of the window, down to its bottom.
+    const filled = location.path[0] === "chat";
     return (
-        <Page sidebar={null}>
+        <Page sidebar={null} isContentFilled={filled}>
             <PageSection>
                 <Title headingLevel="h1" size="2xl">Fleet</Title>
             </PageSection>

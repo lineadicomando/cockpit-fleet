@@ -29,6 +29,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- The message box of the Assistant could still fall below the bottom of
+  the window: the chat now takes the room left in the page with no
+  measuring, and keeps it when the window or what is above it changes.
 - A local project under `/home`, `/root`, `/tmp` or `/var/tmp` worked when
   launched from the interface but never from the scheduler, which cannot
   see those directories: scheduled runs and every check cycle failed with

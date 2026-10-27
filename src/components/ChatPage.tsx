@@ -86,42 +86,6 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
     );
 }
 
-const MIN_HEIGHT = 320;
-
-// The height left below an element, down to the bottom of the window: what
-// the chat takes, so that its message box is never pushed out of sight.
-function useHeightBelow(active: boolean): [React.RefObject<HTMLDivElement>, number | undefined] {
-    const ref = useRef<HTMLDivElement>(null);
-    const [height, setHeight] = useState<number>();
-    useEffect(() => {
-        if (!active) return;
-        const measure = () => {
-            const element = ref.current;
-            if (!element) return;
-            // Where it begins in the page, however the page is scrolled. In
-            // PatternFly 6 what scrolls is the rounded box around the page,
-            // which ends above the bottom of the window.
-            const scroller = element.closest(".pf-v6-c-page__main-container") ?? document.documentElement;
-            const top = element.getBoundingClientRect().top + scroller.scrollTop;
-            // What comes after it is the padding of what holds it.
-            let below = 0;
-            for (let parent = element.parentElement; parent && parent !== scroller.parentElement; parent = parent.parentElement) {
-                below += parseFloat(getComputedStyle(parent).paddingBlockEnd) || 0;
-            }
-            setHeight(Math.max(MIN_HEIGHT, Math.floor(window.innerHeight - top - below)));
-            // Whatever else is below it shows as a page that still scrolls.
-            requestAnimationFrame(() => {
-                const over = scroller.scrollHeight - scroller.clientHeight;
-                if (over > 0) setHeight(now => (now ? Math.max(MIN_HEIGHT, now - over) : now));
-            });
-        };
-        measure();
-        window.addEventListener("resize", measure);
-        return () => window.removeEventListener("resize", measure);
-    }, [active]);
-    return [ref, active ? height : undefined];
-}
-
 // A call that changes something, said in words before it is made.
 function AskModal({ ask }: { ask: Ask }) {
     const { t } = useTranslation();
@@ -250,7 +214,6 @@ export function ChatPage() {
     const info = useLoad(() => call<ChatInfo>("chat.agents"));
     const reload = info.reload;
     useEffect(() => { if (state.phase === "ended" || state.phase === "idle") reload(); }, [state.phase, reload]);
-    const [box, height] = useHeightBelow(state.phase === "ready" && Boolean(info.data));
 
     if (info.error) return <Alert variant="danger" isInline title={info.error.message} />;
     if (!info.data) return <Spinner aria-label={t("Loading")} />;
@@ -269,7 +232,7 @@ export function ChatPage() {
     const running = state.phase === "ready";
     const idle = !state.busy && !state.loading;
     return (
-        <div ref={box} className={running ? "fleet-chat" : undefined} style={{ blockSize: height }}>
+        <div className={running ? "fleet-chat" : undefined}>
             <SectionHeader title={running && agent ? t("Assistant: {{agent}}", { agent: agent.label }) : t("Assistant")}>
                 {running && (
                     <>
