@@ -8,13 +8,17 @@ Agent instructions for this project.
 from the browser, inspired by Semaphore UI, and that also collects, stores and
 notifies on information from managed nodes using Ansible only (agentless).
 
-Three documents, each with one job; do not repeat one in another:
+Four documents, each with one job; do not repeat one in another:
 
 - `TODO.md`: status, decisions, open points and what is left to do.
   Read it first. Tick items as they are completed, record a decision when it
   changes, and keep it short: what is done moves out, to the place below.
 - `docs/architecture.md`: what exists, why it is built that way, and what was
   measured. Update it with every change of design.
+- `CHANGELOG.md`: what changed in each release, for its users. Add a line
+  under `[Unreleased]` with every change a user or an administrator would
+  notice, in the commit that makes it, under the heading of its kind (see
+  "Versions and releases").
 - This file: how to work on the project.
 
 `docs/install.md`, `docs/security.md`, `docs/checks.md`, `docs/backup.md`
@@ -241,6 +245,31 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
   `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
 - Do not `pkill -f` or `pgrep -f` with a pattern that also appears in your own
   command line: it matches the shell that runs it.
+
+## Versions and releases
+
+- Versions follow Semantic Versioning, and a release is a tag `vX.Y.Z` on
+  `main`. While the version is `0.x`, the minor number goes up for new
+  features and for breaking changes, the patch number for fixes only. A
+  breaking change asks the administrator to act on upgrade: a key of
+  `config.toml` or a file a controller keeps changes meaning, a requirement
+  is raised (a distribution, Cockpit, ansible-core), a command of `fleetctl`
+  or `fleet` changes or goes, or a feature is removed. From `1.0.0` breaking
+  changes raise the major number.
+- The kinds of change under `[Unreleased]` decide the next version:
+  `Added`, `Changed`, `Deprecated`, `Removed` and `Breaking` raise the
+  minor number (before 1.0.0), `Fixed` and `Security` alone the patch.
+  A change only of tests, CI or the lab goes in no entry.
+- The version is written in `backend/cockpit_fleet/__init__.py`,
+  `package.json` and `package-lock.json`, the collection's `galaxy.yml`,
+  `packaging/cockpit-fleet.spec` (`Version:`, and an entry of
+  `%changelog`) and `debian/changelog`; `test_version.py` checks that they
+  agree. They change only in a release, not between two.
+- A release is made only when the user asks: on a clean `main` with
+  `make check` passing, the version in the files above, the `[Unreleased]`
+  entries moved under `## [X.Y.Z] - YYYY-MM-DD` (and the links at the end
+  of the file), one commit `Release X.Y.Z`, an annotated tag `vX.Y.Z`.
+  Nothing is pushed unless asked.
 
 ## Repository
 

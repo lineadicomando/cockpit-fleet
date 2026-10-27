@@ -1,9 +1,31 @@
 # Changelog
 
-All notable changes to this project are written here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html): before 1.0.0, a
-minor version may change what an earlier one did.
+Changes that a user or an administrator would notice, newest first. The
+format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
+versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
+before 1.0.0, a minor version may change what an earlier one did. New
+entries go under `[Unreleased]`, under the heading of their kind.
+
+## [Unreleased]
+
+### Changed
+
+- The paths of a project are offered as one types, for inventories and
+  playbooks: its files and directories, narrowed down as one types; a path
+  that is not listed is still taken. `group_vars` and `host_vars` are never
+  offered.
+
+### Fixed
+
+- A local project with files or directories the service account cannot read
+  (logs written with mode 0600, say) failed every run and the reading of its
+  inventories; they are now left out of the copy, and the run's output
+  begins with the paths left out.
+- A new inventory whose reading failed kept its dialog open, so that saving
+  again made it twice; the dialog now closes and says the inventory was
+  saved but not read.
+- The message box of the assistant's page went partly below the bottom of
+  the window.
 
 ## [0.1.0] - 2026-10-25
 
@@ -95,4 +117,5 @@ alone. How to install it is in [docs/install.md](docs/install.md).
   going, purge on Debian removes the data.
 - The interface in English and Italian, accessible to screen readers.
 
+[Unreleased]: https://github.com/lineadicomando/cockpit-fleet/compare/v0.1.0...main
 [0.1.0]: https://github.com/lineadicomando/cockpit-fleet/releases/tag/v0.1.0
