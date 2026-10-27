@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from cockpit_fleet import cli, errors, jobs, journal, system  # noqa: F401  (system registers commands)
+from cockpit_fleet import cli, jobs, journal, system  # noqa: F401  (system registers commands)
 from cockpit_fleet.auth import Caller
-from cockpit_fleet.errors import NotFound
+from cockpit_fleet.errors import Conflict, NotFound
 
 
 class DispatchTest(unittest.TestCase):
@@ -184,7 +184,7 @@ class ProjectRootTest(unittest.TestCase):
             link.symlink_to("/home/anna")
             self.assertEqual(jobs.hidden_from_units(link / "site"), "/home")
         config = type("Config", (), {"local_project_roots": ("/",)})()
-        with self.assertRaises(errors.Conflict) as caught:
+        with self.assertRaises(Conflict) as caught:
             jobs.project_tree({"kind": "local", "path": "/home/anna/site"}, config)
         self.assertIn("is under /home, which the scheduler", str(caught.exception))
 
