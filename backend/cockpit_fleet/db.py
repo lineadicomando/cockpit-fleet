@@ -674,6 +674,19 @@ MIGRATIONS: list[list[str]] = [
         "CREATE INDEX runs_workflow ON runs (workflow_run_id) WHERE workflow_run_id IS NOT NULL",
         "CREATE INDEX runs_of_workflow ON runs (workflow_id) WHERE workflow_id IS NOT NULL",
     ],
+    [
+        # Check cycles that could not be prepared, by inventory and group, so
+        # that a cause that lasts is told once and its end told too.
+        """
+        CREATE TABLE cycle_faults (
+            inventory_id  TEXT NOT NULL REFERENCES inventories (id) ON DELETE CASCADE,
+            grp           TEXT NOT NULL DEFAULT '',
+            reason        TEXT NOT NULL DEFAULT '',
+            since         REAL NOT NULL,
+            PRIMARY KEY (inventory_id, grp)
+        )
+        """,
+    ],
 ]
 
 

@@ -102,13 +102,16 @@ def system_health(ctx: Context, params: Values) -> dict:
     user): its shortest interval, how long its cycles of the last day took,
     the peak of their memory against the budget of one cycle, the due times
     they skipped because a cycle had not ended, whether it is falling
-    behind, and the forks and hosts per cycle the planner now chooses. Then
-    the queue of each lane of the dispatch, and the size of the database."""
+    behind, why its cycles cannot be prepared if they cannot, and the forks
+    and hosts per cycle the planner now chooses. Then the queue of each lane
+    of the dispatch, and the size of the database."""
     now = store.now()
     budget = checks.memory_budget(ctx)
     ceiling = min(ctx.config.checks_forks, ctx.config.max_forks)
     lag = {(row["inventory_id"], row["grp"]): row
            for row in ctx.conn.execute("SELECT * FROM cycle_lag")}
+    faults = {(row["inventory_id"], row["grp"]): row
+              for row in ctx.conn.execute("SELECT * FROM cycle_faults")}
     groups = []
     for (inventory_id, group), entry in _groups(ctx).items():
         entry.update(_cycles(ctx, inventory_id, group, now - WINDOW))
@@ -118,6 +121,9 @@ def system_health(ctx: Context, params: Values) -> dict:
         behind = lag.get((inventory_id, group))
         entry["behind"] = None if behind is None else {
             "streak": behind["streak"], "since": behind["since"], "told": bool(behind["told"])}
+        fault = faults.get((inventory_id, group))
+        entry["unprepared"] = None if fault is None else {
+            "reason": fault["reason"], "since": fault["since"]}
         entry["sizing"] = checks.size(checks.recent_cycles(ctx, inventory_id, group), ceiling,
                                       ctx.config.checks_shard_size, budget,
                                       entry["interval"] / 2)

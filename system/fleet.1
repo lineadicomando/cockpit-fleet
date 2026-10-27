@@ -122,6 +122,18 @@ then, with a umask that lets the group read (022 or 002):
 git clone https://git.example.org/site.git /srv/ansible/site
 fleet project create \-\-name site \-\-kind local \-\-path /srv/ansible/site
 .fi
+.PP
+A root, or a project, under /home, /root, /run/user, /tmp or /var/tmp is
+refused: the scheduler does not see them. To keep a project in a home, where
+an editor or a synchronised folder has it, bind-mount it under the root,
+and give the service account read access to the project itself:
+.PP
+.nf
+sudo install \-d /srv/ansible/site
+# in /etc/fstab:
+/home/anna/site /srv/ansible/site none bind,x\-systemd.requires\-mounts\-for=/home 0 0
+sudo systemctl daemon\-reload && sudo mount /srv/ansible/site
+.fi
 .SH SHORTCUTS
 .TP
 .B launch

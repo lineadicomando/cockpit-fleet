@@ -31,8 +31,9 @@ _ENDS = EVENTS[:4]
 # What the states of checks give: a problem, its end, and a problem nobody
 # acknowledged that is told again.
 CHECK_EVENTS = ("problem", "recovery", "reminder")
-# What the controller says of itself: check cycles that fall behind, and catch up.
-SYSTEM_EVENTS = ("late", "caught_up")
+# What the controller says of itself: check cycles that fall behind, and catch
+# up; that cannot be prepared (a project the scheduler cannot see), and can again.
+SYSTEM_EVENTS = ("late", "caught_up", "unprepared", "prepared")
 SCOPES = ("all", "project", "template", "schedule", "inventory", "group", "check")
 # Scopes that only runs have, and those that only checks have.
 _RUN_SCOPES = ("project", "template", "schedule")
@@ -74,6 +75,7 @@ _WORDS = {
         "ok": "OK", "warning": "WARNING", "critical": "CRITICAL", "unknown": "UNKNOWN",
         "inventory": "Inventory", "since": "Since",
         "late": "Falling behind", "caught_up": "Back on time",
+        "unprepared": "Checks cannot start", "prepared": "Checks start again",
     },
     "it": {
         "failed": "Run fallita", "succeeded": "Run riuscita", "changed": "Run con modifiche",
@@ -90,6 +92,7 @@ _WORDS = {
         "ok": "OK", "warning": "AVVISO", "critical": "CRITICO", "unknown": "SCONOSCIUTO",
         "inventory": "Inventario", "since": "Dal",
         "late": "In ritardo", "caught_up": "Di nuovo in orario",
+        "unprepared": "Controlli bloccati", "prepared": "Controlli ripartiti",
     },
 }
 
@@ -596,8 +599,10 @@ _RULE_PARAMS = {
     "events": Strs("What to tell about: the ends of a run, " + ", ".join(_ENDS)
                    + "; a run that waits for approval, approval"
                    + "; the states of checks, " + ", ".join(CHECK_EVENTS)
-                   + "; check cycles that fall behind and catch up, " + ", ".join(SYSTEM_EVENTS),
-                   max_items=10),
+                   + "; check cycles that fall behind and catch up, late, caught_up"
+                   + "; check cycles that cannot be prepared and can again,"
+                   " unprepared, prepared",
+                   max_items=16),
     "scope": Choice(SCOPES, "Everything, or the runs of one project, template or schedule,"
                     " the runs and checks of an inventory, the checks of a group of an"
                     " inventory, or one check", default="all"),
@@ -628,7 +633,7 @@ def _rule_values(ctx: Context, params: Values) -> dict:
     if scope in _CHECK_SCOPES and set(events) & set(EVENTS):
         raise BadRequest(f"the scope {scope} has checks only: it cannot tell about runs")
     if scope not in _SYSTEM_SCOPES and set(events) & set(SYSTEM_EVENTS):
-        raise BadRequest(f"check cycles falling behind are told for everything or for an"
+        raise BadRequest(f"what happens to check cycles is told for everything or for an"
                          f" inventory, not for the scope {scope}")
     group = params["group"].strip()
     if (scope == "group") != bool(group):

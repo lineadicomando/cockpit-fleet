@@ -797,7 +797,7 @@ too, `changed`, `succeeded`, `canceled`, which covers a run rejected or
 expired before it started), a run that waits for approval (`approval`), which runs (every one, or those of
 one project, template, schedule or inventory) and a channel; what a rule
 says about checks, and about check cycles falling behind (`late`,
-`caught_up`), is in "Checks". Channels are Telegram, a
+`caught_up`) or that cannot be prepared (`unprepared`, `prepared`), is in "Checks". Channels are Telegram, a
 webhook, mail (SMTP) and Matrix, written with the standard library. Only
 playbook runs and ad-hoc commands are told about, not the jobs that serve a
 project.
@@ -1115,6 +1115,18 @@ delay told about is told to be over. A row nothing has added to in 30 days
 goes with the measures: its group is gone. These events are about the
 controller, not a host: their rules have the scope of everything or of an
 inventory, and their message links to the System tab.
+
+**Cycles that cannot be prepared.** A cycle the tick cannot prepare (its
+project gone, or one the scheduler cannot see) leaves each check it would
+have held unknown, with the reason as summary. Unknown is not a problem of
+a node, so rules about problems would stay silent while the checks never
+run. `cycle_faults` keeps, per inventory and group, the reason and since
+when: the first failure is `unprepared`, told once with an error in the
+journal, and the first cycle of the group queued afterwards is `prepared`,
+which deletes the row. Among the cycles of a group in one tick (one per
+credential), one failure is enough to hold the fault. The System tab shows
+the group as "Cannot start", with the reason. Same scopes and link as
+`late`.
 
 **Checks of the user.** A check of the kind `playbook` names a playbook of a
 project; it runs alone, on the hosts of its group, sharded the same way.
@@ -1549,7 +1561,14 @@ for administrators only, since files are theirs in the interface too:
   what is created there). Administrators write with their own editor and
   git, the service reads, no other account sees the files. Writable by
   another group is a warning (what is there is what operators launch),
-  readable by everyone a warning, writable by everyone a failure. The ACL
+  readable by everyone a warning, writable by everyone a failure. Not under
+  `/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`
+  (`jobs.HIDDEN_FROM_UNITS`): the scheduler and `cockpit-fleet-finish@` have
+  `ProtectHome` and `PrivateTmp`, so such a project worked when launched
+  through sudo and failed whenever a timer started it, with "is not a
+  directory". It is refused when created and at every use, a link leading
+  there too, and `selfcheck` fails on such a root. A project that has to
+  stay in a home is bind-mounted under a root (fleet(1)). The ACL
   mask follows the group bits of a new file: who writes there keeps a umask
   that leaves the group read (022 or 002). The manual, fleet(1), has the
   three commands.

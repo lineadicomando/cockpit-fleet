@@ -43,6 +43,7 @@ function HealthSection() {
         slow: t("Slow"),
         late: t("Skipped due times"),
         behind: t("Falling behind"),
+        unprepared: t("Cannot start"),
     };
     const laneText: Record<HealthLane["lane"], string> = {
         runs: t("Runs"),
@@ -119,6 +120,7 @@ function HealthSection() {
                                                 </Td>
                                                 <Td dataLabel={t("Status")}>
                                                     {tone ? <StatusLabel tone={tone}>{keepingText[state]}</StatusLabel> : keepingText[state]}
+                                                    {group.unprepared && <Content component="small" style={{ display: "block" }}>{t("Since {{since}}: {{reason}}", { since: formatTime(group.unprepared.since, i18n.language), reason: group.unprepared.reason })}</Content>}
                                                 </Td>
                                             </Tr>
                                         );

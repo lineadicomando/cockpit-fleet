@@ -656,6 +656,8 @@ def plan(ctx: Context, now: float) -> list[str]:
         key = (row["inventory_id"], row["machine_credential_id"], bool(row["become"]), own)
         groups[key][row["host"]].append(row)
     queued = []
+    # Per inventory and group: why a cycle could not be prepared, or None.
+    faults: dict[tuple[str, str], str | None] = {}
     budget = memory_budget(ctx)
     ceiling = min(ctx.config.checks_forks, ctx.config.max_forks)
     for (inventory_id, credential_id, become, own), by_host in groups.items():
@@ -677,17 +679,57 @@ def plan(ctx: Context, now: float) -> list[str]:
                 run_id = _queue_cycle(ctx, inventory, credential_id, become, cycle_plan, check,
                                       own or "", sizing["forks"])
             except (FleetError, OSError) as failure:
+                faults[(inventory_id, own or "")] = str(failure)
                 for host_id, check_id in held:
                     row = conn.execute(_STATE_ROW + " WHERE s.host_id = ? AND s.check_id = ?",
                                        (host_id, check_id)).fetchone()
                     apply(ctx, row, UNKNOWN, f"the cycle could not be prepared: {failure}", [],
                           {}, now)
                 continue
+            faults.setdefault((inventory_id, own or ""), None)
             conn.executemany(
                 "UPDATE check_states SET run_id = ? WHERE host_id = ? AND check_id = ?",
                 [(run_id, host_id, check_id) for host_id, check_id in held])
             queued.append(run_id)
+    tell_faults(ctx, faults, now)
     return queued
+
+
+def _fault_payload(ctx: Context, event: str, inventory_id: str, group: str, since: float,
+                   summary: str) -> dict:
+    return {"event": event, "title": f"check cycles of {_group_name(ctx, inventory_id, group)}",
+            "summary": summary, "inventory_id": inventory_id, "group": group,
+            "since": since, "page": "system"}
+
+
+def tell_faults(ctx: Context, faults: dict[tuple[str, str], str | None], now: float) -> None:
+    """Tell once that the cycles of a group cannot be prepared, and once that
+    they can again. Each such cycle leaves its checks unknown, which is not
+    a problem of the nodes, so without this nobody would hear of it."""
+    for (inventory_id, group), reason in faults.items():
+        row = ctx.conn.execute("SELECT * FROM cycle_faults WHERE inventory_id = ? AND grp = ?",
+                               (inventory_id, group)).fetchone()
+        name = _group_name(ctx, inventory_id, group)
+        if reason is not None and row is None:
+            ctx.conn.execute("INSERT INTO cycle_faults (inventory_id, grp, reason, since)"
+                             " VALUES (?, ?, ?, ?)", (inventory_id, group, reason[:1000], now))
+            journal.send(f"checks: a cycle of {name} could not be prepared: {reason}", 3,
+                         FLEET_INVENTORY=inventory_id, FLEET_GROUP=group)
+            notify.system_event(ctx, "unprepared", _fault_payload(
+                ctx, "unprepared", inventory_id, group, now,
+                f"its cycles could not be prepared, and its checks are left unknown: {reason}"),
+                inventory_id)
+        elif reason is not None and row["reason"] != reason[:1000]:
+            ctx.conn.execute("UPDATE cycle_faults SET reason = ? WHERE inventory_id = ?"
+                             " AND grp = ?", (reason[:1000], inventory_id, group))
+        elif reason is None and row is not None:
+            ctx.conn.execute("DELETE FROM cycle_faults WHERE inventory_id = ? AND grp = ?",
+                             (inventory_id, group))
+            journal.send(f"checks: the cycles of {name} are prepared again", 5,
+                         FLEET_INVENTORY=inventory_id, FLEET_GROUP=group)
+            notify.system_event(ctx, "prepared", _fault_payload(
+                ctx, "prepared", inventory_id, group, row["since"],
+                "a cycle was prepared and queued again"), inventory_id)
 
 
 def _refresh_inventories(ctx: Context, now: float) -> None:

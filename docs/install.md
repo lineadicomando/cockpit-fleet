@@ -95,7 +95,10 @@ commented out. An unknown key is an error, which the System tab and
   as they are. Empty, as installed, means none: projects come from git, are
   written in the interface, or are uploaded as an archive. `man fleet`,
   "Projects at a terminal", says how to make such a directory that
-  administrators write and the service only reads.
+  administrators write and the service only reads. Not under `/home`,
+  `/root`, `/tmp` or `/var/tmp`: the scheduler does not see them, so such
+  projects are refused; to keep one in a home, bind-mount it under a root
+  (the manual says how).
 - `[network] proxy`, and `[notifications] url`, where people reach Cockpit,
   for the links in the messages.
 - `[adhoc] modules`: the modules an administrator may run as an ad-hoc

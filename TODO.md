@@ -36,7 +36,7 @@ check`; `make ct-test DISTRO=debian` (then `fedora`, `alma`) around a
 change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `auth.py` the roles and rights, `db.py` schema 17),
+`cli.py` the registry, `auth.py` the roles and rights, `db.py` schema 18),
 approvals in `approvals.py`, workflows in `workflows.py`, templates
 and other resources in `resources.py`, launching in `runs.py`, the queue and
 dispatch of jobs in `jobs.py`, command lines of jobs in `runner.py`,
@@ -84,11 +84,11 @@ except the rows that say "to confirm".
 | Terminal | `fleet` for the three roles and approvers, `via: cli`; every command as `fleet AREA VERB --param`, names for ids, shortcuts `launch log result secret assistant help`, `project clone/pull/push`; secrets never on the command line; English only until a field-tested version |
 | Projects at a terminal | Admins only: `local_roots` dir of group `cockpit-fleet-admin` 2770 + ACL for the service, checked by `selfcheck`; managed projects as git bundles, push only as a fast forward of files the editor could write |
 | Schedules | One timer, `scheduler.tick` each minute; `OnCalendar` with time zone; admin edits, operator switches and runs now; answers stored, never secrets; missed > 5 min; overlap skip/queue/cancel |
-| Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs (rejected and expired as canceled; workflow runs too), runs waiting for approval (`approval`), check problem/recovery/reminder, check cycles late/caught_up (scopes all and inventory) |
+| Notifications | Telegram, webhook, SMTP, Matrix; outbox delivered by `cockpit-fleet-notify.service` via a path unit; one secret per channel; rules by scope (all, project, template, schedule, inventory, group, check); failed/changed/successful/canceled runs (rejected and expired as canceled; workflow runs too), runs waiting for approval (`approval`), check problem/recovery/reminder, check cycles late/caught_up and unprepared/prepared (scopes all and inventory) |
 | Time series | Narrow `WITHOUT ROWID` tables keyed by series and time; hourly and daily aggregates upserted as values arrive (UTC days), so retention only deletes; `metric.query` for viewers; charts under a check on the page of a host, `@patternfly/react-charts` in a chunk of its own |
 | Sizing of cycles | `fleet-run` reads `memory.peak` and `cpu.stat` of its cgroup into `result.json`; table `cycles`, 30 days; forks fit `[checks] memory_mb` (0: half the controller's) shared by `2 × max_concurrent`, hosts per shard what they get through in half the shortest interval; `shard_size` and `forks` stay ceilings, sizing only lowers |
 | System health | `system.health` for viewers, like `selfcheck` (no configuration in it beyond the memory budget); a section of the System tab |
-| Cycles late | A due state held by a cycle is skipped, not doubled, and counted; `late` after `[checks] late_after` due times skipped in a row by a group, `caught_up` when one of its cycles ends with none; rules of scope all or inventory |
+| Cycles late | A due state held by a cycle is skipped, not doubled, and counted; `late` after `[checks] late_after` due times skipped in a row by a group, `caught_up` when one of its cycles ends with none; rules of scope all or inventory; a cycle that cannot be prepared is `unprepared` once (schema 18, `cycle_faults`), `prepared` when one is queued again |
 | SSH connections | Kept within a run only; the catalog pipelined (playbooks of the user as their project says). Kept by the account: discarded (rule 8). Kept by a unit per group: only if the load test shows that opening connections is the limit. No fact cache: checks gather no facts |
 | Checks | Catalog + playbooks ending with `fleet_result`; one task per host, `checks.py` or `win_checks.ps1` by shell; thresholds at ingest; cycles as `check` jobs with their own limit, sharded by inventory/credential/become; soft/hard states, flapping, ack, maintenance; viewer sees, operator acks, admin configures |
 | CMDB, updates, drift | Kinds `cmdb`, `updates` and `compliance` (a playbook in `--check --diff`), slow: own cycles, `[checks] slow_timeout`, own dispatch lane; snapshot + changes tables; hardware change = warning for one cycle; viewer sees CMDB, drift diffs operator+ |

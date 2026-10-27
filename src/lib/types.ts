@@ -393,8 +393,9 @@ export type ChannelKind = "telegram" | "webhook" | "smtp" | "matrix";
 export type RunEvent = "failed" | "changed" | "succeeded" | "canceled" | "approval";
 // What the states of checks give.
 export type CheckEvent = "problem" | "recovery" | "reminder";
-// What the controller says of itself: check cycles falling behind, and back on time.
-export type SystemEvent = "late" | "caught_up";
+// What the controller says of itself: check cycles falling behind, and back on
+// time; that cannot be prepared, and can again.
+export type SystemEvent = "late" | "caught_up" | "unprepared" | "prepared";
 export type NotifyEvent = RunEvent | CheckEvent | SystemEvent;
 export type RuleScope = "all" | "project" | "template" | "schedule" | "inventory" | "group" | "check";
 export type NotificationState = "pending" | "sent" | "failed";
@@ -707,6 +708,7 @@ export interface HealthGroup {
     last: { status: string; started_at: number; finished_at: number; hosts: number; forks: number; duration: number } | null;
     active: number;
     behind: { streak: number; since: number; told: boolean } | null;
+    unprepared: { reason: string; since: number } | null;
     sizing: { forks: number; shard_size: number; basis: "configured" | "measured"; seconds_per_host?: number };
 }
 

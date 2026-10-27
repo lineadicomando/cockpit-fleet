@@ -2384,8 +2384,17 @@ msgstr "Durata, abituale e massima"
 msgid "Falling behind"
 msgstr "In ritardo"
 
-msgid "Falling behind: cycles still running when their checks are due again, as many times in a row as the configuration says. Back on time: a cycle ends with nothing skipped. For everything or for one inventory."
-msgstr "In ritardo: cicli ancora in corso quando i loro check tornano in scadenza, tante volte di fila quante dice la configurazione. Di nuovo in orario: un ciclo finisce senza aver saltato nulla. Per tutto o per un inventario."
+msgid "Falling behind: cycles still running when their checks are due again, as many times in a row as the configuration says. Back on time: a cycle ends with nothing skipped. Cannot start: a cycle could not be prepared (a project the scheduler cannot see, say), which leaves its checks unknown. Start again: one could. For everything or for one inventory."
+msgstr "In ritardo: cicli ancora in corso quando i loro check tornano in scadenza, tante volte di fila quante dice la configurazione. Di nuovo in orario: un ciclo finisce senza aver saltato nulla. Bloccati: un ciclo non è stato preparato (per esempio un progetto che lo scheduler non vede), e i suoi check restano sconosciuti. Ripartiti: un ciclo è stato preparato di nuovo. Per tutto o per un inventario."
+
+msgid "Cannot start"
+msgstr "Bloccati"
+
+msgid "Start again"
+msgstr "Ripartiti"
+
+msgid "Since {{since}}: {{reason}}"
+msgstr "Dal {{since}}: {{reason}}"
 
 msgid "free space is not given back to the file system"
 msgstr "lo spazio libero non viene restituito al file system"

@@ -30,8 +30,8 @@ import { ActionsColumn, Alert, NumberInput } from "./pf.tsx";
 const KINDS: ChannelKind[] = ["telegram", "webhook", "smtp", "matrix"];
 const RUN_EVENTS: RunEvent[] = ["failed", "changed", "succeeded", "canceled", "approval"];
 const CHECK_EVENTS: CheckEvent[] = ["problem", "recovery", "reminder"];
-const SYSTEM_EVENTS: SystemEvent[] = ["late", "caught_up"];
-// The scopes in which check cycles falling behind can be told about.
+const SYSTEM_EVENTS: SystemEvent[] = ["late", "caught_up", "unprepared", "prepared"];
+// The scopes in which what happens to check cycles can be told about.
 const SYSTEM_SCOPES: RuleScope[] = ["all", "inventory"];
 // Scopes that only runs have, and those that only checks have.
 const RUN_SCOPES: RuleScope[] = ["project", "template", "schedule"];
@@ -64,6 +64,8 @@ function useLabels() {
             reminder: t("A reminder of it"),
             late: t("Falling behind"),
             caught_up: t("Back on time"),
+            unprepared: t("Cannot start"),
+            prepared: t("Start again"),
             test: t("Test"),
         } as Record<NotifyEvent | "test", string>,
         scopes: {
@@ -304,7 +306,7 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
                         isDisabled={!systemAllowed}
                         onChange={(_e, on) => setEvents(current => on ? [...current, event] : current.filter(item => item !== event))} />
                 ))}
-                <Help>{t("Falling behind: cycles still running when their checks are due again, as many times in a row as the configuration says. Back on time: a cycle ends with nothing skipped. For everything or for one inventory.")}</Help>
+                <Help>{t("Falling behind: cycles still running when their checks are due again, as many times in a row as the configuration says. Back on time: a cycle ends with nothing skipped. Cannot start: a cycle could not be prepared (a project the scheduler cannot see, say), which leaves its checks unknown. Start again: one could. For everything or for one inventory.")}</Help>
             </FormGroup>
             <FormGroup label={t("About what")} fieldId="rule-scope">
                 <FormSelect id="rule-scope" value={scope} onChange={(_e, value) => changeScope(value as RuleScope)}>

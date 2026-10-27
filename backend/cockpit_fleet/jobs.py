@@ -118,6 +118,21 @@ def take_answer(directory: Path, ticket: str, purpose: str) -> None:
         claimed.unlink(missing_ok=True)
 
 
+# What the units of the service (the scheduler, the end of a run) do not see:
+# ProtectHome and PrivateTmp hide it. A project there would work when launched
+# from the interface, through sudo, and fail whenever a timer started it.
+HIDDEN_FROM_UNITS = ("/home", "/root", "/run/user", "/tmp", "/var/tmp")  # noqa: S108
+
+
+def hidden_from_units(path: str | Path) -> str | None:
+    """The directory of HIDDEN_FROM_UNITS that PATH, or where it leads, is in."""
+    for candidate in (Path(path), Path(path).resolve()):
+        for hidden in HIDDEN_FROM_UNITS:
+            if candidate == Path(hidden) or candidate.is_relative_to(hidden):
+                return hidden
+    return None
+
+
 def project_tree(project, config) -> Path:
     """Where the files of a project are on this machine."""
     if project["kind"] in ("git", "managed", "archive"):
@@ -129,12 +144,18 @@ def project_tree(project, config) -> Path:
                            if project["kind"] == "archive"
                            else "this project has not been synchronised yet")
         return tree
+    hidden = hidden_from_units(project["path"])
+    if hidden:
+        raise Conflict(f"{project['path']} is under {hidden}, which the scheduler and the"
+                       " other units of Fleet cannot see: move it under a directory of"
+                       " local_roots, or bind-mount it there to keep it where it is")
     tree = Path(project["path"]).resolve()
     roots = [Path(root).resolve() for root in config.local_project_roots]
     if not any(tree == root or tree.is_relative_to(root) for root in roots):
         raise Conflict(f"{project['path']} is not under a directory allowed in config.toml")
     if not tree.is_dir():
-        raise Conflict(f"{project['path']} is not a directory")
+        raise Conflict(f"{project['path']} is not a directory that the service account"
+                       " can see")
     return tree
 
 

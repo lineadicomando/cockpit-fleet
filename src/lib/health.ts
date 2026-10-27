@@ -1,12 +1,13 @@
 // How a group of check cycles keeps to its interval, for the page of health.
 import type { HealthGroup } from "./types.ts";
 
-export type Keeping = "idle" | "ok" | "failing" | "memory" | "slow" | "late" | "behind";
+export type Keeping = "idle" | "ok" | "failing" | "memory" | "slow" | "late" | "behind" | "unprepared";
 
 // The worst that can be said of a group. A cycle should end within half the
 // shortest interval of what it checks; one that takes longer than the
 // interval makes the next skip.
 export function keeping(group: HealthGroup, budget: number): Keeping {
+    if (group.unprepared) return "unprepared";
     if (group.behind) return "behind";
     if (group.skipped > 0 || (group.duration_max ?? 0) > group.interval) return "late";
     if (group.cycles === 0) return group.active ? "ok" : "idle";
@@ -18,7 +19,7 @@ export function keeping(group: HealthGroup, budget: number): Keeping {
 
 // No tone for a group with nothing measured yet.
 export function keepingTone(state: Keeping): "good" | "warning" | "bad" | null {
-    if (state === "behind") return "bad";
+    if (state === "behind" || state === "unprepared") return "bad";
     if (state === "ok") return "good";
     return state === "idle" ? null : "warning";
 }

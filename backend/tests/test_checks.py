@@ -18,7 +18,7 @@ from cockpit_fleet import (  # noqa: F401
     schedules,
     store,
 )
-from cockpit_fleet.errors import BadRequest
+from cockpit_fleet.errors import BadRequest, Conflict
 
 LISTING = {
     "_meta": {"hostvars": {"web01": {"ansible_host": "10.0.0.1"}, "web02": {},
@@ -811,6 +811,48 @@ class LateTest(CheckBase):
         self.tick(self.clock + 65)
         self.assertEqual([(n["event"], n["channel"]) for n in
                           self.ok("notification.list")["notifications"]], [("late", "ops")])
+
+
+class UnpreparedTest(CheckBase):
+    """A cycle that cannot be prepared leaves its checks unknown, which is no
+    problem of the nodes: the cause is told once, and its end."""
+
+    def told(self):
+        return [(n["event"], n["title"]) for n in self.ok("notification.list")["notifications"]]
+
+    def test_told_once_while_it_lasts_and_when_it_ends(self):
+        channel = self.channel()
+        self.rule(channel, events=("unprepared", "prepared"))
+        inventory = self.inventory()
+        self.check(inventory, group="web", interval=60, retry_interval=60)
+        failing = mock.patch.object(jobs, "write_known_hosts",
+                                    side_effect=Conflict("/home/x is not a directory"))
+        with failing:
+            self.assertEqual(self.tick()["queued"], [])
+            self.tick(self.clock + 60)
+        self.assertEqual({state["state"] for state in self.states().values()}, {"unknown"})
+        self.assertEqual(self.told(), [("unprepared", "check cycles of lab")])
+        [group] = self.ok("system.health", role="viewer")["groups"]
+        self.assertEqual(group["unprepared"]["reason"], "/home/x is not a directory")
+        payload = json.loads(self.ctx().conn.execute(
+            "SELECT payload FROM notifications").fetchone()["payload"])
+        from cockpit_fleet import notify
+        message = notify.compose("it", [payload], "https://fleet:9090")
+        self.assertEqual(message.title, "Fleet: Controlli bloccati: check cycles of lab")
+        self.assertIn("/home/x is not a directory", message.text)
+        # It can again: told, and the page says nothing more of it.
+        self.assertEqual(len(self.tick(self.clock + 60)["queued"]), 1)
+        self.assertEqual(self.told()[0], ("prepared", "check cycles of lab"))
+        [group] = self.ok("system.health", role="viewer")["groups"]
+        self.assertIsNone(group["unprepared"])
+        self.assertEqual(len(self.told()), 2)
+
+    def test_rules_about_it_are_for_everything_or_an_inventory(self):
+        channel = self.channel()
+        template = self.template()
+        self.assertEqual(self.code("rule.create", {
+            "name": "x", "channel_id": channel["id"], "events": ["unprepared"],
+            "scope": "template", "scope_id": template["id"]}), "bad_request")
 
 
 class HealthTest(CheckBase):

@@ -8,6 +8,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+### Added
+
+- Rules of notifications can tell when the check cycles of an inventory
+  cannot be prepared (`unprepared`, "Cannot start"), which leaves their
+  checks unknown and so told about by no rule on problems, and when they
+  can again (`prepared`); the System tab shows such a group with the
+  reason.
+
 ### Changed
 
 - The paths of a project are offered as one types, for inventories and
@@ -20,6 +28,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
   upgrade; the Overview tab shows `0.1.0-3-gabc1234`.
 
 ### Fixed
+
+- A local project under `/home`, `/root`, `/tmp` or `/var/tmp` worked when
+  launched from the interface but never from the scheduler, which cannot
+  see those directories: scheduled runs and every check cycle failed with
+  "is not a directory". Such a project, or a directory of `local_roots`
+  there, is now refused with the reason, and the self-check fails on it;
+  `fleet(1)` says how to bind-mount a project that has to stay in a home.
+  Upgrading a controller with such a project: move or bind-mount it, then
+  change its path.
 
 - A local project with files or directories the service account cannot read
   (logs written with mode 0600, say) failed every run and the reading of its

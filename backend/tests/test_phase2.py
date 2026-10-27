@@ -39,6 +39,8 @@ class Base(unittest.TestCase):
             mock.patch.object(jobs, "_fleet_unit", fleet_unit),
             mock.patch.object(jobs, "_unit_active", lambda run_id: run_id in self.active),
             mock.patch.object(journal, "send", lambda *a, **k: None),
+            # The directories of a test are under /tmp, which units do not see.
+            mock.patch.object(jobs, "HIDDEN_FROM_UNITS", ()),
         ]
         for patch in patches:
             patch.start()

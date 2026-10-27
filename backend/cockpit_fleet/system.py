@@ -7,7 +7,7 @@ import shutil
 import stat
 import subprocess
 
-from . import __version__, audit, db, paths
+from . import __version__, audit, db, jobs, paths
 from .auth import allowed
 from .cli import COMMANDS, Context, Int, Values, command
 from .errors import FleetError
@@ -164,6 +164,10 @@ def _group(gid: int) -> str:
 def check_project_root(root: str) -> tuple[str, str]:
     """A directory of local projects: readable by the service, written only by
     the administrators of Fleet, since what is there is what operators launch."""
+    hidden = jobs.hidden_from_units(root)
+    if hidden:
+        return "fail", (f"{root} is under {hidden}, which the scheduler cannot see: its"
+                        " projects work when launched by hand, never when scheduled")
     try:
         status = os.stat(root)
     except OSError as error:

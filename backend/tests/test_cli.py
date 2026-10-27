@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from cockpit_fleet import cli, journal, system  # noqa: F401  (system registers commands)
+from cockpit_fleet import cli, errors, jobs, journal, system  # noqa: F401  (system registers commands)
 from cockpit_fleet.auth import Caller
 from cockpit_fleet.errors import NotFound
 
@@ -151,8 +151,10 @@ class ProjectRootTest(unittest.TestCase):
         import grp
         import os
         mine = grp.getgrgid(os.getgid()).gr_name
-        # The modes are what is being judged, on a directory of the test's own.
-        with tempfile.TemporaryDirectory() as root:
+        # The modes are what is being judged, on a directory of the test's own
+        # (under /tmp, which units do not see: that is the next test).
+        with mock.patch.object(jobs, "HIDDEN_FROM_UNITS", ()), \
+                tempfile.TemporaryDirectory() as root:
             os.chmod(root, 0o750)  # noqa: S103
             self.assertEqual(system.check_project_root(root), ("ok", root))
             os.chmod(root, 0o755)  # noqa: S103
@@ -165,6 +167,26 @@ class ProjectRootTest(unittest.TestCase):
             os.chmod(root, 0o757)  # noqa: S103
             self.assertEqual(system.check_project_root(root)[0], "fail")
         self.assertEqual(system.check_project_root("/nonexistent/fleet")[0], "fail")
+
+    def test_what_the_units_of_the_service_cannot_see_is_refused(self):
+        # Launched by hand through sudo it would work; by the scheduler, never.
+        for path, hidden in (("/home/anna/projects", "/home"), ("/home", "/home"),
+                             ("/root/site", "/root"), ("/run/user/1000/x", "/run/user"),
+                             ("/tmp/site", "/tmp"), ("/var/tmp/site", "/var/tmp")):  # noqa: S108
+            self.assertEqual(jobs.hidden_from_units(path), hidden)
+            status, detail = system.check_project_root(path)
+            self.assertEqual(status, "fail")
+            self.assertIn("never when scheduled", detail)
+        for path in ("/srv/ansible", "/homework", "/var/lib/x", "/run/userx"):
+            self.assertIsNone(jobs.hidden_from_units(path), path)
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as root:
+            link = Path(root) / "link"
+            link.symlink_to("/home/anna")
+            self.assertEqual(jobs.hidden_from_units(link / "site"), "/home")
+        config = type("Config", (), {"local_project_roots": ("/",)})()
+        with self.assertRaises(errors.Conflict) as caught:
+            jobs.project_tree({"kind": "local", "path": "/home/anna/site"}, config)
+        self.assertIn("is under /home, which the scheduler", str(caught.exception))
 
 
 class AuditTextTest(unittest.TestCase):
