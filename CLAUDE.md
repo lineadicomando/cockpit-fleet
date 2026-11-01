@@ -292,8 +292,11 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
 - CI: `.gitea/workflows/ci.yml`, on runners labelled `cockpit-fleet`
   (Debian 13: tests, the `.deb`), `cockpit-fleet-fedora` and
   `cockpit-fleet-alma` (the `.rpm` with rpmlint): arm64 containers where
-  jobs run directly, as a non-root user. Tools with a version (Node.js,
-  ruff) are pinned in the workflow and installed by `scripts/ci-tool.sh`.
+  jobs run directly, as a non-root user. `.github/workflows/ci.yml` does
+  the same on GitHub, in containers of the three distributions on
+  `ubuntu-latest`, as root, the tools installed at each run. Keep the two
+  in step. Tools with a version (Node.js, ruff) are pinned in both
+  workflows and installed by `scripts/ci-tool.sh`.
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material

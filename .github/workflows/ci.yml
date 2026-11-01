@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24.14.1"
+  RUFF_VERSION: "0.16.10"
+  # Where scripts/ci-tool.sh keeps Node.js and ruff: nothing persists between
+  # runs here, unlike the runners of .gitea/workflows/ci.yml.
+  CI_TOOLS: /tmp/ci-tools
+
+jobs:
+  ci:
+    # The same steps as the Gitea workflow, in a Debian 13 container: the
+    # tests, lint and the .deb, checked by lintian.
+    runs-on: ubuntu-latest
+    container: debian:trixie
+
+    steps:
+      - name: Install the build tools of Debian
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential debhelper lintian git ca-certificates curl xz-utils \
+            make python3 python3-venv
+          rm -rf /var/lib/apt/lists/*
+
+      # The tags too: the packages take their version from git describe.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js and ruff
+        run: |
+          scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"
+          scripts/ci-tool.sh ruff "$RUFF_VERSION" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: |
+          node --version
+          npm --version
+          python3 --version
+          ruff --version
+          lintian --version
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Lint backend
+        run: ruff check --no-cache backend collection
+
+      - name: Backend tests
+        run: make check-py
+
+      - name: Build and check the .deb
+        run: scripts/build-deb.sh --native
+
+      - name: Keep the .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: deb/*.deb
+
+  rpm:
+    # The .rpm for Fedora 44 and AlmaLinux 10, each in a container of its
+    # distribution, checked by rpmlint (from EPEL on AlmaLinux).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora
+            image: fedora:44
+          - distro: alma
+            image: almalinux:10
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+
+    steps:
+      - name: Install the build tools of ${{ matrix.distro }}
+        run: |
+          if [ "${{ matrix.distro }}" = alma ]; then dnf install -y epel-release; fi
+          dnf install -y rpm-build make systemd-rpm-macros rpmlint git curl xz tar
+          dnf clean all
+
+      # The tags too: the packages take their version from git describe.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        run: scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: |
+          grep PRETTY_NAME /etc/os-release
+          node --version
+          rpmbuild --version
+          rpmlint --version
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Build and check the .rpm
+        run: scripts/build-rpm.sh --native
+
+      - name: Keep the .rpm
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.distro }}
+          path: rpm/*.rpm

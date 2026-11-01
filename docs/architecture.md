@@ -2143,7 +2143,12 @@ and warnings, on a Debian 13 runner; and the `.rpm` built natively and
 checked with rpmlint on two more runners, Fedora 44 and AlmaLinux 10, one
 job each. The runners are containers where jobs run directly, as a user
 that is not root; tools with a version (Node.js, ruff) are pinned in the
-workflow and installed once per runner by `scripts/ci-tool.sh`. The
+workflow and installed once per runner by `scripts/ci-tool.sh`.
+`.github/workflows/ci.yml` runs the same steps on GitHub, each job in a
+container of its distribution (`debian:trixie`, `fedora:44`,
+`almalinux:10`) on `ubuntu-latest`, where the job is root and nothing
+persists, so the build tools and the pinned ones are installed at each
+run; the packages are kept as artifacts of the run. The
 integration scripts are not part of CI: they need podman able to start
 privileged containers, which the runner, itself a container where jobs run
 as a non-root user, was not set up for.
