@@ -12,6 +12,10 @@ override_dh_auto_build:
 
 override_dh_auto_test:
 
+# The screenshots are for the README on the web, not for /usr/share/doc.
+override_dh_installdocs:
+	dh_installdocs -Xscreenshots
+
 override_dh_auto_install:
 	$(MAKE) install-files DESTDIR=$(CURDIR)/debian/cockpit-fleet
 

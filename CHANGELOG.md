@@ -46,14 +46,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - A `.gitignore` written in a project of the interface kept the files it
   named out of the project's history, diff and push, while runs still
   executed them. Every file written is now committed.
+- `docs/security.md` says what the sandbox of a run does not hide, the
+  directories of `[projects] local_roots`, and `docs/install.md` how to
+  hide them with a drop-in; and that the database, not the journal, is
+  the record of the audit, since any local account can write the journal.
 
 ### Fixed
 
-- The Checks and Job templates tabs showed a filter chip on the only
-  inventory or project, whose select is not shown; a screen reader named
-  the threshold inputs of a check by the metric's internal name, now by
-  the measure as shown; the "Become root" and "Enabled" checkboxes of a
-  check are grouped under a label, "Options", where there was a blank one.
 - A local project with a directory that can be read but not searched no
   longer fails to launch: its contents are listed as left out at the top
   of the run's output, which now says "collections" when the paths left
@@ -71,6 +70,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   meanwhile.
 - A run canceled while it waited for approval was later shown as
   "expired" among the decided approvals.
+- The Checks and Job templates tabs showed a filter chip on the only
+  inventory or project, whose select is not shown; a screen reader named
+  the threshold inputs of a check by the metric's internal name, now by
+  the measure as shown; the "Become root" and "Enabled" checkboxes of a
+  check are grouped under a label, "Options", where there was a blank one.
+- The packages install the documentation without the screenshots of the
+  README (a megabyte less in `/usr/share/doc`).
 - A check cycle whose plan had been rewritten in its run directory (a
   playbook of the user running on the controller could do it) broke the
   reconciling of every run, so the lists of runs and states answered with

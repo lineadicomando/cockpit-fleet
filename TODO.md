@@ -208,25 +208,14 @@ except the rows that say "to confirm".
   operator can fill the 500 waiting secret answers for an hour; `fleet`
   shows run output with its colours raw (escape sequences of nodes); unpack
   jobs have no time limit.
-- Review (1 November), left as they are: the sandbox of a run hides the
-  state directory, `/etc/cockpit-fleet`, `/home` and `/run` but not
-  `[projects] local_roots`, so a playbook of any project can read every
-  local project (`security.md` says otherwise: a drop-in with
-  `InaccessiblePaths=` per root, or the claim narrowed); `git add --all`
-  of a managed project honours a `.gitignore` written in it, so a file
-  can run without being in the history; `fleetctl` without `SUDO_UID` is
-  an administrator and a playbook can run it (gains nothing while the
-  database is hidden by the tmpfs); the journal's audit records can be
-  forged by any local account (the database is authoritative); a
-  directory readable but not searchable still fails a run; `check.run`
-  and the tick can both queue a cycle for the same states; overlap
-  `cancel` loses the occurrence when a run ends meanwhile; a run whose
-  unit cannot start keeps its directory 90 days; a run canceled while
-  waiting is later marked `expired`; `systemctl` and `fleet-unit` are
-  called with no timeout; `Context` never closes its connection
-  (`ResourceWarning` in the tests); on the page: untranslated ARIA labels
-  of thresholds, `project.files` asked twice when a dialog opens, a
-  stored filter on the only inventory kept with no control to show it.
+- Review (1 November), left as they are: the directories of
+  `[projects] local_roots` stay readable in the sandbox of a run (the
+  administrator hides them with a drop-in, `install.md`); `fleetctl`
+  without `SUDO_UID` is an administrator and a playbook can run it (gains
+  nothing while the database is hidden by the tmpfs); the journal's audit
+  records can be forged by any local account (the database is the record,
+  `security.md`); `ct-lifecycle.sh` still picks a package with `ls`
+  (one per distribution since the build scripts clean up).
 - Negative tests (25 October): a value typed in clear for a secret is
   masked in the audit wherever it appears, so a short one masks other text
   of that record too; the fuzzer gives one hostile value at a time, never

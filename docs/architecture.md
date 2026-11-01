@@ -112,7 +112,7 @@ tries exactly that path.
 
 | A playbook can | A playbook cannot |
 |---|---|
-| read and write its own run directory | see the database, other projects, other runs |
+| read and write its own run directory | see the database, the projects the backend keeps, other runs |
 | read its own decrypted secrets | read the secret store or another run's credentials |
 | open network connections | reach D-Bus or systemd (`/run` is an empty tmpfs) |
 | write to a private `/tmp` and a throwaway home | use sudo or setuid binaries, write `/etc` or `/usr`, read `/home` |

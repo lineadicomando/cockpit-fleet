@@ -38,6 +38,8 @@ account; no daemon is left running and no network port is opened.
 # no network access and only packs the result.
 %build
 test -f dist/index.js || { echo "dist/ is missing: run 'make build' first"; exit 1; }
+# The screenshots are for the README on the web, not for %{_docdir}.
+rm -rf docs/screenshots
 
 %install
 %{__make} install-files DESTDIR=%{buildroot}

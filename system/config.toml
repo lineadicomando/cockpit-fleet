@@ -118,3 +118,5 @@
 #label = "Claude"
 # What a user runs in a terminal on this machine to log in to the model.
 #login = "/opt/cockpit-fleet-agent/bin/claude /login"
+# What `fleet assistant` runs at a terminal (docs/chat.md says the whole line).
+#terminal = ["/opt/cockpit-fleet-agent/bin/claude", "..."]

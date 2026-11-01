@@ -98,7 +98,20 @@ commented out. An unknown key is an error, which the System tab and
   administrators write and the service only reads. Not under `/home`,
   `/root`, `/tmp` or `/var/tmp`: the scheduler does not see them, so such
   projects are refused; to keep one in a home, bind-mount it under a root
-  (the manual says how).
+  (the manual says how). A run works on a copy of its project, but the
+  roots themselves stay readable in its sandbox, so a playbook of any
+  project could read every local project. If a root holds something the
+  other projects must not see, hide it from runs with a drop-in, one line
+  per root:
+
+  ```ini
+  # /etc/systemd/system/cockpit-fleet-run@.service.d/local-roots.conf
+  [Service]
+  InaccessiblePaths=-/srv/ansible
+  ```
+
+  then `systemctl daemon-reload`. The backend reads the roots outside the
+  sandbox, so the copy still works.
 - `[network] proxy`, and `[notifications] url`, where people reach Cockpit,
   for the links in the messages.
 - `[adhoc] modules`: the modules an administrator may run as an ad-hoc

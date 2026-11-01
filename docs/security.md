@@ -15,7 +15,7 @@ they can reach.
 | Who | Is trusted to | Cannot |
 |---|---|---|
 | An administrator of Fleet (`cockpit-fleet-admin`) | decide what runs where: projects, inventories, credentials, templates, checks, ad-hoc commands | become root on the controller, read a secret back, or reach the database outside the backend's commands |
-| Whoever writes a project | write code that runs, in the sandbox of a run, with the credentials of the templates that use it | reach other projects, other runs, their secrets, or the controller beyond the sandbox |
+| Whoever writes a project | write code that runs, in the sandbox of a run, with the credentials of the templates that use it | reach other projects (but see the note on local directories below), other runs, their secrets, or the controller beyond the sandbox |
 | An operator | launch what administrators defined, on fewer hosts than the template says, with answers to its survey | widen a template's hosts, change what it runs, or have an answer read as code |
 | A viewer | see what exists and how runs ended | read the output of runs, which may hold data of the nodes |
 | An approver | let a run that waits for approval start, or refuse it | approve their own launch (an administrator may) |
@@ -42,7 +42,13 @@ else. An administrator of the machine can, of course, do anything.
    nothing else: no path, no option, no unit name.
 5. **Each run is a systemd unit**, under the service account, sandboxed.
    It sees its own directory, its own decrypted secrets and the network;
-   not the database, other projects, other runs, the system bus or `/home`.
+   not the database, the projects the backend keeps, other runs, the
+   system bus or `/home`. The directories of `[projects] local_roots` are
+   the exception: a run works on a copy of its project, but the roots
+   themselves stay readable in the sandbox, as everywhere else on the
+   machine outside `/home`, so a playbook of any project can read every
+   local project. Where that matters, hide them from runs with a drop-in
+   (`docs/install.md` says how).
    Each run has its own process and IPC namespaces, so that one run cannot
    reach the secrets of another through its processes, though all run as
    the same account. sudo and setuid programs do nothing inside it.
@@ -88,7 +94,10 @@ limit on agents, or by the command itself), is in the audit log (the tab
 (`journalctl -t cockpit-fleet`, with `FLEET_USER`, `FLEET_COMMAND`,
 `FLEET_OUTCOME`), with who did it, through what (the page, `fleet` at a
 terminal, an agent), and the parameters, secrets left out. `fleet-secret`
-logs which secret was set or deleted, never the value.
+logs which secret was set or deleted, never the value. The database is the
+record; the journal is a copy for convenience, and any local account can
+send the journal a record with the same identifier, so when reading it
+add `_UID=$(id -u cockpit-fleet)`, a field the journal sets itself.
 
 ## Agents
 

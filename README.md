@@ -3,7 +3,7 @@
 Cockpit plugin to run Ansible from the web console and to watch a fleet of
 nodes through Ansible alone, without installing an agent on them.
 
-> **Status: 0.1.0, the first release.** Tested on Debian 13, Fedora 44 and
+> **Status: early releases (0.x).** Tested on Debian 13, Fedora 44 and
 > AlmaLinux 10; what changed is in [CHANGELOG.md](CHANGELOG.md), what is
 > planned in [TODO.md](TODO.md).
 
