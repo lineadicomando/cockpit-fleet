@@ -9,7 +9,8 @@
 #                                   windows, measure-events and load
 #   ct-test.sh clean                remove the containers and images it made
 #
-# The package comes from deb/ or rpm/: run 'make deb' or 'make rpm' first.
+# The package comes from deb/ or rpm/, the newest one there: run 'make deb' or
+# 'make rpm' first (they leave one per distribution).
 # CT_JOBS scripts run at once (2 by default); variables IT_* of the caller
 # reach the scripts. Logs go to it-results/DISTRO/.
 #
@@ -68,9 +69,9 @@ fi
 
 distro=${1:-}
 case "$distro" in
-    debian) package=$(ls deb/cockpit-fleet_*_all.deb 2>/dev/null | tail -n 1) ;;
-    fedora) package=$(ls rpm/cockpit-fleet-*.fc44.noarch.rpm 2>/dev/null | tail -n 1) ;;
-    alma) package=$(ls rpm/cockpit-fleet-*.el10.noarch.rpm 2>/dev/null | tail -n 1) ;;
+    debian) package=$(ls -t deb/cockpit-fleet_*_all.deb 2>/dev/null | head -n 1) ;;
+    fedora) package=$(ls -t rpm/cockpit-fleet-*.fc44.noarch.rpm 2>/dev/null | head -n 1) ;;
+    alma) package=$(ls -t rpm/cockpit-fleet-*.el10.noarch.rpm 2>/dev/null | head -n 1) ;;
     *) echo "usage: $0 debian|fedora|alma [SCRIPT...] | clean" >&2; exit 2 ;;
 esac
 shift

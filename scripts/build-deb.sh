@@ -47,6 +47,8 @@ if [ "${1:-}" = "--native" ]; then
     root_flag=
     [ "$(id -u)" -ne 0 ] || root_flag=--allow-root
     lintian $root_flag --tag-display-limit 0 --fail-on error,warning "$work"/*.changes
+    # One package in deb/: what ct-test and the lab install is always this one.
+    rm -f deb/cockpit-fleet_*_all.deb
     cp "$work"/*.deb deb/
 else
     if ! podman image exists "$IMAGE"; then

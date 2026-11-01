@@ -39,6 +39,8 @@ if [ "${1:-}" = "--native" ]; then
     tar -C "$top" -czf "$top/SOURCES/cockpit-fleet-$version.tar.gz" "cockpit-fleet-$version"
     rpmbuild -bb --define "_topdir $top" "$spec"
     rpmlint -r packaging/cockpit-fleet.rpmlintrc "$top"/RPMS/noarch/*.rpm
+    # One package per distribution in rpm/: what ct-test and the lab install.
+    rm -f rpm/cockpit-fleet-*"$(rpm --eval '%{?dist}')".noarch.rpm
     cp "$top"/RPMS/noarch/*.rpm rpm/
     exit 0
 fi
