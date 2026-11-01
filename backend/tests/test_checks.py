@@ -344,6 +344,22 @@ class CycleTest(CheckBase):
         self.assertEqual(states[("web02", "disk")]["summary"], "no result for this host")
         self.assertFalse(states[("web02", "disk")]["running"])
 
+    def test_a_plan_the_run_rewrote_frees_the_cycle(self):
+        # The run directory is the run's to write: a playbook on localhost
+        # could leave anything in spec.json. Nothing of the cycle is taken,
+        # and reconciling still ends it.
+        inventory = self.inventory()
+        self.check(inventory, group="web")
+        for spec in ("[]", '{"plan": [1]}', '{"plan": {"web01": [{"id": 1}]}}'):
+            run_id = self.tick(self.clock + 600)["queued"][0]
+            (paths.RUNS_DIR / run_id / "spec.json").write_text(spec)
+            self.answer(run_id, {"web01": "a task failed"})
+            states = self.states()
+            self.assertEqual(states[("web01", "disk")]["state"], "unknown")
+            self.assertIn("could not be read back", states[("web01", "disk")]["summary"])
+            self.assertFalse(states[("web01", "disk")]["running"])
+            self.assertEqual(self.ok("run.get", {"id": run_id})["status"], "successful")
+
     def test_the_clock_is_compared_with_the_controller(self):
         inventory = self.inventory()
         self.check(inventory, "clock", group="web", max_attempts=1)

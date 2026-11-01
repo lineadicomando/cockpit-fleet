@@ -20,7 +20,7 @@ import traceback
 from collections import defaultdict
 from pathlib import Path
 
-from . import catalog, cmdb, jobs, journal, metrics, notify, store
+from . import catalog, cmdb, jobs, journal, metrics, notify, runner, store
 from .catalog import COMPLIANCE, CRITICAL, OK, OWN_KINDS, PLAYBOOK, STATE_NAMES, UNKNOWN, WARNING
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
@@ -313,9 +313,14 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
     since = run["created_at"]
     try:
         spec = json.loads(jobs.read_run_file(directory, "spec.json", 16 * 1024 * 1024))
-    except (OSError, ValueError):
-        spec = {}
-    plan = spec.get("plan", {}) if isinstance(spec, dict) else {}
+        if not isinstance(spec, dict):
+            raise ValueError("spec.json must contain an object")
+        plan = runner.check_plan(spec.get("plan"))
+    except (OSError, ValueError, BadRequest):
+        # The run can write its own directory, so the plan is believed only
+        # as far as its shape: every state of the cycle is then freed below.
+        spec, plan = {}, {}
+        error = error or "the plan of the cycle could not be read back"
     if spec.get("playbook"):
         ids = {entry.get("id") for entries in plan.values() for entry in entries}
         read = _compliance_events if spec.get("compliance") else _playbook_events

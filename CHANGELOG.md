@@ -41,6 +41,12 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- A check cycle whose plan had been rewritten in its run directory (a
+  playbook of the user running on the controller could do it) broke the
+  reconciling of every run, so the lists of runs and states answered with
+  an internal error until the row was fixed by hand. The plan is now
+  checked again when read back, and such a cycle ends with its checks
+  unknown.
 - Exporting assets as CSV or JSON, and the configuration from the System
   tab, did nothing in Firefox: Cockpit's content security policy blocked
   the file. The page's policy now allows it.
