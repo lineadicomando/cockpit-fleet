@@ -60,6 +60,7 @@ class TransferTest(Base):
         ctx = Context(Caller(1000, "anna", "admin"), Path(other.name) / "fleet.db",
                       self.root / "config.toml")
         ctx._config = self.config
+        self.addCleanup(ctx.close)
         return ctx
 
     def test_export_has_names_and_no_secret(self):

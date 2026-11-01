@@ -49,6 +49,23 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- A local project with a directory that can be read but not searched no
+  longer fails to launch: its contents are listed as left out at the top
+  of the run's output, which now says "collections" when the paths left
+  out are under the collections store.
+- A run that systemd could not start kept its prepared directory, the
+  encrypted secrets included, until the prune; it is removed at once.
+- A systemd that does not answer no longer holds `fleetctl` forever: the
+  command fails after 30 seconds, and the self-check marks the scheduler
+  and the notifications as failed.
+- "Check now" while the scheduler is planning a cycle answers "try again"
+  instead of queueing a second cycle for the same checks, whose results
+  the first one then lost.
+- A schedule with overlap "cancel" recorded an error, and lost its
+  occurrence, when one of the runs being stopped ended by itself
+  meanwhile.
+- A run canceled while it waited for approval was later shown as
+  "expired" among the decided approvals.
 - A check cycle whose plan had been rewritten in its run directory (a
   playbook of the user running on the controller could do it) broke the
   reconciling of every run, so the lists of runs and states answered with

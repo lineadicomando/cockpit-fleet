@@ -55,6 +55,10 @@ def audit_list(ctx: Context, params: Values) -> dict:
     return {"entries": entries, "more": len(entries) == limit}
 
 
+# How long systemctl may take to answer about a unit.
+_SYSTEMCTL_TIMEOUT = 30
+
+
 def _output(argv: list[str]) -> str | None:
     """First line a program prints, or None when it is missing or fails."""
     try:
@@ -127,20 +131,23 @@ def _check_run_unit() -> tuple[str, str]:
     return "ok", paths.RUN_UNIT_FILE.name
 
 
-def _check_scheduler() -> tuple[str, str]:
-    result = subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", paths.SCHEDULER_TIMER],
-                            check=False, stdin=subprocess.DEVNULL)
+def _check_unit(unit: str, if_inactive: str) -> tuple[str, str]:
+    try:
+        result = subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", unit],
+                                check=False, stdin=subprocess.DEVNULL, timeout=_SYSTEMCTL_TIMEOUT)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return "fail", f"cannot ask systemd about {unit}: {error}"
     if result.returncode != 0:
-        return "warn", f"{paths.SCHEDULER_TIMER} is not active: schedules launch nothing"
-    return "ok", paths.SCHEDULER_TIMER
+        return "warn", f"{unit} is not active: {if_inactive}"
+    return "ok", unit
+
+
+def _check_scheduler() -> tuple[str, str]:
+    return _check_unit(paths.SCHEDULER_TIMER, "schedules launch nothing")
 
 
 def _check_notify() -> tuple[str, str]:
-    result = subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", paths.NOTIFY_PATH_UNIT],
-                            check=False, stdin=subprocess.DEVNULL)
-    if result.returncode != 0:
-        return "warn", f"{paths.NOTIFY_PATH_UNIT} is not active: notifications are not sent"
-    return "ok", paths.NOTIFY_PATH_UNIT
+    return _check_unit(paths.NOTIFY_PATH_UNIT, "notifications are not sent")
 
 
 def _check_collection() -> tuple[str, str]:

@@ -9,7 +9,7 @@ from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import paths, schedules, store
+from cockpit_fleet import jobs, paths, schedules, store
 from cockpit_fleet.errors import BadRequest
 
 HOUR = 3600.0
@@ -177,6 +177,32 @@ class TickTest(ScheduleBase):
         self.finish(first[skip["id"]])
         outcomes = {row["id"]: row["outcome"] for row in self.tick(START + 3 * HOUR + 1)}
         self.assertEqual(outcomes[skip["id"]], "launched")
+
+    def test_overlap_cancel_goes_on_when_a_run_was_collected_meanwhile(self):
+        schedule = self.schedule(name="cancel", overlap="queue")
+        self.config = dataclasses.replace(self.config, max_concurrent_runs=10)
+        self.tick(START + HOUR + 1)
+        self.tick(START + 2 * HOUR + 1)
+        first, second = [run["id"] for run in
+                         sorted(self.runs_of(schedule["id"]), key=lambda run: run["created_at"])]
+        self.ok("schedule.update", {"id": schedule["id"], "name": "cancel", "calendar": "hourly",
+                                    "template_id": schedule["template_id"], "overlap": "cancel"})
+        # The second ends while the first is stopped: the reconcile of that stop
+        # collects it, so it is no longer there to be canceled.
+        def stop(verb, run_id):
+            if verb != "stop":
+                return
+            self.stopped.append(run_id)
+            self.active.discard(run_id)
+            self.finish(second)
+
+        with mock.patch.object(jobs, "_fleet_unit", stop):
+            fired = self.tick(START + 3 * HOUR + 1)
+        self.assertEqual([row["outcome"] for row in fired], ["launched"])
+        self.assertEqual(self.stopped, [first])
+        statuses = {run["id"]: run["status"] for run in self.runs_of(schedule["id"])}
+        self.assertEqual((statuses[first], statuses[second], len(statuses)),
+                         ("canceled", "successful", 3))
 
     def test_missed_times_are_caught_up_once_or_not_at_all(self):
         never = self.schedule(name="never")

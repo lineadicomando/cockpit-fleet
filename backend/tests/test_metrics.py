@@ -3,6 +3,7 @@ daily aggregates, read back by span, and deleted past their retention."""
 
 import dataclasses
 import sqlite3
+from contextlib import closing
 
 from test_checks import CheckBase, disk
 
@@ -31,7 +32,7 @@ class MetricsBase(CheckBase):
         return self.ok("metric.query", {"host_id": self.host(host)["id"], **params}, role=role)
 
     def count(self, table):
-        with sqlite3.connect(self.root / "fleet.db") as conn:
+        with closing(sqlite3.connect(self.root / "fleet.db")) as conn:
             return conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]  # noqa: S608
 
 

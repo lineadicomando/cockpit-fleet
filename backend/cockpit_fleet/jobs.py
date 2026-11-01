@@ -177,27 +177,27 @@ def open_tree(tree: Path) -> int:
     return fd
 
 
-def snapshot(tree: Path, destination: Path) -> list[str]:
+def snapshot(tree: Path, destination: Path, what: str = "project") -> list[str]:
     """Copy a project for one run. Symbolic links are copied, never followed:
     each directory and file is opened from the one that holds it, so a local
     tree that its owner changes while it is copied cannot lead outside it.
 
     What the service account cannot read (logs a tool of the owner left in a
     local project, say) is left out rather than failing the run, and told at
-    the start of the run's output, in the directory DESTINATION is in.
-    Returns the paths left out, relative to the project."""
+    the start of the run's output, in the directory DESTINATION is in, as
+    paths of WHAT. Returns the paths left out, relative to the tree."""
     counts = [0, 0]
     skipped: list[str] = []
     try:
         fd = open_tree(tree)
     except OSError as error:
-        raise Conflict(f"cannot read the project: {error.strerror}") from None
+        raise Conflict(f"cannot read the {what}: {error.strerror}") from None
     try:
         _copy_tree(fd, destination, counts, skipped, "")
     finally:
         os.close(fd)
     if skipped:
-        _tell_skipped(destination.parent, skipped)
+        _tell_skipped(destination.parent, skipped, what)
     return skipped
 
 
@@ -205,8 +205,8 @@ def snapshot(tree: Path, destination: Path) -> list[str]:
 SKIPPED_SHOWN = 20
 
 
-def _tell_skipped(directory: Path, skipped: list[str]) -> None:
-    lines = [f"fleet: {len(skipped)} paths of the project were left out of this run:"
+def _tell_skipped(directory: Path, skipped: list[str], what: str) -> None:
+    lines = [f"fleet: {len(skipped)} paths of the {what} were left out of this run:"
              " the service account cannot read them\n"]
     lines += [f"  {path}\n" for path in skipped[:SKIPPED_SHOWN]]
     if len(skipped) > SKIPPED_SHOWN:
@@ -226,6 +226,9 @@ def _copy_tree(source: int, target: Path, counts: list[int], skipped: list[str],
         try:
             info = os.stat(name, dir_fd=source, follow_symlinks=False)
         except FileNotFoundError:
+            continue
+        except PermissionError:  # a directory readable but not searchable
+            skipped.append(prefix + name)
             continue
         if stat.S_ISDIR(info.st_mode):
             if name == ".git":
@@ -328,7 +331,7 @@ def place_collections(project, directory: Path, required: bool = False) -> None:
                            " install them from the list of projects")
         return
     try:
-        snapshot(source, directory / "collections")
+        snapshot(source, directory / "collections", "collections")
     except OSError:
         raise Conflict("the collections of this project are being replaced: try again") from None
 
@@ -407,11 +410,19 @@ def enqueue(ctx, run: dict, spec: dict, directory: Path) -> None:
     dispatch(ctx)
 
 
+# How long systemctl, and fleet-unit, may take to answer.
+_UNIT_TIMEOUT = 30
+
+
 def _fleet_unit(verb: str, run_id: str) -> None:
-    result = subprocess.run(
-        ["/usr/bin/sudo", "-n", str(paths.LIBEXEC_DIR / "fleet-unit"), verb, run_id],
-        capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run(
+            ["/usr/bin/sudo", "-n", str(paths.LIBEXEC_DIR / "fleet-unit"), verb, run_id],
+            capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL,
+            timeout=_UNIT_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise Unavailable(f"cannot {verb} the run unit: {error}") from error
     if result.returncode != 0:
         raise Unavailable(result.stderr.strip() or f"cannot {verb} the run unit")
 
@@ -452,14 +463,17 @@ def dispatch(ctx) -> None:
         try:
             _fleet_unit("start", run_id)
         except FleetError as error:
-            _finish(ctx, run_id, "error", None, str(error))
+            end_unstarted(ctx, run_id, "error", str(error))
 
 
 def _unit_active(run_id: str) -> bool:
-    result = subprocess.run(
-        ["/usr/bin/systemctl", "is-active", "--quiet", paths.RUN_UNIT.format(run_id)],
-        check=False, stdin=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run(
+            ["/usr/bin/systemctl", "is-active", "--quiet", paths.RUN_UNIT.format(run_id)],
+            check=False, stdin=subprocess.DEVNULL, timeout=_UNIT_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise Unavailable(f"cannot ask systemd about the run unit: {error}") from error
     return result.returncode == 0
 
 

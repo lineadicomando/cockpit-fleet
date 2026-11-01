@@ -20,6 +20,7 @@ class ApprovalBase(NotifyBase):
         ctx = cli.Context(Caller(1000, user, role, frozenset(rights)), self.root / "fleet.db",
                           self.root / "config.toml")
         ctx._config = self.config
+        self.addCleanup(ctx.close)
         data = {**(params or {}), **({"via": via} if via else {})}
         return cli.dispatch(name, json.dumps(data).encode(), ctx)
 
@@ -132,6 +133,17 @@ class ApprovalTest(ApprovalBase):
         self.assertEqual(self.ok("approval.list")["approvals"], [])
         self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="piero",
                                       role="admin"), "conflict")
+
+    def test_a_run_canceled_while_it_waited_does_not_expire(self):
+        self.config = replace(self.config, approvals_expire_hours=1)
+        run = self.waiting()
+        self.ok_as("run.cancel", {"id": run["id"]}, user="olga")
+        self.clock += 3600
+        self.assertEqual(approvals.expire(self.ctx()), 0)
+        got = self.ok("run.get", {"id": run["id"]})
+        self.assertEqual((got["status"], got["approval"]["decision"]), ("canceled", ""))
+        decided = self.ok("approval.list", {"state": "decided"})["approvals"]
+        self.assertEqual([entry["status"] for entry in decided], ["canceled"])
 
     def test_an_approver_without_a_role_sees_only_what_is_to_approve(self):
         run = self.waiting()

@@ -11,7 +11,7 @@ from unittest import mock
 from cockpit_fleet import cli, jobs, journal, paths, resources, runner, runs, system  # noqa: F401
 from cockpit_fleet.auth import Caller
 from cockpit_fleet.config import Config
-from cockpit_fleet.errors import BadRequest, Conflict
+from cockpit_fleet.errors import BadRequest, Conflict, Unavailable
 
 
 class Base(unittest.TestCase):
@@ -51,6 +51,7 @@ class Base(unittest.TestCase):
     def ctx(self, role="admin", user="anna"):
         ctx = cli.Context(Caller(1000, user, role), self.root / "fleet.db", self.root / "config.toml")
         ctx._config = self.config
+        self.addCleanup(ctx.close)
         return ctx
 
     def call(self, name, params=None, role="admin"):
@@ -292,6 +293,23 @@ class RunTest(Base):
         self.assertEqual(self.stopped, [ids[0]])
         self.assertEqual(self.code("run.cancel", {"id": ids[0]}), "bad_request")
         self.assertEqual(self.code("run.cancel", {"id": ids[1]}, role="viewer"), "forbidden")
+
+    def test_a_run_whose_unit_cannot_start_ends_and_leaves_nothing_behind(self):
+        template = self.template()
+
+        def start(verb, run_id):
+            raise Unavailable("fleet-unit: no such unit")
+
+        with mock.patch.object(jobs, "_fleet_unit", start):
+            run = self.ok("run.start", {"template_id": template["id"]})
+        got = self.ok("run.get", {"id": run["id"]})
+        self.assertEqual((got["status"], got["error"]), ("error", "fleet-unit: no such unit"))
+        self.assertFalse((paths.RUNS_DIR / run["id"]).exists())
+        # The next one is not held back by it.
+        with mock.patch.object(jobs, "_fleet_unit", start):
+            self.ok("run.start", {"template_id": template["id"]})
+        self.assertEqual(self.ok("run.start", {"template_id": template["id"]})["status"],
+                         "running")
 
     def test_log_is_read_in_chunks_and_events_by_whole_lines(self):
         run = self.ok("run.start", {"template_id": self.template()["id"]})
@@ -535,6 +553,7 @@ class ClosingPhase2Test(Base):
                      " VALUES ('t1', 't', 'p1', 'site.yml', 'i1', 'c1', 1, 1)")
         conn.close()
         conn = db.connect(path)
+        self.addCleanup(conn.close)
         self.assertEqual(db.schema_version(conn), len(db.MIGRATIONS))
         rows = conn.execute("SELECT template_id, credential_id, position FROM template_vaults")
         self.assertEqual([tuple(row) for row in rows], [("t1", "c1", 0)])
@@ -599,19 +618,33 @@ class SnapshotTest(unittest.TestCase):
             (tree / "reports").mkdir()
             (tree / "reports" / "secret.log").write_text("x")
             (tree / "site.yml").write_text("play")
+            # Readable but not searchable: its names are listed, nothing of them is read.
+            (tree / "tools").mkdir()
+            (tree / "tools" / "x").write_text("x")
             (tree / "logs").chmod(0o000)
             (tree / "reports" / "secret.log").chmod(0o000)
+            (tree / "tools").chmod(0o400)
             try:
                 skipped = jobs.snapshot(tree, run / "project")
             finally:
                 (tree / "logs").chmod(0o700)
-            self.assertEqual(skipped, ["logs/", "reports/secret.log"])
+                (tree / "tools").chmod(0o700)
+            self.assertEqual(skipped, ["logs/", "reports/secret.log", "tools/x"])
             self.assertEqual((run / "project" / "site.yml").read_text(), "play")
             self.assertFalse((run / "project" / "reports" / "secret.log").exists())
             self.assertEqual((run / "stdout.log").read_text().splitlines(), [
-                "fleet: 2 paths of the project were left out of this run:"
+                "fleet: 3 paths of the project were left out of this run:"
                 " the service account cannot read them",
-                "  logs/", "  reports/secret.log"])
+                "  logs/", "  reports/secret.log", "  tools/x"])
+            # The collections of a project are told apart from the project.
+            (tree / "logs").chmod(0o000)
+            try:
+                jobs.snapshot(tree, Path(tmp) / "c" / "collections", "collections")
+            finally:
+                (tree / "logs").chmod(0o700)
+            self.assertEqual((Path(tmp) / "c" / "stdout.log").read_text().splitlines()[0],
+                             "fleet: 2 paths of the collections were left out of this run:"
+                             " the service account cannot read them")
             # Nothing is said of a project read whole.
             (tree / "reports" / "secret.log").chmod(0o600)
             self.assertEqual(jobs.snapshot(tree, Path(tmp) / "whole" / "project"), [])

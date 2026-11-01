@@ -12,15 +12,18 @@ The slow kinds (the CMDB, updates, compliance) go in cycles of their own,
 with a longer time limit; what they collect beyond a state is kept by cmdb.
 """
 
+import fcntl
 import json
 import math
+import os
 import shutil
 import statistics
 import traceback
 from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 
-from . import catalog, cmdb, jobs, journal, metrics, notify, runner, store
+from . import catalog, cmdb, jobs, journal, metrics, notify, paths, runner, store
 from .catalog import COMPLIANCE, CRITICAL, OK, OWN_KINDS, PLAYBOOK, STATE_NAMES, UNKNOWN, WARNING
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
@@ -635,6 +638,22 @@ def count_skips(ctx: Context, now: float) -> dict[tuple[str, str], int]:
     return dict(per_group)
 
 
+@contextmanager
+def scheduler_lock():
+    """The lock the tick holds while it plans and collects: taken without
+    waiting, as the tick does, so a caller is told to try again rather than
+    wait for a cycle to be planned."""
+    descriptor = os.open(paths.SCHEDULER_LOCK, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Conflict("the scheduler is planning a cycle: try again") from None
+        yield
+    finally:
+        os.close(descriptor)
+
+
 def plan(ctx: Context, now: float) -> list[str]:
     """Queue a cycle for what is due; returns the runs queued."""
     conn = ctx.conn
@@ -1062,13 +1081,16 @@ def check_run(ctx: Context, params: Values) -> dict:
     if not row["enabled"]:
         raise Conflict("this check is turned off")
     now = store.now()
-    cursor = ctx.conn.execute(
-        "UPDATE check_states SET next_at = ? WHERE check_id = ? AND (? IS NULL OR host_id = ?)"
-        " AND run_id IS NULL", (now, row["id"], params["host_id"], params["host_id"]))
-    if params["host_id"] and cursor.rowcount == 0:
-        raise Conflict("this host is not checked by this check, or is being checked now")
-    queued = plan(ctx, now)
-    jobs.dispatch(ctx)
+    # Under the lock of the tick: planned twice, a state's first cycle is lost.
+    with scheduler_lock():
+        cursor = ctx.conn.execute(
+            "UPDATE check_states SET next_at = ? WHERE check_id = ?"
+            " AND (? IS NULL OR host_id = ?) AND run_id IS NULL",
+            (now, row["id"], params["host_id"], params["host_id"]))
+        if params["host_id"] and cursor.rowcount == 0:
+            raise Conflict("this host is not checked by this check, or is being checked now")
+        queued = plan(ctx, now)
+        jobs.dispatch(ctx)
     return {"runs": queued}
 
 

@@ -727,6 +727,9 @@ def connect(path: Path) -> sqlite3.Connection:
     try:
         # Autocommit: transactions are opened explicitly where they are needed.
         conn = sqlite3.connect(path, timeout=5, isolation_level=None)
+    except sqlite3.Error as error:
+        raise Unavailable(f"cannot open the database: {error}") from error
+    try:
         conn.row_factory = sqlite3.Row
         if schema_version(conn) == 0:
             # Only before the first table: free pages can then be given back
@@ -737,6 +740,9 @@ def connect(path: Path) -> sqlite3.Connection:
         conn.execute("PRAGMA busy_timeout = 5000")
         migrate(conn)
         conn.execute("PRAGMA foreign_keys = ON")
-    except sqlite3.Error as error:
-        raise Unavailable(f"cannot open the database: {error}") from error
+    except BaseException as error:
+        conn.close()
+        if isinstance(error, sqlite3.Error):
+            raise Unavailable(f"cannot open the database: {error}") from error
+        raise
     return conn

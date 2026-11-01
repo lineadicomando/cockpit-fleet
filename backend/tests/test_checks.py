@@ -3,7 +3,9 @@ cycle leaves turned into states, and the notifications of hard changes, with
 the run unit replaced by a fake that writes the events a node would give."""
 
 import dataclasses
+import fcntl
 import json
+import os
 from unittest import mock
 
 from test_notify import NotifyBase
@@ -585,6 +587,20 @@ class NotifyChecksTest(CheckBase):
                                    role="operator"), "forbidden")
         audit = [row["command"] for row in self.ctx().conn.execute("SELECT command FROM audit")]
         self.assertIn("check.run", audit)
+
+    def test_check_run_waits_for_no_tick_and_tells_when_one_is_planning(self):
+        inventory = self.inventory()
+        check = self.check(inventory, group="web")
+        descriptor = os.open(paths.SCHEDULER_LOCK, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            answer = self.call("check.run", {"id": check["id"]}, role="operator")
+        finally:
+            os.close(descriptor)
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("planning", answer["error"]["message"])
+        self.assertEqual(self.ok("run.list")["runs"][1:], [])
+        self.assertEqual(len(self.ok("check.run", {"id": check["id"]}, role="operator")["runs"]), 1)
 
 
 class StoreTest(CheckBase):

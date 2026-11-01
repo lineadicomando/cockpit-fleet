@@ -1,4 +1,5 @@
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,7 +7,7 @@ from unittest import mock
 
 from cockpit_fleet import cli, jobs, journal, system  # noqa: F401  (system registers commands)
 from cockpit_fleet.auth import Caller
-from cockpit_fleet.errors import Conflict, NotFound
+from cockpit_fleet.errors import Conflict, NotFound, Unavailable
 
 
 class DispatchTest(unittest.TestCase):
@@ -37,7 +38,9 @@ class DispatchTest(unittest.TestCase):
 
     def ctx(self, role, user="anna"):
         root = Path(self.tmp.name)
-        return cli.Context(Caller(1000, user, role), root / "fleet.db", root / "config.toml")
+        ctx = cli.Context(Caller(1000, user, role), root / "fleet.db", root / "config.toml")
+        self.addCleanup(ctx.close)
+        return ctx
 
     def call(self, name, role, params=None, raw=None):
         data = raw if raw is not None else (json.dumps(params).encode() if params is not None else b"")
@@ -127,6 +130,24 @@ class DispatchTest(unittest.TestCase):
     def test_every_registered_command_declares_a_known_role(self):
         for spec in cli.COMMANDS.values():
             self.assertIn(spec.role, ("viewer", "operator", "admin"), spec.name)
+
+
+class UnitTimeoutTest(unittest.TestCase):
+    """systemctl and fleet-unit that never answer are told, not waited for."""
+
+    def hang(self, argv, **kwargs):
+        self.assertEqual(kwargs["timeout"], 30)
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    def test_fleet_unit_and_is_active_give_up(self):
+        with mock.patch.object(subprocess, "run", self.hang):
+            with self.assertRaises(Unavailable) as caught:
+                jobs._fleet_unit("start", "r1")
+            self.assertIn("cannot start the run unit", str(caught.exception))
+            with self.assertRaises(Unavailable):
+                jobs._unit_active("r1")
+            self.assertEqual(system._check_scheduler()[0], "fail")
+            self.assertEqual(system._check_notify()[0], "fail")
 
 
 class JournalTest(unittest.TestCase):

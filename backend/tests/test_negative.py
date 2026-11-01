@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -398,7 +399,8 @@ class FuzzTest(Fixture):
         for name in self.TREES:
             shutil.copytree(self.root / name, self.root / f"{name}.image", symlinks=True)
         image = self.root / "image.db"
-        with sqlite3.connect(self.root / "fleet.db") as source, sqlite3.connect(image) as copy:
+        with (closing(sqlite3.connect(self.root / "fleet.db")) as source,
+              closing(sqlite3.connect(image)) as copy):
             source.backup(copy)
         return image
 

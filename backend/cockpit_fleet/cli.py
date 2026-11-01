@@ -231,6 +231,12 @@ class Context:
         except FleetError:
             return None
 
+    def close(self) -> None:
+        """Close the connection, if one was opened; conn opens another."""
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
 
 class Params:
     """Typed access to the parameters; done() rejects anything not consumed."""
@@ -409,6 +415,8 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
                      FLEET_TRACEBACK=traceback.format_exc())
         message = "internal error, see the journal"
         return {"ok": False, "error": {"code": "internal", "message": message}}
+    finally:
+        ctx.close()
 
 
 def load_commands() -> dict[str, Command]:

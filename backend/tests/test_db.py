@@ -16,8 +16,12 @@ class DatabaseTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def opened(self, conn: sqlite3.Connection) -> sqlite3.Connection:
+        self.addCleanup(conn.close)
+        return conn
+
     def test_new_database_is_migrated_to_the_latest_schema(self):
-        conn = db.connect(self.path)
+        conn = self.opened(db.connect(self.path))
         self.assertEqual(db.schema_version(conn), len(db.MIGRATIONS))
         self.assertEqual(conn.execute("PRAGMA journal_mode").fetchone()[0], "wal")
         self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
@@ -25,17 +29,17 @@ class DatabaseTest(unittest.TestCase):
 
     def test_reopening_does_not_migrate_again(self):
         db.connect(self.path).close()
-        conn = db.connect(self.path)
+        conn = self.opened(db.connect(self.path))
         self.assertEqual(db.schema_version(conn), len(db.MIGRATIONS))
 
     def test_later_migrations_apply_on_top_of_existing_data(self):
-        conn = db.connect(self.path)
+        conn = self.opened(db.connect(self.path))
         conn.execute("INSERT INTO audit (ts, uid, user, command, params, outcome)"
                      " VALUES (1, 1, 'u', 'c', '{}', 'ok')")
         conn.close()
         extra = [*db.MIGRATIONS, ["CREATE TABLE later (x INTEGER)"]]
         with mock.patch.object(db, "MIGRATIONS", extra):
-            conn = db.connect(self.path)
+            conn = self.opened(db.connect(self.path))
             self.assertEqual(db.schema_version(conn), len(extra))
             conn.execute("SELECT x FROM later")
             self.assertEqual(conn.execute("SELECT count(*) FROM audit").fetchone()[0], 1)
@@ -45,7 +49,7 @@ class DatabaseTest(unittest.TestCase):
         broken = [*db.MIGRATIONS, ["CREATE TABLE ok_table (x INTEGER)", "THIS IS NOT SQL"]]
         with mock.patch.object(db, "MIGRATIONS", broken), self.assertRaises(Unavailable):
             db.connect(self.path)
-        conn = sqlite3.connect(self.path)
+        conn = self.opened(sqlite3.connect(self.path))
         self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], len(db.MIGRATIONS))
         tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master")]
         self.assertNotIn("ok_table", tables)
@@ -62,7 +66,7 @@ class DatabaseTest(unittest.TestCase):
             db.connect(Path(self.tmp.name) / "missing-dir" / "fleet.db")
 
     def test_outcome_is_constrained(self):
-        conn = db.connect(self.path)
+        conn = self.opened(db.connect(self.path))
         with self.assertRaises(sqlite3.IntegrityError):
             conn.execute("INSERT INTO audit (ts, uid, user, command, params, outcome)"
                          " VALUES (1, 1, 'u', 'c', '{}', 'maybe')")

@@ -54,8 +54,10 @@ def may_decide(ctx: Context, requested_by: str) -> bool:
 def expire(ctx: Context) -> int:
     """End the runs whose time to be approved is over; called by the tick."""
     now = store.now()
-    due = ctx.conn.execute("SELECT run_id FROM approvals WHERE decision = ''"
-                           " AND expires_at <= ?", (now,)).fetchall()
+    # One canceled while it waited keeps its decision empty: it is not expired.
+    due = ctx.conn.execute("SELECT a.run_id FROM approvals a JOIN runs r ON r.id = a.run_id"
+                           " WHERE a.decision = '' AND a.expires_at <= ? AND r.status = ?",
+                           (now, jobs.WAITING)).fetchall()
     return sum(_decide(ctx, row["run_id"], "expired", "system", "") for row in due)
 
 

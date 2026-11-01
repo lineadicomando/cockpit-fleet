@@ -64,7 +64,9 @@ class RunsTest(CheckBase):
 
 class VacuumTest(CheckBase):
     def database(self):
-        return sqlite3.connect(self.root / "fleet.db")
+        conn = sqlite3.connect(self.root / "fleet.db")
+        self.addCleanup(conn.close)
+        return conn
 
     def test_a_new_database_gives_back_free_pages_a_few_at_a_time(self):
         self.ok("run.list")

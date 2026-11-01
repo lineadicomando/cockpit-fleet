@@ -435,7 +435,10 @@ def _fire(ctx: Context, row, now: float) -> dict:
             try:
                 if row["overlap"] == "cancel":
                     for active in previous:
-                        jobs.cancel(ctx, active)
+                        try:
+                            jobs.cancel(ctx, active)
+                        except BadRequest:
+                            pass  # collected by the cancel of the one before it
                 run_id = _launch(ctx, row, f"schedule:{row['name']}")["id"]
             except FleetError as failure:
                 outcome, error = "error", str(failure)
