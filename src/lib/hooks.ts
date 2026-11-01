@@ -20,9 +20,9 @@ export interface Loaded<T> {
     reload: () => void;
 }
 
-// Loads once on mount and again on reload(). A slow answer to an earlier
-// request never overwrites the result of a later one.
-export function useLoad<T>(load: () => Promise<T>): Loaded<T> {
+// Loads once on mount, again when one of `deps` changes and on reload(). A
+// slow answer to an earlier request never overwrites the result of a later one.
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): Loaded<T> {
     const [data, setData] = useState<T | null>(null);
     const [error, setError] = useState<Error | null>(null);
     const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ export function useLoad<T>(load: () => Promise<T>): Loaded<T> {
         );
     }, []);
 
-    useEffect(reload, [reload]);
+    useEffect(reload, [reload, ...deps]);
     return { data, error, loading, reload };
 }
 

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from "react";
+import React, { Suspense, lazy, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Button,
@@ -261,8 +261,7 @@ export function HostsPage() {
             call<{ hosts: FleetHost[] }>("host.list", filter),
         ]);
         return { ...states, hosts: hosts.hosts, every: view === "grid" };
-    });
-    useEffect(data.reload, [inventoryId, view]);
+    }, [inventoryId, view]);
     usePolling(() => data.reload(), POLL, true);
 
     return (

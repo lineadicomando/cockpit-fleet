@@ -70,7 +70,7 @@ export function PathInput({ id, label, value, onChange, choices, placeholder }: 
             isExpanded={listShown} onClick={() => { setIsOpen(!listShown); input.current?.focus(); }}>
             <TextInputGroup isPlain>
                 <TextInputGroupMain inputId={id} aria-label={label} value={value} placeholder={placeholder} innerRef={input}
-                    autoComplete="off" role="combobox" isExpanded={listShown} aria-controls={listId}
+                    autoComplete="off" role="combobox" isExpanded={listShown} aria-controls={listShown ? listId : undefined}
                     aria-activedescendant={listShown && focused !== null ? optionId(focused) : undefined}
                     onClick={() => setIsOpen(true)} onKeyDown={onKeyDown}
                     onChange={(_event, typed) => { onChange(typed); setIsOpen(true); setFocused(null); }} />

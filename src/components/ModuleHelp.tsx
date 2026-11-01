@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Content, Label, ModalBody, ModalHeader, ModalVariant, TextInput, Title } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
@@ -64,8 +64,7 @@ function Returns({ values, depth = 0 }: { values: ModuleReturn[]; depth?: number
 
 function Help({ name }: { name: string }) {
     const { t } = useTranslation();
-    const help = useLoad(() => call<ModuleHelp>("module.help", { name }));
-    useEffect(help.reload, [name]);
+    const help = useLoad(() => call<ModuleHelp>("module.help", { name }), [name]);
 
     if (help.error) return <Alert variant="danger" isInline title={help.error.message} />;
     if (!help.data || help.loading) return <Spinner aria-label={t("Loading")} />;

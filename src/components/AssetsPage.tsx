@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Button,
@@ -121,8 +121,7 @@ export function AssetsPage() {
     const [filter, setFilter] = useState("");
     const [tab, setTab] = useState<string | number>("hosts");
     const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
-    const data = useLoad(() => call<{ hosts: CmdbHost[] }>("cmdb.list", inventoryId ? { inventory_id: inventoryId } : {}));
-    useEffect(data.reload, [inventoryId]);
+    const data = useLoad(() => call<{ hosts: CmdbHost[] }>("cmdb.list", inventoryId ? { inventory_id: inventoryId } : {}), [inventoryId]);
 
     const shown = (data.data?.hosts ?? []).filter(host => matches(host, filter));
     const stamp = new Date().toISOString().slice(0, 10);

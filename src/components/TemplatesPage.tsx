@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Checkbox, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, Label, TextInput } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
@@ -57,10 +57,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [survey, setSurvey] = useState(() => (template?.survey ?? []).map(toDraft));
     const files = useLoad(() => projectId
         ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
-        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }));
-
-    // After the render that has the new project, not in the change handler.
-    useEffect(files.reload, [projectId]);
+        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }), [projectId]);
 
     async function submit() {
         let vars: unknown = {};
@@ -364,11 +361,12 @@ export function TemplatesPage() {
                         .map(id => ({ id, name: name(id) })).sort((a, b) => a.name.localeCompare(b.name));
                     const projects = used(data.templates.map(item => item.project_id), names.project);
                     const inventories = used(data.templates.map(item => item.inventory_id), names.inventory);
-                    // A stored project or inventory that no template uses any more is not a filter.
+                    // A stored project or inventory that no template uses any more is not a
+                    // filter, nor is the only one, whose select is not shown.
                     const view = {
                         ...stored,
-                        project: projects.some(item => item.id === stored.project) ? stored.project : "",
-                        inventory: inventories.some(item => item.id === stored.inventory) ? stored.inventory : "",
+                        project: projects.length > 1 && projects.some(item => item.id === stored.project) ? stored.project : "",
+                        inventory: inventories.length > 1 && inventories.some(item => item.id === stored.inventory) ? stored.inventory : "",
                     };
                     const shown = filterTemplates(data.templates, view, names);
                     const groups = groupTemplates(sortTemplates(shown, view.sort, view.descending, names), view.groupBy, names);

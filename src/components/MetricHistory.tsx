@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Content, Flex, FlexItem, Title, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
 import {
@@ -107,8 +107,7 @@ export function MetricHistory({ hostId, checkId, version }: { hostId: string; ch
     const query = useLoad(() => {
         const until = Math.floor(Date.now() / 1000);
         return call<MetricQuery>("metric.query", { host_id: hostId, check_id: checkId, since: until - SPANS[span], until });
-    });
-    useEffect(query.reload, [span, version]);
+    }, [span, version]);
 
     const spans: [Span, string][] = [["day", t("Day")], ["week", t("Week")], ["month", t("Month")], ["year", t("Year")]];
     const data = query.data;

@@ -51,8 +51,7 @@ export function RunsPage() {
     const [status, setStatus] = useState("");
     const [commanding, setCommanding] = useState(false);
     const [limit, setLimit] = useState(50);
-    const list = useLoad(() => call<{ runs: Run[]; more: boolean }>("run.list", { limit, status }));
-    useEffect(list.reload, [status, limit]);
+    const list = useLoad(() => call<{ runs: Run[]; more: boolean }>("run.list", { limit, status }), [status, limit]);
     const anyActive = list.data?.runs.some(run => isActive(run.status)) ?? false;
     usePolling(list.reload, 3000, anyActive);
     const now = Date.now() / 1000;

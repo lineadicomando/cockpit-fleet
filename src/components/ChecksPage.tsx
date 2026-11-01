@@ -170,6 +170,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
         reboot_required: t("Reboot required (1 = yes)"), days_left: t("Days before expiry"), offset: t("Offset (seconds)"),
         security_updates: t("Security updates"), updates: t("Updates"), changed: t("Tasks that would change"),
     };
+    const levelNames = { warning: t("Warning at"), critical: t("Critical at") };
     const descriptions: Record<CheckKind, string> = {
         reachability: t("Whether Ansible reaches the host. A host it does not reach has its other checks unknown, and only this one is told about: apply it to every host."),
         disk: t("Space and inodes used on each filesystem of the host, each fixed drive on Windows."),
@@ -284,14 +285,14 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
             {(Object.keys(fields).length > 0 || own) && (
                 <FormGroup label={t("Thresholds")} role="group" fieldId="chk-thresholds">
                     <Table variant="compact" borders={false} aria-label={t("Thresholds")}>
-                        <Thead><Tr><Th>{t("Measure")}</Th><Th>{t("Warning at")}</Th><Th>{t("Critical at")}</Th></Tr></Thead>
+                        <Thead><Tr><Th>{t("Measure")}</Th><Th>{levelNames.warning}</Th><Th>{levelNames.critical}</Th></Tr></Thead>
                         <Tbody>
                             {Object.entries(fields).map(([metric, field]) => (
                                 <Tr key={metric}>
                                     <Td>{thresholdNames[metric] ?? metric}</Td>
                                     {(["warning", "critical"] as const).map(level => (
                                         <Td key={level}>
-                                            <TextInput aria-label={`${metric} ${level}`} value={field[level]} style={{ maxWidth: "8rem" }}
+                                            <TextInput aria-label={`${thresholdNames[metric] ?? metric}: ${levelNames[level]}`} value={field[level]} style={{ maxWidth: "8rem" }}
                                                 onChange={(_e, value) => setFields(current => ({ ...current, [metric]: { ...current[metric], [level]: value } }))} />
                                         </Td>
                                     ))}
@@ -324,7 +325,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
                     </FormGroup>
                 </GridItem>
                 <GridItem>
-                    <FormGroup fieldId="chk-flags" role="group" label=" ">
+                    <FormGroup fieldId="chk-flags" role="group" label={t("Options")}>
                         <Checkbox id="chk-become" label={t("Become root (some checks need it)")} isChecked={become} onChange={(_e, value) => setBecome(value)} />
                         <Checkbox id="chk-enabled" label={t("Enabled")} isChecked={enabled} onChange={(_e, value) => setEnabled(value)} />
                     </FormGroup>
@@ -608,10 +609,11 @@ export function ChecksPage() {
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
 
-    // The inventories that have checks; a stored one that has none any more is not a filter.
+    // The inventories that have checks; a stored one that has none any more is not a
+    // filter, nor is the only one, whose select is not shown.
     const inventories = [...new Map((list.data?.checks ?? []).map(check => [check.inventory_id, check.inventory])).entries()]
         .map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-    const view = !list.data || stored.inventory === "" || inventories.some(item => item.id === stored.inventory)
+    const view = !list.data || stored.inventory === "" || (inventories.length > 1 && inventories.some(item => item.id === stored.inventory))
         ? stored : { ...stored, inventory: "" };
 
     async function runNow(check: CheckDef) {

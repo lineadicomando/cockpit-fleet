@@ -49,6 +49,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- The Checks and Job templates tabs showed a filter chip on the only
+  inventory or project, whose select is not shown; a screen reader named
+  the threshold inputs of a check by the metric's internal name, now by
+  the measure as shown; the "Become root" and "Enabled" checkboxes of a
+  check are grouped under a label, "Options", where there was a blank one.
 - A local project with a directory that can be read but not searched no
   longer fails to launch: its contents are listed as left out at the top
   of the run's output, which now says "collections" when the paths left

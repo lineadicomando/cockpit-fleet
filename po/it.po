@@ -160,6 +160,9 @@ msgstr "Apri la run"
 msgid "Operator"
 msgstr "Operatore"
 
+msgid "Options"
+msgstr "Opzioni"
+
 msgid "Outcome"
 msgstr "Esito"
 

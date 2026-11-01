@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, Radio, TextInput } from "@patternfly/react-core";
 import { ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
@@ -26,10 +26,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     const [vaultId, setVaultId] = useState(inventory?.vault_credential_id ?? "");
     const files = useLoad(() => projectId
         ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
-        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }));
-
-    // After the render that has the new project, not in the change handler.
-    useEffect(files.reload, [projectId]);
+        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }), [projectId]);
 
     async function submit() {
         const source = kind === "managed"
@@ -157,7 +154,7 @@ export function InventoriesPage() {
     const refresh = () => { list.reload(); setWaiting(8); };
     const saved = (problem: string | null) => {
         refresh();
-        setError(problem && t("The inventory was saved, but it could not be read: {{reason}}", { reason: problem }));
+        setError(problem === null ? null : t("The inventory was saved, but it could not be read: {{reason}}", { reason: problem }));
     };
     const read = (inventory: Inventory) => act(async () => { await call("inventory.parse", { id: inventory.id }); refresh(); });
     const edit = (inventory: Inventory) => act(async () => setEditing(await call<Inventory>("inventory.get", { id: inventory.id })));
