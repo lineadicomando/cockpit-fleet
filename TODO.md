@@ -4,7 +4,7 @@ Cockpit plugin that runs Ansible from the browser (Semaphore UI style) and
 collects, stores and notifies on data from the nodes, with Ansible only. Not
 a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
-## Status (25 October 2026)
+## Status (1 November 2026)
 
 Phases 0–9 closed (how each was accepted: the last section of
 `docs/architecture.md`); the terminal's ideas done and seen live. Phase 9
@@ -49,14 +49,19 @@ notifications in `notify.py` and `channels.py`, the terminal in
 (`checks.py`, `win_checks.ps1`, `fleet_result.py`), pages in
 `src/components/`.
 
-Last test runs, on 25 October with the negative tests and their fixes:
-unit tests (461 backend, 93 frontend) and ruff clean; `make ct-test` of
-every script on the three, `negative` included, all passing but `cmdb` on
-Fedora, where `podman network connect` fails in the container (netavark:
-"invalid namespace path"), so the interface it adds to a node never
-appears: the environment, not the code. On the VMs of the three, last on
-24 October (`privileges sandbox roles runs workflows schedules`, no SELinux
-denial), before these fixes. `windows.sh` last on 20 October.
+Last test runs, on 1 November after a review of the whole project (its
+findings under Leftovers, "Review (1 November)"): unit tests (469
+backend, 119 frontend) and ruff clean; `make ct-test` of every script on
+the three, `negative` included, all passing but `cmdb` on Fedora, where
+`podman network connect` fails in the container (netavark: "invalid
+namespace path"), so the interface it adds to a node never appears: the
+environment, not the code. Two distributions' `ct-test` at once make
+`checks.sh` miss its times (no notification within two intervals): run
+them one after the other. Until that day `ct-test` had installed the
+release package of 25 October, not the one just built (fixed in
+`ct-test.sh` and the build scripts). On the VMs of the three, last on 24
+October (`privileges sandbox roles runs workflows schedules`, no SELinux
+denial). `windows.sh` last on 20 October.
 
 ## Decisions
 
@@ -66,7 +71,7 @@ except the rows that say "to confirm".
 | Topic | Decision |
 |---|---|
 | Name | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet`, command `fleet`; `fleetctl` stays the backend's (out of `PATH`) |
-| License, repo | `LGPL-2.1-or-later`, to confirm at publication; a private Gitea, GitHub once stable |
+| License, repo | `LGPL-2.1-or-later`, to confirm at publication; developed on a private Gitea, published at `github.com/lineadicomando/cockpit-fleet` from a fresh history (the private one holds workstation details) |
 | Backend | No daemon, no port: units on demand; account `cockpit-fleet`; root only in `fleet-unit`, `fleet-secret` |
 | Roles | Groups `cockpit-fleet-admin`, `-operator`, `-viewer`, the highest wins; rights apart (`auth.GROUP_RIGHTS`, a command's `right=`). Viewer: outcomes, not output. Operator: launches, narrows hosts, dry run, answers surveys |
 | Approvals | `cockpit-fleet-approver` is a right (`approve`) that adds to any role or stands alone, not a fourth role; administrators approve too; nobody approves their own launch but an administrator; agents never approve; the run is prepared at launch and waits as `pending_approval`, expires after `[approvals] expire_hours` (24) |
@@ -203,6 +208,25 @@ except the rows that say "to confirm".
   operator can fill the 500 waiting secret answers for an hour; `fleet`
   shows run output with its colours raw (escape sequences of nodes); unpack
   jobs have no time limit.
+- Review (1 November), left as they are: the sandbox of a run hides the
+  state directory, `/etc/cockpit-fleet`, `/home` and `/run` but not
+  `[projects] local_roots`, so a playbook of any project can read every
+  local project (`security.md` says otherwise: a drop-in with
+  `InaccessiblePaths=` per root, or the claim narrowed); `git add --all`
+  of a managed project honours a `.gitignore` written in it, so a file
+  can run without being in the history; `fleetctl` without `SUDO_UID` is
+  an administrator and a playbook can run it (gains nothing while the
+  database is hidden by the tmpfs); the journal's audit records can be
+  forged by any local account (the database is authoritative); a
+  directory readable but not searchable still fails a run; `check.run`
+  and the tick can both queue a cycle for the same states; overlap
+  `cancel` loses the occurrence when a run ends meanwhile; a run whose
+  unit cannot start keeps its directory 90 days; a run canceled while
+  waiting is later marked `expired`; `systemctl` and `fleet-unit` are
+  called with no timeout; `Context` never closes its connection
+  (`ResourceWarning` in the tests); on the page: untranslated ARIA labels
+  of thresholds, `project.files` asked twice when a dialog opens, a
+  stored filter on the only inventory kept with no control to show it.
 - Negative tests (25 October): a value typed in clear for a secret is
   masked in the audit wherever it appears, so a short one masks other text
   of that record too; the fuzzer gives one hostile value at a time, never
@@ -238,8 +262,12 @@ except the rows that say "to confirm".
       screenshots of the Debian VM in `docs/screenshots/`, in the README;
       `CHANGELOG.md`; the version 0.1.0 wherever it is written, the
       collection's included)
-- [ ] GitHub Actions workflow; publication with license confirmed and a
-      history with no secrets or real environments
+- [x] GitHub Actions workflow (1 November: `.github/workflows/ci.yml`,
+      the Gitea one's steps in containers of the three distributions;
+      the Debian job rehearsed in a local container, the rpm ones not)
+- [ ] Publication: the license confirmed, a fresh history on
+      `github.com/lineadicomando/cockpit-fleet` (the private one holds
+      workstation details), the GitHub workflow seen green there
 
 ## Future
 

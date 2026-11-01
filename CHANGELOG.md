@@ -30,6 +30,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- In Italian, a project or inventory written in the interface is now
+  "Interno" rather than "Scritto qui".
 - The paths of a project are offered as one types, for inventories and
   playbooks: its files and directories, narrowed down as one types; a path
   that is not listed is still taken. `group_vars` and `host_vars` are never
@@ -61,7 +63,6 @@ entries go under `[Unreleased]`, under the heading of their kind.
   `fleet(1)` says how to bind-mount a project that has to stay in a home.
   Upgrading a controller with such a project: move or bind-mount it, then
   change its path.
-
 - A local project with files or directories the service account cannot read
   (logs written with mode 0600, say) failed every run and the reading of its
   inventories; they are now left out of the copy, and the run's output
@@ -69,8 +70,6 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - A new inventory whose reading failed kept its dialog open, so that saving
   again made it twice; the dialog now closes and says the inventory was
   saved but not read.
-- The message box of the assistant's page went partly below the bottom of
-  the window.
 
 ## [0.1.0] - 2026-10-25
 
