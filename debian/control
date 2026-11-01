@@ -12,7 +12,7 @@ Architecture: all
 Depends: ${misc:Depends},
          cockpit-bridge (>= 337),
          ansible-core (>= 2.16),
-         python3 (>= 3.13),
+         python3 (>= 3.12),
          systemd (>= 257),
          sudo,
          git,
