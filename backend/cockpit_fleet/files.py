@@ -114,7 +114,8 @@ def _identity(ctx: Context) -> dict:
 def _commit(ctx: Context, project, message: str) -> str:
     """Commit whatever differs in the tree; returns the project's revision."""
     project_id = project["id"]
-    _git(project_id, "add", "--all")
+    # --force: a .gitignore in the tree must not keep a file runs see out of the history.
+    _git(project_id, "add", "--all", "--force")
     if not _git(project_id, "status", "--porcelain"):
         return project["revision"]  # written again as it was
     _git(project_id, "commit", "--quiet", f"--message={message}", env=_identity(ctx))

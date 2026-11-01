@@ -41,6 +41,13 @@ class Managed(Base):
 
 @unittest.skipUnless(os.path.exists("/usr/bin/git"), "needs git")
 class ManagedProjectTest(Managed):
+    def test_a_gitignore_in_the_tree_keeps_nothing_out_of_the_history(self):
+        self.write(".gitignore", "evil.yml\n")
+        self.write("evil.yml", PLAYBOOK)
+        self.assertIn("evil.yml", self.git("ls-files").split())
+        commits = self.ok("file.history", {"id": self.id, "path": "evil.yml"})["commits"]
+        self.assertEqual(len(commits), 1)
+
     def test_a_new_project_is_an_empty_tree_with_its_repository_beside_it(self):
         self.assertEqual((self.project["kind"], self.project["revision"]), ("managed", ""))
         self.assertEqual(list(self.tree.iterdir()), [])
@@ -304,6 +311,7 @@ class RebuildMigrationTest(unittest.TestCase):
                 conn.close()
 
             conn = db.connect(path)
+            self.addCleanup(conn.close)
             self.assertEqual(db.schema_version(conn), len(db.MIGRATIONS))
             self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])

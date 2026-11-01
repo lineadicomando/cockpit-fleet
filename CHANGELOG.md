@@ -41,6 +41,12 @@ entries go under `[Unreleased]`, under the heading of their kind.
   above the last release and below the next, so installing it is an
   upgrade; the Overview tab shows `0.1.0-3-gabc1234`.
 
+### Security
+
+- A `.gitignore` written in a project of the interface kept the files it
+  named out of the project's history, diff and push, while runs still
+  executed them. Every file written is now committed.
+
 ### Fixed
 
 - A check cycle whose plan had been rewritten in its run directory (a
