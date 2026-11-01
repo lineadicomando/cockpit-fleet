@@ -49,10 +49,11 @@ notifications in `notify.py` and `channels.py`, the terminal in
 (`checks.py`, `win_checks.ps1`, `fleet_result.py`), pages in
 `src/components/`.
 
-Last test runs, on 1 November after a review of the whole project (its
-findings under Leftovers, "Review (1 November)"): unit tests (469
-backend, 119 frontend) and ruff clean; `make ct-test` of every script on
-the three, `negative` included, all passing but `cmdb` on Fedora, where
+Last test runs, on 1 November after a review of the whole project and
+its fixes (what it leaves as it is: Leftovers, "Review (1 November)"):
+unit tests (475 backend, 119 frontend) and ruff clean; `make ct-test` of
+every script on Debian and AlmaLinux after the fixes, and on the three
+before them, `negative` included, all passing but `cmdb` on Fedora, where
 `podman network connect` fails in the container (netavark: "invalid
 namespace path"), so the interface it adds to a node never appears: the
 environment, not the code. Two distributions' `ct-test` at once make
