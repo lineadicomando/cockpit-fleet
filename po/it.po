@@ -2997,8 +2997,6 @@ msgstr "Annulla la selezione"
 msgid "Open files"
 msgstr "File aperti"
 
-msgid "Close {{name}}"
-msgstr "Chiudi {{name}}"
 
 msgid "Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed."
 msgstr "Dentro il progetto, per esempio roles/web/tasks/main.yml. Le cartelle vengono create quando servono."

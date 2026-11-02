@@ -2316,3 +2316,17 @@ What each closed phase had to show, and how it was shown.
   on Fedora 44 and AlmaLinux 10 with no denial; in a browser on Debian,
   approving as an administrator and as an approver with no role, the steps
   of a workflow run, the editor.
+- **11, files and inventories as trees** (2 November): a managed project
+  changed many files at once, directories moved, copied and deleted, a
+  path restored, a directory downloaded, an archive imported (`files.sh`);
+  a managed inventory written as a tree like a school's (groups of groups,
+  `host_vars`), read, launched on from another project, read again after a
+  change, and one of before trees made its first file; a file inventory of
+  another project copied for a run (`inventories.sh`); an inventory cloned
+  and pushed at a terminal (`cli.sh`); on containers of the three, and on
+  the machines of Fedora 44 and AlmaLinux 10 with `sandbox`, SELinux
+  enforcing and no denial; in a browser on Debian, the tree dragged, used
+  with the keyboard, several files open in tabs, Lighthouse 100 for
+  accessibility. The tree's open folders are named by their name, yet axe
+  still remarks that their text (their children) is not in it: the tree
+  pattern nests them, and the score is not lowered.

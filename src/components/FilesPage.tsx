@@ -617,9 +617,9 @@ export function FilesPage({ id }: { id: string }) {
                             {tabs.length > 0 && (
                                 <>
                                     <Tabs panelId="fleet-file-panel" activeKey={current ?? ""} onSelect={(_e, key) => { setCurrent(String(key)); setCheckId(null); }}
-                                        onClose={(_e, key) => guardClose([String(key)])} aria-label={t("Open files")}>
+                                        aria-label={t("Open files")}>
                                         {tabs.map(candidate => (
-                                            <Tab key={candidate.path} eventKey={candidate.path} closeButtonAriaLabel={t("Close {{name}}", { name: candidate.path })}
+                                            <Tab key={candidate.path} eventKey={candidate.path}
                                                 title={<TabTitleText>{basename(candidate.path)}{isDirty(candidate) ? " •" : ""}</TabTitleText>} />
                                         ))}
                                     </Tabs>
@@ -635,6 +635,7 @@ export function FilesPage({ id }: { id: string }) {
                                                         {isYaml(tab.path) && !ofInventory && <Button variant="secondary" onClick={check} isDisabled={!tab.file || isDirty(tab)}>{t("Check syntax")}</Button>}
                                                         {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "history", path: tab.path })}>{t("Changes")}</Button>}
                                                         <Button variant="secondary" onClick={() => download(tab.path)}>{t("Download")}</Button>
+                                                        <Button variant="secondary" onClick={() => guardClose([tab.path])}>{t("Close")}</Button>
                                                     </Flex>
                                                 </Flex>
                                                 {tab.error && <Alert variant="danger" isInline title={tab.error} />}

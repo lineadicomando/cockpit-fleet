@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { IAction } from "@patternfly/react-table";
 import { AngleDownIcon, AngleRightIcon, FileIcon, FolderIcon, FolderOpenIcon } from "@patternfly/react-icons";
@@ -41,6 +41,10 @@ export function FileTree({
     const [focused, setFocused] = useState<string | null>(null);
     const [target, setTarget] = useState<string | null>(null);
     const items = useRef(new Map<string, HTMLLIElement>());
+    // The name of a node, not what is inside it, is what names it: ids for
+    // aria-labelledby, by the node's place among those shown.
+    const prefix = useId();
+    const nameId = (path: string) => `${prefix}-${shown.findIndex(entry => entry.node.path === path)}`;
 
     // The node in the tab order: the one last focused, if still shown.
     const tabbable = shown.some(entry => entry.node.path === focused) ? focused : (current ?? shown[0]?.node.path ?? null);
@@ -146,7 +150,7 @@ export function FileTree({
             if (selected.has(node.path)) classes.push("is-selected");
             if (target === node.path) classes.push("is-target");
             return (
-                <li key={node.path} role="treeitem" aria-level={level} aria-label={node.name} aria-expanded={isDirectory ? isOpen : undefined}
+                <li key={node.path} role="treeitem" aria-level={level} aria-labelledby={nameId(node.path)} aria-expanded={isDirectory ? isOpen : undefined}
                     aria-selected={editable ? selected.has(node.path) : undefined}
                     aria-current={node.path === current ? "true" : undefined}
                     tabIndex={node.path === tabbable ? 0 : -1}
@@ -174,7 +178,7 @@ export function FileTree({
                         <span className="fleet-tree-icon" aria-hidden>
                             {isDirectory ? (isOpen ? <FolderOpenIcon /> : <FolderIcon />) : <FileIcon />}
                         </span>
-                        <span className="fleet-tree-name">{node.name}</span>
+                        <span className="fleet-tree-name" id={nameId(node.path)}>{node.name}</span>
                         <span className="fleet-tree-actions" onClick={event => event.stopPropagation()}
                             onKeyDown={event => event.stopPropagation()}>
                             <ActionsColumn items={actions(node)} />

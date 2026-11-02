@@ -1009,7 +1009,6 @@
   "Filter files": "Filtra i file",
   "Clear the selection": "Annulla la selezione",
   "Open files": "File aperti",
-  "Close {{name}}": "Chiudi {{name}}",
   "Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed.": "Dentro il progetto, per esempio roles/web/tasks/main.yml. Le cartelle vengono create quando servono.",
   "A folder is kept once a file is in it.": "Una cartella viene conservata quando contiene un file.",
   "The new path inside the project: a folder is renamed with everything in it.": "Il nuovo percorso dentro il progetto: una cartella viene rinominata con tutto il suo contenuto.",
