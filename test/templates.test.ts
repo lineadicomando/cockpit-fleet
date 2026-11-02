@@ -10,7 +10,7 @@ import type { RunStatus, Template } from "../src/lib/types.ts";
 function template(name: string, project: string, inventory: string, more: Partial<Template> = {}, last?: [RunStatus, number]): Template {
     return {
         id: name, name, project_id: project, playbook: `${name}.yml`, inventory_id: inventory, machine_credential_id: null,
-        vault_credential_ids: [], limit_hosts: "", tags: [], skip_tags: [], extra_vars: {}, survey: [], forks: null, verbosity: 0,
+        vault_credential_ids: [], limit_hosts: "", tags: [], skip_tags: [], extra_vars: {}, variable_set_ids: [], survey: [], forks: null, verbosity: 0,
         become: false, needs_approval: false, ...more,
         last_run: last ? { id: `r-${name}`, status: last[0], created_at: last[1], finished_at: null } : null,
     };

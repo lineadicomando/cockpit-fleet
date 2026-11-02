@@ -31,11 +31,14 @@ class TransferTest(Base):
         self.ok("inventory.create", {"name": "file", "kind": "file", "project_id": project["id"],
                                      "path": "inventories/hosts.yml"})
         self.ok("hostkey.add", {"host": "10.0.0.5", "key_type": "ssh-ed25519", "key": KEY})
+        school = self.ok("varset.create", {"name": "school", "description": "the school",
+                                           "variables": {"domain": "school.edu"}})
         self.ok("template.create", {
             "name": "deploy", "project_id": project["id"], "playbook": "site.yml",
             "inventory_id": managed["id"], "machine_credential_id": machine["id"],
             "vault_credential_ids": [vault["id"]], "limit_hosts": "web*", "tags": ["a"],
             "extra_vars": {"x": 1}, "forks": 7, "become": True,
+            "variable_set_ids": [school["id"]],
             "survey": [{"name": "version", "type": "text", "required": True}]})
         template = self.ok("template.list")["templates"][0]
         with mock.patch.object(schedules, "analyze", lambda *args: ("", [2e9])):
@@ -74,6 +77,9 @@ class TransferTest(Base):
         template = document["templates"][0]
         self.assertEqual((template["project"], template["inventory"], template["machine_credential"],
                           template["vault_credentials"]), ("site", "inv", "ssh", ["vault"]))
+        self.assertEqual(template["variable_sets"], ["school"])
+        self.assertEqual(document["variable_sets"], [{"name": "school", "description": "the school",
+                                                      "variables": {"domain": "school.edu"}}])
         self.assertEqual(document["projects"][0]["credential"], "token")
         self.assertEqual(self.code("config.export", role="operator"), "forbidden")
 
@@ -86,12 +92,12 @@ class TransferTest(Base):
         answer = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)
         self.assertTrue(answer["ok"], answer)
         data = answer["data"]
-        self.assertEqual((data["created"], data["exists"], data["failed"]), (13, 0, 0), data)
+        self.assertEqual((data["created"], data["exists"], data["failed"]), (14, 0, 0), data)
         again = dispatch("config.export", b"", ctx)["data"]
         for section in transfer.SECTIONS:
             self.assertEqual(again[section], document[section], section)
         second = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)["data"]
-        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 13, 0))
+        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 14, 0))
         # Each thing left the record its own command leaves; the text of an
         # inventory is in none.
         rows = ctx.conn.execute("SELECT command, params FROM audit").fetchall()

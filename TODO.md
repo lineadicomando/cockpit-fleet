@@ -92,6 +92,7 @@ except the rows that say "to confirm".
 | Ad-hoc | Admin only, modules from `[adhoc] modules`, run as a generated playbook |
 | Export/import | One JSON by name, no secrets, no files; import creates, never replaces |
 | Agents (MCP) | `fleet-mcp` on stdio, each tool a `fleetctl` call; `[mcp] enabled = false`, `max_role = "operator"`; `via` audited, can only restrict; no tool for secrets; templates with a required secret not tools |
+| Sets of variables | Global, named JSON objects of extra variables (schema 21); a template takes several in order before its own, a later one wins; merged at each launch, the run records which; shown merged in the template's form; not for secrets, seen by viewers; one in use cannot be deleted (2 November) |
 | Chat ("Assistant") | Agent named in `[chat.agents.NAME]` (ACP), installed by the role `chat_agent`, not by the package; until set up, the tab guides administrators with one line to paste in Cockpit's terminal, the role enabling `[mcp]` when asked (`chat_agent_enable_mcp`, 2 November); started by `fleet-chat` as the user; login per user at a terminal; `[chat] max_sessions` 2; in the page read-only tools unasked, the rest confirmed; `fleet assistant` runs the agent's CLI with `--permission-mode manual` (every call confirmed) in `~/.local/state/cockpit-fleet/assistant` |
 | Terminal | `fleet` for the three roles and approvers, `via: cli`; every command as `fleet AREA VERB --param`, names for ids, shortcuts `launch log result secret assistant help`, `project clone/pull/push`; secrets never on the command line; English only until a field-tested version |
 | Projects at a terminal | Admins only: `local_roots` dir of group `cockpit-fleet-admin` 2770 + ACL for the service, checked by `selfcheck`; managed projects as git bundles, push only as a fast forward of files the editor could write |
@@ -314,6 +315,8 @@ Decided on 2 November (Decisions, "Files and inventories").
 
 ## Future
 
+Sets of variables: secret variables in a set (encrypted as credentials
+are, kept off the page and out of export), and sets for ad-hoc commands.
 External triggers (git webhooks, auto-remediation); `ansible-pull` for very
 large fleets; secrets on OpenBao or Bitwarden; export to Prometheus or
 InfluxDB; execution environments in containers; other controller

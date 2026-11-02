@@ -3061,3 +3061,78 @@ msgstr "fatto"
 
 msgid "not yet"
 msgstr "non ancora"
+
+msgid "Variables"
+msgstr "Variabili"
+
+msgid "Sets of variables"
+msgstr "Insiemi di variabili"
+
+msgid "New set of variables"
+msgstr "Nuovo insieme di variabili"
+
+msgid "Edit set of variables"
+msgstr "Modifica insieme di variabili"
+
+msgid "No sets of variables"
+msgstr "Nessun insieme di variabili"
+
+msgid "A set of variables holds extra variables that job templates take, so that a value common to many of them is written once. A template takes them in order, before its own; a later one wins. Variables that depend on the hosts belong in the group_vars of an inventory instead."
+msgstr "Un insieme di variabili contiene variabili extra che i job template prendono, così un valore comune a molti si scrive una volta sola. Un template li prende in ordine, prima delle sue; il successivo vince. Le variabili che dipendono dagli host vanno invece nei group_vars di un inventario."
+
+msgid "A JSON object. Not for secrets: they would be stored in clear, and every role sees them."
+msgstr "Un oggetto JSON. Non per i segreti: sarebbero salvati in chiaro, e ogni ruolo li vede."
+
+msgid "The variables must be a JSON object, for example {\"domain\": \"school.edu\"}."
+msgstr "Le variabili devono essere un oggetto JSON, per esempio {\"domain\": \"school.edu\"}."
+
+msgid "A change applies to the next runs of: {{templates}}."
+msgstr "Una modifica vale per le prossime run di: {{templates}}."
+
+msgid "Used by"
+msgstr "Usato da"
+
+msgid "Job templates use it"
+msgstr "È usato da job template"
+
+msgid "The set of variables is deleted. This cannot be undone."
+msgstr "L'insieme di variabili viene eliminato. L'operazione non si può annullare."
+
+msgid "Move {{name}} up"
+msgstr "Sposta {{name}} in su"
+
+msgid "Move {{name}} down"
+msgstr "Sposta {{name}} in giù"
+
+msgid "Remove {{name}}"
+msgstr "Togli {{name}}"
+
+msgid "Add a set of variables"
+msgstr "Aggiungi un insieme di variabili"
+
+msgid "Add a set of variables…"
+msgstr "Aggiungi un insieme di variabili…"
+
+msgid "Every set is taken"
+msgstr "Tutti gli insiemi sono già presi"
+
+msgid "Taken in this order, before the extra variables below: a later one wins."
+msgstr "Presi in quest'ordine, prima delle variabili extra qui sotto: il successivo vince."
+
+msgid "Variables of a run ({{number}})"
+msgstr "Variabili di una run ({{number}})"
+
+msgid "Variables of a run"
+msgstr "Variabili di una run"
+
+msgid "The extra variables below are not a JSON object yet: only the sets are shown."
+msgstr "Le variabili extra qui sotto non sono ancora un oggetto JSON: sono mostrati solo gli insiemi."
+
+msgid "This template"
+msgstr "Questo template"
+
+msgid "instead of {{sets}}"
+msgstr "al posto di {{sets}}"
+
+msgid "A survey's answer, and what earlier steps of a workflow pass on, win over these."
+msgstr "Le risposte di una survey, e ciò che passano gli step precedenti di un workflow, vincono su queste."

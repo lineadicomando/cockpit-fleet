@@ -148,6 +148,23 @@ expect_eq "the events hold the difference as text" \
     "+++ after: /tmp/fleet-it-marker"
 if grep -q 'TopSecretValue' "/var/lib/cockpit-fleet/runs/$run_id/events.jsonl"; then fail "a no_log value is in a difference"; else pass "no_log values are in no difference"; fi
 
+# --- sets of variables: taken before the template's own -------------------------
+varset=$(admin varset.create '{"name": "greetings", "variables": {"greeting": "from-set"}}')
+varset_id=$(get "$varset" 'a["data"]["id"]')
+base="\"id\": \"$template_id\", \"name\": \"demo\", \"project_id\": \"$project_id\", \"playbook\": \"site.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\""
+admin template.update "{$base, \"variable_set_ids\": [\"$varset_id\"]}" >/dev/null
+run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$template_id\"}")" 'a["data"]["id"]')
+expect_run "a template takes a set of variables" "$run_id" 120 successful
+expect_eq "the run gets the set's variable" "$(cat /tmp/fleet-it-marker 2>/dev/null)" "$IT_SSH_USER from-set"
+expect_eq "the run records the set" \
+    "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["options"]["variable_sets"][0]["name"]')" greetings
+expect_eq "a set in use is not deleted" \
+    "$(get "$(admin varset.delete "{\"id\": \"$varset_id\"}")" 'a["error"]["code"]')" conflict
+admin template.update "{$base, \"variable_set_ids\": [\"$varset_id\"], \"extra_vars\": {\"greeting\": \"hello\"}}" >/dev/null
+run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$template_id\"}")" 'a["data"]["id"]')
+expect_run "a template with a set and its own variables" "$run_id" 120 successful
+expect_eq "the template's own variable wins over the set's" "$(cat /tmp/fleet-it-marker 2>/dev/null)" "$IT_SSH_USER hello"
+
 # --- survey: an answer is a variable of the run, never a template ---------------
 survey=$(admin template.update "{\"id\": \"$template_id\", \"name\": \"demo\", \"project_id\": \"$project_id\", \"playbook\": \"site.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"extra_vars\": {\"greeting\": \"hello\"}, \"survey\": [{\"name\": \"greeting\", \"type\": \"text\", \"required\": true}]}")
 expect_eq "template takes a survey" "$(get "$survey" 'a["data"]["survey"][0]["name"]')" greeting

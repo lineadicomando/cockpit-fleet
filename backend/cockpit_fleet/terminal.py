@@ -78,6 +78,7 @@ _NAMED = {
     "credential": ("credential.list", "credentials"), "check": ("check.list", "checks"),
     "host": ("host.list", "hosts"), "schedule": ("schedule.list", "schedules"),
     "channel": ("channel.list", "channels"), "rule": ("rule.list", "rules"),
+    "varset": ("varset.list", "variable_sets"),
 }
 # Parameters that hold the id of another area; "id" is of the command's own
 # area, but for the files, which are of a project.

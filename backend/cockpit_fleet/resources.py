@@ -10,7 +10,7 @@ import subprocess
 import unicodedata
 from pathlib import Path, PurePosixPath
 
-from . import files, jobs, paths, store, survey
+from . import files, jobs, paths, store, survey, variables
 from .cli import Bool, Choice, Context, Id, Int, Obj, Objs, Str, Strs, Values, command
 from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
@@ -753,6 +753,7 @@ def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
     data["tags"] = store.loads(row["tags"], [])
     data["skip_tags"] = store.loads(row["skip_tags"], [])
     data["extra_vars"] = store.loads(row["extra_vars"], {})
+    data["variable_set_ids"] = [one["id"] for one in variables.template_sets(ctx.conn, row["id"])]
     data["survey"] = store.loads(row["survey"], [])
     data["last_run"] = last_runs.get(row["id"])
     return data
@@ -769,6 +770,9 @@ _TEMPLATE_PARAMS = {
     "tags": Strs(),
     "skip_tags": Strs(),
     "extra_vars": Obj(),
+    "variable_set_ids": Strs("Sets of variables the template takes before its own extra"
+                             " variables, in order: a later one wins.",
+                             max_items=variables.MAX_PER_TEMPLATE),
     "survey": Objs(max_items=survey.MAX_FIELDS),
     "forks": Int(1, 200),
     "verbosity": Int(0, 4, default=0),
@@ -788,9 +792,7 @@ def _template_values(ctx: Context, params: Values) -> dict:
     forks = params["forks"]
     if forks is not None and forks > ctx.config.max_forks:
         raise BadRequest(f"forks cannot exceed {ctx.config.max_forks} (config.toml)")
-    extra_vars = params["extra_vars"]
-    if len(json.dumps(extra_vars)) > 64 * 1024:
-        raise BadRequest("extra_vars is too large")
+    extra_vars = variables.check_variables(params["extra_vars"], "extra_vars")
     return {
         "name": name,
         "project_id": project_id,
@@ -830,7 +832,7 @@ def vault_ids(ctx: Context, params: Values) -> list[str]:
 
 
 def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[str],
-                   create: bool) -> dict:
+                   create: bool, sets: list[str]) -> dict:
     conn = ctx.conn
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -840,9 +842,14 @@ def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[st
         else:
             store.update(conn, "templates", template_id, values, "template")
             conn.execute("DELETE FROM template_vaults WHERE template_id = ?", (template_id,))
+            conn.execute("DELETE FROM template_variable_sets WHERE template_id = ?",
+                         (template_id,))
         for position, credential_id in enumerate(vaults):
             conn.execute("INSERT INTO template_vaults (template_id, credential_id, position)"
                          " VALUES (?, ?, ?)", (template_id, credential_id, position))
+        for position, set_id in enumerate(sets):
+            conn.execute("INSERT INTO template_variable_sets (template_id, set_id, position)"
+                         " VALUES (?, ?, ?)", (template_id, set_id, position))
         conn.execute("COMMIT")
     except BaseException:
         conn.execute("ROLLBACK")
@@ -864,7 +871,8 @@ def template_create(ctx: Context, params: Values) -> dict:
     """Create a job template."""
     values = _template_values(ctx, params)
     vaults = vault_ids(ctx, params)
-    return _save_template(ctx, store.new_id("t"), values, vaults, create=True)
+    sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"])
+    return _save_template(ctx, store.new_id("t"), values, vaults, create=True, sets=sets)
 
 
 @command("template.update", role="admin", mutating=True,
@@ -875,7 +883,8 @@ def template_update(ctx: Context, params: Values) -> dict:
     store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
     vaults = vault_ids(ctx, params)
-    return _save_template(ctx, template_id, values, vaults, create=False)
+    sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"])
+    return _save_template(ctx, template_id, values, vaults, create=False, sets=sets)
 
 
 @command("template.delete", role="admin", mutating=True,

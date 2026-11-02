@@ -698,6 +698,28 @@ MIGRATIONS: list[list[str]] = [
         # is first needed, then emptied.
         "ALTER TABLE inventories ADD COLUMN revision TEXT NOT NULL DEFAULT ''",
     ],
+    [
+        # Sets of variables that job templates take, several in order, before
+        # their own extra variables. One in use cannot be deleted.
+        """
+        CREATE TABLE variable_sets (
+            id           TEXT PRIMARY KEY,
+            name         TEXT NOT NULL UNIQUE,
+            description  TEXT NOT NULL DEFAULT '',
+            variables    TEXT NOT NULL DEFAULT '{}',
+            created_at   REAL NOT NULL,
+            updated_at   REAL NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE template_variable_sets (
+            template_id  TEXT NOT NULL REFERENCES templates (id) ON DELETE CASCADE,
+            set_id       TEXT NOT NULL REFERENCES variable_sets (id),
+            position     INTEGER NOT NULL,
+            PRIMARY KEY (template_id, set_id)
+        )
+        """,
+    ],
 ]
 
 

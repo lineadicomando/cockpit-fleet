@@ -625,6 +625,30 @@ it, never as the file alone: the path of a unit's credentials has the `@` of
 the unit's name in it, and Ansible would split it there (found running
 `ansible-win_edulab`, whose vault has no identifier).
 
+**Sets of variables.** A set (`variable_sets`, schema 21, commands
+`varset.*`) is a named object of extra variables that job templates take,
+several in order (`template_variable_sets`, like `template_vaults`), so that
+a value common to many templates, such as a domain or the name of an ISO for
+`ansible-win_edulab`, is written once. At launch `runs.launch` merges them
+into the template's extra variables: the sets in the template's order, a
+later one winning by top-level name, then the template's own; the survey's
+answers and what earlier steps of a workflow pass on still come after, in
+their own files. The merge happens at each launch, so a change of a set is
+in the next run of every template that takes it, schedules and workflow
+steps included; the run records which sets it took, by id and by name as
+they were (`options.variable_sets`). Like the template's own they are
+written by an administrator, seen by every role, and stay templates for
+Ansible: not a place for secrets. Names are those Ansible takes for a
+variable (the template's own extra variables are checked the same way
+since), 64 KB at most per object. A set in use cannot be deleted (a foreign
+key, as for credentials); deleting a template frees its sets. They differ
+from the `group_vars` of an inventory, which depend on the hosts and lose
+to extra variables: a set is chosen by the template and wins over the
+defaults of roles and over the inventory. The form of a template shows what
+a run will get, variable by variable, with where each comes from
+(`src/lib/variables.ts`). Discarded for now: secret variables in a set
+(they would be encrypted as credentials are) and sets for ad-hoc commands.
+
 **Limits a launcher can change.** Launching a template, an operator may add a
 host limit and ask for a dry run. The limit narrows the template's own and
 cannot widen it. They are not joined into one pattern: Ansible reads the
@@ -1524,7 +1548,8 @@ successful.
 ## Export and import
 
 `config.export` returns the configuration as one JSON document: credentials,
-projects, inventories, trusted host keys, job templates, schedules, checks,
+projects, inventories, trusted host keys, sets of variables, job templates
+(with the names of their sets), schedules, checks,
 notification channels and rules. Things refer to
 each other by name, since identifiers differ between two installations. It
 holds no secret: a credential is its name, its kind, its user name and its

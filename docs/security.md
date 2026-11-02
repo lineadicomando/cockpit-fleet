@@ -121,8 +121,8 @@ Known limits, none of which lets a role do more than this page says:
   playbook from the database; a flaw in the sandbox would be a flaw here.
 - Webhook bodies carry what nodes said as it is (a Slack or Discord message
   may get their markup); `http://` is allowed for a channel with a secret;
-  webhook URLs and the extra variables of a template are visible to viewers
-  (neither is meant for secrets).
+  webhook URLs, the extra variables of a template and the sets of variables
+  are visible to viewers (none is meant for secrets).
 - `config.export` and `inventory.get` by an administrator are not audited.
 - An operator can fill the 500 places for waiting secret answers for an
   hour, which would hold up other launches that need one.

@@ -437,6 +437,7 @@ def load_commands() -> dict[str, Command]:
         schedules,
         system,
         transfer,
+        variables,
         workflows,
     )
 

@@ -1,5 +1,5 @@
 """Export and import of the configuration: credentials, projects, inventories,
-trusted host keys, job templates, workflows, schedules, checks, notification
+trusted host keys, sets of variables, job templates, workflows, schedules, checks, notification
 channels and their rules, as one JSON document.
 
 No secret is in it: a credential or a channel travels without its secrets,
@@ -10,14 +10,14 @@ Things refer to each other by name, since identifiers differ between two
 installations.
 """
 
-from . import audit, files, resources, store
+from . import audit, files, resources, store, variables
 from .cli import COMMANDS, Context, Obj, Values, command
 from .errors import BadRequest, FleetError
 
 FORMAT = "cockpit-fleet-config"
 VERSION = 1
-SECTIONS = ("credentials", "projects", "inventories", "host_keys", "templates", "workflows",
-            "schedules", "checks", "channels", "rules")
+SECTIONS = ("credentials", "projects", "inventories", "host_keys", "variable_sets", "templates",
+            "workflows", "schedules", "checks", "channels", "rules")
 # What the scope of a rule names, by table.
 _SCOPES = {"project": "projects", "template": "templates", "schedule": "schedules",
            "inventory": "inventories", "group": "inventories", "check": "checks"}
@@ -60,6 +60,10 @@ def config_export(ctx: Context, params: Values) -> dict:
     document["host_keys"] = [
         {"host": row["host"], "key_type": row["key_type"], "key": row["key"]}
         for row in conn.execute("SELECT * FROM host_keys ORDER BY host, key_type")]
+    document["variable_sets"] = [
+        {"name": row["name"], "description": row["description"],
+         "variables": store.loads(row["variables"], {})}
+        for row in conn.execute("SELECT * FROM variable_sets ORDER BY name COLLATE NOCASE")]
     document["templates"] = []
     for row in conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE").fetchall():
         document["templates"].append({
@@ -71,6 +75,8 @@ def config_export(ctx: Context, params: Values) -> dict:
             "limit_hosts": row["limit_hosts"], "tags": store.loads(row["tags"], []),
             "skip_tags": store.loads(row["skip_tags"], []),
             "extra_vars": store.loads(row["extra_vars"], {}),
+            "variable_sets": [one["name"]
+                              for one in variables.template_sets(conn, row["id"])],
             "survey": store.loads(row["survey"], []), "forks": row["forks"],
             "verbosity": row["verbosity"], "become": bool(row["become"]),
             "needs_approval": bool(row["needs_approval"]),
@@ -215,10 +221,17 @@ class _Importer:
         self._create("hostkey.add", params)
         return "created"
 
+    def variable_set(self, item: dict) -> None:
+        self._create("varset.create", {key: item[key] for key in
+                                       ("name", "description", "variables") if key in item})
+
     def template(self, item: dict) -> None:
         vaults = item.get("vault_credentials") or []
         if not isinstance(vaults, list):
             raise BadRequest("vault_credentials must be a list")
+        sets = item.get("variable_sets") or []
+        if not isinstance(sets, list):
+            raise BadRequest("variable_sets must be a list")
         params = {
             "name": item.get("name"), "playbook": item.get("playbook"),
             "project_id": self._id("projects", item.get("project"), "project", True),
@@ -227,6 +240,8 @@ class _Importer:
                                               "credential"),
             "vault_credential_ids": [self._id("credentials", name, "credential", True)
                                      for name in vaults],
+            "variable_set_ids": [self._id("variable_sets", name, "set of variables", True)
+                                 for name in sets],
         }
         for key in ("limit_hosts", "tags", "skip_tags", "extra_vars", "survey", "verbosity",
                     "become", "needs_approval"):
@@ -309,6 +324,8 @@ def config_import(ctx: Context, params: Values) -> dict:
     work._each("projects", document.get("projects", []), "projects", work.project)
     work._each("inventories", document.get("inventories", []), "inventories", work.inventory)
     work._each("host_keys", document.get("host_keys", []), None, work.host_key)
+    work._each("variable_sets", document.get("variable_sets", []), "variable_sets",
+               work.variable_set)
     work._each("templates", document.get("templates", []), "templates", work.template)
     work._each("workflows", document.get("workflows", []), "workflows", work.workflow)
     work._each("schedules", document.get("schedules", []), "schedules", work.schedule)

@@ -10,6 +10,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Sets of variables, in a new Variables tab: named objects of extra
+  variables that job templates take, several in order, before their own
+  extra variables (a later one wins), so that a value common to many
+  templates is written once (`varset.list`, `create`, `update`, `delete`;
+  `variable_set_ids` of a template). The form of a template shows what a
+  run gets and where each variable comes from; a run records the sets it
+  took; export and import carry them. Not for secrets: every role sees
+  them.
 - The Assistant tab is shown to administrators while the chat is not set
   up, with what is missing and the two lines to paste in Cockpit's
   terminal: one that installs the agent and turns the chat on, one for the
@@ -75,6 +83,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- The extra variables of a job template must have names Ansible takes for
+  a variable (letters, digits and `_`, not starting with a digit): a
+  template with another name, which Ansible refuses at run time, is
+  refused when saved.
 - An inventory written in the interface is a tree of files with a history,
   like a project written there: a file of hosts with `group_vars/` and
   `host_vars/` beside it, vault files, several sources, plugins with the

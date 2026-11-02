@@ -191,6 +191,16 @@ export interface SurveyField {
     choices?: string[];
 }
 
+export interface VariableSet {
+    id: string;
+    name: string;
+    description: string;
+    variables: Record<string, unknown>;
+    // The job templates that take it.
+    templates: { id: string; name: string }[];
+    updated_at: number;
+}
+
 export interface Template {
     id: string;
     name: string;
@@ -203,6 +213,8 @@ export interface Template {
     tags: string[];
     skip_tags: string[];
     extra_vars: Record<string, unknown>;
+    // Sets of variables taken before its own, in order: a later one wins.
+    variable_set_ids: string[];
     survey: SurveyField[];
     forks: number | null;
     verbosity: number;
@@ -348,6 +360,8 @@ export interface Run {
     error: string;
     options: {
         limit?: string; check?: boolean; diff?: boolean; answers?: Record<string, SurveyValue>; secret_answers?: string[];
+        // The sets of variables a run of a template took, by name as they were then.
+        variable_sets?: { id: string; name: string }[];
         // A syntax check: the playbook, and what ansible-lint said if it is installed.
         // An installation of collections: the requirements file.
         path?: string; lint?: "clean" | "findings";

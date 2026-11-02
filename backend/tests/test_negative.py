@@ -77,6 +77,8 @@ template.create admin M       template.delete admin M       template.list viewer
 template.update admin M       whoami viewer -               workflow.create admin M
 workflow.delete admin M       workflow.launch operator M    workflow.list viewer -
 workflow.progress viewer -    workflow.resume operator M    workflow.update admin M
+varset.create admin M         varset.delete admin M         varset.list viewer -
+varset.update admin M
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()
@@ -245,9 +247,13 @@ class Fixture(CheckBase):
                                                 "username": "maint"})
         vault = self.ok("credential.create", {"name": "vault", "kind": "vault"})
         fx["credential"], fx["vault"] = machine["id"], vault["id"]
+        fx["varset"] = self.ok("varset.create", {"name": "school",
+                                                 "variables": {"domain": "school.edu"}})["id"]
+        fx["spare_varset"] = self.ok("varset.create", {"name": "spare"})["id"]
         template = self.ok("template.create", {
             "name": "deploy", "project_id": project["id"], "playbook": "site.yml",
             "inventory_id": inventory["id"], "machine_credential_id": machine["id"],
+            "variable_set_ids": [fx["varset"]],
             "survey": [{"name": "colour", "type": "text"},
                        {"name": "token", "type": "secret"}]})
         fx["template"] = template["id"]
@@ -283,7 +289,7 @@ class Fixture(CheckBase):
              "credential": "credential", "file": "managed", "inventory": "inventory",
              "maintenance": "maintenance", "project": "project", "rule": "rule",
              "run": "run", "schedule": "schedule", "template": "template",
-             "workflow": "workflow", "host": "host"}
+             "workflow": "workflow", "host": "host", "varset": "varset"}
     FOREIGN = {"template_id": "template", "project_id": "project", "inventory_id": "inventory",
                "credential_id": "credential", "machine_credential_id": "credential",
                "vault_credential_id": "vault", "channel_id": "channel", "check_id": "check",
@@ -342,12 +348,17 @@ class Fixture(CheckBase):
         "template.create": lambda fx: {
             "name": "new", "playbook": "site.yml", "limit_hosts": "web", "tags": ["a"],
             "skip_tags": ["b"], "vault_credential_ids": [fx["vault"]],
+            "variable_set_ids": [fx["varset"]],
             "machine_credential_id": fx["credential"], "extra_vars": {"a": {"b": [1, "c"]}},
             "survey": [{"name": "size", "type": "choice", "choices": ["s", "m"],
                         "default": "s", "required": True},
                        {"name": "count", "type": "number", "min": 1, "max": 9}]},
         "template.update": lambda fx: {"playbook": "site.yml", "tags": ["a"],
-                                       "extra_vars": {"a": 1}},
+                                       "extra_vars": {"a": 1},
+                                       "variable_set_ids": [fx["varset"]]},
+        "varset.create": lambda fx: {"name": "new", "variables": {"a": {"b": [1]}}},
+        "varset.update": lambda fx: {"name": "school", "variables": {"domain": "x.edu"}},
+        "varset.delete": lambda fx: {"id": fx["spare_varset"]},
         "check.create": lambda fx: {
             "name": "new", "kind": "disk", "group": "web",
             "params": {"mounts": ["/"], "exclude_types": ["tmpfs"]},

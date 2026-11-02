@@ -16,6 +16,7 @@ import { AccessProblemPage } from "./components/AccessProblemPage.tsx";
 import { PendingApprovals } from "./components/ApprovalsPage.tsx";
 import { AuditPage } from "./components/AuditPage.tsx";
 import { ChatPage } from "./components/ChatPage.tsx";
+import { VariablesPage } from "./components/VariablesPage.tsx";
 import { AssetsPage } from "./components/AssetsPage.tsx";
 import { ChecksPage } from "./components/ChecksPage.tsx";
 import { HostDetailPage, HostsPage } from "./components/HostsPage.tsx";
@@ -34,7 +35,7 @@ import { WorkflowsPage } from "./components/WorkflowsPage.tsx";
 import { SessionContext } from "./lib/session.tsx";
 import { Spinner, TabPanel, Tabs } from "./components/pf.tsx";
 
-const TABS = ["overview", "hosts", "assets", "checks", "runs", "templates", "workflows", "schedules", "notifications", "inventories", "projects", "credentials", "hostkeys", "chat", "system", "audit"];
+const TABS = ["overview", "hosts", "assets", "checks", "runs", "templates", "workflows", "schedules", "notifications", "inventories", "projects", "credentials", "variables", "hostkeys", "chat", "system", "audit"];
 
 // A refusal by the backend itself means the same as one by sudo.
 function accessProblem(error: Error): AccessProblem {
@@ -85,7 +86,7 @@ export function App() {
         const go = (tab: string) => cockpit.location.go(tab === "overview" ? [] : [tab]);
         const titles: Record<string, string> = {
             overview: t("Overview"), hosts: t("Hosts"), assets: t("Assets"), checks: t("Checks"), runs: t("Runs"), templates: t("Job templates"), workflows: t("Workflows"), schedules: t("Schedules"), notifications: t("Notifications"), inventories: t("Inventories"),
-            projects: t("Projects"), credentials: t("Credentials"), hostkeys: t("Host keys"), system: t("System"),
+            projects: t("Projects"), credentials: t("Credentials"), variables: t("Variables"), hostkeys: t("Host keys"), system: t("System"),
             audit: t("Audit log"), chat: t("Assistant"),
         };
 
@@ -120,6 +121,7 @@ export function App() {
                             ? <FilesPage key={location.path[1]} id={location.path[1]} />
                             : <ProjectsPage />)}
                         {section === "credentials" && <CredentialsPage />}
+                        {section === "variables" && <VariablesPage />}
                         {section === "hostkeys" && <HostKeysPage />}
                         {section === "chat" && <ChatPage />}
                         {section === "system" && <SystemPage />}

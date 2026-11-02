@@ -401,6 +401,12 @@ export function RunDetailPage({ id }: { id: string }) {
                                 <DescriptionListDescription><code>{data.options.limit}</code></DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
+                        {(data.options.variable_sets ?? []).length > 0 && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Sets of variables")}</DescriptionListTerm>
+                                <DescriptionListDescription>{data.options.variable_sets!.map(one => one.name).join(", ")}</DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
                         {Object.keys(data.options.answers ?? {}).length + (data.options.secret_answers ?? []).length > 0 && (
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{t("Answers")}</DescriptionListTerm>

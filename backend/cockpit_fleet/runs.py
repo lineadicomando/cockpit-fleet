@@ -4,6 +4,7 @@ import json
 import shutil
 
 from . import approvals, jobs, store, survey
+from . import variables as varsets
 from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command
 from .errors import BadRequest, Conflict, Forbidden
 from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
@@ -51,6 +52,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     inventory = store.fetch(ctx.conn, "inventories", template["inventory_id"], "inventory")
     limits = [template["limit_hosts"], check_limit(limit) if limit else ""]
     variables, tickets = survey.answer(store.loads(template["survey"], []), answers)
+    extra_vars, sets = varsets.effective(ctx.conn, template)
 
     spec = {
         "kind": "playbook",
@@ -67,7 +69,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         "verbosity": template["verbosity"],
         "tags": store.loads(template["tags"], []),
         "skip_tags": store.loads(template["skip_tags"], []),
-        "extra_vars": store.loads(template["extra_vars"], {}),
+        "extra_vars": extra_vars,
         "survey_vars": variables,
         "survey_secrets": {},
         "workflow_vars": workflow["vars"] if workflow else {},
@@ -104,6 +106,9 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     options = {"limit": limit, "check": check, "diff": spec["diff"], "answers": variables,
                # Which secrets were given; their values are in no record.
                "secret_answers": sorted(tickets)}
+    if sets:
+        # Which sets of variables it took, by name as they were then.
+        options["variable_sets"] = sets
     run = {"id": run_id, "kind": "playbook", "title": template["name"],
            "template_id": template_id, "project_id": project["id"],
            "inventory_id": inventory["id"], "revision": project["revision"],

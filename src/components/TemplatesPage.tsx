@@ -13,7 +13,9 @@ import {
     filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, readTemplatesView, sortTemplates, withoutTemplateFilters, withTemplateGroupsOpen,
     type Outcome, type TemplateGroup, type TemplateNames, type TemplateSort, type TemplatesView, type Trait,
 } from "../lib/templates.ts";
-import type { Credential, Inventory, Project, ProjectPaths, Run, Schedule, Template } from "../lib/types.ts";
+import type { Credential, Inventory, Project, ProjectPaths, Run, Schedule, Template, VariableSet } from "../lib/types.ts";
+import { parseVariables } from "../lib/variables.ts";
+import { VariableSetsField } from "./VariablesPage.tsx";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { AtTerminal, ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader } from "./common.tsx";
 import { launchCommand } from "../lib/terminal.ts";
@@ -28,6 +30,7 @@ interface Choices {
     projects: Project[];
     inventories: Inventory[];
     credentials: Credential[];
+    sets: VariableSet[];
 }
 
 function loadChoices(): Promise<Choices> {
@@ -35,7 +38,8 @@ function loadChoices(): Promise<Choices> {
         call<{ projects: Project[] }>("project.list"),
         call<{ inventories: Inventory[] }>("inventory.list"),
         call<{ credentials: Credential[] }>("credential.list"),
-    ]).then(([p, i, c]) => ({ projects: p.projects, inventories: i.inventories, credentials: c.credentials }));
+        call<{ variable_sets: VariableSet[] }>("varset.list"),
+    ]).then(([p, i, c, v]) => ({ projects: p.projects, inventories: i.inventories, credentials: c.credentials, sets: v.variable_sets }));
 }
 
 function TemplateModal({ template, choices, onClose, onDone }: { template?: Template; choices: Choices; onClose: () => void; onDone: () => void }) {
@@ -49,6 +53,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [limit, setLimit] = useState(template?.limit_hosts ?? "");
     const [tags, setTags] = useState((template?.tags ?? []).join(", "));
     const [skipTags, setSkipTags] = useState((template?.skip_tags ?? []).join(", "));
+    const [setIds, setSetIds] = useState<string[]>(template?.variable_set_ids ?? []);
     const [extraVars, setExtraVars] = useState(template && Object.keys(template.extra_vars).length ? JSON.stringify(template.extra_vars, null, 2) : "");
     const [forks, setForks] = useState(template?.forks ? String(template.forks) : "");
     const [verbosity, setVerbosity] = useState(String(template?.verbosity ?? 0));
@@ -60,18 +65,12 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
         : Promise.resolve<ProjectPaths>({ files: [], directories: [] }), [projectId]);
 
     async function submit() {
-        let vars: unknown = {};
-        if (extraVars.trim()) {
-            try {
-                vars = JSON.parse(extraVars);
-            } catch {
-                throw new Error(t("Extra variables must be a JSON object, for example {\"version\": \"1.2\"}."));
-            }
-        }
+        const vars = parseVariables(extraVars);
+        if (vars === null) throw new Error(t("Extra variables must be a JSON object, for example {\"version\": \"1.2\"}."));
         const params = {
             name, project_id: projectId, playbook: playbook.trim(), inventory_id: inventoryId,
             machine_credential_id: machineId, vault_credential_ids: vaultIds,
-            limit_hosts: limit.trim(), tags: words(tags), skip_tags: words(skipTags), extra_vars: vars,
+            limit_hosts: limit.trim(), tags: words(tags), skip_tags: words(skipTags), extra_vars: vars, variable_set_ids: setIds,
             survey: survey.map(fromDraft),
             ...(forks ? { forks: Number(forks) } : {}), verbosity: Number(verbosity), become,
             needs_approval: needsApproval,
@@ -180,6 +179,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <Checkbox id="tpl-approval" label={t("Each run needs approval")} isChecked={needsApproval} onChange={(_e, value) => setNeedsApproval(value)}
                     description={t("A run waits until a member of cockpit-fleet-approver, or an administrator, other than who launched it approves it. An administrator may approve their own.")} />
             </FormGroup>
+            <VariableSetsField sets={choices.sets} ids={setIds} onChange={setSetIds} own={extraVars} />
             <FormGroup label={t("Extra variables")} fieldId="tpl-vars" role="group">
                 <CodeEditor className="fleet-code-field fleet-code-short" label={t("Extra variables")} path="vars.json" value={extraVars} onChange={setExtraVars} placeholder={'{\n  "version": "1.2"\n}'} />
                 <FormHelperText><HelperText><HelperTextItem>{t("A JSON object. Not for secrets: they would be stored in clear.")}</HelperTextItem></HelperText></FormHelperText>
