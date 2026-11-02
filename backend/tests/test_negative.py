@@ -53,6 +53,7 @@ file.delete admin M           file.diff admin -             file.history admin -
 file.list admin -             file.move admin M             file.push admin M
 file.read admin -             file.write admin M            host.get viewer -
 file.change admin M           file.download admin M         file.restore admin M
+file.import admin M
 host.list viewer -            hostkey.add admin M           hostkey.list viewer -
 hostkey.remove admin M        hostkey.scan admin -          inventory.create admin M
 inventory.delete admin M      inventory.get viewer -        inventory.list viewer -
@@ -326,6 +327,7 @@ class Fixture(CheckBase):
             {"op": "delete", "path": "moved"}]},
         "file.restore": lambda fx: {"path": "site.yml", "revision": fx.get("revision", "x")},
         "file.download": lambda fx: {"path": "site.yml"},
+        "file.import": lambda fx: {"filename": "lab.tar.gz", "data": TARBALL, "into": "labs"},
         "file.push": lambda fx: {"expected": fx.get("revision", "x"), "bundle": ""},
         "project.create": lambda fx: {"name": "new", "kind": "git",
                                       "url": "https://example.org/a.git"},

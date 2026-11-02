@@ -145,13 +145,20 @@ class AdhocCommandTest(Base):
             "name": "file", "kind": "file", "project_id": project["id"],
             "path": "inventories/hosts.yml"})
         params = {**self.params, "inventory_id": inventory["id"]}
-        self.assertEqual(self.code("run.adhoc", {**params, "project_id": other["id"]}),
-                         "bad_request")
         run = self.ok("run.adhoc", params)
         directory = paths.RUNS_DIR / run["id"]
         self.assertEqual(run["project_id"], project["id"])
         self.assertTrue((directory / "project" / "inventories" / "hosts.yml").is_file())
         self.assertFalse((directory / "inventory").exists())
+        # With another project: the directory of the inventory, apart.
+        run = self.ok("run.adhoc", {**params, "project_id": other["id"]})
+        directory = paths.RUNS_DIR / run["id"]
+        spec = json.loads((directory / "spec.json").read_text())
+        self.assertEqual(run["project_id"], other["id"])
+        self.assertEqual((spec["inventory"], spec["inventory_source"]),
+                         ("inventories/hosts.yml", "copy"))
+        self.assertEqual(sorted(p.name for p in (directory / "inventory").rglob("*")),
+                         ["hosts.yml", "inventories"])
 
     def test_a_project_can_be_given_for_its_collections(self):
         project = self.local_project()

@@ -8,7 +8,7 @@ import unittest
 
 from test_phase2 import Base
 
-from cockpit_fleet import paths, transfer  # noqa: F401  (its commands)
+from cockpit_fleet import checks, paths, transfer  # noqa: F401  (their commands)
 
 SCHOOL = [
     {"path": "hosts.yaml", "content": "all:\n  children:\n    students:\n      hosts:\n"
@@ -159,3 +159,74 @@ class InventoryTreeTest(Base):
         created = [entry for entry in entries if entry["command"] == "inventory.create"]
         self.assertTrue(any("host_vars/pc01.yaml" in entry["params"] for entry in created))
         self.assertFalse(any("192.0.2.21" in entry["params"] for entry in entries))
+
+
+class OtherProjectTest(Base):
+    """A file inventory of one project used by templates of another."""
+
+    def setUp(self):
+        super().setUp()
+        self.playbooks = self.local_project("playbooks")
+        tree = self.root / "src" / "labs"
+        (tree / "inventories" / "school" / "host_vars").mkdir(parents=True)
+        (tree / "inventories" / "school" / "hosts.yaml").write_text("all:\n  hosts:\n    pc01:\n")
+        (tree / "inventories" / "school" / "host_vars" / "pc01.yaml").write_text("a: 1\n")
+        (tree / "inventories" / "other.yml").write_text("all: {}\n")
+        (tree / "hosts").write_text("pc02\n")
+        (tree / "site.yml").write_text("- hosts: all\n")
+        self.tree = tree
+        self.labs = self.ok("project.create", {"name": "labs", "kind": "local", "path": str(tree)})
+
+    def inventory(self, name, path):
+        return self.ok("inventory.create", {"name": name, "kind": "file",
+                                            "project_id": self.labs["id"], "path": path})
+
+    def launch(self, inventory):
+        template = self.ok("template.create", {"name": inventory["name"],
+                                               "project_id": self.playbooks["id"],
+                                               "playbook": "site.yml",
+                                               "inventory_id": inventory["id"]})
+        run = self.ok("run.start", {"template_id": template["id"]})
+        directory = paths.RUNS_DIR / run["id"]
+        return directory, json.loads((directory / "spec.json").read_text())
+
+    def copied(self, directory):
+        return sorted(str(path.relative_to(directory / "inventory"))
+                      for path in (directory / "inventory").rglob("*") if path.is_file())
+
+    def test_what_the_inventory_reads_is_copied_apart(self):
+        for path, wanted in (
+                ("inventories/school", ["inventories/school/host_vars/pc01.yaml",
+                                        "inventories/school/hosts.yaml"]),
+                ("inventories/school/hosts.yaml", ["inventories/school/host_vars/pc01.yaml",
+                                                   "inventories/school/hosts.yaml"]),
+                ("hosts", ["hosts", "inventories/other.yml", "inventories/school/host_vars/pc01.yaml",
+                           "inventories/school/hosts.yaml", "site.yml"])):
+            directory, spec = self.launch(self.inventory(path.replace("/", "-"), path))
+            self.assertEqual((spec["inventory"], spec["inventory_source"]), (path, "copy"), path)
+            self.assertEqual(self.copied(directory), wanted, path)
+            # The project of the template is the one copied as the project.
+            self.assertTrue((directory / "project" / "inventories" / "hosts.yml").is_file())
+
+    def test_a_link_on_the_way_is_not_followed(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "hosts.yaml").write_text("secret\n")
+        os.symlink(outside, self.tree / "linked")
+        inventory = self.inventory("linked", "linked/hosts.yaml")
+        template = self.ok("template.create", {"name": "linked",
+                                               "project_id": self.playbooks["id"],
+                                               "playbook": "site.yml",
+                                               "inventory_id": inventory["id"]})
+        self.assertEqual(self.code("run.start", {"template_id": template["id"]}), "conflict")
+
+    def test_a_check_of_the_user_and_an_ad_hoc_command_may_use_it_too(self):
+        inventory = self.inventory("school", "inventories/school")
+        self.ok("check.create", {"name": "queue", "kind": "playbook",
+                                 "inventory_id": inventory["id"],
+                                 "project_id": self.playbooks["id"], "playbook": "site.yml"})
+        run = self.ok("run.adhoc", {"inventory_id": inventory["id"],
+                                    "project_id": self.playbooks["id"], "limit": "all",
+                                    "module": "ansible.builtin.ping"})
+        spec = json.loads((paths.RUNS_DIR / run["id"] / "spec.json").read_text())
+        self.assertEqual(spec["inventory_source"], "copy")

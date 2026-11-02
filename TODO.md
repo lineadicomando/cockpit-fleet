@@ -118,7 +118,8 @@ except the rows that say "to confirm".
   roles of the requirements file not installed, no job timeout; an inventory
   has one vault credential; inventory plugins get no credential; the address
   shown for a host is its own `ansible_host`, not one its groups set (the
-  listing is `--export`ed, so group variables stay with the groups).
+  listing is `--export`ed, so group variables stay with the groups); a file
+  inventory of another project gets the collections of the job's project only.
 - Editor: one file at a time; unsaved changes lost on tab change; syntax
   check without vault password, listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
@@ -279,14 +280,16 @@ Decided on 2 November (Decisions, "Files and inventories").
       `place_inventory` copies the tree, a path inside it as the source
       (default: all of it), export and import of its files, the Files page
       on an inventory
-- [ ] File inventories of a project usable with templates, ad-hoc
-      commands and checks of other projects (the inventory's tree copied
-      as `inventory/` of the run)
+- [x] File inventories of a project usable with templates, ad-hoc
+      commands and checks of other projects (2 November: what the
+      inventory reads copied as `inventory/` of the run; the collections
+      of the inventory's project are not)
 - [ ] The file manager in the interface, shared by the two pages: actions
       on each node, drag and drop, "Move to…", copy, new folder, selection
       of several, upload and download, tabs keeping unsaved changes, filter
-- [ ] An archive imported into a managed project as one commit (the
-      `unpack` job)
+- [x] An archive imported into a managed project or inventory as one
+      commit (2 November: `file.import`, the `unpack` job, then the files
+      taken as the editor writes them)
 - [ ] `fleet inventory clone/pull/push` at the terminal
 - [ ] Integration: `files.sh`, `inventories.sh` with a tree like
       `ansible-win_edulab`'s `inventories/school`, `negative.sh`, `cli.sh`;

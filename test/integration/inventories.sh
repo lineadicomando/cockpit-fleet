@@ -125,6 +125,19 @@ admin inventory.update "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}" >/dev/n
 expect_run "a file of its tree can be the source" "$(parse "$school")" 60 successful
 expect_eq "with the variables beside it" "$(addresses "$school")" "dc01= pc01=192.0.2.23 pc02=192.0.2.23"
 
+# A file inventory of another project: copied for the run with what is beside it.
+mkdir -p "$SRC/labs/inventories/lab1/group_vars/all" "$SRC/labs/inventories/lab1/host_vars"
+printf 'all:\n  hosts:\n    lab1-pc01:\n    lab1-pc02:\n' > "$SRC/labs/inventories/lab1/hosts.yaml"
+printf 'ansible_connection: local\n' > "$SRC/labs/inventories/lab1/group_vars/all/vars.yaml"
+printf 'ansible_host: 192.0.2.31\n' > "$SRC/labs/inventories/lab1/host_vars/lab1-pc01.yaml"
+chmod -R a+rX "$SRC/labs"
+labs_id=$(get "$(admin project.create "{\"name\": \"labs\", \"kind\": \"local\", \"path\": \"$SRC/labs\"}")" 'a["data"]["id"]')
+lab1=$(get "$(admin inventory.create "{\"name\": \"lab1\", \"kind\": \"file\", \"project_id\": \"$labs_id\", \"path\": \"inventories/lab1/hosts.yaml\"}")" 'a["data"]["id"]')
+expect_run "an inventory of a project of its own is read" "$(parse "$lab1")" 60 successful
+run_id=$(launch "$(template "on another project's inventory" "$lab1")")
+expect_run "a template of another project runs on it" "$run_id" 90 successful
+expect_eq "connected as its group_vars say" "$(get "$(admin run.get "{\"id\": \"$run_id\"}")" 'sorted(a["data"]["stats"])')" "['lab1-pc01', 'lab1-pc02']"
+
 # An inventory written before inventories were trees: its text, in the database.
 as_fleet python3 -c "import sqlite3, time; c = sqlite3.connect('$DB'); c.execute(\"INSERT INTO inventories (id, name, kind, format, content, created_at) VALUES ('iold00000001', 'old', 'managed', 'ini', '[web]\\nweb01 ansible_connection=local\\n', ?)\", (time.time(),)); c.commit()"
 expect_run "an inventory of before trees is read" "$(parse iold00000001)" 60 successful

@@ -324,6 +324,19 @@ built by `fleetctl`, opening each directory from the one that holds it and
 leaving links out, for any kind of project; like `file.bundle`, it is in
 the audit trail, as a copy of the files.
 
+`file.import` brings an archive into a managed project or inventory, into
+a directory of it or at its top, as one commit of the caller: it travels
+like an upload (base64 on stdin, within `[projects] max_upload_mb`) and is
+unpacked by the same `unpack` job, in the sandbox, with the same rules and
+the same single top directory left out. What the job leaves is then read
+by `fleetctl` from the run's directory one directory from another,
+following no link, and taken only if every entry is a regular file or a
+directory, of at most 1 MB, with a path the editor takes, 5000 files at
+most: a link, which an uploaded project may keep inside itself, fails the
+import here, since the editor never writes one. The files are added, and
+replace those of the same path; nothing else of the tree goes. What a
+write does follows: syntax checks, collections, inventories read again.
+
 An inventory that is a file of a project is read again when a change in
 the interface or a push touches what it reads: its own file or directory,
 the directory it is in (its `group_vars` and `host_vars`), or a directory
@@ -480,6 +493,19 @@ directory of sources (read together, as Ansible does: static files and plugin
 configurations side by side), or the YAML file of an inventory plugin. Every
 one is read by a job, in the sandbox, so a plugin runs there and nowhere
 else. A plugin gets no credential beyond the vault of the inventory.
+
+A file inventory serves templates, ad-hoc commands and checks of any
+project, not only its own: playbooks from a public git repository, say,
+and the inventory of a school, with its vault, in a project of its own.
+When the project of the job is another, the job gets, beside the copy of
+its own project, a copy of what the inventory reads as `inventory/`, at
+the same path: its directory, or the directory its file is in (its
+`group_vars` and `host_vars`), the whole project for a file at its top.
+The copy is made like that of a project, from `/` part by part, so a link
+on the way is refused. Only the collections of the job's project are
+copied: an inventory plugin that comes from the collections of the
+inventory's project is not there. Until 0.1.0 such a template was
+refused.
 
 **Inventories written in the interface** are a tree of files, like a managed
 project, with a git repository beside it:

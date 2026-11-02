@@ -506,15 +506,26 @@ def inventory_delete(ctx: Context, params: Values) -> dict:
 def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | None) -> dict:
     """Make an inventory available to a job; returns the spec keys that point to it.
 
-    A file inventory needs its project copied into the run directory, unless the
-    caller already did that for the same project.
+    A file inventory of the project the job copies is read there. One of
+    another project gets a copy of what it reads, apart, as inventory/: its
+    directory, or the directory its file is in (with the group_vars and
+    host_vars beside it), at the same path; the whole project for a file at
+    its top. PROJECT_ID None: the caller copied the inventory's own project.
     """
     if inventory["kind"] == "managed":
         # A copy of its tree, as a project is copied: runs share nothing they write.
         jobs.snapshot(files.inventory_tree(ctx, inventory), directory / "inventory", "inventory")
         return {"inventory": inventory["path"] or ".", "inventory_source": "managed"}
     if project_id is not None and inventory["project_id"] != project_id:
-        raise Conflict("this inventory is a file of another project")
+        other = store.fetch(ctx.conn, "projects", inventory["project_id"], "project")
+        tree = jobs.project_tree(other, ctx.config)
+        path = PurePosixPath(inventory["path"])
+        # Opened part by part from /, following no link: a link on the way is refused.
+        scope = path if (tree / path).is_dir() and not (tree / path).is_symlink() \
+            else path.parent
+        jobs.snapshot(tree / scope, directory / "inventory" / scope, "inventory", directory)
+        return {"inventory": inventory["path"], "inventory_source": "copy",
+                "inventory_scripts": ctx.config.inventory_scripts}
     return {"inventory": inventory["path"], "inventory_source": "project",
             "inventory_scripts": ctx.config.inventory_scripts}
 
@@ -767,9 +778,7 @@ def _template_values(ctx: Context, params: Values) -> dict:
     project_id = params["project_id"]
     inventory_id = params["inventory_id"]
     store.fetch(ctx.conn, "projects", project_id, "project")
-    inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-    if inventory["kind"] == "file" and inventory["project_id"] != project_id:
-        raise BadRequest("a file inventory can only be used with its own project")
+    store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     limit = params["limit_hosts"]
     forks = params["forks"]
     if forks is not None and forks > ctx.config.max_forks:

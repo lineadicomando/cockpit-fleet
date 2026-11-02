@@ -43,14 +43,14 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
 
     const data = choices.data;
     const inventory = data?.inventories.find(item => item.id === inventoryId);
-    // A file inventory comes with its project; one written here fits any, or none.
+    // With no project, a file inventory brings its own.
     const ownProject = inventory?.kind === "file" ? inventory.project_id ?? "" : null;
     const chosenModule = module || data?.modules[0] || "";
     const ofKind = (kind: string) => (data?.credentials ?? []).filter(credential => credential.kind === kind);
 
     async function submit() {
         const run = await call<Run>("run.adhoc", {
-            inventory_id: inventoryId, project_id: ownProject ?? projectId, limit: limit.trim(),
+            inventory_id: inventoryId, project_id: projectId, limit: limit.trim(),
             module: chosenModule, free_form: freeForm.trim(),
             machine_credential_id: machineId, vault_credential_ids: vaultIds, become, check,
         });
@@ -92,8 +92,8 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
                         </GridItem>
                         <GridItem>
                             <FormGroup label={t("Project")} fieldId="adhoc-project">
-                                <FormSelect id="adhoc-project" value={ownProject ?? projectId} onChange={(_e, value) => setProjectId(value)} isDisabled={ownProject !== null}>
-                                    <FormSelectOption value="" label={t("None")} />
+                                <FormSelect id="adhoc-project" value={projectId} onChange={(_e, value) => setProjectId(value)}>
+                                    <FormSelectOption value="" label={ownProject !== null ? t("That of the inventory") : t("None")} />
                                     {data.projects.map(project => <FormSelectOption key={project.id} value={project.id} label={project.name} />)}
                                 </FormSelect>
                                 <FormHelperText><HelperText><HelperTextItem>{t("Only needed for a module of a collection the project brings.")}</HelperTextItem></HelperText></FormHelperText>

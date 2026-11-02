@@ -177,15 +177,17 @@ def open_tree(tree: Path) -> int:
     return fd
 
 
-def snapshot(tree: Path, destination: Path, what: str = "project") -> list[str]:
+def snapshot(tree: Path, destination: Path, what: str = "project",
+             run_directory: Path | None = None) -> list[str]:
     """Copy a project for one run. Symbolic links are copied, never followed:
     each directory and file is opened from the one that holds it, so a local
     tree that its owner changes while it is copied cannot lead outside it.
 
     What the service account cannot read (logs a tool of the owner left in a
     local project, say) is left out rather than failing the run, and told at
-    the start of the run's output, in the directory DESTINATION is in, as
-    paths of WHAT. Returns the paths left out, relative to the tree."""
+    the start of the run's output, in RUN_DIRECTORY (the directory
+    DESTINATION is in if None), as paths of WHAT. Returns the paths left
+    out, relative to the tree."""
     counts = [0, 0]
     skipped: list[str] = []
     try:
@@ -197,7 +199,7 @@ def snapshot(tree: Path, destination: Path, what: str = "project") -> list[str]:
     finally:
         os.close(fd)
     if skipped:
-        _tell_skipped(destination.parent, skipped, what)
+        _tell_skipped(run_directory or destination.parent, skipped, what)
     return skipped
 
 
@@ -580,6 +582,8 @@ def _collect(ctx, run) -> None:
         lint = "clean" if result["lint_rc"] == 0 else "findings"
         extra["options"] = json.dumps({**store.loads(run["options"], {}), "lint": lint})
 
+    # An archive unpacked into the files of a managed project or inventory.
+    imported = run["kind"] == "unpack" and "import" in store.loads(run["options"], {})
     try:
         if status == "successful" and run["kind"] == "inventory":
             _store_inventory(ctx, run, directory)
@@ -589,11 +593,14 @@ def _collect(ctx, run) -> None:
         if status == "successful" and run["kind"] == "sync":
             revision = str(result.get("revision", ""))
             extra["revision"] = _store_checkout(ctx, run, directory, revision)
+        elif run["kind"] == "unpack" and status == "successful" and imported:
+            from . import files  # it builds on this module
+            extra["revision"] = files.take_import(ctx, run, directory)
         elif run["kind"] == "unpack" and status == "successful":
             # The digest fleetctl took of what it received, not a claim of the job.
             revision = str(store.loads(run["options"], {}).get("sha256", ""))
             extra["revision"] = _store_checkout(ctx, run, directory, revision)
-        elif run["kind"] in ("sync", "unpack") and run["project_id"]:
+        elif run["kind"] in ("sync", "unpack") and run["project_id"] and not imported:
             store.update(ctx.conn, "projects", run["project_id"],
                          {"sync_error": _log_tail(directory)}, "project")
         if run["kind"] == "check":
@@ -620,7 +627,7 @@ def _collect(ctx, run) -> None:
         shutil.rmtree(directory / leftover, ignore_errors=True)
     (directory / "archive").unlink(missing_ok=True)
 
-    if status == "successful" and run["kind"] in ("sync", "unpack", "galaxy"):
+    if status == "successful" and run["kind"] in ("sync", "unpack", "galaxy") and not imported:
         # New files may ask for collections that are not here: reconcile()
         # starts the job that installs them. After an installation, this is
         # for a requirements file that changed while it ran.
@@ -629,7 +636,7 @@ def _collect(ctx, run) -> None:
         except (FleetError, OSError) as failure:
             store.update(ctx.conn, "projects", run["project_id"],
                          {"collections_error": str(failure)}, "project")
-    if status == "successful" and run["kind"] in ("sync", "unpack"):
+    if status == "successful" and run["kind"] in ("sync", "unpack") and not imported:
         # Inventories that are files of the project may have changed with it.
         from . import files  # it builds on this module
         try:

@@ -15,7 +15,7 @@ from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import archive, cli, paths
+from cockpit_fleet import archive, cli, files, paths
 from cockpit_fleet.config import Config
 from cockpit_fleet.errors import BadRequest
 
@@ -323,8 +323,101 @@ class UploadTest(Base):
         self.assertLessEqual({name for name, spec in cli.COMMANDS.items()
                               if spec.max_input != cli.MAX_INPUT},
                              {"project.upload", "config.import", "file.push", "file.write",
-                              "file.change", "inventory.create"})
+                              "file.change", "file.import", "inventory.create"})
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(os.path.exists("/usr/bin/git"), "needs git")
+class ImportTest(Base):
+    """An archive unpacked into a managed project, or inventory, as one commit."""
+
+    def setUp(self):
+        super().setUp()
+        self.project = self.ok("project.create", {"name": "edited", "kind": "managed"})
+        self.id = self.project["id"]
+        self.ok("file.write", {"id": self.id, "path": "site.yml", "content": "old\n",
+                               "expected": ""})
+
+    def imported(self, data: bytes, id=None, **extra):
+        queued = self.ok("file.import", {"id": id or self.id, "filename": "lab.tar.gz",
+                                         "data": base64.b64encode(data).decode(), **extra})
+        directory = paths.RUNS_DIR / queued["run_id"]
+        done = archive.extract(directory / "archive", directory / "checkout")
+        self.finish(queued["run_id"], 0, **done)
+        return self.ok("run.get", {"id": queued["run_id"]})
+
+    def listed(self, id=None):
+        return sorted(f["path"] for f in self.ok("file.list", {"id": id or self.id})["files"])
+
+    def test_its_files_are_added_as_one_commit_by_who_asked(self):
+        run = self.imported(tar(("lab-1.0/hosts.yaml", b"all: {}\n"),
+                                ("lab-1.0/host_vars/pc01.yaml", b"a: 1\n"),
+                                ("lab-1.0/site.yml", PLAYBOOK)), into="labs/one")
+        self.assertEqual(run["status"], "successful", run)
+        self.assertEqual(self.listed(), ["labs/one/host_vars/pc01.yaml", "labs/one/hosts.yaml",
+                                         "labs/one/site.yml", "site.yml"])
+        commits = self.ok("file.history", {"id": self.id})["commits"]
+        self.assertEqual((commits[0]["subject"], commits[0]["author"]),
+                         ("Import lab.tar.gz into labs/one", "anna"))
+        self.assertEqual(run["revision"], commits[0]["revision"])
+        # A playbook among them is checked, as when written.
+        self.assertTrue(any(r["kind"] == "syntax" for r in self.ok("run.list")["runs"]))
+
+    def test_a_file_of_the_same_path_is_replaced(self):
+        self.imported(tar(("site.yml", PLAYBOOK)))
+        self.assertEqual((paths.PROJECTS_DIR / self.id / "tree" / "site.yml").read_bytes(),
+                         PLAYBOOK)
+
+    def test_what_the_editor_would_not_write_fails_it_whole(self):
+        before = self.ok("file.list", {"id": self.id})["revision"]
+        for members in ((("big.iso", b"\0" * (files.MAX_FILE + 1)), ("ok.yml", b"x")),
+                        (("link", None),)):
+            data = tar(*members) if members[0][1] is not None else linked_tar()
+            run = self.imported(data)
+            self.assertEqual(run["status"], "error", members[0][0])
+            self.assertEqual(self.ok("file.list", {"id": self.id})["revision"], before)
+            self.assertEqual(self.listed(), ["site.yml"])
+
+    def test_an_inventory_written_here_takes_one_too(self):
+        inventory = self.ok("inventory.create", {"name": "school", "kind": "managed",
+                                                 "content": "all: {}\n"})
+        run = self.imported(tar(("group_vars/all.yml", b"a: 1\n"), ("host_vars/pc01.yml", b"")),
+                            id=inventory["id"])
+        self.assertEqual(run["inventory_id"], inventory["id"])
+        self.assertEqual(self.listed(inventory["id"]),
+                         ["group_vars/all.yml", "host_vars/pc01.yml", "hosts.yml"])
+        # A single directory that holds everything is not kept, as for an upload.
+        self.imported(tar(("group_vars/web.yml", b"b: 2\n")), id=inventory["id"],
+                      into="group_vars")
+        self.assertIn("group_vars/web.yml", self.listed(inventory["id"]))
+        # And it is read again.
+        self.assertTrue(any(r["kind"] == "inventory" and r["inventory_id"] == inventory["id"]
+                            for r in self.ok("run.list")["runs"]))
+
+    def test_only_what_is_written_here_and_only_administrators(self):
+        archived = self.ok("project.create", {"name": "shipped", "kind": "archive"})
+        data = base64.b64encode(tar(("a.yml", b"x"))).decode()
+        self.assertEqual(self.code("file.import", {"id": archived["id"], "data": data}),
+                         "conflict")
+        self.assertEqual(self.code("file.import", {"id": self.id, "data": data},
+                                   role="operator"), "forbidden")
+        self.assertEqual(self.code("file.import", {"id": self.id, "data": data, "into": "../x"}),
+                         "bad_request")
+        self.assertEqual(self.code("file.import", {"id": self.id, "data": ""}), "bad_request")
+
+
+def linked_tar() -> bytes:
+    """An archive with a link that stays inside it: fine for an uploaded
+    project, not for one written in the interface."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as packed:
+        member = tarfile.TarInfo("site.yml")
+        member.size = len(PLAYBOOK)
+        packed.addfile(member, io.BytesIO(PLAYBOOK))
+        link = tarfile.TarInfo("link")
+        link.type, link.linkname = tarfile.SYMTYPE, "site.yml"
+        packed.addfile(link)
+    return buffer.getvalue()

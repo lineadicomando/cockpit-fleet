@@ -2894,3 +2894,9 @@ msgstr "Vuoto per leggere tutti i file, come Ansible legge una directory di sorg
 
 msgid "Written here: {{path}}"
 msgstr "Scritto qui: {{path}}"
+
+msgid "{{name}} (from {{project}})"
+msgstr "{{name}} (da {{project}})"
+
+msgid "That of the inventory"
+msgstr "Quello dell'inventario"

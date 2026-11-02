@@ -165,9 +165,8 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
     if len(json.dumps(args)) > 64 * 1024:
         raise BadRequest("args is too large")
     inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-    if inventory["kind"] == "file":
-        if project_id not in (None, inventory["project_id"]):
-            raise BadRequest("a file inventory can only be used with its own project")
+    if inventory["kind"] == "file" and project_id is None:
+        # What stands beside it, and the collections of its project.
         project_id = inventory["project_id"]
     project = store.fetch(ctx.conn, "projects", project_id, "project") if project_id else None
 

@@ -991,8 +991,6 @@ def _playbook_values(ctx: Context, params: Values, kind: str, inventory) -> dict
         return {"project_id": None, "playbook": ""}
     project = store.fetch(ctx.conn, "projects", params.need("project_id"), "project")
     path = str(check_relative_path(params.need("playbook"), "playbook"))
-    if inventory["kind"] == "file" and inventory["project_id"] != project["id"]:
-        raise BadRequest("the inventory is a file of another project")
     return {"project_id": project["id"], "playbook": path}
 
 

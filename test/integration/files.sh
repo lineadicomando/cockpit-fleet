@@ -142,4 +142,24 @@ expect_eq "only one written here can be changed" \
     "$(get "$(write "$plain" site.yml "" < /dev/null)" 'a["error"]["code"]')" conflict
 expect_eq "a symbolic link is not followed" "$(get "$(admin file.read "{\"id\": \"$plain\", \"path\": \"link\"}")" 'a["error"]["code"]')" conflict
 
+# --- an archive imported as one commit, by the job that unpacks it -------------------
+work=$(mktemp -d)
+mkdir -p "$work/lab-1.0/host_vars"
+printf 'all:\n  hosts:\n    pc01:\n' > "$work/lab-1.0/hosts.yaml"
+printf 'a: 1\n' > "$work/lab-1.0/host_vars/pc01.yaml"
+tar -C "$work" -czf "$work/lab.tar.gz" lab-1.0
+python3 -c 'import base64,json,sys; json.dump({"id": sys.argv[1], "filename": "lab.tar.gz", "into": "inventories/lab", "data": base64.b64encode(open(sys.argv[2], "rb").read()).decode()}, sys.stdout)' "$id" "$work/lab.tar.gz" > "$work/params.json"
+imported=$(get "$(admin file.import "$(cat "$work/params.json")")" 'a["data"]["run_id"]')
+expect_run "an archive is imported into a managed project" "$imported" 60 successful
+expect_eq "its files are in the directory asked for" "$(get "$(admin file.list "{\"id\": \"$id\"}")" '" ".join(sorted(f["path"] for f in a["data"]["files"] if f["path"].startswith("inventories/")))')" "inventories/lab/host_vars/pc01.yaml inventories/lab/hosts.yaml"
+expect_eq "as one commit by who imported it" "$(get "$(admin file.history "{\"id\": \"$id\", \"limit\": 1}")" 'a["data"]["commits"][0]["author"] + ": " + a["data"]["commits"][0]["subject"]')" "itadmin: Import lab.tar.gz into inventories/lab"
+ln -s hosts.yaml "$work/lab-1.0/link"
+tar -C "$work" -czf "$work/lab.tar.gz" lab-1.0
+python3 -c 'import base64,json,sys; json.dump({"id": sys.argv[1], "filename": "lab.tar.gz", "data": base64.b64encode(open(sys.argv[2], "rb").read()).decode()}, sys.stdout)' "$id" "$work/lab.tar.gz" > "$work/params.json"
+before=$(get "$(admin file.list "{\"id\": \"$id\"}")" 'a["data"]["revision"]')
+refused=$(get "$(admin file.import "$(cat "$work/params.json")")" 'a["data"]["run_id"]')
+expect_run "an archive with a link is not taken into it" "$refused" 60 error
+expect_eq "and the project is as it was" "$(get "$(admin file.list "{\"id\": \"$id\"}")" 'a["data"]["revision"]')" "$before"
+rm -rf "$work"
+
 finish

@@ -81,8 +81,15 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
         onClose();
     }
 
-    // A file inventory belongs to one project; one written here fits any.
-    const inventories = choices.inventories.filter(inventory => inventory.kind === "managed" || inventory.project_id === projectId);
+    // Any inventory fits any project: a file of another project is copied
+    // for the run with what stands beside it. Its project is named.
+    const projectName = (id: string | null) => choices.projects.find(project => project.id === id)?.name ?? "";
+    const inventories = choices.inventories.map(inventory => ({
+        ...inventory,
+        name: inventory.kind === "file" && inventory.project_id !== projectId
+            ? t("{{name}} (from {{project}})", { name: inventory.name, project: projectName(inventory.project_id) })
+            : inventory.name,
+    }));
     const ofKind = (kind: string) => choices.credentials.filter(credential => credential.kind === kind);
 
     return (

@@ -136,11 +136,10 @@ def _locked(project_id: str):
         yield
 
 
-def _identity(ctx: Context | None) -> dict:
-    """The caller as the author, the service as the committer; the service as
-    both for what no one wrote (the text of an inventory made its first file)."""
+def _identity(author: str) -> dict:
+    """AUTHOR as the author, the service as the committer."""
     host = socket.gethostname() or "localhost"
-    user = re.sub(r"[<>\s]+", "-", ctx.caller.user) if ctx else paths.SERVICE_USER
+    user = re.sub(r"[<>\s]+", "-", author) or paths.SERVICE_USER
     return {
         "GIT_AUTHOR_NAME": user, "GIT_AUTHOR_EMAIL": f"{user}@{host}",
         "GIT_COMMITTER_NAME": paths.SERVICE_USER,
@@ -148,16 +147,19 @@ def _identity(ctx: Context | None) -> dict:
     }
 
 
-def _commit(ctx: Context, project, message: str, by_service: bool = False) -> str:
+def _commit(ctx: Context, project, message: str, by_service: bool = False,
+            author: str | None = None) -> str:
     """Commit whatever differs in the tree; returns the revision of the
-    project or inventory. The author is the caller, or the service."""
+    project or inventory. The author is AUTHOR, or the caller; the service
+    BY_SERVICE, for what no one wrote (the text of an inventory made its
+    first file)."""
     project_id = project["id"]
     # --force: a .gitignore in the tree must not keep a file runs see out of the history.
     _git(project_id, "add", "--all", "--force")
     if not _git(project_id, "status", "--porcelain"):
         return project["revision"]  # written again as it was
     _git(project_id, "commit", "--quiet", f"--message={message}",
-         env=_identity(None if by_service else ctx))
+         env=_identity(paths.SERVICE_USER if by_service else author or ctx.caller.user))
     revision = _git(project_id, "rev-parse", "HEAD").strip()
     table, what = _table(project_id)
     values = {"revision": revision}
@@ -319,7 +321,7 @@ def looks_like_playbook(path: str, content: str) -> bool:
     return next(lines, "").startswith("- ") and bool(_PLAY_RE.search(content))
 
 
-def _queue_check(ctx: Context, project, path: PurePosixPath) -> str:
+def _queue_check(ctx: Context, project, path: PurePosixPath, start: bool = True) -> str:
     """Queue a job that checks the syntax of one playbook of a project."""
     tree = jobs.project_tree(project, ctx.config)
     if not _locate(tree, path).is_file():
@@ -332,10 +334,11 @@ def _queue_check(ctx: Context, project, path: PurePosixPath) -> str:
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
-    jobs.enqueue(ctx, {"id": run_id, "kind": "syntax", "title": f"{project['name']}: {path}",
-                       "project_id": project["id"], "revision": project["revision"],
-                       "options": json.dumps({"path": str(path)})},
-                 {"kind": "syntax", "playbook": str(path)}, directory)
+    (jobs.enqueue if start else jobs.queue)(
+        ctx, {"id": run_id, "kind": "syntax", "title": f"{project['name']}: {path}",
+              "project_id": project["id"], "revision": project["revision"],
+              "options": json.dumps({"path": str(path)})},
+        {"kind": "syntax", "playbook": str(path)}, directory)
     return run_id
 
 
@@ -527,12 +530,15 @@ def _rollback(project_id: str) -> None:
 
 
 def change(ctx: Context, project, operations: list[dict], message: str,
-            revision: str = "", reread: bool = True) -> dict:
+           revision: str = "", reread: bool = True, author: str | None = None,
+           start: bool = True) -> dict:
     """Make OPERATIONS in a managed project or inventory as one commit, all
     or none, and what follows from them: for a project, syntax checks of the
     playbooks written, the collections a requirements file asks for, its
     inventories read again; for an inventory, reading it again (unless not
-    REREAD: inventory.create and inventory.update leave that to the caller)."""
+    REREAD: inventory.create and inventory.update leave that to the caller).
+    The author is AUTHOR, or the caller; the jobs are only queued if not START
+    (reconcile, which starts them after)."""
     tree = container_tree(ctx, project)
     written, touched, said = [], [], []
     changed = [False]
@@ -553,7 +559,7 @@ def change(ctx: Context, project, operations: list[dict], message: str,
                 if count > MAX_LISTED:
                     raise Conflict(f"a tree holds at most {MAX_LISTED} files")
             default = said[0] if len(said) == 1 else f"{len(said)} changes: " + "; ".join(said)
-            new_revision = _commit(ctx, project, message or default[:200])
+            new_revision = _commit(ctx, project, message or default[:200], author=author)
         except BaseException:
             if changed[0]:
                 _rollback(project["id"])
@@ -565,7 +571,7 @@ def change(ctx: Context, project, operations: list[dict], message: str,
         from .resources import queue_parse  # it builds on this module
         return {"revision": new_revision, "files": files, "check_run_ids": [],
                 "collections_run_id": None,
-                "inventory_run_ids": [queue_parse(ctx, project)] if reread else []}
+                "inventory_run_ids": [queue_parse(ctx, project, start=start)] if reread else []}
     checks = []
     # The last content written to each path, if the path is still there: a
     # file written, then moved or deleted by a later change, is not checked.
@@ -577,12 +583,12 @@ def change(ctx: Context, project, operations: list[dict], message: str,
             continue
         if looks_like_playbook(name, content) and (tree / name).is_file() \
                 and not (tree / name).is_symlink():
-            checks.append(_queue_check(ctx, project, operation["path"]))
+            checks.append(_queue_check(ctx, project, operation["path"], start))
     collections = None
     if any(name == path or name.startswith(path + "/")
            for name in jobs.REQUIREMENTS for path in touched):
-        collections = jobs.install_missing(ctx, project["id"])
-    inventories = reread_inventories(ctx, project, touched)
+        collections = jobs.install_missing(ctx, project["id"], start=start)
+    inventories = reread_inventories(ctx, project, touched, start=start)
     return {"revision": new_revision, "files": files, "check_run_ids": checks,
             "collections_run_id": collections, "inventory_run_ids": inventories}
 
@@ -850,6 +856,127 @@ def file_download(ctx: Context, params: Values) -> dict:
     if len(data) > MAX_BUNDLE:
         raise Conflict(f"more than {MAX_UPLOAD_MB} MB to download: choose a directory")
     return {"name": f"{name}.tar.gz", "archive": True, "data": base64.b64encode(data).decode()}
+
+
+@command("file.import", role="admin", mutating=True, redact=("data",), tool=False,
+         max_input=_MAX_BUNDLE_TEXT + 64 * 1024,
+         params={
+             "id": Id(),
+             "filename": Str(default="", max_length=1024),
+             "data": Str("The archive, in base64: tar (plain, gzip, bzip2, xz) or zip",
+                         required=True, max_length=_MAX_BUNDLE_TEXT),
+             "into": Str("The directory to unpack it into; empty for the top",
+                         default="", max_length=1024),
+             "message": Str(default="", max_length=200),
+         })
+def file_import(ctx: Context, params: Values) -> dict:
+    """Unpack an archive into a managed project or inventory, as one commit
+    of its files: a job unpacks it in the sandbox, as for an uploaded
+    project, and its files are then taken as the editor would write them
+    (regular files of at most 1 MB, no links), adding to what is there and
+    replacing a file of the same path. A single directory that holds
+    everything in the archive (project-1.0/) is not kept, as for an upload.
+    Returns the run to follow."""
+    row = _project(ctx, params, managed=True)
+    into = str(check_file_path(params["into"], "into")) if params["into"] else ""
+    message = _message(params, "")
+    try:
+        content = base64.b64decode(params["data"], validate=True)
+    except ValueError as error:
+        raise BadRequest("data is not valid base64") from error
+    if not content:
+        raise BadRequest("the archive is empty")
+    if len(content) > ctx.config.max_upload_mb * 1024 * 1024:
+        raise BadRequest(f"the archive is larger than {ctx.config.max_upload_mb} MB"
+                         " (projects.max_upload_mb in config.toml)")
+    shown = "".join(ch for ch in PurePosixPath(params["filename"].replace("\\", "/")).name
+                    if ch.isprintable())[:200]
+    options = {"filename": shown, "size": len(content), "sha256": _digest(content),
+               "import": {"into": into, "author": ctx.caller.user, "message": message}}
+    run_id = store.new_id("r")
+    directory = jobs.create_dir(run_id)
+    try:
+        (directory / "archive").write_bytes(content)
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+    owner = {"inventory_id": row["id"]} if is_inventory(row["id"]) else {"project_id": row["id"]}
+    jobs.enqueue(ctx, {"id": run_id, "kind": "unpack", "title": f"{row['name']}: {shown}",
+                       "options": json.dumps(options), **owner},
+                 {"kind": "unpack"}, directory)
+    return {"run_id": run_id, "filename": shown, "size": len(content),
+            "sha256": options["sha256"]}
+
+
+def _gather(root: Path) -> list[tuple[str, bytes]]:
+    """The files a job unpacked into ROOT, read following no link, as
+    (relative path, content): only regular files and directories are taken."""
+    found: list[tuple[str, bytes]] = []
+    budget = [MAX_BUNDLE]
+
+    def walk(directory_fd: int, prefix: str) -> None:
+        for name in sorted(os.listdir(directory_fd)):
+            relative = f"{prefix}/{name}" if prefix else name
+            info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode):
+                child = os.open(name, _DIR_FLAGS, dir_fd=directory_fd)
+                try:
+                    walk(child, relative)
+                finally:
+                    os.close(child)
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                raise Conflict(f"{relative}: only files and directories are taken here, not links")
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                                 dir_fd=directory_fd)
+            with os.fdopen(descriptor, "rb") as source:
+                data = source.read(MAX_FILE + 1)
+            if len(data) > MAX_FILE:
+                raise Conflict(f"{relative} is larger than {MAX_FILE // 1024} kB")
+            budget[0] -= len(data)
+            if budget[0] < 0:
+                raise Conflict(f"the archive holds more than {MAX_UPLOAD_MB} MB")
+            found.append((relative, data))
+            if len(found) > MAX_LISTED:
+                raise Conflict(f"the archive holds more than {MAX_LISTED} files")
+
+    fd = os.open(root, _DIR_FLAGS)
+    try:
+        walk(fd, "")
+    finally:
+        os.close(fd)
+    return found
+
+
+def take_import(ctx: Context, run, directory: Path) -> str:
+    """Take what an unpack job of file.import left as one commit of the
+    project or inventory, by whoever asked for it; returns its revision.
+    What the job left is not trusted: it is read like an archive's members."""
+    options = store.loads(run["options"], {})
+    asked = options.get("import") or {}
+    container_id = run["project_id"] or run["inventory_id"]
+    if not container_id:
+        raise Conflict("the project or inventory was deleted meanwhile")
+    row = _fetch(ctx, container_id)
+    if row["kind"] != "managed":
+        raise Conflict("only what is written in the interface takes an import")
+    if not stat.S_ISDIR(os.lstat(directory / "checkout").st_mode):
+        raise Conflict("the job did not leave a directory")
+    into = check_file_path(asked["into"], "into") if asked.get("into") else None
+    tree = container_tree(ctx, row)
+    operations = []
+    for relative, data in _gather(directory / "checkout"):
+        path = check_file_path(str(into / relative) if into else relative)
+        target = _locate(tree, path)
+        expected = _digest(_read(target)) if target.is_file() else ""
+        operations.append({"op": "write", "path": path, "data": data, "expected": expected})
+    if not operations:
+        raise Conflict("the archive holds no file")
+    name = options.get("filename") or "an archive"
+    message = asked.get("message") or f"Import {name}" + (f" into {into}" if into else "")
+    done = change(ctx, row, operations, message[:200], author=str(asked.get("author") or ""),
+                  start=False)
+    return done["revision"]
 
 
 @command("file.history", role="admin",

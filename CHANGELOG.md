@@ -18,6 +18,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   earlier revision (`file.restore`); a file is downloaded, a directory as
   a `.tar.gz` (`file.download`, any kind of project). Files that are not
   text, up to 1 MB, can be uploaded and kept, and are shown as such.
+- An archive (tar or zip) can be imported into a project or inventory
+  written in the interface, into one of its directories, as one commit
+  (`file.import`); it is unpacked in the sandbox like an uploaded project,
+  and links are refused.
+- An inventory that is a file of a project can be used by templates,
+  ad-hoc commands and checks of other projects: the run gets a copy of the
+  inventory's directory, with its `group_vars` and `host_vars`, beside the
+  playbooks of its own project.
 - An inventory that is a file of a project is read again when a change
   touches its files, its `group_vars` or `host_vars`, and after the
   project is fetched or uploaded again.

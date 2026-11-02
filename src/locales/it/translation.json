@@ -975,5 +975,7 @@
   "Source in its files": "Sorgente tra i suoi file",
   "All of them": "Tutti",
   "Empty to read every file, as Ansible reads a directory of sources: group_vars and host_vars are used. Its files are changed with “Files”.": "Vuoto per leggere tutti i file, come Ansible legge una directory di sorgenti: group_vars e host_vars vengono usati. I suoi file si modificano con «File».",
-  "Written here: {{path}}": "Scritto qui: {{path}}"
+  "Written here: {{path}}": "Scritto qui: {{path}}",
+  "{{name}} (from {{project}})": "{{name}} (da {{project}})",
+  "That of the inventory": "Quello dell'inventario"
 }
