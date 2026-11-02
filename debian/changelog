@@ -1,3 +1,9 @@
+cockpit-fleet (0.2.0) unstable; urgency=medium
+
+  * Release 0.2.0. See CHANGELOG.md.
+
+ -- Alessandro Gagliano <alessandro.gagliano@gmail.com>  Mon, 02 Nov 2026 21:14:22 +0100
+
 cockpit-fleet (0.1.0) unstable; urgency=medium
 
   * First release: Ansible from the Cockpit web console, and the fleet

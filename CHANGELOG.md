@@ -8,6 +8,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+
 ### Added
 
 - Sets of variables, in a new Variables tab: named objects of extra
@@ -267,5 +269,6 @@ alone. How to install it is in [docs/install.md](docs/install.md).
   going, purge on Debian removes the data.
 - The interface in English and Italian, accessible to screen readers.
 
-[Unreleased]: https://github.com/lineadicomando/cockpit-fleet/compare/v0.1.0...main
+[Unreleased]: https://github.com/lineadicomando/cockpit-fleet/compare/v0.2.0...main
+[0.2.0]: https://github.com/lineadicomando/cockpit-fleet/releases/tag/v0.2.0
 [0.1.0]: https://github.com/lineadicomando/cockpit-fleet/releases/tag/v0.1.0
