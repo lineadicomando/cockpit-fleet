@@ -17,6 +17,10 @@
   ansible.builtin.include_tasks: configure.yml
   when: chat_agent_state == 'absent' or chat_agent_configure | bool
 
+- name: Let agents reach the backend
+  ansible.builtin.include_tasks: mcp.yml
+  when: chat_agent_state == 'present' and chat_agent_enable_mcp | bool
+
 - name: Remove the agent
   ansible.builtin.file:
     path: "{{ chat_agent_dir }}"

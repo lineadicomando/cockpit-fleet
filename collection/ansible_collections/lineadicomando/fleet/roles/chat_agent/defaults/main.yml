@@ -21,8 +21,12 @@ chat_agent_node_archives:
 
 # Name the agent in config.toml too. Off by default: naming an agent is what
 # turns the chat on, and what is said in a chat goes to the provider of the
-# model. [mcp] enabled, which the chat also needs, is never touched.
+# model.
 chat_agent_configure: false
+# Set enabled = true in [mcp] of config.toml, which the chat also needs.
+# Off by default: it lets every agent a user starts reach the backend, not
+# only the chat's. Removing the agent leaves it as it is.
+chat_agent_enable_mcp: false
 chat_agent_config_file: /etc/cockpit-fleet/config.toml
 chat_agent_name: claude
 chat_agent_label: Claude

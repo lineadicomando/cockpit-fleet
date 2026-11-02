@@ -20,6 +20,27 @@ LAUNCHER = str(LIBEXEC_DIR / "fleet-chat")
 AGENT_DIR = "/opt/cockpit-fleet-agent/"
 SETUP = ("sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections"
          " ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent")
+LOGIN = AGENT_DIR + "bin/claude /login"
+
+
+def _guide(ctx: Context) -> dict:
+    """How far this machine is from a chat with our agent, and the one line
+    an administrator pastes in a terminal to go the rest of the way: it
+    names the agent only when none is named (the role refuses one named by
+    hand), and enables [mcp] only when it is not."""
+    config = ctx.config
+    command = SETUP
+    if not config.chat_agents:
+        command += " -e chat_agent_configure=true"
+    if not config.mcp_enabled:
+        command += " -e chat_agent_enable_mcp=true"
+    return {
+        "installed": os.access(AGENT_DIR + "bin/claude-agent-acp", os.X_OK),
+        "configured": bool(config.chat_agents),
+        "mcp_enabled": config.mcp_enabled,
+        "command": command,
+        "login": LOGIN,
+    }
 
 
 def open_sessions(proc: Path = Path("/proc")) -> int:
@@ -70,6 +91,7 @@ def chat_agents(ctx: Context, params: Values) -> dict:
     return {
         "agents": agents,
         "unavailable": _needs_agents(ctx),
+        "guide": _guide(ctx),
         "max_role": config.mcp_max_role,
         "max_sessions": config.chat_max_sessions,
         "open_sessions": open_sessions(),

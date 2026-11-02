@@ -23,10 +23,20 @@ export interface ChatAgentInfo {
     setup: string;
 }
 
+export interface ChatGuide {
+    installed: boolean;
+    configured: boolean;
+    mcp_enabled: boolean;
+    command: string;
+    login: string;
+}
+
 export interface ChatInfo {
     agents: ChatAgentInfo[];
     // Why the chat cannot be used, or an empty string.
     unavailable: string;
+    // How far this machine is from a chat with Claude, and the line that goes the rest of the way.
+    guide: ChatGuide;
     max_role: Role;
     max_sessions: number;
     open_sessions: number;

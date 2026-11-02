@@ -1021,5 +1021,16 @@
   "files_count_other": "{{count}} elementi",
   "files_selected_one": "{{count}} selezionato",
   "files_selected_many": "{{count}} selezionati",
-  "files_selected_other": "{{count}} selezionati"
+  "files_selected_other": "{{count}} selezionati",
+  "Set up the assistant": "Configura l'assistente",
+  "An assistant that works on this controller through Fleet: it reads what each user may read and launches what each user may launch, and asks before every action that changes something. It is not set up on this machine yet.": "Un assistente che lavora su questo controller attraverso Fleet: legge ciò che ogni utente può leggere e lancia ciò che ogni utente può lanciare, e chiede conferma prima di ogni azione che modifica qualcosa. Su questa macchina non è ancora configurato.",
+  "What is said in the chat leaves this machine": "Ciò che si dice nella chat esce da questa macchina",
+  "What users write, and what Fleet answers to the assistant (inventories, job templates, the outcome of runs and, when asked, their output), is sent to the provider of the model. Set it up only where that is acceptable.": "Ciò che scrivono gli utenti, e ciò che Fleet risponde all'assistente (inventari, job template, l'esito delle run e, se richiesto, il loro output), viene inviato al fornitore del modello. Configuralo solo dove è accettabile.",
+  "Install Claude's agent and turn the chat on: paste this line in a terminal, as a user who may use sudo on this machine. It downloads about 510 MB.": "Installa l'agente di Claude e attiva la chat: incolla questa riga in un terminale, come un utente che può usare sudo su questa macchina. Scarica circa 510 MB.",
+  "Agent installed": "Agente installato",
+  "Agent named in config.toml": "Agente indicato in config.toml",
+  "Agents enabled ([mcp])": "Agenti abilitati ([mcp])",
+  "Log in to the model, once, as your own user and without sudo. Every user who opens the assistant does this once.": "Accedi al modello, una volta sola, con il tuo utente e senza sudo. Ogni utente che apre l'assistente lo fa una volta.",
+  "done": "fatto",
+  "not yet": "non ancora"
 }

@@ -78,8 +78,9 @@ export function App() {
             );
         }
         // Not every tab is for everyone: the audit trail is for administrators,
-        // and the chat is there when config.toml names an agent for it.
-        const tabs = TABS.filter(tab => (tab !== "audit" || data.commands.includes("audit.list")) && (tab !== "chat" || data.chat));
+        // and the chat is there when config.toml names an agent for it, or for
+        // administrators, who find there how to set it up.
+        const tabs = TABS.filter(tab => (tab !== "audit" || data.commands.includes("audit.list")) && (tab !== "chat" || data.chat || data.role === "admin"));
         const section = tabs.includes(location.path[0]) ? location.path[0] : "overview";
         const go = (tab: string) => cockpit.location.go(tab === "overview" ? [] : [tab]);
         const titles: Record<string, string> = {

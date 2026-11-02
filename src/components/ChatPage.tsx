@@ -26,9 +26,9 @@ import { chat } from "../lib/chat-agent.ts";
 import type { Ask, ChatState } from "../lib/chat.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
-import { useLoad } from "../lib/hooks.ts";
+import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useSession } from "../lib/session.tsx";
-import type { ChatAgentInfo, ChatInfo } from "../lib/types.ts";
+import type { ChatAgentInfo, ChatGuide, ChatInfo } from "../lib/types.ts";
 import { SectionHeader, TerminalCommand as Command } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { Alert, Modal, Spinner } from "./pf.tsx";
@@ -206,6 +206,49 @@ function Login({ agent }: { agent: ChatAgentInfo | undefined }) {
     );
 }
 
+function Step({ done, children }: { done: boolean; children: React.ReactNode }) {
+    const { t } = useTranslation();
+    return (
+        <FlexItem>
+            {done ? <StatusLabel tone="good">{children}</StatusLabel> : <Label isCompact color="grey">{children}</Label>}
+            <span className="pf-v6-screen-reader">{done ? t("done") : t("not yet")}</span>
+        </FlexItem>
+    );
+}
+
+// For an administrator, while the chat cannot be used: what is missing, and the
+// lines to paste in Cockpit's terminal. The page looks again by itself, and
+// shows the start of the chat once nothing is missing.
+function Setup({ guide, onCheck }: { guide: ChatGuide; onCheck: () => void }) {
+    const { t } = useTranslation();
+    return (
+        <>
+            <SectionHeader title={t("Set up the assistant")}>
+                <Button variant="secondary" onClick={onCheck}>{t("Check again")}</Button>
+            </SectionHeader>
+            <Content component="p">{t("An assistant that works on this controller through Fleet: it reads what each user may read and launches what each user may launch, and asks before every action that changes something. It is not set up on this machine yet.")}</Content>
+            <Alert variant="info" isInline title={t("What is said in the chat leaves this machine")} style={{ marginBlockEnd: "1rem" }}>
+                {t("What users write, and what Fleet answers to the assistant (inventories, job templates, the outcome of runs and, when asked, their output), is sent to the provider of the model. Set it up only where that is acceptable.")}
+            </Alert>
+            <Content component="ol">
+                <Content component="li">
+                    <Content component="p">{t("Install Claude's agent and turn the chat on: paste this line in a terminal, as a user who may use sudo on this machine. It downloads about 510 MB.")}</Content>
+                    <Command text={guide.command} />
+                    <Flex gap={{ default: "gapSm" }} style={{ marginBlock: "0.5rem 1rem" }}>
+                        <Step done={guide.installed}>{t("Agent installed")}</Step>
+                        <Step done={guide.configured}>{t("Agent named in config.toml")}</Step>
+                        <Step done={guide.mcp_enabled}>{t("Agents enabled ([mcp])")}</Step>
+                    </Flex>
+                </Content>
+                <Content component="li">
+                    <Content component="p">{t("Log in to the model, once, as your own user and without sudo. Every user who opens the assistant does this once.")}</Content>
+                    <Command text={guide.login} />
+                </Content>
+            </Content>
+        </>
+    );
+}
+
 export function ChatPage() {
     const { t, i18n } = useTranslation();
     const session = useSession();
@@ -214,9 +257,12 @@ export function ChatPage() {
     const info = useLoad(() => call<ChatInfo>("chat.agents"));
     const reload = info.reload;
     useEffect(() => { if (state.phase === "ended" || state.phase === "idle") reload(); }, [state.phase, reload]);
+    const setup = session.role === "admin" && !!info.data && (!!info.data.unavailable || info.data.agents.length === 0);
+    usePolling(reload, 5000, setup && !info.error);
 
     if (info.error) return <Alert variant="danger" isInline title={info.error.message} />;
     if (!info.data) return <Spinner aria-label={t("Loading")} />;
+    if (setup) return <Setup guide={info.data.guide} onCheck={reload} />;
     if (info.data.unavailable || info.data.agents.length === 0) {
         return (
             <EmptyState titleText={t("The assistant cannot be used yet")} headingLevel="h3">

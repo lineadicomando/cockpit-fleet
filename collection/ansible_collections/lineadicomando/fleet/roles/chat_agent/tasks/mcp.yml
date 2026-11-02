@@ -1,0 +1,36 @@
+---
+- name: Read config.toml
+  ansible.builtin.slurp:
+    src: "{{ chat_agent_config_file }}"
+  register: chat_agent_mcp_config
+
+# Only enabled in [mcp] is set: an uncommented line of it is changed, the
+# commented default is taken when it is the only one, and the key goes under
+# the header otherwise; a file with no [mcp] gets one at its end.
+- name: Let agents reach the backend in config.toml
+  ansible.builtin.copy:
+    content: "{{ chat_agent_new_text }}"
+    dest: "{{ chat_agent_config_file }}"
+    # The file is read by the backend as it is: one it refuses is not written.
+    validate: >-
+      /usr/bin/python3 -I -c "import sys; sys.path.insert(0, '/usr/lib/cockpit-fleet');
+      from pathlib import Path; from cockpit_fleet.config import load; load(Path(sys.argv[1]))" %s
+  vars:
+    chat_agent_text: "{{ chat_agent_mcp_config.content | b64decode }}"
+    chat_agent_table: "\n\n[mcp]\nenabled = true\n"
+    chat_agent_section: >-
+      {{ chat_agent_text | regex_search('(?ms)^\[mcp\][ \t]*\n.*?(?=^[ \t]*\[|\Z)') or '' }}
+    chat_agent_new_section: >-
+      {%- if chat_agent_section is regex('(?m)^[ \t]*enabled[ \t]*=') -%}
+      {{ chat_agent_section | regex_replace('(?m)^[ \t]*enabled[ \t]*=.*$', 'enabled = true') }}
+      {%- elif chat_agent_section | regex_findall('(?m)^[ \t]*#[ \t]*enabled[ \t]*=.*$') | length == 1 -%}
+      {{ chat_agent_section | regex_replace('(?m)^[ \t]*#[ \t]*enabled[ \t]*=.*$', 'enabled = true') }}
+      {%- else -%}
+      {{ chat_agent_section | regex_replace('^(\[mcp\][ \t]*\n)', '\1enabled = true\n') }}
+      {%- endif -%}
+    chat_agent_new_text: >-
+      {%- if chat_agent_section -%}
+      {{ chat_agent_text | replace(chat_agent_section, chat_agent_new_section) }}
+      {%- else -%}
+      {{ chat_agent_text | regex_replace('\n*$', '') ~ chat_agent_table }}
+      {%- endif -%}

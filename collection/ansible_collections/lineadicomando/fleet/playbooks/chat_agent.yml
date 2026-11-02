@@ -5,7 +5,8 @@
 #       ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent
 #
 # with -e chat_agent_configure=true to name the agent in config.toml
-# too, and -e chat_agent_state=absent to remove it. See docs/chat.md.
+# too, -e chat_agent_enable_mcp=true to set enabled = true in its [mcp], and
+# -e chat_agent_state=absent to remove it. See docs/chat.md.
 - name: Install the agent of the chat page of cockpit-fleet
   hosts: all
   gather_facts: false

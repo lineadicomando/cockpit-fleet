@@ -1782,8 +1782,19 @@ chat on, apart from `[mcp] enabled`, which the chat also needs: enabling
 `fleet-mcp` sends data to nobody, a chat sends what is said in it to the
 provider of the model. The role writes that section only when asked
 (`chat_agent_configure`), between two marker lines, through the backend's own
-parser, and never over an agent it did not write. `whoami` says whether an
-agent is named, and the tab is shown only then. `chat.agents` says whether
+parser, and never over an agent it did not write; it sets `[mcp] enabled`
+only when asked too (`chat_agent_enable_mcp`), the one key changed in place
+in a file the administrator may have edited, and the file is written only if
+the backend's parser accepts it. `whoami` says whether an agent is named:
+the tab is shown to every role then, and to administrators always. While
+the chat cannot be used, an administrator gets a guide instead of the chat:
+`chat.agents` says in `guide` whether our agent is installed, an agent named
+and `[mcp]` enabled, and gives the one line that does what is missing (the
+flags of the role for what is not done yet: `chat_agent_configure` would
+refuse an agent named by hand) and the login, each to copy, beside the
+button to the terminal; the page asks again every 5 s. It installs nothing
+itself: that would take a third entry point as root, and a download of
+510 MB from a click. `chat.agents` says whether
 each agent is there to be started, and for one under
 `/opt/cockpit-fleet-agent` that is not, the command that installs it: the
 page shows it, to be copied, with a button that opens Cockpit's terminal,

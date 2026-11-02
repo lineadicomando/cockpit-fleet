@@ -10,6 +10,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- The Assistant tab is shown to administrators while the chat is not set
+  up, with what is missing and the two lines to paste in Cockpit's
+  terminal: one that installs the agent and turns the chat on, one for the
+  login; it shows the chat once nothing is missing.
+- The playbook `lineadicomando.fleet.chat_agent` takes
+  `-e chat_agent_enable_mcp=true`, which sets `enabled = true` in `[mcp]`
+  of `config.toml`.
 - Files of a project written in the interface can be changed several at a
   time, as one commit made whole or not at all (`file.change`: write,
   move, copy and delete, of files and directories); a directory is

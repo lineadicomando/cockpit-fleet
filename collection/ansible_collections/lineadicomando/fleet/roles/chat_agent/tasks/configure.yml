@@ -44,7 +44,8 @@
   ansible.builtin.debug:
     msg: >-
       The agent is named in {{ chat_agent_config_file }}. The chat also needs
-      [mcp] enabled = true there, which this role does not set.
+      [mcp] enabled = true there: run with -e chat_agent_enable_mcp=true, or set it.
   when:
     - chat_agent_state == 'present'
+    - not chat_agent_enable_mcp | bool
     - chat_agent_config.content | b64decode is not regex('(?m)^\s*enabled\s*=\s*true')

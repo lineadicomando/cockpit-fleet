@@ -108,6 +108,8 @@ class CommandsTest(Base):
         self.assertNotIn("/opt/agent", json.dumps(data))
 
     def test_an_agent_that_is_not_installed_is_told_with_how_to_install_ours(self):
+        # Not where ours may be installed on the machine of the test.
+        self.enterContext(mock.patch.object(chat, "AGENT_DIR", "/nonexistent/agent/"))
         here = ChatAgent("here", ("/bin/sh",))
         ours = ChatAgent("ours", (chat.AGENT_DIR + "bin/claude-agent-acp",))
         self.config = replace(self.config, chat_agents=(here, ours, AGENT))
@@ -116,6 +118,18 @@ class CommandsTest(Base):
         self.assertEqual((agents["ours"]["installed"], agents["ours"]["setup"]),
                          (False, chat.SETUP))
         self.assertEqual((agents["claude"]["installed"], agents["claude"]["setup"]), (False, ""))
+
+    def test_the_guide_asks_for_what_is_missing_only(self):
+        guide = self.ok("chat.agents", role="viewer")["guide"]
+        self.assertEqual((guide["configured"], guide["mcp_enabled"], guide["command"],
+                          guide["login"]),
+                         (True, True, chat.SETUP, "/opt/cockpit-fleet-agent/bin/claude /login"))
+        self.config = Config()
+        guide = self.ok("chat.agents")["guide"]
+        self.assertEqual((guide["configured"], guide["mcp_enabled"]), (False, False))
+        self.assertEqual(guide["command"], chat.SETUP + " -e chat_agent_configure=true"
+                                                        " -e chat_agent_enable_mcp=true")
+        self.assertNotIn("\n", guide["command"])
 
     def test_why_the_chat_cannot_be_used(self):
         self.config = replace(self.config, mcp_enabled=False)

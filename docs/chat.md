@@ -19,19 +19,26 @@ guarantee. Do not turn the chat on where that is not acceptable.
 
 ## Turning it on
 
-Three steps, the first two for an administrator of the machine. Each is a
-command in a terminal, and Cockpit has one ("Terminal" in its menu), which
-runs as whoever is logged in.
+Until it is set up, the "Assistant" tab is shown to administrators of Fleet
+only, and says what is missing with the lines to paste in a terminal, each
+with a button to copy it and one that opens Cockpit's terminal ("Terminal"
+in its menu, which runs as whoever is logged in). The page looks again every
+few seconds and shows the start of the chat once nothing is missing. The
+steps are these:
 
-1. Install the agent, once, for all users:
+1. An administrator of the machine (one who may use `sudo`) installs the
+   agent, names it in `config.toml` and lets agents reach the backend, with
+   one line:
 
    ```sh
-   sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections \
-       ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent \
-       -e chat_agent_configure=true
+   sudo env ANSIBLE_COLLECTIONS_PATH=/usr/share/cockpit-fleet/collections ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent -e chat_agent_configure=true -e chat_agent_enable_mcp=true
    ```
 
-2. Let agents reach the backend, in `/etc/cockpit-fleet/config.toml`:
+   The page leaves out `chat_agent_configure` when an agent is named
+   already, and `chat_agent_enable_mcp` when `[mcp]` is enabled already.
+   `chat_agent_enable_mcp` sets `enabled = true` in `[mcp]` of
+   `/etc/cockpit-fleet/config.toml` and nothing else; without it, set it by
+   hand:
 
    ```toml
    [mcp]
@@ -39,10 +46,15 @@ runs as whoever is logged in.
    #max_role = "operator"  # and never with more than this role
    ```
 
-3. Each user logs in to the model, once (see below).
+2. Each user logs in to the model, once, as their own user and without
+   `sudo` (see below):
 
-The "Assistant" tab appears, after a reload, for every role once an agent is named
-in `config.toml`. The agent runs as the user who opens the page.
+   ```sh
+   /opt/cockpit-fleet-agent/bin/claude /login
+   ```
+
+Once an agent is named in `config.toml`, the tab appears for every role,
+after a reload. The agent runs as the user who opens the page.
 
 ## What the playbook does
 
@@ -69,9 +81,13 @@ nothing: this does, when an administrator runs it.
   login = "/opt/cockpit-fleet-agent/bin/claude /login"
   ```
 
-  Without it, the playbook prints these lines for you to add. It never sets
-  `[mcp] enabled`, and refuses to write over an agent of the same name that
-  it did not write.
+  Without it, the playbook prints these lines for you to add. It refuses to
+  write over an agent of the same name that it did not write.
+- With `-e chat_agent_enable_mcp=true`, `enabled = true` in `[mcp]` of
+  `config.toml`: the line there is changed, or the commented default, or the
+  key is added under `[mcp]`, or `[mcp]` at the end of the file. The file is
+  written only if the backend accepts it. Removing the agent leaves `[mcp]`
+  as it is, since other agents may use it.
 
 Running it again changes nothing; a later version of the package may name a
 newer Node.js or adapter, and running it again then updates them. To remove
