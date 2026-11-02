@@ -108,7 +108,7 @@ def _check_config(ctx: Context) -> tuple[str, str]:
 
 
 def _check_state_dir() -> tuple[str, str]:
-    for directory in (paths.STATE_DIR, paths.RUNS_DIR, paths.PROJECTS_DIR):
+    for directory in (paths.STATE_DIR, paths.RUNS_DIR, paths.PROJECTS_DIR, paths.INVENTORIES_DIR):
         if not os.access(directory, os.R_OK | os.W_OK | os.X_OK):
             return "fail", f"{directory} is not writable"
     return "ok", str(paths.STATE_DIR)

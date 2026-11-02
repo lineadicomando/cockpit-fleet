@@ -27,7 +27,7 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Chunk, Commit, FileContent, Project, ProjectFiles, Run } from "../lib/types.ts";
+import type { Chunk, Commit, FileContent, Inventory, Project, ProjectFiles, Run } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
@@ -156,11 +156,15 @@ function PathModal({ title, submitLabel, initial, onSubmit, onClose }: {
 }
 
 // The files of one project: shown for any project, edited when the project is
-// written here.
+// written here. Also those of an inventory written here, whose id starts with i.
 export function FilesPage({ id }: { id: string }) {
     const { t } = useTranslation();
     const can = useCan();
-    const projects = useLoad(() => call<{ projects: Project[] }>("project.list"));
+    const ofInventory = id.startsWith("i");
+    // Whose files they are: a project, or an inventory with no kind of project.
+    const owners = useLoad<{ id: string; name: string; kind: Project["kind"] | Inventory["kind"] }[]>(() => ofInventory
+        ? call<{ inventories: Inventory[] }>("inventory.list").then(data => data.inventories)
+        : call<{ projects: Project[] }>("project.list").then(data => data.projects));
     const list = useLoad(() => call<ProjectFiles>("file.list", { id }));
     const [path, setPath] = useState<string | null>(null);
     const [file, setFile] = useState<FileContent | null>(null);
@@ -174,7 +178,7 @@ export function FilesPage({ id }: { id: string }) {
     const [pending, setPending] = useState<(() => void) | null>(null);
     const request = useRef(0);
 
-    const project = projects.data?.projects.find(candidate => candidate.id === id);
+    const project = owners.data?.find(candidate => candidate.id === id);
     const editable = list.data?.editable ?? false;
     const dirty = file !== null && text !== file.content;
 
@@ -234,7 +238,8 @@ export function FilesPage({ id }: { id: string }) {
     }
 
     // Ansible's keywords, and the modules installed on the controller.
-    const complete = useMemo(() => (path && editable && isYaml(path) ? ansibleSource(path) : undefined), [path, editable]);
+    // Not in an inventory: its files are hosts and variables, not tasks.
+    const complete = useMemo(() => (path && editable && !ofInventory && isYaml(path) ? ansibleSource(path) : undefined), [path, editable, ofInventory]);
 
     const tree = useMemo(() => {
         const files = list.data?.files ?? [];
@@ -254,9 +259,11 @@ export function FilesPage({ id }: { id: string }) {
                 {editable && <Button variant="primary" onClick={() => guard(() => setDialog("new"))}>{t("New file")}</Button>}
                 {editable && <Button variant="secondary" onClick={() => setDialog("history")}>{t("All changes")}</Button>}
                 {can("module.help") && <ModuleHelpButton />}
-                <Button variant="secondary" onClick={() => guard(() => cockpit.location.go(["projects"]))}>{t("All projects")}</Button>
+                {ofInventory
+                    ? <Button variant="secondary" onClick={() => guard(() => cockpit.location.go(["inventories"]))}>{t("All inventories")}</Button>
+                    : <Button variant="secondary" onClick={() => guard(() => cockpit.location.go(["projects"]))}>{t("All projects")}</Button>}
             </SectionHeader>
-            {project && project.kind !== "managed" && (
+            {project && !ofInventory && project.kind !== "managed" && (
                 <Alert variant="info" isInline isPlain style={{ marginBottom: "1rem" }}
                     title={project.kind === "git"
                         ? t("These files come from a git repository: they are changed there, and fetched again with “Update from git”.")
@@ -266,7 +273,9 @@ export function FilesPage({ id }: { id: string }) {
             )}
             <ListState loaded={list} isEmpty={data => data.files.length === 0}
                 emptyTitle={t("No files")}
-                emptyBody={editable ? t("Create the first file of this project: a playbook, for example site.yml.") : t("This project has no files.")}>
+                emptyBody={ofInventory
+                    ? t("Create the first file of this inventory: hosts.yml, for example, with group_vars and host_vars beside it.")
+                    : editable ? t("Create the first file of this project: a playbook, for example site.yml.") : t("This project has no files.")}>
                 {data => (
                     <div className="fleet-files">
                         <div className="fleet-files-tree">
@@ -289,20 +298,24 @@ export function FilesPage({ id }: { id: string }) {
                                             {dirty && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Not saved")}</Label>}
                                         </FlexItem>
                                         <Flex gap={{ default: "gapSm" }}>
-                                            {isYaml(path) && <Button variant="secondary" onClick={check} isDisabled={!file || dirty}>{t("Check syntax")}</Button>}
+                                            {isYaml(path) && !ofInventory && <Button variant="secondary" onClick={check} isDisabled={!file || dirty}>{t("Check syntax")}</Button>}
                                             {editable && <Button variant="secondary" onClick={() => setDialog("file-history")}>{t("Changes")}</Button>}
                                             {editable && <Button variant="secondary" onClick={() => setDialog("rename")} isDisabled={!file || dirty}>{t("Rename")}</Button>}
                                             {editable && <Button variant="secondary" isDanger onClick={() => setDialog("delete")}>{t("Delete")}</Button>}
                                         </Flex>
                                     </Flex>
-                                    {file
+                                    {file?.binary && (
+                                        <Alert variant="info" isInline isPlain
+                                            title={t("This file is not text ({{size}} bytes): it cannot be shown or edited here.", { size: file.size ?? 0 })} />
+                                    )}
+                                    {file && !file.binary
                                         ? (
                                             <CodeEditor key={path} className="fleet-editor" label={path} path={path} value={text} onChange={setText}
                                                 readOnly={!editable} complete={complete}
                                                 onSave={() => { if (editable && dirty && !saving) save(); }} />
                                         )
-                                        : !error && <Spinner aria-label={t("Loading")} />}
-                                    {editable && file && (
+                                        : !file && !error && <Spinner aria-label={t("Loading")} />}
+                                    {editable && file && !file.binary && (
                                         <Flex alignItems={{ default: "alignItemsCenter" }}>
                                             <FlexItem grow={{ default: "grow" }}>
                                                 <TextInput aria-label={t("What changed")} placeholder={t("What changed (optional)")} value={note}

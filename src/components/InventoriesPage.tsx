@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import cockpit from "cockpit";
 import { useTranslation } from "react-i18next";
 import { Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, Radio, TextInput } from "@patternfly/react-core";
 import { ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
@@ -7,7 +8,7 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { inventoryChoices } from "../lib/files.ts";
-import type { Credential, Inventory, Project, ProjectPaths } from "../lib/types.ts";
+import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
@@ -27,11 +28,20 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     const files = useLoad(() => projectId
         ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
         : Promise.resolve<ProjectPaths>({ files: [], directories: [] }), [projectId]);
+    // The tree of one written here: its files are edited on their own page,
+    // and a file or a directory of it may be the source.
+    const tree = useLoad(() => inventory?.kind === "managed"
+        ? call<ProjectFiles>("file.list", { id: inventory.id })
+            .then(data => ({ files: data.files.map(entry => entry.path), directories: data.directories }))
+            .catch(() => ({ files: [], directories: [] }))
+        : Promise.resolve<ProjectPaths>({ files: [], directories: [] }));
 
     async function submit() {
-        const source = kind === "managed"
-            ? { format, content }
-            : { project_id: projectId, path: path.trim() };
+        const source = kind === "file"
+            ? { project_id: projectId, path: path.trim() }
+            // Written here: the text of its main file when it is created, then
+            // its files are changed on their own page.
+            : inventory ? { path: path.trim() } : { format, content };
         const params = { name, vault_credential_id: vaultId, ...source };
         const saved = inventory
             ? await call<Inventory>("inventory.update", { id: inventory.id, ...params })
@@ -62,7 +72,13 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                     <Radio id="inv-kind-file" name="inv-kind" label={t("File of a project")} isChecked={kind === "file"} onChange={() => setKind("file")} />
                 </FormGroup>
             )}
-            {kind === "managed" ? (
+            {kind === "managed" && inventory ? (
+                <FormGroup label={t("Source in its files")} fieldId="inv-path">
+                    <PathInput id="inv-path" label={t("Source in its files")} value={path} onChange={setPath} placeholder={t("All of them")}
+                        choices={inventoryChoices(tree.data?.files ?? [], tree.data?.directories ?? [])} />
+                    <FormHelperText><HelperText><HelperTextItem>{t("Empty to read every file, as Ansible reads a directory of sources: group_vars and host_vars are used. Its files are changed with “Files”.")}</HelperTextItem></HelperText></FormHelperText>
+                </FormGroup>
+            ) : kind === "managed" ? (
                 <>
                     <FormGroup label={t("Format")} role="radiogroup" isInline fieldId="inv-format">
                         <Radio id="inv-format-yaml" name="inv-format" label="YAML" isChecked={format === "yaml"} onChange={() => setFormat("yaml")} />
@@ -72,7 +88,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                         <CodeEditor key={format} className="fleet-code-field" label={t("Hosts and groups")} path={format === "yaml" ? "hosts.yml" : "hosts"}
                             value={content} onChange={setContent}
                             placeholder={format === "yaml" ? "all:\n  hosts:\n    web01:\n      ansible_host: 192.0.2.10" : "[web]\nweb01 ansible_host=192.0.2.10"} />
-                        <FormHelperText><HelperText><HelperTextItem>{t("Do not write passwords here: use a credential.")}</HelperTextItem></HelperText></FormHelperText>
+                        <FormHelperText><HelperText><HelperTextItem>{t("Do not write passwords here: use a credential. This becomes its first file; group_vars, host_vars and other files are added with “Files”.")}</HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>
                 </>
             ) : (
@@ -178,13 +194,18 @@ export function InventoriesPage() {
                                 <Tr>
                                     <ExpandCell isExpanded={expanded === inventory.id} onToggle={() => setExpanded(expanded === inventory.id ? null : inventory.id)} />
                                     <Td dataLabel={t("Name")}>{inventory.name}</Td>
-                                    <Td dataLabel={t("Source")}>{inventory.kind === "managed" ? t("Written here") : inventory.path}</Td>
+                                    <Td dataLabel={t("Source")}>
+                                        {inventory.kind === "managed"
+                                            ? (inventory.path ? t("Written here: {{path}}", { path: inventory.path }) : t("Written here"))
+                                            : inventory.path}
+                                    </Td>
                                     <Td dataLabel={t("Hosts")}>
                                         {inventory.parse_error ? t("Not readable") : inventory.parsed_at ? inventory.host_count : t("Not read yet")}
                                     </Td>
                                     <Td dataLabel={t("Read")}>{formatTime(inventory.parsed_at, i18n.language)}</Td>
                                     <Td isActionCell>
                                         <ActionsColumn items={[
+                                            ...(inventory.kind === "managed" && can("file.list") ? [{ title: t("Files"), onClick: () => cockpit.location.go(["inventories", inventory.id]) }] : []),
                                             ...(can("inventory.parse") ? [{ title: t("Read again"), onClick: () => read(inventory) }] : []),
                                             ...(can("inventory.update") ? [{ title: t("Edit"), onClick: () => edit(inventory) }] : []),
                                             ...(can("inventory.delete") ? [{ title: t("Delete"), onClick: () => setDeleting(inventory) }] : []),

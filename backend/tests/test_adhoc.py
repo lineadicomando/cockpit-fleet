@@ -106,8 +106,10 @@ class AdhocCommandTest(Base):
 
         (directory / "runtime").mkdir()
         argv = runner.build_adhoc_argv(spec, directory, directory / "runtime", None)
+        # The tree of the inventory, its main file in it.
         self.assertEqual(argv[argv.index("--inventory") + 1],
-                         str((directory / "inventory" / "hosts.yml").resolve()))
+                         str((directory / "inventory").resolve()))
+        self.assertTrue((directory / "inventory" / "hosts.yml").is_file())
         self.assertIn("--become", argv)
 
     def test_administrators_only_and_audited(self):

@@ -15,7 +15,7 @@ AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 Phase 10 (release 0.1.0) closed on 2 November: the project is public at
 `github.com/lineadicomando/cockpit-fleet`, under `LGPL-2.1-or-later`, its
 history rewritten with no workstation details, the GitHub workflow green.
-**Next:** nothing planned beyond the leftovers below and the Future section.
+**Next:** phase 11 (files and inventories as trees), below.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -37,7 +37,7 @@ check`; `make ct-test DISTRO=debian` (then `fedora`, `alma`) around a
 change that needs it.
 
 Where things are: commands in `backend/cockpit_fleet/` (one module per area;
-`cli.py` the registry, `auth.py` the roles and rights, `db.py` schema 19),
+`cli.py` the registry, `auth.py` the roles and rights, `db.py` schema 20),
 approvals in `approvals.py`, workflows in `workflows.py`, templates
 and other resources in `resources.py`, launching in `runs.py`, the queue and
 dispatch of jobs in `jobs.py`, command lines of jobs in `runner.py`,
@@ -84,6 +84,7 @@ except the rows that say "to confirm".
 | Secrets | `systemd-creds`, decrypted only by PID 1 per run; survey secrets via `fleet-secret answer` tickets; never on a command line; masked in output |
 | Projects | Git, local directory, written in the interface (git repo beside the tree, admin only), uploaded archive (base64 on stdin, 20 MB by default, `[projects] max_upload_mb` up to 50); `ansible.cfg` keys by allowlist; Galaxy collections installed beside the tree, copied into runs |
 | Inventories | A file, a directory of sources or a plugin file, of a project, read in the sandbox; scripts off unless `[inventories] scripts` |
+| Files and inventories (phase 11) | One file manager for managed projects and managed inventories; a managed inventory becomes a tree of its own with a git repository beside it (`inventories/<id>/`), not a hidden project and not a directory of a project only; file inventories usable by templates of other projects; files up to 1 MB, binary ones uploaded and downloaded but not edited; drag and drop in the tree from the start, beside a keyboard "Move to…" (2 November) |
 | Ad-hoc | Admin only, modules from `[adhoc] modules`, run as a generated playbook |
 | Export/import | One JSON by name, no secrets, no files; import creates, never replaces |
 | Agents (MCP) | `fleet-mcp` on stdio, each tool a `fleetctl` call; `[mcp] enabled = false`, `max_role = "operator"`; `via` audited, can only restrict; no tool for secrets; templates with a required secret not tools |
@@ -115,7 +116,9 @@ except the rows that say "to confirm".
   was not looked at; the
   uploaded archive is not kept, no progress bar; Galaxy public sources only,
   roles of the requirements file not installed, no job timeout; an inventory
-  has one vault credential; inventory plugins get no credential.
+  has one vault credential; inventory plugins get no credential; the address
+  shown for a host is its own `ansible_host`, not one its groups set (the
+  listing is `--export`ed, so group variables stay with the groups).
 - Editor: one file at a time; unsaved changes lost on tab change; syntax
   check without vault password, listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
@@ -259,6 +262,35 @@ except the rows that say "to confirm".
 - [x] Publication (2 November: the license confirmed, the rewritten
       history on `github.com/lineadicomando/cockpit-fleet` and on Gitea,
       the same on both; the GitHub workflow green on its first run)
+
+## Phase 11 — Files and inventories as trees
+
+Decided on 2 November (Decisions, "Files and inventories").
+
+- [x] Backend of files (2 November; the managed inventory as a container
+      comes with the next item): `file.change` (write, upload, move, copy, delete
+      of files and directories, in one commit, all or nothing, against an
+      expected revision), `file.download` (a file, or a directory as a
+      tar.gz), `file.restore` (a path as it was at a revision); `file.list`
+      with directories and the revision; binary files up to 1 MB; file
+      inventories of a project read again when a change touches them
+- [x] Managed inventories as trees (2 November): schema 20 (revision),
+      the text of `content` made the first commit on first use,
+      `place_inventory` copies the tree, a path inside it as the source
+      (default: all of it), export and import of its files, the Files page
+      on an inventory
+- [ ] File inventories of a project usable with templates, ad-hoc
+      commands and checks of other projects (the inventory's tree copied
+      as `inventory/` of the run)
+- [ ] The file manager in the interface, shared by the two pages: actions
+      on each node, drag and drop, "Move to…", copy, new folder, selection
+      of several, upload and download, tabs keeping unsaved changes, filter
+- [ ] An archive imported into a managed project as one commit (the
+      `unpack` job)
+- [ ] `fleet inventory clone/pull/push` at the terminal
+- [ ] Integration: `files.sh`, `inventories.sh` with a tree like
+      `ansible-win_edulab`'s `inventories/school`, `negative.sh`, `cli.sh`;
+      `make ct-test` on the three; the pages in a browser on a VM
 
 ## Future
 

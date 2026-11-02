@@ -1,7 +1,8 @@
 #!/bin/sh
 # Inventories that are more than a file of hosts: the YAML file of an inventory
 # plugin, a directory of sources, an executable script (off unless config.toml
-# allows it), and one that nothing can read.
+# allows it), one that nothing can read, and one written in the interface as a
+# tree of files (hosts, group_vars, host_vars), like ansible-win_edulab's school.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -94,5 +95,41 @@ expect_eq "and its hosts are read" "$(hosts "$script")" "fromscript:scripted"
 written=$(get "$(admin inventory.create '{"name": "written", "kind": "managed", "format": "yaml", "content": "plugin: ansible.builtin.generator\nhosts:\n  name: \"{{ app }}\"\nlayers:\n  app: [one, two]\n"}')" 'a["data"]["id"]')
 expect_run "a plugin's file can be written in the interface" "$(parse "$written")" 60 successful
 expect_eq "with its hosts" "$(hosts "$written")" "one: two:"
+
+# --- written in the interface as a tree of files ----------------------------------
+school=$(get "$(admin inventory.create '{"name": "school", "kind": "managed", "files": [
+  {"path": "hosts.yaml", "content": "all:\n  children:\n    servers:\n      hosts:\n        dc01:\n    students:\n      hosts:\n        pc01:\n        pc02:\n    win_managed:\n      children:\n        students:\n"},
+  {"path": "group_vars/all/vars.yaml", "content": "ansible_user: lab\n"},
+  {"path": "group_vars/students/vars.yaml", "content": "ansible_connection: local\n"},
+  {"path": "host_vars/pc02.yaml", "content": "ansible_host: 192.0.2.22\n"},
+  {"path": "group_vars/all/vault.yaml.example", "content": "not: [yaml\n"}]}')" 'a["data"]["id"]')
+addresses() {  # addresses INVENTORY-ID: "name=address" of what was read
+    get "$(admin inventory.get "{\"id\": \"$1\"}")" '" ".join(h["name"] + "=" + h["address"] for h in sorted(a["data"]["hosts"], key=lambda h: h["name"]))'
+}
+groups_of() {  # groups_of INVENTORY-ID: "name:groups", groups sorted
+    get "$(admin inventory.get "{\"id\": \"$1\"}")" '" ".join(h["name"] + ":" + ",".join(sorted(h["groups"])) for h in sorted(a["data"]["hosts"], key=lambda h: h["name"]))'
+}
+expect_run "a tree like a school is read" "$(parse "$school")" 60 successful
+expect_eq "its groups, children included" "$(groups_of "$school")" "dc01:servers pc01:students,win_managed pc02:students,win_managed"
+# The address shown is the host's own: the listing is exported, so what a group
+# sets stays with the group (group_vars are seen at work by the run below).
+expect_eq "host_vars beside its hosts are read" "$(addresses "$school")" "dc01= pc01= pc02=192.0.2.22"
+run_id=$(launch "$(template "on a school" "$school" win_managed)")
+expect_run "a playbook of another project runs on it" "$run_id" 90 successful
+expect_eq "on the hosts of a group of groups, connected as group_vars say" "$(get "$(admin run.get "{\"id\": \"$run_id\"}")" 'sorted(a["data"]["stats"])')" "['pc01', 'pc02']"
+sha=$(get "$(admin file.read "{\"id\": \"$school\", \"path\": \"host_vars/pc02.yaml\"}")" 'a["data"]["sha256"]')
+answer=$(admin file.change "{\"id\": \"$school\", \"operations\": [{\"op\": \"write\", \"path\": \"host_vars/pc02.yaml\", \"content\": \"ansible_host: 192.0.2.23\\n\", \"expected\": \"$sha\"}, {\"op\": \"copy\", \"path\": \"host_vars/pc02.yaml\", \"to\": \"host_vars/pc01.yaml\"}]}")
+expect_run "a change of its files reads it again" "$(get "$answer" 'a["data"]["inventory_run_ids"][0]')" 60 successful
+expect_eq "with what changed" "$(addresses "$school")" "dc01= pc01=192.0.2.23 pc02=192.0.2.23"
+admin inventory.update "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}" >/dev/null
+expect_run "a file of its tree can be the source" "$(parse "$school")" 60 successful
+expect_eq "with the variables beside it" "$(addresses "$school")" "dc01= pc01=192.0.2.23 pc02=192.0.2.23"
+
+# An inventory written before inventories were trees: its text, in the database.
+as_fleet python3 -c "import sqlite3, time; c = sqlite3.connect('$DB'); c.execute(\"INSERT INTO inventories (id, name, kind, format, content, created_at) VALUES ('iold00000001', 'old', 'managed', 'ini', '[web]\\nweb01 ansible_connection=local\\n', ?)\", (time.time(),)); c.commit()"
+expect_run "an inventory of before trees is read" "$(parse iold00000001)" 60 successful
+expect_eq "its text is the main file of its tree" "$(get "$(admin file.list '{"id": "iold00000001"}')" '[f["path"] for f in a["data"]["files"]]')" "['hosts']"
+expect_eq "and no longer in the database" "$(db "SELECT length(content) FROM inventories WHERE id = 'iold00000001'")" "0"
+expect_eq "with its hosts" "$(hosts iold00000001)" "web01:web"
 
 finish

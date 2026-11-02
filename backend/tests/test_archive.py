@@ -322,7 +322,8 @@ class UploadTest(Base):
         # The other one takes a whole exported configuration.
         self.assertLessEqual({name for name, spec in cli.COMMANDS.items()
                               if spec.max_input != cli.MAX_INPUT},
-                             {"project.upload", "config.import", "file.push"})
+                             {"project.upload", "config.import", "file.push", "file.write",
+                              "file.change", "inventory.create"})
 
 
 if __name__ == "__main__":

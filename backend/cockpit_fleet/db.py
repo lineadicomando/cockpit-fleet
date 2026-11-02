@@ -691,6 +691,13 @@ MIGRATIONS: list[list[str]] = [
         # The last run of each template, which template.list shows.
         "CREATE INDEX runs_template ON runs (template_id) WHERE template_id IS NOT NULL",
     ],
+    [
+        # An inventory written in the interface is a tree of files with a git
+        # repository beside it, like a managed project: the commit it is at.
+        # Its text (content) is made the first file of the tree when the tree
+        # is first needed, then emptied.
+        "ALTER TABLE inventories ADD COLUMN revision TEXT NOT NULL DEFAULT ''",
+    ],
 ]
 
 

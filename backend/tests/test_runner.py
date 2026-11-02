@@ -122,7 +122,7 @@ class InventorySourceTest(unittest.TestCase):
             self.assertEqual(env["ANSIBLE_INVENTORY_UNPARSED_FAILED"], "True")
             self.assertIn(",script,", build_env(run, runtime, scripts=True)["ANSIBLE_INVENTORY_ENABLED"])
 
-    def test_a_project_inventory_may_be_a_directory_a_written_one_may_not(self):
+    def test_an_inventory_may_be_a_directory_of_the_project_or_of_its_own_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             run, runtime = Path(tmp) / "run", Path(tmp) / "runtime"
             (run / "project" / "inv").mkdir(parents=True)
@@ -133,8 +133,13 @@ class InventorySourceTest(unittest.TestCase):
             argv = build_argv(spec, run, runtime, None)
             self.assertEqual(argv[argv.index("--inventory") + 1],
                              str((run / "project" / "inv").resolve()))
+            for source in (".", "dir"):
+                argv = build_argv({**spec, "inventory": source, "inventory_source": "managed"},
+                                  run, runtime, None)
+                self.assertEqual(argv[argv.index("--inventory") + 1],
+                                 str((run / "inventory" / source).resolve()))
             with self.assertRaises(BadRequest):
-                build_argv({**spec, "inventory": "dir", "inventory_source": "managed"},
+                build_argv({**spec, "inventory": "../project", "inventory_source": "managed"},
                            run, runtime, None)
             with self.assertRaises(BadRequest):
                 build_argv({**spec, "playbook": "inv"}, run, runtime, None)

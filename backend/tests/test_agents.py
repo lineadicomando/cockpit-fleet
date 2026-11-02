@@ -50,7 +50,11 @@ class FormsTest(Base):
         self.assertEqual(self.code("project.create", {"name": "m", "kind": "managed",
                                                       "path": tree}), "bad_request")
         self.assertEqual(self.code("inventory.create", {"name": "i", "kind": "managed",
-                                                        "content": "", "path": "hosts"}),
+                                                        "content": "", "project_id": "p1"}),
+                         "bad_request")
+        self.assertEqual(self.code("inventory.create", {"name": "f", "kind": "file",
+                                                        "files": [{"path": "a", "content": ""}],
+                                                        "project_id": "p1", "path": "a"}),
                          "bad_request")
         self.assertEqual(self.code("hostkey.scan", {}), "bad_request")
 

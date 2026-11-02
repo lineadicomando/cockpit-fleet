@@ -70,6 +70,9 @@ msgstr "Controllo della sintassi in corso…"
 msgid "Choose a file to see it."
 msgstr "Scegli un file per vederlo."
 
+msgid "This file is not text ({{size}} bytes): it cannot be shown or edited here."
+msgstr "Questo file non è testo ({{size}} byte): qui non si può mostrare né modificare."
+
 msgid "Configuration file"
 msgstr "File di configurazione"
 
@@ -373,8 +376,8 @@ msgstr "Eliminare {{name}}?"
 msgid "Directory on this server"
 msgstr "Directory su questo server"
 
-msgid "Do not write passwords here: use a credential."
-msgstr "Non scrivere password qui: usa una credenziale."
+msgid "Do not write passwords here: use a credential. This becomes its first file; group_vars, host_vars and other files are added with “Files”."
+msgstr "Non scrivere password qui: usa una credenziale. Questo diventa il suo primo file; group_vars, host_vars e altri file si aggiungono con «File»."
 
 msgid "Dry run"
 msgstr "Prova a vuoto"
@@ -2873,3 +2876,21 @@ msgid "templates_count"
 msgid_plural "templates_count_plural"
 msgstr[0] "{{count}} template"
 msgstr[1] "{{count}} template"
+
+msgid "All inventories"
+msgstr "Tutti gli inventari"
+
+msgid "Create the first file of this inventory: hosts.yml, for example, with group_vars and host_vars beside it."
+msgstr "Crea il primo file di questo inventario: hosts.yml, per esempio, con group_vars e host_vars accanto."
+
+msgid "Source in its files"
+msgstr "Sorgente tra i suoi file"
+
+msgid "All of them"
+msgstr "Tutti"
+
+msgid "Empty to read every file, as Ansible reads a directory of sources: group_vars and host_vars are used. Its files are changed with “Files”."
+msgstr "Vuoto per leggere tutti i file, come Ansible legge una directory di sorgenti: group_vars e host_vars vengono usati. I suoi file si modificano con «File»."
+
+msgid "Written here: {{path}}"
+msgstr "Scritto qui: {{path}}"

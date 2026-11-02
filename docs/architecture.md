@@ -228,7 +228,7 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 | `project/` | a copy of the project (symbolic links copied, never followed; `.git` left out) |
 | `creds/` | ciphertext of the secrets this job may use, named by purpose |
 | `known_hosts` | the host keys an administrator has trusted |
-| `inventory/` | the inventory, when it is written in the interface rather than a project file |
+| `inventory/` | a copy of the tree of the inventory, when it is written in the interface rather than a project file |
 | `collections/` | a copy of the collections installed for the project, when it asks for some |
 
 The copy of a local project opens each directory and file from the one
@@ -274,10 +274,13 @@ an askpass helper that reads it from the credentials directory, so it is in
 neither argv nor the environment.
 
 **Projects written in the interface.** A third kind of project, `managed`,
-has no source elsewhere: its files are written in the "Files" page, one at a
-time, by administrators. They are the work tree of a git repository, and every
-change (write, rename, delete) is one commit whose author is the caller and
-whose committer is the service account. A run records the commit it ran.
+has no source elsewhere: its files are written in the "Files" page by
+administrators. They are the work tree of a git repository, and every
+change is one commit whose author is the caller and whose committer is the
+service account: one file written (`file.write`), a file or a directory
+renamed or deleted, or a list of changes (`file.change`: write, move, copy,
+delete, of files and directories) made all together or not at all. A run
+records the commit it ran.
 
 ```
 /var/lib/cockpit-fleet/projects/<id>/tree/       the files, what a run copies
@@ -296,9 +299,37 @@ never patterns.
 
 A write quotes the SHA-256 of the content it started from, empty for a new
 file: one that someone else changed meanwhile is refused instead of
-overwritten. The content is not copied into the audit record. Files are text,
-UTF-8, up to 512 kB. The same page shows the files of the other kinds of
-project, read-only.
+overwritten. A list of changes may also quote the revision it was made on,
+and is refused if the project moved on since. The content is not copied
+into the audit record, the paths are (`operations[].content` and
+`operations[].data` are redacted inside the list). Files are up to 1 MB:
+text is edited, a file that is not UTF-8 (an installer a playbook copies to
+nodes) is uploaded in base64 and shown as binary, never edited. The same
+page shows the files of the other kinds of project, read-only.
+
+The changes of a list are made one after the other in the tree; each is
+checked before it touches anything, and when one fails after others were
+made, `git reset --hard` and `git clean` put the tree back as the last
+commit has it. A directory is moved or copied only if every path it would
+then hold is one the editor takes (twelve levels at most), and a copy only
+if the project then holds at most 5000 files. Git keeps no empty
+directory, so neither does a project: a directory left empty goes.
+
+`file.restore` puts a file or a directory back as it was at a revision, as
+a new commit, exactly (files added since are removed). Only a revision in
+the history of `main` is taken: a push that was refused leaves its objects
+in the repository, links among them, and they must not reach the tree.
+`file.download` gives a file in base64, or a directory as a gzipped tar
+built by `fleetctl`, opening each directory from the one that holds it and
+leaving links out, for any kind of project; like `file.bundle`, it is in
+the audit trail, as a copy of the files.
+
+An inventory that is a file of a project is read again when a change in
+the interface or a push touches what it reads: its own file or directory,
+the directory it is in (its `group_vars` and `host_vars`), or a directory
+it is in, moved or deleted. A fetch or an upload reads again every
+inventory of the project. Before, the hosts were those of the last reading
+until someone asked, or the hourly reading for checks.
 
 **Uploaded projects.** A fourth kind of project, `archive`, gets its files
 from a tar (plain, gzip, bzip2 or xz) or a zip chosen in the browser. They are
@@ -448,10 +479,45 @@ opened from the page of the files and from the ad-hoc command.
 directory of sources (read together, as Ansible does: static files and plugin
 configurations side by side), or the YAML file of an inventory plugin. Every
 one is read by a job, in the sandbox, so a plugin runs there and nowhere
-else; one written in the interface may be a plugin's file too, but its name is
-`hosts.yml`, which the plugins that want a name of their own
-(`*.aws_ec2.yml`) refuse. A plugin gets no credential beyond the vault of the
-inventory.
+else. A plugin gets no credential beyond the vault of the inventory.
+
+**Inventories written in the interface** are a tree of files, like a managed
+project, with a git repository beside it:
+
+```
+/var/lib/cockpit-fleet/inventories/<id>/tree/       the files, what a run copies
+/var/lib/cockpit-fleet/inventories/<id>/repo.git/   the repository
+/var/lib/cockpit-fleet/inventories/<id>/lock        one change at a time
+```
+
+The `file.*` commands work on it by its id (an inventory's starts with `i`,
+a project's with `p`), under the same rules as on a managed project: the
+same paths, the same limits, a commit for each change, history, restore,
+download, and a clone and push at a terminal; not `file.check`, since an
+inventory has no playbook. A change reads the inventory again. Its source
+is the whole tree, read as Ansible reads a directory of sources (a file of
+hosts with `group_vars/` and `host_vars/` beside it, files of plugins with
+the names they want, `*.aws_ec2.yml`), or a file or directory of it: the
+inventory's `path`. A run gets a copy of the tree as `inventory/`, made as
+the copy of a project is; an executable file in it is never run as a
+script, whatever `[inventories] scripts` says, as before.
+
+`inventory.create` and `inventory.update` still take `content`: the text of
+its main file, `hosts.yml` (or `hosts` for INI), written as a commit;
+`inventory.create` also takes `files`, every file of the tree, which is how
+an export brings an inventory back. An inventory written before it was a
+tree had its text in the database (`content`): the first time its tree is
+needed, the text is made `hosts.yml` (or `hosts`) of a new repository, in a
+commit of the service account, and dropped from the database. That needs no
+step of the upgrade and no migration of files, and a controller that never
+opens an inventory keeps its text where it was. The revision of the tree is
+in the database (schema 20) and in what `inventory.get` answers.
+
+This replaces one text field: `group_vars` per group, `host_vars`, a vault
+file beside the others, several sources and a plugin with the name it wants
+could not be written in the interface before, only in a project. A hidden
+managed project behind each inventory was considered and left: every list,
+export and check of projects would have had to leave it out.
 
 A job enables Ansible's default inventory plugins but `script`: an executable
 file of a project is then read as text and never run. `[inventories] scripts
@@ -1402,9 +1468,11 @@ each other by name, since identifiers differ between two installations. It
 holds no secret: a credential is its name, its kind, its user name and its
 vault identifier, and its secrets are entered again where it is imported.
 Neither does it hold the files of a project that has no source elsewhere
-(written in the interface, uploaded): such a project arrives empty. The text
-of an inventory written in the interface and the variables of a template are
-in it as they are.
+(written in the interface, uploaded): such a project arrives empty. The
+files of an inventory written in the interface (`files`: path, and content,
+or data in base64 for one that is not text, with `content` its main file for
+an import made before inventories were trees) and the variables of a
+template are in it as they are.
 
 `config.import` creates what the document lists and is not there yet, by
 name; what exists is left as it is, so importing twice changes nothing. Each
@@ -1595,7 +1663,7 @@ for administrators only, since files are theirs in the interface too:
   commits of `main` since that revision to `file.push`, which takes them only
   if the project is still at that revision, as a line of commits (no merge),
   and if every file of the result is one the editor could have written
-  (regular files of at most 512 kB, the names `check_file_path` takes: no
+  (regular files of at most 1 MB, the names `check_file_path` takes: no
   link, no submodule, nothing called `.git`); then a fast forward, and what
   a write in the interface does: a syntax check of each playbook changed,
   the collections when the requirements changed. The authors are those of

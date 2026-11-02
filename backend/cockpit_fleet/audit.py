@@ -40,9 +40,22 @@ def _masked(value: object, secrets: tuple[str, ...]) -> object:
     return value
 
 
+def _redacted_items(params: dict, redact: tuple[str, ...]) -> dict:
+    """PARAMS with KEY of each object of the list LIST hidden, for every
+    "LIST[].KEY" of REDACT: a list of changes keeps its paths, not their content."""
+    params = dict(params)
+    for entry in redact:
+        name, found, key = entry.partition("[].")
+        if found and isinstance(params.get(name), list):
+            params[name] = [{**item, key: "***"} if isinstance(item, dict) and key in item
+                            else item for item in params[name]]
+    return params
+
+
 def _params_text(params: dict, redact: tuple[str, ...], secrets: tuple[str, ...] = ()) -> str:
     if secrets:
         params = _masked(params, secrets)
+    params = _redacted_items(params, redact)
     # Identifiers and limits first and whole: they say what the call was about.
     order = sorted(params, key=lambda key: (not (key == "id" or key.endswith("_id")
                                                  or key == "limit"), key))

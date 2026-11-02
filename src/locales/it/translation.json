@@ -17,6 +17,7 @@
   "Check syntax": "Controlla la sintassi",
   "Checking the syntax…": "Controllo della sintassi in corso…",
   "Choose a file to see it.": "Scegli un file per vederlo.",
+  "This file is not text ({{size}} bytes): it cannot be shown or edited here.": "Questo file non è testo ({{size}} byte): qui non si può mostrare né modificare.",
   "Configuration file": "File di configurazione",
   "Copied": "Copiato",
   "Copy": "Copia",
@@ -118,7 +119,7 @@
   "Delete": "Elimina",
   "Delete {{name}}?": "Eliminare {{name}}?",
   "Directory on this server": "Directory su questo server",
-  "Do not write passwords here: use a credential.": "Non scrivere password qui: usa una credenziale.",
+  "Do not write passwords here: use a credential. This becomes its first file; group_vars, host_vars and other files are added with “Files”.": "Non scrivere password qui: usa una credenziale. Questo diventa il suo primo file; group_vars, host_vars e altri file si aggiungono con «File».",
   "Dry run": "Prova a vuoto",
   "Dry run: show what would change, change nothing": "Prova a vuoto: mostra cosa cambierebbe, senza cambiare nulla",
   "Duration": "Durata",
@@ -968,5 +969,11 @@
   "No job template matches the filters": "Nessun template corrisponde ai filtri",
   "templates_count_one": "{{count}} template",
   "templates_count_many": "{{count}} template",
-  "templates_count_other": "{{count}} template"
+  "templates_count_other": "{{count}} template",
+  "All inventories": "Tutti gli inventari",
+  "Create the first file of this inventory: hosts.yml, for example, with group_vars and host_vars beside it.": "Crea il primo file di questo inventario: hosts.yml, per esempio, con group_vars e host_vars accanto.",
+  "Source in its files": "Sorgente tra i suoi file",
+  "All of them": "Tutti",
+  "Empty to read every file, as Ansible reads a directory of sources: group_vars and host_vars are used. Its files are changed with “Files”.": "Vuoto per leggere tutti i file, come Ansible legge una directory di sorgenti: group_vars e host_vars vengono usati. I suoi file si modificano con «File».",
+  "Written here: {{path}}": "Scritto qui: {{path}}"
 }

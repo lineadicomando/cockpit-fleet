@@ -95,8 +95,11 @@ export interface Project {
 
 export interface ProjectFiles {
     files: { path: string; size: number }[];
+    directories: string[];
     truncated: boolean;
     editable: boolean;
+    // What a change of several files says it was made on.
+    revision: string;
 }
 
 export interface FileContent {
@@ -104,6 +107,9 @@ export interface FileContent {
     content: string;
     // What a write quotes, so that a change made meanwhile is not overwritten.
     sha256: string;
+    // Not text: shown, never edited.
+    binary?: boolean;
+    size?: number;
 }
 
 export interface Commit {
@@ -134,6 +140,8 @@ export interface Inventory {
     host_count: number;
     hosts?: InventoryHost[];
     content?: string;
+    // The commit its tree is at, for one written here.
+    revision: string;
 }
 
 export interface HostKey {

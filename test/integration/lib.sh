@@ -74,7 +74,8 @@ wipe() {
     for name in $("$SECRET" list | grep -E '^(c|n)-'); do "$SECRET" delete "$name"; done
     for user in itadmin itoperator itapprover; do userdel -r "$user" 2>/dev/null; done
     [ -f "$CONFIG.it-backup" ] && mv "$CONFIG.it-backup" "$CONFIG"
-    rm -rf /srv/fleet-it /var/lib/cockpit-fleet/runs/* /var/lib/cockpit-fleet/projects/* /var/lib/cockpit-fleet/cache
+    rm -rf /srv/fleet-it /var/lib/cockpit-fleet/runs/* /var/lib/cockpit-fleet/projects/* \
+        /var/lib/cockpit-fleet/inventories/* /var/lib/cockpit-fleet/cache
     rm -f "$DB" "$DB-wal" "$DB-shm"
     systemctl reset-failed 'cockpit-fleet-run@*' 'cockpit-fleet-finish@*' 2>/dev/null
     return 0

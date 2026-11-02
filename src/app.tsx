@@ -112,7 +112,9 @@ export function App() {
                         {section === "workflows" && <WorkflowsPage />}
                         {section === "schedules" && <SchedulesPage />}
                         {section === "notifications" && <NotificationsPage />}
-                        {section === "inventories" && <InventoriesPage />}
+                        {section === "inventories" && (location.path[1]
+                            ? <FilesPage key={location.path[1]} id={location.path[1]} />
+                            : <InventoriesPage />)}
                         {section === "projects" && (location.path[1]
                             ? <FilesPage key={location.path[1]} id={location.path[1]} />
                             : <ProjectsPage />)}

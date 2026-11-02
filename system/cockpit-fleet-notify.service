@@ -22,7 +22,7 @@ LoadCredentialEncrypted=notify:/etc/cockpit-fleet/secrets/notify
 
 ProtectSystem=strict
 ReadWritePaths=/var/lib/cockpit-fleet
-InaccessiblePaths=-/var/lib/cockpit-fleet/runs -/var/lib/cockpit-fleet/projects
+InaccessiblePaths=-/var/lib/cockpit-fleet/runs -/var/lib/cockpit-fleet/projects -/var/lib/cockpit-fleet/inventories
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

@@ -52,6 +52,7 @@ drift.get operator -          file.bundle admin M           file.check admin M
 file.delete admin M           file.diff admin -             file.history admin -
 file.list admin -             file.move admin M             file.push admin M
 file.read admin -             file.write admin M            host.get viewer -
+file.change admin M           file.download admin M         file.restore admin M
 host.list viewer -            hostkey.add admin M           hostkey.list viewer -
 hostkey.remove admin M        hostkey.scan admin -          inventory.create admin M
 inventory.delete admin M      inventory.get viewer -        inventory.list viewer -
@@ -317,6 +318,14 @@ class Fixture(CheckBase):
         "file.write": lambda fx: {"path": "new.yml", "content": "- hosts: all\n",
                                   "expected": ""},
         "file.diff": lambda fx: {"revision": fx.get("revision", "x")},
+        "file.change": lambda fx: {"revision": fx.get("revision", ""), "operations": [
+            {"op": "write", "path": "new.yml", "content": "- hosts: all\n", "expected": ""},
+            {"op": "copy", "path": "site.yml", "to": "copy/site.yml"},
+            {"op": "move", "path": "copy", "to": "moved"},
+            {"op": "write", "path": "files/blob.bin", "data": "AAEC"},
+            {"op": "delete", "path": "moved"}]},
+        "file.restore": lambda fx: {"path": "site.yml", "revision": fx.get("revision", "x")},
+        "file.download": lambda fx: {"path": "site.yml"},
         "file.push": lambda fx: {"expected": fx.get("revision", "x"), "bundle": ""},
         "project.create": lambda fx: {"name": "new", "kind": "git",
                                       "url": "https://example.org/a.git"},

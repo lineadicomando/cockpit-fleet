@@ -10,6 +10,18 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Files of a project written in the interface can be changed several at a
+  time, as one commit made whole or not at all (`file.change`: write,
+  move, copy and delete, of files and directories); a directory is
+  renamed, moved or deleted with everything in it (`file.move`,
+  `file.delete`); a file or a directory is put back as it was at an
+  earlier revision (`file.restore`); a file is downloaded, a directory as
+  a `.tar.gz` (`file.download`, any kind of project). Files that are not
+  text, up to 1 MB, can be uploaded and kept, and are shown as such.
+- An inventory that is a file of a project is read again when a change
+  touches its files, its `group_vars` or `host_vars`, and after the
+  project is fetched or uploaded again.
+
 - Rules of notifications can tell when the check cycles of an inventory
   cannot be prepared (`unprepared`, "Cannot start"), which leaves their
   checks unknown and so told about by no rule on problems, and when they
@@ -29,6 +41,21 @@ entries go under `[Unreleased]`, under the heading of their kind.
   template its `last_run`.
 
 ### Changed
+
+- An inventory written in the interface is a tree of files with a history,
+  like a project written there: a file of hosts with `group_vars/` and
+  `host_vars/` beside it, vault files, several sources, plugins with the
+  names they want. Its files are changed with "Files" on the Inventories
+  tab (and `file.*` with its id), each change a commit that reads it again;
+  it is read whole, or from a file or directory of it. The text of an
+  existing one becomes its `hosts.yml` (or `hosts`) the first time it is
+  used. Export and import carry its files. A backup now includes
+  `/var/lib/cockpit-fleet/inventories/` (`docs/backup.md`).
+
+- Files of a project written in the interface, or pushed from a clone, may
+  be up to 1 MB instead of 512 kB; `file.read` of a file that is not text
+  answers with `binary` instead of an error, and `file.list` gives the
+  directories and the revision too.
 
 - In Italian, a project or inventory written in the interface is now
   "Interno" rather than "Scritto qui".

@@ -129,10 +129,12 @@ def _tags(spec: dict, key: str) -> str | None:
 
 
 def _inventory(spec: dict, run_dir: Path) -> Path:
-    """An inventory of the project, a file or a directory of sources, or the
-    one written for this run."""
+    """An inventory of the project, a file or a directory of sources, or a
+    copy of the tree of one written in the interface (all of it, or a file
+    or directory of it)."""
     if spec.get("inventory_source") == "managed":
-        return resolve_inside(run_dir / "inventory", spec.get("inventory"), "inventory")
+        return resolve_inside(run_dir / "inventory", spec.get("inventory"), "inventory",
+                              directory=True)
     return resolve_inside(run_dir / "project", spec.get("inventory"), "inventory",
                           directory=True)
 

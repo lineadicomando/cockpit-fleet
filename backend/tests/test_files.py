@@ -99,8 +99,11 @@ class ManagedProjectTest(Managed):
         got = self.ok("file.read", {"id": self.id, "path": "vars/all.yml"})
         self.assertEqual((got["content"], got["sha256"]), ("città: Roma\n", written["sha256"]))
         self.assertEqual(self.code("file.read", {"id": self.id, "path": "nope.yml"}), "not_found")
+        # A file that is not text is said to be one, without its content.
         (self.tree / "blob.bin").write_bytes(b"\xff\xfe\x00")
-        self.assertEqual(self.code("file.read", {"id": self.id, "path": "blob.bin"}), "conflict")
+        blob = self.ok("file.read", {"id": self.id, "path": "blob.bin"})
+        self.assertEqual((blob["binary"], blob["content"], blob["size"]), (True, "", 3))
+        self.assertFalse(got["binary"])
         (self.tree / "big.txt").write_bytes(b"x" * (files.MAX_FILE + 1))
         self.assertEqual(self.code("file.read", {"id": self.id, "path": "big.txt"}), "conflict")
 
@@ -237,6 +240,174 @@ class ManagedProjectTest(Managed):
             self.assertEqual(self.code("project.create", {"name": "x", "kind": "managed"}),
                              "internal")
         self.assertEqual(len(self.ok("project.list")["projects"]), 1)
+
+
+@unittest.skipUnless(os.path.exists("/usr/bin/git"), "needs git")
+class ChangeTest(Managed):
+    """Several changes at once, directories, binary files, restore and download."""
+
+    def change(self, *operations, **extra):
+        return self.ok("file.change", {"id": self.id, "operations": list(operations), **extra})
+
+    def listed(self):
+        return [entry["path"] for entry in self.ok("file.list", {"id": self.id})["files"]]
+
+    def lab(self):
+        """A tree like the inventory of a school: hosts, group_vars, host_vars."""
+        return self.change(
+            {"op": "write", "path": "inventories/school/hosts.yaml", "content": "all: {}\n"},
+            {"op": "write", "path": "inventories/school/group_vars/all/vars.yaml",
+             "content": "a: 1\n"},
+            {"op": "write", "path": "inventories/school/host_vars/dc01.yaml", "content": "b: 2\n"},
+            message="A school")
+
+    def test_many_changes_are_one_commit(self):
+        done = self.lab()
+        self.assertEqual(len(done["files"]), 3)
+        self.assertEqual(self.ok("file.history", {"id": self.id})["commits"][0]["subject"],
+                         "A school")
+        listed = self.ok("file.list", {"id": self.id})
+        self.assertEqual(listed["revision"], done["revision"])
+        self.assertIn("inventories/school/group_vars/all", listed["directories"])
+        self.assertEqual(len(self.git("log", "--format=%H").split()), 1)
+
+    def test_a_directory_is_copied_moved_and_deleted_whole(self):
+        self.lab()
+        self.change({"op": "copy", "path": "inventories/school", "to": "inventories/lab2"})
+        self.assertIn("inventories/lab2/group_vars/all/vars.yaml", self.listed())
+        self.assertIn("inventories/school/hosts.yaml", self.listed())
+        self.change({"op": "move", "path": "inventories/lab2", "to": "labs/two"})
+        self.assertIn("labs/two/host_vars/dc01.yaml", self.listed())
+        self.assertFalse((self.tree / "inventories/lab2").exists())
+        self.ok("file.delete", {"id": self.id, "path": "labs"})
+        self.assertFalse((self.tree / "labs").exists())
+        self.assertEqual(len(self.listed()), 3)
+        # The commands of one file move a directory too.
+        self.ok("file.move", {"id": self.id, "path": "inventories", "to": "inv"})
+        self.assertEqual(sorted(self.listed())[0], "inv/school/group_vars/all/vars.yaml")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_nothing_is_made_when_one_change_is_refused(self):
+        self.lab()
+        before = self.ok("file.list", {"id": self.id})
+        for refused, code in (
+                ({"op": "move", "path": "nope", "to": "x"}, "not_found"),
+                ({"op": "copy", "path": "inventories", "to": "inventories/again"}, "bad_request"),
+                ({"op": "write", "path": "inventories/school/hosts.yaml", "content": "x"},
+                 "conflict"),
+                ({"op": "move", "path": "inventories", "to": "/".join(["d"] * 9)}, "bad_request"),
+                ({"op": "chmod", "path": "x"}, "bad_request"),
+                ({"op": "write", "path": "x", "content": "a", "data": "YQ=="}, "bad_request"),
+                ({"op": "write", "path": "x", "data": "not base64!"}, "bad_request"),
+                ({"op": "delete", "path": "x", "to": "y"}, "bad_request")):
+            answer = self.call("file.change", {"id": self.id, "operations": [
+                {"op": "delete", "path": "inventories/school/host_vars"},
+                {"op": "write", "path": "new.yml", "content": "x"}, refused]})
+            self.assertEqual(answer["error"]["code"], code, refused)
+            self.assertEqual(self.ok("file.list", {"id": self.id}), before, refused)
+            self.assertEqual(self.git("status", "--porcelain"), "", refused)
+        self.assertEqual(self.code("file.change", {"id": self.id, "operations": []}),
+                         "bad_request")
+
+    def test_only_playbooks_still_there_are_checked(self):
+        done = self.change({"op": "write", "path": "site.yml", "content": PLAYBOOK},
+                           {"op": "write", "path": "gone.yml", "content": PLAYBOOK},
+                           {"op": "move", "path": "gone.yml", "to": "notes.txt"})
+        self.assertEqual(len(done["check_run_ids"]), 1)
+        self.assertEqual(self.ok("run.get", {"id": done["check_run_ids"][0]})["options"]["path"],
+                         "site.yml")
+
+    def test_a_revision_that_changed_meanwhile_is_refused(self):
+        first = self.lab()
+        self.write("other.yml", "x: 1\n")
+        self.assertEqual(self.code("file.change", {
+            "id": self.id, "revision": first["revision"],
+            "operations": [{"op": "delete", "path": "inventories"}]}), "conflict")
+        self.assertIn("inventories/school/hosts.yaml", self.listed())
+
+    def test_binary_files_are_uploaded_read_and_kept_up_to_a_limit(self):
+        import base64
+        blob = bytes(range(256)) * 16
+        done = self.change({"op": "write", "path": "files/setup.msi",
+                            "data": base64.b64encode(blob).decode()})
+        self.assertEqual((self.tree / "files/setup.msi").read_bytes(), blob)
+        read = self.ok("file.read", {"id": self.id, "path": "files/setup.msi"})
+        self.assertEqual((read["binary"], read["size"], read["sha256"]),
+                         (True, len(blob), done["files"][0]["sha256"]))
+        self.assertEqual(done["check_run_ids"], [])
+        big = base64.b64encode(b"\0" * (files.MAX_FILE + 1)).decode()
+        self.assertEqual(self.code("file.change", {"id": self.id, "operations": [
+            {"op": "write", "path": "files/big.iso", "data": big}]}), "bad_request")
+        # The content never reaches the audit trail; the paths do.
+        entry = self.ok("audit.list")["entries"][1]
+        self.assertEqual(entry["command"], "file.change")
+        self.assertIn("files/setup.msi", entry["params"])
+        self.assertNotIn(base64.b64encode(blob).decode()[:40], entry["params"])
+
+    def test_a_path_is_restored_as_it_was(self):
+        first = self.lab()
+        self.change({"op": "write", "path": "inventories/school/host_vars/pc01.yaml",
+                     "content": "c: 3\n"},
+                    {"op": "delete", "path": "inventories/school/group_vars"})
+        done = self.ok("file.restore", {"id": self.id, "path": "inventories/school",
+                                        "revision": first["revision"]})
+        self.assertEqual(sorted(self.listed()), [
+            "inventories/school/group_vars/all/vars.yaml",
+            "inventories/school/host_vars/dc01.yaml", "inventories/school/hosts.yaml"])
+        self.assertEqual(self.ok("file.history", {"id": self.id})["commits"][0]["subject"],
+                         f"Restore inventories/school as of {first['revision'][:10]}")
+        self.assertNotEqual(done["revision"], first["revision"])
+        for params, code in (({"path": "nope", "revision": first["revision"]}, "not_found"),
+                             ({"path": "inventories", "revision": "f" * 40}, "not_found"),
+                             ({"path": "inventories", "revision": "HEAD"}, "bad_request")):
+            self.assertEqual(self.code("file.restore", {"id": self.id, **params}), code, params)
+
+    def test_a_file_or_a_directory_is_downloaded(self):
+        import base64
+        import tarfile
+        self.lab()
+        one = self.ok("file.download", {"id": self.id, "path": "inventories/school/hosts.yaml"})
+        self.assertEqual((one["name"], one["archive"], base64.b64decode(one["data"])),
+                         ("hosts.yaml", False, b"all: {}\n"))
+        packed = self.ok("file.download", {"id": self.id, "path": "inventories/school"})
+        self.assertEqual((packed["name"], packed["archive"]), ("school.tar.gz", True))
+        with tarfile.open(fileobj=io.BytesIO(base64.b64decode(packed["data"]))) as archive:
+            names = archive.getnames()
+            self.assertEqual(archive.extractfile("school/host_vars/dc01.yaml").read(), b"b: 2\n")
+        self.assertIn("school/group_vars/all/vars.yaml", names)
+        whole = self.ok("file.download", {"id": self.id})
+        self.assertEqual(whole["name"], "edited.tar.gz")
+        # A link is left out, never followed.
+        os.symlink("/etc/passwd", self.tree / "inventories/school/passwd")
+        packed = self.ok("file.download", {"id": self.id, "path": "inventories"})
+        with tarfile.open(fileobj=io.BytesIO(base64.b64decode(packed["data"]))) as archive:
+            self.assertNotIn("inventories/school/passwd", archive.getnames())
+        self.assertEqual(self.ok("audit.list")["entries"][0]["command"], "file.download")
+
+    def test_inventories_of_the_project_are_read_again_when_their_files_change(self):
+        self.lab()
+        whole = self.ok("inventory.create", {"name": "school", "kind": "file",
+                                             "project_id": self.id,
+                                             "path": "inventories/school"})
+        top = self.ok("inventory.create", {"name": "top", "kind": "file",
+                                           "project_id": self.id, "path": "hosts.yaml"})
+        cases = (
+            ("inventories/school/group_vars/all/vars.yaml", {whole["id"]}),
+            ("roles/web/tasks/main.yml", set()),
+            ("group_vars/all.yml", {top["id"]}),
+            ("hosts.yaml", {top["id"]}),
+        )
+        for path, wanted in cases:
+            current = self.ok("file.read", {"id": self.id, "path": path}) \
+                if (self.tree / path).exists() else {"sha256": ""}
+            done = self.change({"op": "write", "path": path, "content": f"# {path}\n",
+                                "expected": current["sha256"]})
+            read = {self.ok("run.get", {"id": run_id})["inventory_id"]
+                    for run_id in done["inventory_run_ids"]}
+            self.assertEqual(read, wanted, path)
+        # Moving a directory an inventory is in reads it again too.
+        done = self.change({"op": "move", "path": "inventories", "to": "old"})
+        self.assertEqual(len(done["inventory_run_ids"]), 1)
 
 
 class PlaybookGuessTest(unittest.TestCase):
@@ -414,6 +585,11 @@ class TerminalCloneTest(Managed):
         subprocess.run(["/usr/bin/git", "-C", self.clone, "commit", "--quiet", "-m", "link"], check=True)
         with self.assertRaisesRegex(terminal_failure(), "only regular files"):
             self.fleet("project", "push", self.clone)
+        # What the refused push left in the repository cannot be restored from.
+        refused = subprocess.run(["/usr/bin/git", "-C", self.clone, "rev-parse", "HEAD"],
+                                 capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(self.code("file.restore", {"id": self.id, "path": "shadow",
+                                                    "revision": refused}), "not_found")
         subprocess.run(["/usr/bin/git", "-C", self.clone, "reset", "--quiet", "--hard", "HEAD~1"], check=True)
         self.commit("big.bin", "x" * (files.MAX_FILE + 1))
         with self.assertRaisesRegex(terminal_failure(), "larger than"):

@@ -4,12 +4,13 @@ channels and their rules, as one JSON document.
 
 No secret is in it: a credential or a channel travels without its secrets,
 which are entered again where it is imported. Neither are the files of a
-project that has no source elsewhere (written in the interface, uploaded).
+project that has no source elsewhere (written in the interface, uploaded);
+those of an inventory written in the interface are.
 Things refer to each other by name, since identifiers differ between two
 installations.
 """
 
-from . import audit, resources, store
+from . import audit, files, resources, store
 from .cli import COMMANDS, Context, Obj, Values, command
 from .errors import BadRequest, FleetError
 
@@ -45,11 +46,17 @@ def config_export(ctx: Context, params: Values) -> dict:
         {"name": row["name"], "kind": row["kind"], "path": row["path"], "url": row["url"],
          "ref": row["ref"], "credential": credentials.get(row["credential_id"], "")}
         for row in conn.execute("SELECT * FROM projects ORDER BY name COLLATE NOCASE")]
-    document["inventories"] = [
-        {"name": row["name"], "kind": row["kind"], "project": projects.get(row["project_id"], ""),
-         "path": row["path"], "format": row["format"], "content": row["content"],
-         "vault_credential": credentials.get(row["vault_credential_id"], "")}
-        for row in conn.execute("SELECT * FROM inventories ORDER BY name COLLATE NOCASE")]
+    document["inventories"] = []
+    for row in conn.execute("SELECT * FROM inventories ORDER BY name COLLATE NOCASE").fetchall():
+        item = {"name": row["name"], "kind": row["kind"],
+                "project": projects.get(row["project_id"], ""), "path": row["path"],
+                "format": row["format"], "content": "",
+                "vault_credential": credentials.get(row["vault_credential_id"], "")}
+        if row["kind"] == "managed":
+            # The whole tree; content, its main file, for an import of before trees.
+            item["files"] = files.tree_files(ctx, row)
+            item["content"] = files.main_text(ctx, row)
+        document["inventories"].append(item)
     document["host_keys"] = [
         {"host": row["host"], "key_type": row["key_type"], "key": row["key"]}
         for row in conn.execute("SELECT * FROM host_keys ORDER BY host, key_type")]
@@ -189,6 +196,9 @@ class _Importer:
         if kind == "file":
             params.update(project_id=self._id("projects", item.get("project"), "project", True),
                           path=item.get("path"))
+        elif isinstance(item.get("files"), list):
+            params.update(format=item.get("format") or "yaml", path=item.get("path") or "",
+                          files=item["files"])
         else:
             params.update(format=item.get("format") or "yaml", content=item.get("content") or "")
         self._create("inventory.create", params)

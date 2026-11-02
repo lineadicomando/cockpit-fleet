@@ -9,6 +9,7 @@ for the administrator of the machine; every command runs as root.
 |---|---|---|
 | The database: projects, inventories, credentials (without their secrets), templates, schedules, workflows, checks and their states, time series, notifications, the history of runs, the audit log | `/var/lib/cockpit-fleet/fleet.db` (with `-wal` and `-shm` beside it) | yes, copied as below |
 | Projects written in the interface (a git repository each, with their history), uploaded archives, collections installed for projects, checkouts of git projects | `/var/lib/cockpit-fleet/projects/` | yes; git projects and their collections can also be fetched again |
+| Inventories written in the interface (their files, a git repository each, with their history) | `/var/lib/cockpit-fleet/inventories/` | yes |
 | The output and events of runs | `/var/lib/cockpit-fleet/runs/` | if the output of past runs matters; it is deleted after `[runs] keep_days` anyway |
 | The configuration | `/etc/cockpit-fleet/config.toml` | yes |
 | Local projects | the directories of `[projects] local_roots` | with the rest of the machine's data |
@@ -51,12 +52,13 @@ target.close()
 '
 ```
 
-Then copy that file, the projects and the configuration where backups go:
+Then copy that file, the projects, the inventories and the configuration
+where backups go:
 
 ```sh
 tar -C / -czf /root/cockpit-fleet-$(date +%F).tar.gz \
     var/backups/cockpit-fleet/fleet.db var/lib/cockpit-fleet/projects \
-    etc/cockpit-fleet/config.toml
+    var/lib/cockpit-fleet/inventories etc/cockpit-fleet/config.toml
 ```
 
 Add `etc/cockpit-fleet/secrets` for a restore on this same machine, and
@@ -81,7 +83,8 @@ Add `etc/cockpit-fleet/secrets` for a restore on this same machine, and
    rm -f /var/lib/cockpit-fleet/fleet.db-wal /var/lib/cockpit-fleet/fleet.db-shm
    install -o cockpit-fleet -g cockpit-fleet -m 0600 \
        /var/backups/cockpit-fleet/fleet.db /var/lib/cockpit-fleet/fleet.db
-   chown -R cockpit-fleet:cockpit-fleet /var/lib/cockpit-fleet/projects
+   chown -R cockpit-fleet:cockpit-fleet /var/lib/cockpit-fleet/projects \
+       /var/lib/cockpit-fleet/inventories
    ```
 
    The secrets, if restored on the same machine, stay root's:
@@ -110,7 +113,8 @@ users, vault identifiers, never a secret), projects, inventories, host keys,
 templates, workflows, schedules, checks, channels and rules, each named by
 its name. "Import" on another controller creates what it does not have yet
 and leaves alone what has the same name; it reports each item. It carries
-no files (a project written in the interface, an uploaded archive), no run,
+no files of a project (written in the interface, an uploaded archive; those
+of an inventory written in the interface are in it), no run,
 no state of a check, no audit log, and no secret: set them afterwards. At a
 terminal: `fleet config export --json > fleet.json` (without `--json` it
 prints the document for reading), and `fleet config import --document

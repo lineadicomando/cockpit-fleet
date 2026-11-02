@@ -16,6 +16,7 @@ from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .names import check_id
 from .validators import (
+    check_file_path,
     check_git_ref,
     check_git_url,
     check_host,
@@ -341,28 +342,37 @@ NOT_READ = "the inventory could not be read: an administrator can see why"
 def _inventory(row, with_hosts: bool = False, admin: bool = True) -> dict:
     hosts = store.loads(row["hosts"], [])
     data = {key: row[key] for key in ("id", "name", "kind", "project_id", "path", "format",
-                                      "vault_credential_id", "parsed_at", "parse_error")}
+                                      "vault_credential_id", "parsed_at", "parse_error",
+                                      "revision")}
     if not admin and data["parse_error"]:
         # Ansible quotes the lines it could not read, and they may hold passwords.
         data["parse_error"] = NOT_READ
     data["host_count"] = len(hosts)
     if with_hosts:
         data["hosts"] = hosts
-        data["content"] = row["content"]
     return data
 
 
-# A file inventory takes the project and the path, a written one the rest.
+# A file inventory takes the project and the path, a written one the rest:
+# its path is the source inside its tree, empty for all of it.
 _INVENTORY_PARAMS = {
     "vault_credential_id": Id(required=False),
     "project_id": Id(required=False),
-    "path": Str(max_length=1024),
+    "path": Str("For a file inventory, its file or directory in the project; for one written"
+                " here, the file or directory of its tree Ansible reads, empty for all of it",
+                max_length=1024),
     "format": Choice(("yaml", "ini"), default="yaml"),
-    "content": Str(max_length=512 * 1024),
+    "content": Str("For an inventory written here, the text of its main file: hosts.yml,"
+                   " or hosts for INI", max_length=512 * 1024),
 }
+# The files an inventory written here is created with, as file.change writes them.
+_INVENTORY_FILES = Objs("For an inventory written here, files of its tree to create it with:"
+                        " path, and content (text) or data (base64)",
+                        max_items=files.MAX_LISTED)
 
 
-def _inventory_values(ctx: Context, params: Values, kind: str) -> dict:
+def _inventory_values(ctx: Context, params: Values, kind: str, row=None) -> dict:
+    """What a create, or an update of ROW, writes; a format not given is kept."""
     values: dict = {"vault_credential_id":
                     credential_of_kind(ctx, params["vault_credential_id"], "vault")}
     if kind == "file":
@@ -371,10 +381,32 @@ def _inventory_values(ctx: Context, params: Values, kind: str) -> dict:
         store.fetch(ctx.conn, "projects", values["project_id"], "project")
         values["path"] = str(check_relative_path(params.need("path"), "path"))
     else:
-        params.unused("project_id", "path")
-        values["format"] = params["format"]
-        values["content"] = params.need("content")
+        params.unused("project_id")
+        values["format"] = row["format"] if row is not None and "format" not in params.given \
+            else params["format"]
+        if params["path"] is not None:
+            values["path"] = str(check_file_path(params["path"], "path")) if params["path"] else ""
     return values
+
+
+def _write_main(ctx: Context, inventory, content: str, operations: list[dict]) -> None:
+    """Write the main file of a managed inventory, and the other files given,
+    as one commit; the main file of the other format goes."""
+    main = files.MAIN_FILES[inventory["format"]]
+    tree = files.inventory_tree(ctx, inventory)
+    changes = list(operations)
+    if content is not None:
+        current = tree / main
+        expected = hashlib.sha256(current.read_bytes()).hexdigest() \
+            if current.is_file() and not current.is_symlink() else ""
+        changes.append({"op": "write", "path": main, "content": content, "expected": expected})
+        other = next(name for name in files.MAIN_FILES.values() if name != main)
+        if (tree / other).is_file() and not (tree / other).is_symlink():
+            changes.append({"op": "delete", "path": other})
+    if changes:
+        checked = [files.check_operation(index, item) for index, item in enumerate(changes)]
+        files.change(ctx, store.fetch(ctx.conn, "inventories", inventory["id"], "inventory"),
+                     checked, "", reread=False)
 
 
 @command("inventory.list", role="viewer")
@@ -390,40 +422,70 @@ def inventory_list(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def inventory_get(ctx: Context, params: Values) -> dict:
-    """One inventory with its hosts and groups, as last read."""
+    """One inventory with its hosts and groups, as last read; for an
+    administrator, the text of the main file of one written here."""
     inventory_id = params["id"]
     jobs.reconcile(ctx)
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     data = _inventory(row, with_hosts=True, admin=ctx.caller.role == "admin")
-    if ctx.caller.role != "admin":
-        # The text of a managed inventory may hold connection passwords.
-        data["content"] = ""
+    # The text of a managed inventory may hold connection passwords.
+    data["content"] = files.main_text(ctx, row) \
+        if row["kind"] == "managed" and ctx.caller.role == "admin" else ""
+    if row["kind"] == "managed":
+        data["revision"] = store.fetch(ctx.conn, "inventories", inventory_id,
+                                       "inventory")["revision"]
     return data
 
 
-@command("inventory.create", role="admin", mutating=True, redact=("content",),
+_FILES_REDACTED = ("content", "files[].content", "files[].data")
+
+
+@command("inventory.create", role="admin", mutating=True, redact=_FILES_REDACTED,
+         max_input=files.MAX_BUNDLE * 4 // 3 + 64 * 1024,
          params={"name": Str(required=True, max_length=200),
-                 "kind": Choice(("file", "managed")), **_INVENTORY_PARAMS})
+                 "kind": Choice(("file", "managed")), **_INVENTORY_PARAMS,
+                 "files": _INVENTORY_FILES})
 def inventory_create(ctx: Context, params: Values) -> dict:
-    """Create an inventory: a path of a project, or text written here."""
+    """Create an inventory: a path of a project, or a tree of files written
+    here (a main file, hosts.yml or hosts, with group_vars and host_vars
+    beside it, say), which file.list and file.change work on by its id."""
     name = store.check_name(params["name"])
     kind = params["kind"]
+    if kind == "file" and params["files"]:
+        raise BadRequest("unknown parameter: files")
     values = _inventory_values(ctx, params, kind)
+    operations = []
+    for index, item in enumerate(params["files"]):
+        if not isinstance(item, dict) or "op" in item or "expected" in item:
+            raise BadRequest(f"files[{index}] must have path, and content or data")
+        operations.append({"op": "write", **item})
     inventory_id = store.new_id("i")
     store.insert(ctx.conn, "inventories", {"id": inventory_id, "name": name, "kind": kind,
                                            "created_at": store.now(), **values}, "inventory")
+    if kind == "managed":
+        row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+        try:
+            _write_main(ctx, row, params["content"], operations)
+        except BaseException:
+            store.delete(ctx.conn, "inventories", inventory_id, "inventory")
+            shutil.rmtree(paths.INVENTORIES_DIR / inventory_id, ignore_errors=True)
+            raise
     return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
 @command("inventory.update", role="admin", mutating=True, redact=("content",),
          params={"id": Id(), "name": Str(max_length=200), **_INVENTORY_PARAMS})
 def inventory_update(ctx: Context, params: Values) -> dict:
-    """Change an inventory."""
+    """Change an inventory; for one written here, content replaces the text
+    of its main file, as a commit."""
     inventory_id = params["id"]
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     name = store.check_name(row["name"] if params["name"] is None else params["name"])
-    values = _inventory_values(ctx, params, row["kind"])
+    values = _inventory_values(ctx, params, row["kind"], row)
     store.update(ctx.conn, "inventories", inventory_id, {"name": name, **values}, "inventory")
+    row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    if row["kind"] == "managed":
+        _write_main(ctx, row, params["content"], [])
     return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
@@ -432,9 +494,12 @@ def inventory_update(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def inventory_delete(ctx: Context, params: Values) -> dict:
-    """Delete an inventory that no template uses."""
+    """Delete an inventory that no template uses, and the files of one
+    written here."""
     inventory_id = params["id"]
     store.delete(ctx.conn, "inventories", inventory_id, "inventory")
+    shutil.rmtree(paths.INVENTORIES_DIR / check_id(inventory_id, "inventory id"),
+                  ignore_errors=True)
     return {}
 
 
@@ -445,10 +510,9 @@ def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | 
     caller already did that for the same project.
     """
     if inventory["kind"] == "managed":
-        name = "hosts.yml" if inventory["format"] == "yaml" else "hosts"
-        (directory / "inventory").mkdir(mode=0o700)
-        (directory / "inventory" / name).write_text(inventory["content"])
-        return {"inventory": name, "inventory_source": "managed"}
+        # A copy of its tree, as a project is copied: runs share nothing they write.
+        jobs.snapshot(files.inventory_tree(ctx, inventory), directory / "inventory", "inventory")
+        return {"inventory": inventory["path"] or ".", "inventory_source": "managed"}
     if project_id is not None and inventory["project_id"] != project_id:
         raise Conflict("this inventory is a file of another project")
     return {"inventory": inventory["path"], "inventory_source": "project",

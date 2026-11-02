@@ -629,6 +629,14 @@ def _collect(ctx, run) -> None:
         except (FleetError, OSError) as failure:
             store.update(ctx.conn, "projects", run["project_id"],
                          {"collections_error": str(failure)}, "project")
+    if status == "successful" and run["kind"] in ("sync", "unpack"):
+        # Inventories that are files of the project may have changed with it.
+        from . import files  # it builds on this module
+        try:
+            project = store.fetch(ctx.conn, "projects", run["project_id"], "project")
+            files.reread_inventories(ctx, project, None, run["created_by"], start=False)
+        except (FleetError, OSError) as failure:
+            journal.send(f"inventories of {run['project_id']} not read again: {failure}", 4)
 
 
 def _log_tail(directory: Path, limit: int = 2000) -> str:
