@@ -4,7 +4,7 @@ Cockpit plugin that runs Ansible from the browser (Semaphore UI style) and
 collects, stores and notifies on data from the nodes, with Ansible only. Not
 a replacement for Icinga: nothing in real time, alerts "reasonably timely".
 
-## Status (1 November 2026)
+## Status (2 November 2026)
 
 Phases 0–9 closed (how each was accepted: the last section of
 `docs/architecture.md`); the terminal's ideas done and seen live. Phase 9
@@ -12,9 +12,10 @@ Phases 0–9 closed (how each was accepted: the last section of
 workflows` on the VMs of the three, no SELinux denial on Fedora 44 and
 AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 
-**Next:** the last item of phase 10, publication on GitHub: its Actions
-workflow, the license confirmed, a history with no secrets or real
-environments. 0.1.0 is tagged; everything else of phase 10 is done.
+Phase 10 (release 0.1.0) closed on 2 November: the project is public at
+`github.com/lineadicomando/cockpit-fleet`, under `LGPL-2.1-or-later`, its
+history rewritten with no workstation details, the GitHub workflow green.
+**Next:** nothing planned beyond the leftovers below and the Future section.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -72,7 +73,7 @@ except the rows that say "to confirm".
 | Topic | Decision |
 |---|---|
 | Name | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet`, command `fleet`; `fleetctl` stays the backend's (out of `PATH`) |
-| License, repo | `LGPL-2.1-or-later`, to confirm at publication; developed on a private Gitea, published at `github.com/lineadicomando/cockpit-fleet` with its history rewritten by `git filter-repo --replace-text` (the private one holds workstation details); a fresh history discarded, as it loses blame, bisect and the commit of v0.1.0 |
+| License, repo | `LGPL-2.1-or-later`, confirmed on 2 November; developed on a private Gitea, published at `github.com/lineadicomando/cockpit-fleet` with its history rewritten by `git filter-repo --replace-text` (the private one holds workstation details); a fresh history discarded, as it loses blame, bisect and the commit of v0.1.0 |
 | Backend | No daemon, no port: units on demand; account `cockpit-fleet`; root only in `fleet-unit`, `fleet-secret` |
 | Roles | Groups `cockpit-fleet-admin`, `-operator`, `-viewer`, the highest wins; rights apart (`auth.GROUP_RIGHTS`, a command's `right=`). Viewer: outcomes, not output. Operator: launches, narrows hosts, dry run, answers surveys |
 | Approvals | `cockpit-fleet-approver` is a right (`approve`) that adds to any role or stands alone, not a fourth role; administrators approve too; nobody approves their own launch but an administrator; agents never approve; the run is prepared at launch and waits as `pending_approval`, expires after `[approvals] expire_hours` (24) |
@@ -255,9 +256,9 @@ except the rows that say "to confirm".
 - [x] GitHub Actions workflow (1 November: `.github/workflows/ci.yml`,
       the Gitea one's steps in containers of the three distributions;
       the Debian job rehearsed in a local container, the rpm ones not)
-- [ ] Publication: the license confirmed, the rewritten history on
-      `github.com/lineadicomando/cockpit-fleet` (the private one holds
-      workstation details), the GitHub workflow seen green there
+- [x] Publication (2 November: the license confirmed, the rewritten
+      history on `github.com/lineadicomando/cockpit-fleet` and on Gitea,
+      the same on both; the GitHub workflow green on its first run)
 
 ## Future
 

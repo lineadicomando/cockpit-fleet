@@ -284,11 +284,11 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
 
 ## Repository
 
-- The repository will be published on GitHub once the project is stable. Treat
-  every commit as future public history: no secrets, no passwords, no details of
-  real (non-test) environments or of a developer's machines, in files or in
-  commit messages.
-- License: `LGPL-2.1-or-later`, same as `cockpit-samba-dc` (provisional).
+- The repository is public on GitHub (`github.com/lineadicomando/cockpit-fleet`),
+  with the same history on the private Gitea where CI also runs. Every commit
+  is public history: no secrets, no passwords, no details of real (non-test)
+  environments or of a developer's machines, in files or in commit messages.
+- License: `LGPL-2.1-or-later`, same as `cockpit-samba-dc`.
 - CI: `.gitea/workflows/ci.yml`, on runners labelled `cockpit-fleet`
   (Debian 13: tests, the `.deb`), `cockpit-fleet-fedora` and
   `cockpit-fleet-alma` (the `.rpm` with rpmlint): arm64 containers where
