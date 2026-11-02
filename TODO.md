@@ -125,9 +125,8 @@ except the rows that say "to confirm".
   listing is `--export`ed, so group variables stay with the groups); a file
   inventory of another project gets the collections of the job's project only.
 - Editor: open files and their unsaved changes kept while another tab of
-  Fleet is shown, lost when the browser's tab is reloaded (asked first); a
-  folder made in the page and left empty is gone on reload (git keeps no
-  empty directory); no search in the content of files; syntax
+  Fleet is shown, lost when the browser's tab is reloaded (asked first);
+  no search in the content of files; syntax
   check without vault password, listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
 - Ad-hoc: arguments as one line in the page, stored in clear.

@@ -132,20 +132,22 @@ class ManagedProjectTest(Managed):
         self.assertEqual(sorted(os.listdir(outside)), ["secret"])
         self.assertEqual(self.ok("file.list", {"id": self.id})["files"], [])
 
-    def test_delete_and_move_are_commits_and_leave_no_empty_directory(self):
+    def test_delete_and_move_are_commits_and_keep_the_directories_left_empty(self):
         self.write("roles/web/tasks/main.yml", "a\n")
         self.write("site.yml", "b\n")
         self.ok("file.move", {"id": self.id, "path": "roles/web/tasks/main.yml",
                               "to": "roles/db/tasks/main.yml"})
-        self.assertFalse((self.tree / "roles" / "web").exists())
-        self.assertEqual([f["path"] for f in self.ok("file.list", {"id": self.id})["files"]],
+        self.assertTrue((self.tree / "roles/web/tasks/.gitkeep").is_file())
+        listed = self.ok("file.list", {"id": self.id})
+        self.assertEqual([f["path"] for f in listed["files"]],
                          ["site.yml", "roles/db/tasks/main.yml"])
+        self.assertIn("roles/web/tasks", listed["directories"])
         self.assertEqual(self.code("file.move", {"id": self.id, "path": "site.yml",
                                                  "to": "roles/db/tasks/main.yml"}), "conflict")
         self.assertEqual(self.code("file.move", {"id": self.id, "path": "nope", "to": "x"}),
                          "not_found")
         self.ok("file.delete", {"id": self.id, "path": "roles/db/tasks/main.yml"})
-        self.assertFalse((self.tree / "roles").exists())
+        self.assertIn("roles/db/tasks/.gitkeep", self.git("ls-files").split())
         self.assertEqual(self.code("file.delete", {"id": self.id, "path": "site.yml/x"}),
                          "conflict")
         self.assertEqual(self.code("file.delete", {"id": self.id, "path": "nope"}), "not_found")
@@ -155,6 +157,43 @@ class ManagedProjectTest(Managed):
         only = self.ok("file.history", {"id": self.id, "path": "site.yml"})["commits"]
         self.assertEqual([c["subject"] for c in only], ["Add site.yml"])
         self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_an_empty_folder_is_made_and_kept_until_something_is_in_it(self):
+        self.write("site.yml", "b\n")
+        self.ok("file.change", {"id": self.id, "operations": [
+            {"op": "mkdir", "path": "roles/web/templates"}, {"op": "mkdir", "path": "files"}]})
+        listed = self.ok("file.list", {"id": self.id})
+        self.assertEqual([f["path"] for f in listed["files"]], ["site.yml"])
+        self.assertEqual(sorted(listed["directories"]),
+                         ["files", "roles", "roles/web", "roles/web/templates"])
+        # Only the innermost holds the file that keeps it, and it goes once a file is there.
+        self.assertEqual(sorted(self.git("ls-files").split()),
+                         ["files/.gitkeep", "roles/web/templates/.gitkeep", "site.yml"])
+        self.write("roles/web/templates/a.j2", "x\n")
+        self.assertEqual(sorted(self.git("ls-files").split()),
+                         ["files/.gitkeep", "roles/web/templates/a.j2", "site.yml"])
+        # Moved, copied, and back when emptied.
+        self.ok("file.change", {"id": self.id, "operations": [
+            {"op": "copy", "path": "files", "to": "copied"},
+            {"op": "move", "path": "roles/web/templates/a.j2", "to": "a.j2"}]})
+        self.assertIn("copied", self.ok("file.list", {"id": self.id})["directories"])
+        self.assertIn("roles/web/templates/.gitkeep", self.git("ls-files").split())
+        for refused, code in (({"op": "mkdir", "path": "files"}, "conflict"),
+                              ({"op": "mkdir", "path": "site.yml/x"}, "conflict"),
+                              ({"op": "mkdir", "path": "../x"}, "bad_request"),
+                              ({"op": "mkdir", "path": "/".join(["d"] * 12)}, "bad_request"),
+                              ({"op": "mkdir", "path": "x", "to": "y"}, "bad_request")):
+            self.assertEqual(self.code("file.change", {"id": self.id, "operations": [refused]}),
+                             code, refused)
+        self.ok("file.change", {"id": self.id, "operations": [
+            {"op": "mkdir", "path": "/".join(["d"] * 11)}]})
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_a_gitkeep_with_content_is_a_file_like_any_other(self):
+        self.write("files/.gitkeep", "mine\n")
+        self.write("files/other", "x\n")
+        self.assertEqual(sorted(f["path"] for f in self.ok("file.list", {"id": self.id})["files"]),
+                         ["files/.gitkeep", "files/other"])
 
     def test_a_name_is_never_a_pattern(self):
         self.write("a.yml", "a\n")
@@ -281,6 +320,7 @@ class ChangeTest(Managed):
         self.assertFalse((self.tree / "inventories/lab2").exists())
         self.ok("file.delete", {"id": self.id, "path": "labs"})
         self.assertFalse((self.tree / "labs").exists())
+        self.assertNotIn("inventories/lab2", self.ok("file.list", {"id": self.id})["directories"])
         self.assertEqual(len(self.listed()), 3)
         # The commands of one file move a directory too.
         self.ok("file.move", {"id": self.id, "path": "inventories", "to": "inv"})

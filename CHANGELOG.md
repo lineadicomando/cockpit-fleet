@@ -25,7 +25,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   folder as an archive; several files stay open in tabs with their changes
   while another tab of Fleet is shown; the tree is filtered by name; a file
   is put back as it was after an earlier change. The tree is used with the
-  keyboard too (arrows, Enter, Space, F2, Delete).
+  keyboard too (arrows, Enter, Space, F2, Delete). Folders are kept when
+  empty, made so or left so by a move or a delete (`file.change` takes
+  `mkdir`), as an empty `.gitkeep` that the page does not show; an
+  imported archive keeps its empty folders too.
 - `fleet inventory clone`, `pull` and `push` work on an inventory written
   in the interface as `fleet project` does on a project; a push reads it
   again.

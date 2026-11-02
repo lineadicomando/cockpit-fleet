@@ -1010,7 +1010,7 @@
   "Clear the selection": "Annulla la selezione",
   "Open files": "File aperti",
   "Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed.": "Dentro il progetto, per esempio roles/web/tasks/main.yml. Le cartelle vengono create quando servono.",
-  "A folder is kept once a file is in it.": "Una cartella viene conservata quando contiene un file.",
+  "Inside the project, for example roles/web/templates. Folders are created as needed.": "Dentro il progetto, per esempio roles/web/templates. Le cartelle vengono create quando servono.",
   "The new path inside the project: a folder is renamed with everything in it.": "Il nuovo percorso dentro il progetto: una cartella viene rinominata con tutto il suo contenuto.",
   "What is deleted goes from the project, folders with everything in them, as one change; it stays in the record of changes. Open files among them are closed.": "Ciò che si elimina esce dal progetto, le cartelle con tutto il loro contenuto, con una sola modifica; resta nello storico delle modifiche. I file aperti tra questi vengono chiusi.",
   "Replace files?": "Sostituire i file?",

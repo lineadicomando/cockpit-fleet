@@ -61,7 +61,7 @@ interface OpenFile {
 
 // The open files of each project or inventory, kept while the page is left
 // for another tab of Fleet; gone when the browser's tab is reloaded.
-const kept = new Map<string, { tabs: OpenFile[]; current: string | null; empty: string[] }>();
+const kept = new Map<string, { tabs: OpenFile[]; current: string | null }>();
 
 const isDirty = (tab: OpenFile) => tab.file !== null && !tab.file.binary && tab.text !== tab.file.content;
 
@@ -308,8 +308,6 @@ export function FilesPage({ id }: { id: string }) {
     const saved = kept.get(id);
     const [tabs, setTabs] = useState<OpenFile[]>(saved?.tabs ?? []);
     const [current, setCurrent] = useState<string | null>(saved?.current ?? null);
-    // Folders made here that hold no file yet: git keeps none, so neither does the backend.
-    const [empty, setEmpty] = useState<string[]>(saved?.empty ?? []);
     const [open, setOpen] = useState<Set<string> | null>(null);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [query, setQuery] = useState("");
@@ -326,14 +324,11 @@ export function FilesPage({ id }: { id: string }) {
     const editable = list.data?.editable ?? false;
     const files = useMemo(() => (list.data?.files ?? []).map(entry => entry.path), [list.data]);
     const fileSet = useMemo(() => new Set(files), [files]);
-    const directories = useMemo(() => {
-        const all = new Set([...(list.data?.directories ?? []), ...empty.flatMap(path => [...ancestors(path), path])]);
-        return [...all].sort();
-    }, [list.data, empty]);
+    const directories = useMemo(() => [...(list.data?.directories ?? [])].sort(), [list.data]);
     const tab = tabs.find(candidate => candidate.path === current) ?? null;
     const anyDirty = tabs.some(isDirty);
 
-    useEffect(() => { kept.set(id, { tabs, current, empty }); }, [id, tabs, current, empty]);
+    useEffect(() => { kept.set(id, { tabs, current }); }, [id, tabs, current]);
 
     // Leaving the page with changes not saved asks first.
     useEffect(() => {
@@ -348,11 +343,6 @@ export function FilesPage({ id }: { id: string }) {
         if (!list.data || open !== null) return;
         setOpen(new Set(list.data.files.length <= OPEN_ALL ? list.data.directories : current ? ancestors(current) : []));
     }, [list.data]);
-
-    // A folder made here is no longer needed once a file is in it.
-    useEffect(() => {
-        setEmpty(paths => paths.filter(path => !files.some(file => isInside(file, path))));
-    }, [files]);
 
     const filtered = useMemo(() => filterFiles(files, query), [files, query]);
     const shownOpen = useMemo(() => new Set([...(open ?? []), ...filtered.open]), [open, filtered]);
@@ -427,7 +417,6 @@ export function FilesPage({ id }: { id: string }) {
         };
         setTabs(all => all.map(candidate => ({ ...candidate, path: move(candidate.path) })));
         setCurrent(path => (path ? move(path) : path));
-        setEmpty(paths => paths.map(move));
         setOpen(previous => new Set([...(previous ?? [])].map(move)));
     }
 
@@ -442,9 +431,7 @@ export function FilesPage({ id }: { id: string }) {
 
     async function remove(paths: string[]) {
         const gone = topmost(paths);
-        const real = gone.filter(path => fileSet.has(path) || files.some(file => isInside(file, path) && file !== path));
-        if (real.length) await apply(real.map(path => ({ op: "delete", path })));
-        setEmpty(previous => previous.filter(path => !gone.some(deleted => isInside(path, deleted))));
+        await apply(gone.map(path => ({ op: "delete", path })));
         closeTabs(tabs.filter(candidate => gone.some(deleted => isInside(candidate.path, deleted))).map(candidate => candidate.path));
     }
 
@@ -578,7 +565,7 @@ export function FilesPage({ id }: { id: string }) {
             )}
             {problem && <Alert variant="danger" isInline title={problem} style={{ marginBottom: "1rem" }} />}
             {importId && <div style={{ marginBottom: "1rem" }}><ImportResult key={importId} id={importId} onDone={list.reload} /></div>}
-            <ListState loaded={list} isEmpty={data => data.files.length === 0 && empty.length === 0 && !editable}
+            <ListState loaded={list} isEmpty={data => data.files.length === 0 && data.directories.length === 0 && !editable}
                 emptyTitle={t("No files")} emptyBody={t("This project has no files.")}>
                 {data => (
                     <div className="fleet-files">
@@ -597,7 +584,7 @@ export function FilesPage({ id }: { id: string }) {
                                     <Button variant="link" size="sm" onClick={() => setSelected(new Set())}>{t("Clear the selection")}</Button>
                                 </Flex>
                             )}
-                            {data.files.length === 0 && empty.length === 0
+                            {data.files.length === 0 && data.directories.length === 0
                                 ? <Content component="p">{ofInventory
                                     ? t("Create the first file of this inventory: hosts.yml, for example, with group_vars and host_vars beside it.")
                                     : t("Create the first file of this project: a playbook, for example site.yml.")}</Content>
@@ -674,10 +661,10 @@ export function FilesPage({ id }: { id: string }) {
                     initial={dialog.in ? `${dialog.in}/` : ""}
                     help={dialog.kind === "new-file"
                         ? t("Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed.")
-                        : t("A folder is kept once a file is in it.")}
+                        : t("Inside the project, for example roles/web/templates. Folders are created as needed.")}
                     onSubmit={async next => {
                         if (dialog.kind === "new-folder") {
-                            setEmpty(paths => [...paths, next]);
+                            await apply([{ op: "mkdir", path: next }]);
                             setOpen(previous => new Set([...(previous ?? []), ...ancestors(next), next]));
                         } else {
                             await call("file.write", { id, path: next, content: "", expected: "" });
@@ -692,12 +679,8 @@ export function FilesPage({ id }: { id: string }) {
                 <PathModal title={t("Rename {{path}}", { path: dialog.path })} submitLabel={t("Rename")} initial={dialog.path}
                     help={t("The new path inside the project: a folder is renamed with everything in it.")}
                     onSubmit={async next => {
-                        const moves = [{ path: dialog.path, to: next }];
-                        if (empty.includes(dialog.path)) followMoves(moves);
-                        else {
-                            await apply([{ op: "move", path: dialog.path, to: next }]);
-                            followMoves(moves);
-                        }
+                        await apply([{ op: "move", path: dialog.path, to: next }]);
+                        followMoves([{ path: dialog.path, to: next }]);
                         setDialog(null);
                     }}
                     onClose={() => setDialog(null)} />

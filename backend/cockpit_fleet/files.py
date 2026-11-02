@@ -63,6 +63,9 @@ _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _INCOMING = "refs/fleet/incoming"
 # A play among the top-level items of a list: this is what tells a playbook
 # from a file of tasks or of variables.
+# What keeps an empty directory in the history, where git keeps none: an
+# empty file, put in and taken out by the backend, never listed.
+KEEP = ".gitkeep"
 _PLAY_RE = re.compile(r"^(- | {2})(hosts|(ansible\.builtin\.)?import_playbook) *:", re.MULTILINE)
 
 _GIT_ENV = {
@@ -154,6 +157,7 @@ def _commit(ctx: Context, project, message: str, by_service: bool = False,
     BY_SERVICE, for what no one wrote (the text of an inventory made its
     first file)."""
     project_id = project["id"]
+    _keep_empty(_home(project_id) / "tree")
     # --force: a .gitignore in the tree must not keep a file runs see out of the history.
     _git(project_id, "add", "--all", "--force")
     if not _git(project_id, "status", "--porcelain"):
@@ -288,14 +292,26 @@ def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _prune(tree: Path, directory: Path) -> None:
-    """Remove the directories a deleted file left empty: git does not keep them."""
-    while directory != tree:
-        try:
-            directory.rmdir()
-        except OSError:
-            return
-        directory = directory.parent
+def _is_marker(path: Path) -> bool:
+    """Whether PATH is the empty file that keeps its directory."""
+    try:
+        status = os.lstat(path)
+    except OSError:
+        return False
+    return path.name == KEEP and stat.S_ISREG(status.st_mode) and status.st_size == 0
+
+
+def _keep_empty(tree: Path) -> None:
+    """Give every empty directory of TREE the file that keeps it in the
+    history, and take that file out of a directory that holds something else."""
+    for current, directories, names in os.walk(tree, topdown=False):
+        here = Path(current)
+        if here == tree:
+            continue
+        if not directories and not names:
+            (here / KEEP).touch(mode=0o600)
+        elif KEEP in names and len(directories) + len(names) > 1 and _is_marker(here / KEEP):
+            (here / KEEP).unlink()
 
 
 def _project(ctx: Context, params: Values, managed: bool = False):
@@ -400,6 +416,7 @@ _OPERATION_KEYS = {
     "move": ({"path", "to"}, set()),
     "copy": ({"path", "to"}, set()),
     "delete": ({"path"}, set()),
+    "mkdir": ({"path"}, set()),
 }
 
 
@@ -491,6 +508,13 @@ def _apply(tree: Path, operation: dict, changed: list[bool]) -> tuple[str, list[
         changed[0] = True
         _write_file(target, operation["data"])
         return f"{'Update' if exists else 'Add'} {path}", [str(path)]
+    if kind == "mkdir":
+        if _mode_on_way(tree, path) is not None:
+            raise Conflict(f"{path} already exists")
+        check_file_path(str(path / KEEP), "path")  # room for what keeps it
+        changed[0] = True
+        (tree / path).mkdir(mode=0o700, parents=True)
+        return f"Add folder {path}", [str(path)]
     is_directory = _entry(tree, path)
     source = tree / path
     if kind == "delete":
@@ -499,7 +523,6 @@ def _apply(tree: Path, operation: dict, changed: list[bool]) -> tuple[str, list[
             shutil.rmtree(source)
         else:
             source.unlink()
-        _prune(tree, source.parent)
         return f"Delete {path}", [str(path)]
     to = operation["to"]
     if _mode_on_way(tree, to) is not None:
@@ -513,7 +536,6 @@ def _apply(tree: Path, operation: dict, changed: list[bool]) -> tuple[str, list[
     if kind == "move":
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         source.rename(target)
-        _prune(tree, source.parent)
         return f"Rename {path} to {to}", [str(path), str(to)]
     for relative in inside:
         origin = source / relative if relative.parts else source
@@ -617,7 +639,7 @@ def file_list(ctx: Context, params: Values) -> dict:
                 relative.encode()
             except (OSError, UnicodeEncodeError):
                 continue
-            if stat.S_ISREG(status.st_mode):
+            if stat.S_ISREG(status.st_mode) and not (name == KEEP and status.st_size == 0):
                 found.append({"path": relative, "size": status.st_size})
         if len(found) > MAX_LISTED:
             break
@@ -704,10 +726,11 @@ def file_move(ctx: Context, params: Values) -> dict:
          params={
              "id": Id(),
              "operations": Objs(
-                 "The changes, made in this order: each has op (write, move, copy or"
-                 " delete) and path; to for move and copy; for write, content (text) or"
-                 " data (base64) and expected, the SHA-256 of the file it replaces,"
-                 " empty for a new one. Move, copy and delete take directories too.",
+                 "The changes, made in this order: each has op (write, move, copy,"
+                 " delete or mkdir) and path; to for move and copy; for write, content"
+                 " (text) or data (base64) and expected, the SHA-256 of the file it"
+                 " replaces, empty for a new one. Move, copy and delete take directories"
+                 " too; a directory is kept when it is empty.",
                  max_items=MAX_OPERATIONS),
              "revision": Str("The revision of the project the changes were made on;"
                              " refused if it changed meanwhile", default="", max_length=64),
@@ -715,8 +738,9 @@ def file_move(ctx: Context, params: Values) -> dict:
          })
 def file_change(ctx: Context, params: Values) -> dict:
     """Change files and directories of a managed project as one commit: all
-    the changes are made, or none of them. Playbooks written are checked, as
-    when written one at a time."""
+    the changes are made, or none of them. A directory left empty, or made
+    with mkdir, is kept, with an empty .gitkeep in it that is not listed.
+    Playbooks written are checked, as when written one at a time."""
     project = _project(ctx, params, managed=True)
     operations = [check_operation(index, item) for index, item in enumerate(params["operations"])]
     if not operations:
@@ -908,14 +932,18 @@ def file_import(ctx: Context, params: Values) -> dict:
             "sha256": options["sha256"]}
 
 
-def _gather(root: Path) -> list[tuple[str, bytes]]:
+def _gather(root: Path) -> list[tuple[str, bytes | None]]:
     """The files a job unpacked into ROOT, read following no link, as
-    (relative path, content): only regular files and directories are taken."""
-    found: list[tuple[str, bytes]] = []
+    (relative path, content), and its empty directories, with None as
+    content: only regular files and directories are taken."""
+    found: list[tuple[str, bytes | None]] = []
     budget = [MAX_BUNDLE]
 
     def walk(directory_fd: int, prefix: str) -> None:
-        for name in sorted(os.listdir(directory_fd)):
+        names = sorted(os.listdir(directory_fd))
+        if not names and prefix:
+            found.append((prefix, None))
+        for name in names:
             relative = f"{prefix}/{name}" if prefix else name
             info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
             if stat.S_ISDIR(info.st_mode):
@@ -967,6 +995,10 @@ def take_import(ctx: Context, run, directory: Path) -> str:
     operations = []
     for relative, data in _gather(directory / "checkout"):
         path = check_file_path(str(into / relative) if into else relative)
+        if data is None:
+            if _mode_on_way(tree, path) is None:
+                operations.append({"op": "mkdir", "path": path})
+            continue
         target = _locate(tree, path)
         expected = _digest(_read(target)) if target.is_file() else ""
         operations.append({"op": "write", "path": path, "data": data, "expected": expected})

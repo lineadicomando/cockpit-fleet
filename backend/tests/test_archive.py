@@ -371,6 +371,17 @@ class ImportTest(Base):
         self.assertEqual((paths.PROJECTS_DIR / self.id / "tree" / "site.yml").read_bytes(),
                          PLAYBOOK)
 
+    def test_its_empty_directories_are_kept(self):
+        run = self.imported(tar(("lab/roles/web/files", None), ("lab/site.yml", PLAYBOOK)),
+                            into="labs")
+        self.assertEqual(run["status"], "successful", run)
+        self.assertIn("labs/roles/web/files",
+                      self.ok("file.list", {"id": self.id})["directories"])
+        self.assertEqual(self.listed(), ["labs/site.yml", "site.yml"])
+        # Already there, it is left as it is.
+        run = self.imported(tar(("roles/web/files", None), ("other.yml", b"x")), into="labs")
+        self.assertEqual(run["status"], "successful", run)
+
     def test_what_the_editor_would_not_write_fails_it_whole(self):
         before = self.ok("file.list", {"id": self.id})["revision"]
         for members in ((("big.iso", b"\0" * (files.MAX_FILE + 1)), ("ok.yml", b"x")),

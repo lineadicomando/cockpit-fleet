@@ -313,7 +313,15 @@ made, `git reset --hard` and `git clean` put the tree back as the last
 commit has it. A directory is moved or copied only if every path it would
 then hold is one the editor takes (twelve levels at most), and a copy only
 if the project then holds at most 5000 files. Git keeps no empty
-directory, so neither does a project: a directory left empty goes.
+directory, so before each commit the backend puts an empty `.gitkeep` in
+every directory left empty, or made empty with `mkdir`, and takes it out
+of one that holds something else: a folder stays as long as no one
+deletes it, in a clone and in an export too, which an empty project or
+inventory to start from needs. `file.list` does not show an empty
+`.gitkeep` (one with content is a file like any other); Ansible ignores
+it, as it ignores every name that starts with a dot in an inventory
+directory and among variables. An archive imported keeps its empty
+directories the same way.
 
 `file.restore` puts a file or a directory back as it was at a revision, as
 a new commit, exactly (files added since are removed). Only a revision in

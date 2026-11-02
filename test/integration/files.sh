@@ -105,7 +105,8 @@ expect_eq "nothing was written outside the tree" "$(ls /var/lib/cockpit-fleet/pr
 # --- rename, delete, history ---------------------------------------------------------
 expect_eq "a file is renamed" "$(get "$(admin file.move "{\"id\": \"$id\", \"path\": \"broken.yml\", \"to\": \"old/broken.yml\"}")" 'len(a["data"]["revision"])')" 40
 expect_eq "a file is deleted" "$(get "$(admin file.delete "{\"id\": \"$id\", \"path\": \"old/broken.yml\"}")" 'a["ok"]')" True
-expect_denied "its directory goes with it" test -e "$home/tree/old"
+expect_ok "its directory stays, kept in the history" test -f "$home/tree/old/.gitkeep"
+expect_eq "the empty directory is listed, not what keeps it" "$(get "$(admin file.list "{\"id\": \"$id\"}")" '("old" in a["data"]["directories"], any(f["path"].startswith("old/") for f in a["data"]["files"]))')" "(True, False)"
 history=$(admin file.history "{\"id\": \"$id\"}")
 expect_eq "the changes are listed, newest first" "$(get "$history" '[c["subject"] for c in a["data"]["commits"]][:2]')" \
     "['Delete old/broken.yml', 'Rename broken.yml to old/broken.yml']"

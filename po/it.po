@@ -3001,8 +3001,8 @@ msgstr "File aperti"
 msgid "Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed."
 msgstr "Dentro il progetto, per esempio roles/web/tasks/main.yml. Le cartelle vengono create quando servono."
 
-msgid "A folder is kept once a file is in it."
-msgstr "Una cartella viene conservata quando contiene un file."
+msgid "Inside the project, for example roles/web/templates. Folders are created as needed."
+msgstr "Dentro il progetto, per esempio roles/web/templates. Le cartelle vengono create quando servono."
 
 msgid "The new path inside the project: a folder is renamed with everything in it."
 msgstr "Il nuovo percorso dentro il progetto: una cartella viene rinominata con tutto il suo contenuto."
