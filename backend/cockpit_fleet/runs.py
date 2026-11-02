@@ -267,7 +267,8 @@ def _read_from(ctx: Context, params: Values, name: str) -> dict:
     run_id = params["id"]
     offset = params["offset"]
     run = store.fetch(ctx.conn, "runs", run_id, "run")
-    if run["kind"] == "inventory" and ctx.caller.role != "admin":
+    if (run["kind"] == "inventory" or run["kind"] == "syntax" and run["inventory_id"]) \
+            and ctx.caller.role != "admin":
         # Ansible quotes the lines it could not read, and they may hold passwords.
         raise Forbidden("the output of reading an inventory is for administrators")
     try:

@@ -591,7 +591,9 @@ def change(ctx: Context, project, operations: list[dict], message: str,
     files = [{"path": str(op["path"]), "sha256": _digest(op["data"])} for op in written]
     if is_inventory(project["id"]):
         from .resources import queue_parse  # it builds on this module
-        return {"revision": new_revision, "files": files, "check_run_ids": [],
+        return {"revision": new_revision, "files": files,
+                "check_run_ids": [queue_parse(ctx, project, start=start, syntax=True)]
+                if reread else [],
                 "collections_run_id": None,
                 "inventory_run_ids": [queue_parse(ctx, project, start=start)] if reread else []}
     checks = []
@@ -1059,11 +1061,16 @@ def file_diff(ctx: Context, params: Values) -> dict:
              "path": Str(required=True, max_length=1024),
          })
 def file_check(ctx: Context, params: Values) -> dict:
-    """Queue a syntax check of one playbook, of any kind of project."""
-    if is_inventory(params["id"]):
-        raise Conflict("an inventory has no playbook to check")
+    """Queue a syntax check of one playbook, of any kind of project; in an
+    inventory written in the interface, of the whole inventory, as it reads
+    the file at path among its sources or their variables."""
     project = _project(ctx, params)
     path = check_file_path(params["path"])
+    if is_inventory(project["id"]):
+        from .resources import queue_parse  # it builds on this module
+        if not _locate(container_tree(ctx, project), path).is_file():
+            raise NotFound(f"no such file: {path}")
+        return {"run_id": queue_parse(ctx, project, syntax=True)}
     return {"run_id": _queue_check(ctx, project, path)}
 
 
@@ -1163,7 +1170,9 @@ def file_push(ctx: Context, params: Values) -> dict:
                                                if table == "projects" else {})}, what)
     project = _fetch(ctx, project_id)
     if is_inventory(project_id):
-        return {"revision": revision, "files": changed, "check_run_ids": [],
+        from .resources import queue_parse  # it builds on this module
+        return {"revision": revision, "files": changed,
+                "check_run_ids": [queue_parse(ctx, project, syntax=True)],
                 "collections_run_id": None, "inventory_run_ids": _reread(ctx, project, changed)}
     tree = container_tree(ctx, project)
     checks = []

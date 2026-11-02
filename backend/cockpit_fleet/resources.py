@@ -541,8 +541,10 @@ def inventory_parse(ctx: Context, params: Values) -> dict:
 
 
 def queue_parse(ctx: Context, inventory, created_by: str | None = None,
-                start: bool = True) -> str:
-    """Queue the job that lists the hosts and groups of an inventory."""
+                start: bool = True, syntax: bool = False) -> str:
+    """Queue the job that lists the hosts and groups of an inventory. With
+    SYNTAX, a syntax check instead: the same reading, where any source that
+    cannot be read fails it, and the hosts listed are not kept."""
     inventory_id = inventory["id"]
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
@@ -553,15 +555,18 @@ def queue_parse(ctx: Context, inventory, created_by: str | None = None,
             jobs.place_collections(project, directory)
         else:
             (directory / "project").mkdir(mode=0o700)
-        spec = {"kind": "inventory", **place_inventory(ctx, inventory, directory, None)}
+        spec = {"kind": "syntax" if syntax else "inventory",
+                **place_inventory(ctx, inventory, directory, None)}
         jobs.add_secret(directory, inventory["vault_credential_id"],
                         "vault_password", "vault_password")
         jobs.write_known_hosts(ctx.conn, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
-    run = {"id": run_id, "kind": "inventory", "title": inventory["name"],
+    run = {"id": run_id, "kind": spec["kind"], "title": inventory["name"],
            "inventory_id": inventory_id, "project_id": inventory["project_id"]}
+    if syntax:
+        run["revision"] = inventory["revision"]
     if created_by:
         run["created_by"] = created_by
     (jobs.enqueue if start else jobs.queue)(ctx, run, spec, directory)

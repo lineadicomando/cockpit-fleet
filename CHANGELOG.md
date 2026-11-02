@@ -29,6 +29,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   empty, made so or left so by a move or a delete (`file.change` takes
   `mkdir`), as an empty `.gitkeep` that the page does not show; an
   imported archive keeps its empty folders too.
+- The syntax of an inventory written in the interface is checked when one
+  of its files is saved, imported or pushed, and on request from the
+  editor ("Check syntax", `file.check`): it is read as for its hosts, but
+  any source or variables file that cannot be read fails the check.
 - `fleet inventory clone`, `pull` and `push` work on an inventory written
   in the interface as `fleet project` does on a project; a push reads it
   again.

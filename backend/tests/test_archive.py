@@ -400,6 +400,13 @@ class ImportTest(Base):
         self.assertEqual(run["inventory_id"], inventory["id"])
         self.assertEqual(self.listed(inventory["id"]),
                          ["group_vars/all.yml", "host_vars/pc01.yml", "hosts.yml"])
+        # Its syntax is checked, and it is read again.
+        kinds = sorted(r["kind"] for r in self.ok("run.list")["runs"]
+                       if r["inventory_id"] == inventory["id"] and r["kind"] != "unpack")
+        self.assertEqual(kinds, ["inventory", "syntax"])
+        for run_id in list(self.active):
+            self.finish(run_id)
+            self.ok("run.get", {"id": run_id})
         # A single directory that holds everything is not kept, as for an upload.
         self.imported(tar(("group_vars/web.yml", b"b: 2\n")), id=inventory["id"],
                       into="group_vars")

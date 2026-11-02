@@ -127,7 +127,8 @@ except the rows that say "to confirm".
 - Editor: open files and their unsaved changes kept while another tab of
   Fleet is shown, lost when the browser's tab is reloaded (asked first);
   no search in the content of files; syntax
-  check without vault password, listed among runs; completion and module
+  check of a playbook without vault password, of an inventory on save or
+  on request only (a file of its tree that is no source is not checked), listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Masking: other encodings, and secrets a run decrypts itself, not masked.

@@ -619,7 +619,7 @@ export function FilesPage({ id }: { id: string }) {
                                                         {isDirty(tab) && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Not saved")}</Label>}
                                                     </FlexItem>
                                                     <Flex gap={{ default: "gapSm" }}>
-                                                        {isYaml(tab.path) && !ofInventory && <Button variant="secondary" onClick={check} isDisabled={!tab.file || isDirty(tab)}>{t("Check syntax")}</Button>}
+                                                        {(ofInventory ? !tab.file?.binary : isYaml(tab.path)) && <Button variant="secondary" onClick={check} isDisabled={!tab.file || isDirty(tab)}>{t("Check syntax")}</Button>}
                                                         {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "history", path: tab.path })}>{t("Changes")}</Button>}
                                                         <Button variant="secondary" onClick={() => download(tab.path)}>{t("Download")}</Button>
                                                         <Button variant="secondary" onClick={() => guardClose([tab.path])}>{t("Close")}</Button>

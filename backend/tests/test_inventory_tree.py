@@ -105,10 +105,41 @@ class InventoryTreeTest(Base):
         self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "host_vars/pc01.yaml"})
                          ["content"], "ansible_host: 192.0.2.21\n")
 
+    def test_its_syntax_is_checked_on_a_change_and_when_asked(self):
+        made = self.ok("inventory.create", {"name": "school", "kind": "managed",
+                                            "files": SCHOOL})
+        self.ok("inventory.update", {"id": made["id"], "path": "hosts.yaml"})
+        current = self.ok("file.read", {"id": made["id"], "path": "host_vars/pc01.yaml"})
+        saved = self.ok("file.write", {"id": made["id"], "path": "host_vars/pc01.yaml",
+                                       "content": "ansible_host: [\n",
+                                       "expected": current["sha256"]})
+        run_id = saved["check_run_id"]
+        self.assertEqual(self.spec_of(run_id), {"kind": "syntax", "inventory": "hosts.yaml",
+                                                "inventory_source": "managed"})
+        self.assertEqual((paths.RUNS_DIR / run_id / "inventory/host_vars/pc01.yaml").read_text(),
+                         "ansible_host: [\n")
+        run = self.ok("run.get", {"id": run_id})
+        self.assertEqual((run["kind"], run["inventory_id"], run["title"], run["revision"]),
+                         ("syntax", made["id"], "school", saved["revision"]))
+        # A failed check is not a failed reading: the inventory keeps what it listed.
+        self.finish(run_id, rc=1)
+        self.assertEqual(self.ok("run.get", {"id": run_id})["status"], "failed")
+        self.assertEqual(self.ok("inventory.get", {"id": made["id"]})["parse_error"], "")
+        # Its output may quote a password, as a reading's may.
+        self.assertEqual(self.code("run.log", {"id": run_id}, role="operator"), "forbidden")
+        self.ok("run.log", {"id": run_id})
+
+        asked = self.ok("file.check", {"id": made["id"], "path": "hosts.yaml"})["run_id"]
+        self.assertEqual(self.spec_of(asked)["kind"], "syntax")
+        self.finish(asked)
+        self.assertEqual(self.ok("run.get", {"id": asked})["status"], "successful")
+        self.assertEqual(self.code("file.check", {"id": made["id"], "path": "nope.yml"}),
+                         "not_found")
+        self.assertEqual(self.code("file.check", {"id": made["id"], "path": "hosts.yaml"},
+                                   role="operator"), "forbidden")
+
     def test_what_is_only_for_projects_or_only_for_trees(self):
         made = self.ok("inventory.create", {"name": "web", "kind": "managed", "content": ""})
-        self.assertEqual(self.code("file.check", {"id": made["id"], "path": "hosts.yml"}),
-                         "conflict")
         project = self.ok("project.create", {"name": "site", "kind": "managed"})
         self.ok("file.write", {"id": project["id"], "path": "hosts.yml", "content": "all: {}\n",
                                "expected": ""})

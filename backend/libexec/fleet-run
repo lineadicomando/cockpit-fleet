@@ -105,6 +105,13 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
         command, env = runner.build_galaxy(spec, run_dir, runtime_dir)
         return {"rc": execute(command, env, run_dir / "project", log)}
 
+    if kind == "syntax" and "inventory" in spec:
+        # An inventory: read as for an "inventory" job, strictly, with its vault.
+        env = runner.build_env(run_dir, runtime_dir, events=False, credentials_dir=credentials)
+        env.update(runner.INVENTORY_SYNTAX_ENV)
+        return {"rc": execute(runner.build_inventory_argv(spec, run_dir, credentials), env,
+                              run_dir / "project", log)}
+
     if kind == "syntax":
         env = runner.build_env(run_dir, runtime_dir, events=False)
         result = {"rc": execute(runner.build_syntax_argv(spec, run_dir), env,

@@ -3,11 +3,12 @@
 A job is one of eight kinds: "playbook" (ansible-playbook), "adhoc" (one
 module, as a playbook written for the job), "inventory" (ansible-inventory, to
 list hosts and groups), "sync" (fetch a git project), "syntax" (check a
-playbook without running it), "unpack" (extract an uploaded archive, which
-runs no command: see archive.py), "galaxy" (install the collections a
-project asks for) and "check" (a cycle of the checks of the catalog, one
-task per host, as a playbook written for the job). Nothing from the frontend reaches a
-command line without going through the functions here.
+playbook without running it, or read an inventory strictly), "unpack"
+(extract an uploaded archive, which runs no command: see archive.py),
+"galaxy" (install the collections a project asks for) and "check" (a
+cycle of the checks of the catalog, one task per host, as a playbook
+written for the job). Nothing from the frontend reaches a command line
+without going through the functions here.
 """
 
 import configparser
@@ -637,6 +638,11 @@ def build_inventory_argv(spec: dict, run_dir: Path, credentials_dir: Path | None
         "--output", str(run_dir / "inventory.json"),
         *_credential_args(credentials_dir, ("vault_password",)),
     ]
+
+
+# A syntax check of an inventory: a source no plugin could read fails it,
+# where a reading of the inventory only warns while another source is read.
+INVENTORY_SYNTAX_ENV = {"ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED": "True"}
 
 
 def build_syntax_argv(spec: dict, run_dir: Path) -> list[str]:

@@ -212,7 +212,8 @@ playbook written for the job), `inventory` (`ansible-inventory --list`, to
 learn hosts and groups; when it fails, Ansible quotes the lines it could not
 read, which may hold passwords, so why is shown to administrators only,
 and so is its output), `sync` (fetch a git project), `syntax` (check a
-playbook without running it), `unpack` (extract an uploaded archive),
+playbook without running it, or an inventory written in the interface,
+whose output is for administrators as a reading's is), `unpack` (extract an uploaded archive),
 `galaxy` (install the collections a project asks for) and `check` (a cycle
 of checks, see "Checks"). A run of a workflow is not a job: it has no
 unit, and its steps are runs of playbooks (see "Workflows"). All of them need the sandbox, because all of them work on what a project
@@ -455,7 +456,19 @@ check's; what ansible-lint found is in the output and marked on the run
 playbook of any project. It is a job and not a call because it reads a project:
 ansible-lint loads the rules a project's `.ansible-lint` points to, which is
 Python of the project (`files.sh` ships one and checks where it could write).
-No vault password is given to a check.
+No vault password is given to a check of a playbook.
+
+A change to an inventory written in the interface (saved, imported,
+pushed) queues a `syntax` job too, beside the reading that lists its hosts,
+and the editor offers the same check on any of its files. It is the
+reading's `ansible-inventory --list` on a copy of the tree, with the
+inventory's vault password, but with
+`ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED`: a reading fails only when no
+source could be read, and a broken file among the sources of a directory,
+or a broken `group_vars` file Ansible skips with a warning, would pass it.
+The check keeps nothing of what it listed, so the inventory's hosts and
+its `parse_error` are those of the last reading. A file of the tree that is
+no source of the inventory (its path names another file) is not checked.
 
 Checked on Debian 13 with ansible-core 2.19.11 and ansible-lint 25.2.1, which
 works inside the unit as it is.

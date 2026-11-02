@@ -124,6 +124,22 @@ expect_eq "with what changed" "$(addresses "$school")" "dc01= pc01=192.0.2.23 pc
 admin inventory.update "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}" >/dev/null
 expect_run "a file of its tree can be the source" "$(parse "$school")" 60 successful
 expect_eq "with the variables beside it" "$(addresses "$school")" "dc01= pc01=192.0.2.23 pc02=192.0.2.23"
+expect_run "a change of its files checks its syntax" "$(get "$answer" 'a["data"]["check_run_ids"][0]')" 60 successful
+sha=$(get "$(admin file.read "{\"id\": \"$school\", \"path\": \"host_vars/pc01.yaml\"}")" 'a["data"]["sha256"]')
+answer=$(admin file.write "{\"id\": \"$school\", \"path\": \"host_vars/pc01.yaml\", \"content\": \"ansible_host: [\\n\", \"expected\": \"$sha\"}")
+expect_run "a variables file that is no YAML fails the check" "$(get "$answer" 'a["data"]["check_run_id"]')" 60 failed
+sha=$(get "$(admin file.read "{\"id\": \"$school\", \"path\": \"host_vars/pc01.yaml\"}")" 'a["data"]["sha256"]')
+admin file.write "{\"id\": \"$school\", \"path\": \"host_vars/pc01.yaml\", \"content\": \"ansible_host: 192.0.2.23\\n\", \"expected\": \"$sha\"}" >/dev/null
+# The whole tree as the source, with a file no plugin reads beside hosts.yaml:
+# the reading takes the other one, the check does not.
+admin inventory.update "{\"id\": \"$school\", \"path\": \"\"}" >/dev/null
+answer=$(admin file.write "{\"id\": \"$school\", \"path\": \"broken\", \"content\": \"[web\\n\", \"expected\": \"\"}")
+expect_run "a source that cannot be read leaves the reading to the others" "$(parse "$school")" 60 successful
+expect_run "but fails the check" "$(get "$answer" 'a["data"]["check_run_id"]')" 60 failed
+expect_run "the check is offered on request" "$(get "$(admin file.check "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}")" 'a["data"]["run_id"]')" 60 failed
+admin file.delete "{\"id\": \"$school\", \"path\": \"broken\"}" >/dev/null
+expect_run "and passes once it is gone" "$(get "$(admin file.check "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}")" 'a["data"]["run_id"]')" 60 successful
+admin inventory.update "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}" >/dev/null
 
 # A file inventory of another project: copied for the run with what is beside it.
 mkdir -p "$SRC/labs/inventories/lab1/group_vars/all" "$SRC/labs/inventories/lab1/host_vars"
