@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { calls, setSpawnHandler } from "./mocks/cockpit.ts";
-import { base64Pieces, uploadArchive, uploadPieces } from "../src/lib/upload.ts";
+import { base64Pieces, importPieces, uploadArchive, uploadPieces } from "../src/lib/upload.ts";
 
 function bytes(length: number): Uint8Array {
     return Uint8Array.from({ length }, (_value, index) => (index * 31 + 7) % 256);
@@ -34,4 +34,10 @@ test("an archive goes to project.upload on stdin, never in argv", async () => {
     assert.equal((await uploadArchive("p1", file)).run_id, "r1");
     assert.equal(calls[0].args[calls[0].args.length - 1], "project.upload");
     assert.deepEqual(JSON.parse(calls[0].input ?? ""), { id: "p1", filename: "a.zip", data: "UEsDBAA=" });
+});
+
+test("importPieces make the parameters of file.import, with where to unpack", () => {
+    const data = new Uint8Array([0, 1, 2, 250, 251, 252, 253]);
+    const params = JSON.parse(importPieces("i1", "lab \"1\".tgz", "group_vars", data, 3).join(""));
+    assert.deepEqual(params, { id: "i1", filename: "lab \"1\".tgz", into: "group_vars", data: Buffer.from(data).toString("base64") });
 });

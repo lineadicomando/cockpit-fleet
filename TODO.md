@@ -120,7 +120,10 @@ except the rows that say "to confirm".
   shown for a host is its own `ansible_host`, not one its groups set (the
   listing is `--export`ed, so group variables stay with the groups); a file
   inventory of another project gets the collections of the job's project only.
-- Editor: one file at a time; unsaved changes lost on tab change; syntax
+- Editor: open files and their unsaved changes kept while another tab of
+  Fleet is shown, lost when the browser's tab is reloaded (asked first); a
+  folder made in the page and left empty is gone on reload (git keeps no
+  empty directory); no search in the content of files; syntax
   check without vault password, listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
 - Ad-hoc: arguments as one line in the page, stored in clear.
@@ -284,9 +287,13 @@ Decided on 2 November (Decisions, "Files and inventories").
       commands and checks of other projects (2 November: what the
       inventory reads copied as `inventory/` of the run; the collections
       of the inventory's project are not)
-- [ ] The file manager in the interface, shared by the two pages: actions
-      on each node, drag and drop, "Move to…", copy, new folder, selection
-      of several, upload and download, tabs keeping unsaved changes, filter
+- [x] The file manager in the interface, shared by the two pages (2
+      November: a tree of its own, `FileTree.tsx`, for drag and drop in
+      Firefox; actions on each node, "Move to…", copy, new folder,
+      selection of several, upload (drop from the desktop too) and
+      download, import of an archive, tabs keeping unsaved changes,
+      filter, restore from the changes of a file; seen in Firefox on a
+      Debian container, not yet on a VM nor with Lighthouse)
 - [x] An archive imported into a managed project or inventory as one
       commit (2 November: `file.import`, the `unpack` job, then the files
       taken as the editor writes them)

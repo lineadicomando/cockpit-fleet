@@ -121,8 +121,6 @@ msgstr "Git"
 msgid "If you administer this server, turn on administrative access at the top of the page."
 msgstr "Se amministri questo server, attiva l'accesso amministrativo in alto nella pagina."
 
-msgid "Inside the project, for example roles/web/tasks/main.yml. Directories are created as needed."
-msgstr "All'interno del progetto, per esempio roles/web/tasks/main.yml. Le directory vengono create quando servono."
 
 msgid "Install the cockpit-fleet package on this server."
 msgstr "Installa il pacchetto cockpit-fleet su questo server."
@@ -226,8 +224,6 @@ msgstr "Il backend di Fleet non è installato"
 msgid "The check did not run"
 msgstr "Il controllo non è stato eseguito"
 
-msgid "The file is deleted from the project. What it held stays in the record of changes."
-msgstr "Il file viene eliminato dal progetto. Il suo contenuto resta nel registro delle modifiche."
 
 msgid "The files are written in this interface. Every change is recorded with its author, and can be looked up later."
 msgstr "I file si scrivono in questa interfaccia. Ogni modifica viene registrata con il suo autore e si può consultare in seguito."
@@ -925,8 +921,6 @@ msgstr "Segreto"
 msgid "Encrypted as soon as it is typed and given to that run only. It is not kept and cannot be read back, but a playbook that prints it puts it in the output."
 msgstr "Viene cifrato appena digitato e consegnato solo a quell'esecuzione. Non viene conservato e non si può rileggere, ma un playbook che lo stampa lo mette nell'output."
 
-msgid "{{path}} has changes that were not saved."
-msgstr "{{path}} ha modifiche non salvate."
 
 msgid "Find"
 msgstr "Trova"
@@ -2900,3 +2894,139 @@ msgstr "{{name}} (da {{project}})"
 
 msgid "That of the inventory"
 msgstr "Quello dell'inventario"
+
+msgid "Drag files and folders here to move them to the top, or files from your computer to upload them."
+msgstr "Trascina qui file e cartelle per spostarli in cima, o file dal tuo computer per caricarli."
+
+msgid "Importing the archive…"
+msgstr "Importazione dell'archivio in corso…"
+
+msgid "The archive was imported"
+msgstr "L'archivio è stato importato"
+
+msgid "The archive could not be imported"
+msgstr "Non è stato possibile importare l'archivio"
+
+msgid "Put it back as it was after this change"
+msgstr "Rimettilo com'era dopo questa modifica"
+
+msgid "Copy {{what}}"
+msgstr "Copia {{what}}"
+
+msgid "Move {{what}}"
+msgstr "Sposta {{what}}"
+
+msgid "Move"
+msgstr "Sposta"
+
+msgid "To the folder"
+msgstr "Nella cartella"
+
+msgid "The top"
+msgstr "La cima"
+
+msgid "A folder cannot go into itself."
+msgstr "Una cartella non può andare dentro se stessa."
+
+msgid "Empty for the top. A folder that does not exist is created."
+msgstr "Vuoto per la cima. Una cartella che non esiste viene creata."
+
+msgid "Import an archive into {{path}}"
+msgstr "Importa un archivio in {{path}}"
+
+msgid "Import an archive"
+msgstr "Importa un archivio"
+
+msgid "Import"
+msgstr "Importa"
+
+msgid "Its files are added, as one change; a file of the same path is replaced. A folder that holds everything, like project-1.0/, is left out."
+msgstr "I suoi file vengono aggiunti, con una sola modifica; un file con lo stesso percorso viene sostituito. Una cartella che contiene tutto, come progetto-1.0/, viene tolta."
+
+msgid "A tar archive, compressed or not, or a zip. Links in it are refused, and files larger than 1 MB."
+msgstr "Un archivio tar, compresso o no, o uno zip. I link al suo interno vengono rifiutati, così come i file più grandi di 1 MB."
+
+msgid "{{name}} is larger than 1 MB."
+msgstr "{{name}} è più grande di 1 MB."
+
+msgid "Upload {{number}} files"
+msgstr "Carica {{number}} file"
+
+msgid "Open"
+msgstr "Apri"
+
+msgid "New file here"
+msgstr "Nuovo file qui"
+
+msgid "New folder here"
+msgstr "Nuova cartella qui"
+
+msgid "Upload files here"
+msgstr "Carica file qui"
+
+msgid "Import an archive here"
+msgstr "Importa un archivio qui"
+
+msgid "Move to…"
+msgstr "Sposta in…"
+
+msgid "Copy to…"
+msgstr "Copia in…"
+
+msgid "Download as an archive"
+msgstr "Scarica come archivio"
+
+msgid "Download"
+msgstr "Scarica"
+
+msgid "New folder"
+msgstr "Nuova cartella"
+
+msgid "Upload files"
+msgstr "Carica file"
+
+msgid "Download all"
+msgstr "Scarica tutto"
+
+msgid "Filter files"
+msgstr "Filtra i file"
+
+msgid "Clear the selection"
+msgstr "Annulla la selezione"
+
+msgid "Open files"
+msgstr "File aperti"
+
+msgid "Close {{name}}"
+msgstr "Chiudi {{name}}"
+
+msgid "Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed."
+msgstr "Dentro il progetto, per esempio roles/web/tasks/main.yml. Le cartelle vengono create quando servono."
+
+msgid "A folder is kept once a file is in it."
+msgstr "Una cartella viene conservata quando contiene un file."
+
+msgid "The new path inside the project: a folder is renamed with everything in it."
+msgstr "Il nuovo percorso dentro il progetto: una cartella viene rinominata con tutto il suo contenuto."
+
+msgid "What is deleted goes from the project, folders with everything in them, as one change; it stays in the record of changes. Open files among them are closed."
+msgstr "Ciò che si elimina esce dal progetto, le cartelle con tutto il loro contenuto, con una sola modifica; resta nello storico delle modifiche. I file aperti tra questi vengono chiusi."
+
+msgid "Replace files?"
+msgstr "Sostituire i file?"
+
+msgid "These files exist already, and are replaced by those uploaded:"
+msgstr "Questi file esistono già e vengono sostituiti da quelli caricati:"
+
+msgid "These files have changes that were not saved:"
+msgstr "Questi file hanno modifiche non salvate:"
+
+msgid "files_count"
+msgid_plural "files_count_plural"
+msgstr[0] "{{count}} elemento"
+msgstr[1] "{{count}} elementi"
+
+msgid "files_selected"
+msgid_plural "files_selected_plural"
+msgstr[0] "{{count}} selezionato"
+msgstr[1] "{{count}} selezionati"

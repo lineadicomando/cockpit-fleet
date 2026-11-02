@@ -34,3 +34,20 @@ export async function uploadArchive(id: string, file: File): Promise<Uploaded> {
     const bytes = new Uint8Array(await file.arrayBuffer());
     return callWith<Uploaded>("project.upload", uploadPieces(id, file.name, bytes));
 }
+
+// The parameters of file.import, as the pieces of one JSON object.
+export function importPieces(id: string, filename: string, into: string, bytes: Uint8Array, size: number = PIECE): string[] {
+    return [`{"id":${JSON.stringify(id)},"filename":${JSON.stringify(filename)},"into":${JSON.stringify(into)},"data":"`, ...base64Pieces(bytes, size), '"}'];
+}
+
+// Sends an archive to be unpacked into a directory of a project or
+// inventory written in the interface; a job unpacks it.
+export async function importArchive(id: string, into: string, file: File): Promise<Uploaded> {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return callWith<Uploaded>("file.import", importPieces(id, file.name, into, bytes));
+}
+
+// A file chosen in the browser as base64, for file.change.
+export async function fileBase64(file: Blob): Promise<string> {
+    return base64Pieces(new Uint8Array(await file.arrayBuffer())).join("");
+}

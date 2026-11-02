@@ -452,6 +452,21 @@ No vault password is given to a check.
 Checked on Debian 13 with ansible-core 2.19.11 and ansible-lint 25.2.1, which
 works inside the unit as it is.
 
+**The page of the files** shows a tree, a project's or an inventory's, and
+the files open in tabs beside it. The tree is not PatternFly's `TreeView`,
+which draws every node as a button: Firefox starts no drag from inside a
+button, and dragging is how files are moved. `FileTree.tsx` follows the
+tree pattern of WAI-ARIA instead (one node in the tab order, arrows to
+move, Enter to open, Space to select, F2 to rename, Delete), with a menu on
+each node and checkboxes for a selection of several. A node dropped on a
+folder is moved there, files dropped from the desktop are uploaded there;
+the same is offered without a mouse by "Move to…" and "Upload files". Every
+change the page makes is one `file.change` quoting the revision the tree
+was listed at, so a tree changed meanwhile is refused, not overwritten.
+Open files and what was typed in them stay, in memory, while another tab
+of Fleet is shown; the browser asks before a reload loses them. A folder
+made in the page holds nothing in git until a file is put in it.
+
 **The editor.** Files, the text of an inventory and a template's variables
 are edited with CodeMirror 6: highlighting (YAML with Jinja in it, INI, JSON,
 Python), indentation, search. It costs about 650 kB of bundle, which goes from

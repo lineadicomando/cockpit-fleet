@@ -18,6 +18,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   earlier revision (`file.restore`); a file is downloaded, a directory as
   a `.tar.gz` (`file.download`, any kind of project). Files that are not
   text, up to 1 MB, can be uploaded and kept, and are shown as such.
+- The page of the files is a file manager: folders are created, renamed,
+  moved, copied and deleted with what they hold; files and folders are
+  dragged onto a folder to move them, and files from the desktop to upload
+  them; several are selected at once; files are uploaded and downloaded, a
+  folder as an archive; several files stay open in tabs with their changes
+  while another tab of Fleet is shown; the tree is filtered by name; a file
+  is put back as it was after an earlier change. The tree is used with the
+  keyboard too (arrows, Enter, Space, F2, Delete).
 - An archive (tar or zip) can be imported into a project or inventory
   written in the interface, into one of its directories, as one commit
   (`file.import`); it is unpacked in the sandbox like an uploaded project,

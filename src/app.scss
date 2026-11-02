@@ -55,6 +55,50 @@
     @media (max-width: 48rem) { grid-template-columns: minmax(0, 1fr); }
 }
 .fleet-files-tree { max-block-size: 75vh; overflow: auto; }
+.fleet-files-filter { margin-block-end: var(--pf-t--global--spacer--sm); }
+.fleet-files-selection {
+    margin-block-end: var(--pf-t--global--spacer--sm);
+    font-size: var(--pf-t--global--font--size--sm);
+}
+
+// The tree of the files: its own, for drag and drop (see FileTree.tsx).
+.fleet-tree {
+    min-block-size: 8rem;
+    padding-block-end: var(--pf-t--global--spacer--md);
+    border-radius: var(--pf-t--global--border--radius--small);
+
+    ul { list-style: none; margin: 0; padding: 0; }
+    [role="treeitem"] { outline: none; }
+    [role="treeitem"]:focus-visible > .fleet-tree-row {
+        outline: var(--pf-t--global--border--width--strong) solid var(--pf-t--global--focus-ring--color--default);
+        outline-offset: -2px;
+    }
+    &.is-target { background: var(--pf-t--global--background--color--secondary--default); }
+}
+.fleet-tree-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs);
+    min-block-size: 2rem;
+    padding-inline-end: var(--pf-t--global--spacer--xs);
+    border-radius: var(--pf-t--global--border--radius--small);
+    cursor: pointer;
+    user-select: none;
+
+    &:hover { background: var(--pf-t--global--background--color--primary--hover); }
+    &.is-current { background: var(--pf-t--global--background--color--primary--clicked); font-weight: var(--pf-t--global--font--weight--body--bold); }
+    &.is-selected { background: var(--pf-t--global--background--color--secondary--hover); }
+    &.is-target { outline: var(--pf-t--global--border--width--strong) dashed var(--pf-t--global--border--color--clicked); }
+}
+.fleet-tree-toggle { inline-size: 1rem; display: inline-flex; justify-content: center; color: var(--pf-t--global--icon--color--subtle); }
+.fleet-tree-icon { display: inline-flex; color: var(--pf-t--global--icon--color--subtle); }
+.fleet-tree-check { margin: 0; }
+.fleet-tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-tree-hint {
+    margin-block-start: var(--pf-t--global--spacer--sm);
+    font-size: var(--pf-t--global--font--size--xs);
+    color: var(--pf-t--global--text--color--subtle);
+}
 
 // The box of an editor: it fills it and scrolls inside.
 .fleet-code { display: block; }
