@@ -72,7 +72,7 @@ except the rows that say "to confirm".
 | Topic | Decision |
 |---|---|
 | Name | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet`, command `fleet`; `fleetctl` stays the backend's (out of `PATH`) |
-| License, repo | `LGPL-2.1-or-later`, to confirm at publication; developed on a private Gitea, published at `github.com/lineadicomando/cockpit-fleet` from a fresh history (the private one holds workstation details) |
+| License, repo | `LGPL-2.1-or-later`, to confirm at publication; developed on a private Gitea, published at `github.com/lineadicomando/cockpit-fleet` with its history rewritten by `git filter-repo --replace-text` (the private one holds workstation details); a fresh history discarded, as it loses blame, bisect and the commit of v0.1.0 |
 | Backend | No daemon, no port: units on demand; account `cockpit-fleet`; root only in `fleet-unit`, `fleet-secret` |
 | Roles | Groups `cockpit-fleet-admin`, `-operator`, `-viewer`, the highest wins; rights apart (`auth.GROUP_RIGHTS`, a command's `right=`). Viewer: outcomes, not output. Operator: launches, narrows hosts, dry run, answers surveys |
 | Approvals | `cockpit-fleet-approver` is a right (`approve`) that adds to any role or stands alone, not a fourth role; administrators approve too; nobody approves their own launch but an administrator; agents never approve; the run is prepared at launch and waits as `pending_approval`, expires after `[approvals] expire_hours` (24) |
@@ -255,7 +255,7 @@ except the rows that say "to confirm".
 - [x] GitHub Actions workflow (1 November: `.github/workflows/ci.yml`,
       the Gitea one's steps in containers of the three distributions;
       the Debian job rehearsed in a local container, the rpm ones not)
-- [ ] Publication: the license confirmed, a fresh history on
+- [ ] Publication: the license confirmed, the rewritten history on
       `github.com/lineadicomando/cockpit-fleet` (the private one holds
       workstation details), the GitHub workflow seen green there
 
