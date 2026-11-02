@@ -26,6 +26,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   while another tab of Fleet is shown; the tree is filtered by name; a file
   is put back as it was after an earlier change. The tree is used with the
   keyboard too (arrows, Enter, Space, F2, Delete).
+- `fleet inventory clone`, `pull` and `push` work on an inventory written
+  in the interface as `fleet project` does on a project; a push reads it
+  again.
 - An archive (tar or zip) can be imported into a project or inventory
   written in the interface, into one of its directories, as one commit
   (`file.import`); it is unpacked in the sandbox like an uploaded project,

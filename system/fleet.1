@@ -103,6 +103,12 @@ as a line of commits whose files the editor could have written; its
 playbooks are then checked as when saved in the interface.
 .B fleet project pull
 brings into the clone what was written in the interface meanwhile.
+An inventory written in the interface, a tree of files, is cloned, pulled
+and pushed the same way:
+.BI "fleet inventory clone " "inventory " \fR[\fIdirectory\fR],
+.BR "fleet inventory pull " and
+.BR "fleet inventory push" ;
+a push reads the inventory again.
 .PP
 A project may also be a directory under
 .B [projects] local_roots

@@ -128,6 +128,18 @@ fleet_as itadmin project pull /tmp/fleet-it-clone
 expect_eq "what the interface wrote is pulled" "$code $(test -f /tmp/fleet-it-clone/later.yml && echo here)" "0 here"
 rm -rf /tmp/fleet-it-clone /tmp/fleet-it-other
 
+# An inventory written in the interface, the same way.
+admin inventory.create '{"name": "cli-inv", "kind": "managed", "content": "all:\n  hosts:\n    localhost:\n      ansible_connection: local\n"}' >/dev/null
+fleet_as itadmin inventory clone cli-inv /tmp/fleet-it-inv
+expect_eq "a managed inventory is cloned" "$code $(test -f /tmp/fleet-it-inv/hosts.yml && echo here)" "0 here"
+mkdir -p /tmp/fleet-it-inv/group_vars && printf 'a: 1\n' > /tmp/fleet-it-inv/group_vars/all.yml
+chown -R itadmin /tmp/fleet-it-inv
+sudo -u itadmin -H git -C /tmp/fleet-it-inv add --all
+sudo -u itadmin -H git -C /tmp/fleet-it-inv commit -q -m "Add group_vars"
+fleet_as itadmin inventory push /tmp/fleet-it-inv
+expect_eq "its commits are pushed back, and it is read again" "$code $(printf '%s' "$out" | grep -c 'inventory read again')" "0 1"
+rm -rf /tmp/fleet-it-inv
+
 # A directory of local projects as the guide says: written by the
 # administrators, read by the service through an ACL, by nobody else.
 install -d -m 2770 -g cockpit-fleet-admin /srv/fleet-it/roots

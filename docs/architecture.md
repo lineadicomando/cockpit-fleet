@@ -1711,6 +1711,11 @@ for administrators only, since files are theirs in the interface too:
   the commits; who pushed is in the audit trail. `fleet project pull`
   fetches the same way and fast-forwards; a clone whose commits diverge is
   told to rebase on `fleet/main`.
+- An inventory written in the interface is cloned, pulled and pushed the
+  same way, with `fleet inventory clone`, `pull` and `push`: the same
+  bundles, by its id; the clone keeps it as `fleet.inventory` rather than
+  `fleet.project`, so a clone of one is never pushed as the other. A push
+  reads the inventory again.
 
 Checked on Debian 13 (`cli.sh`): a project, an inventory and a template set
 up by an administrator, a file written from a file and from stdin, an

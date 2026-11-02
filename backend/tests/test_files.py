@@ -545,6 +545,30 @@ class TerminalCloneTest(Managed):
         subprocess.run(["/usr/bin/git", "-C", self.clone, "add", "--all"], check=True)
         subprocess.run(["/usr/bin/git", "-C", self.clone, "commit", "--quiet", "-m", message], check=True)
 
+    def test_an_inventory_written_here_is_cloned_and_pushed_too(self):
+        made = self.ok("inventory.create", {"name": "school", "kind": "managed",
+                                            "content": "all: {}\n"})
+        clone = str(self.work / "school")
+        self.assertEqual(self.fleet("inventory", "clone", "school", clone)[0], 0)
+        self.assertEqual((Path(clone) / "hosts.yml").read_text(), "all: {}\n")
+        target = Path(clone) / "group_vars" / "all.yml"
+        target.parent.mkdir()
+        target.write_text("a: 1\n")
+        subprocess.run(["/usr/bin/git", "-C", clone, "add", "--all"], check=True)
+        subprocess.run(["/usr/bin/git", "-C", clone, "commit", "--quiet", "-m", "vars"], check=True)
+        code, said = self.fleet("inventory", "push", clone)
+        self.assertEqual(code, 0, said)
+        self.assertIn("inventory read again", said)
+        self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "group_vars/all.yml"})
+                         ["content"], "a: 1\n")
+        # A clone of an inventory is not pushed as a project's, nor the other way.
+        from cockpit_fleet.terminal import Usage
+        with self.assertRaises(Usage):
+            self.fleet("project", "push", clone)
+        self.assertEqual(self.fleet("project", "clone", "edited", self.clone)[0], 0)
+        with self.assertRaises(Usage):
+            self.fleet("inventory", "pull", self.clone)
+
     def test_clone_commit_push_as_if_written_in_the_interface(self):
         self.assertEqual(self.fleet("project", "clone", "edited", self.clone)[0], 0)
         self.assertEqual((Path(self.clone) / "site.yml").read_text(), PLAYBOOK)

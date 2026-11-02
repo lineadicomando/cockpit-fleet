@@ -14,6 +14,7 @@ its stdin: never on a command line.
     fleet secret CREDENTIAL FIELD | --channel CHANNEL
     fleet assistant [AGENT]
     fleet project clone PROJECT [DIR] | pull [DIR] | push [DIR]
+    fleet inventory clone INVENTORY [DIR] | pull [DIR] | push [DIR]
     fleet help [AREA [VERB]]
 
 The commands are read from the registry of the installed package, so that
@@ -552,10 +553,10 @@ def complete(commands: dict[str, Command], words: list[str],
     elif len(before) == 1 and any(name.startswith(f"{before[0]}.") for name in commands):
         candidates = sorted(name.split(".", 1)[1] for name in commands
                             if name.startswith(f"{before[0]}."))
-        if before[0] == "project":
+        if before[0] in LOCAL_AREAS:
             candidates = sorted([*candidates, *LOCAL_VERBS])
-    elif before[:1] == ["project"] and before[1] in LOCAL_VERBS:
-        candidates = _names(lookup, "project") if before[1] == "clone" and len(before) == 2 \
+    elif before[0] in LOCAL_AREAS and before[1] in LOCAL_VERBS:
+        candidates = _names(lookup, before[0]) if before[1] == "clone" and len(before) == 2 \
             and not current.startswith("-") else []
     else:
         found = find_command(commands, before)
@@ -849,13 +850,15 @@ def _assistant(term: Terminal, args: list[str]) -> int:
     return code
 
 
-# --- projects written in the interface, at a terminal ----------------------------------------
+# --- projects and inventories written in the interface, at a terminal -----------------------
 
-# Verbs of the area "project" that fleet does itself, with the bundles of the backend.
+# Areas whose things written in the interface are cloned, pulled and pushed.
+LOCAL_AREAS = ("project", "inventory")
+# Verbs of those areas that fleet does itself, with the bundles of the backend.
 LOCAL_VERBS = {
-    "clone": "Clone a project written in the interface, to work on it with git",
+    "clone": "Clone a {area} written in the interface, to work on it with git",
     "pull": "Bring into a clone what was written in the interface since",
-    "push": "Send the commits of a clone to its project, as if written in the interface",
+    "push": "Send the commits of a clone to its {area}, as if written in the interface",
 }
 # The last revision of the project a clone knows: what a push builds on.
 _BASE = "refs/remotes/fleet/main"
@@ -868,10 +871,12 @@ def _git(term: Terminal, args: list[str], cwd: str | None = None) -> str:
     return out
 
 
-def _clone_of(term: Terminal, directory: str) -> str:
-    code, out, _err = term.git(["config", "--get", "fleet.project"], directory)
+def _clone_of(term: Terminal, directory: str, area: str) -> str:
+    """The id of the project or inventory a clone was made of, which must
+    be of AREA."""
+    code, out, _err = term.git(["config", "--get", f"fleet.{area}"], directory)
     if code != 0 or not out.strip():
-        raise Usage(f"{directory} is not a clone made by fleet project clone")
+        raise Usage(f"{directory} is not a clone made by fleet {area} clone")
     return out.strip()
 
 
@@ -891,60 +896,62 @@ def clone_directory(project: dict) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", project["name"]).lstrip("-.") or project["id"]
 
 
-def _project_clone(term: Terminal, args: list[str]) -> int:
-    parser = _parser("project clone", "Clone a project written in the interface, to work on"
-                     " it with git and push the commits back with fleet project push.")
-    parser.add_argument("project", help="its name or its id")
-    parser.add_argument("directory", nargs="?", help="where; the name of the project by default")
+def _local_clone(term: Terminal, area: str, args: list[str]) -> int:
+    parser = _parser(f"{area} clone", f"Clone a {area} written in the interface, to work on"
+                     f" it with git and push the commits back with fleet {area} push.")
+    parser.add_argument(area, help="its name or its id")
+    parser.add_argument("directory", nargs="?", help=f"where; the name of the {area} by default")
     options = parser.parse_args(args)
-    project = _one(term("project.list")["projects"], options.project, "project",
-                   "fleet project list")
-    if project["kind"] != "managed":
-        raise Usage(f"{project['name']} is not written in the interface: only such a project"
-                    " is cloned here (a git project is cloned from its URL)")
-    directory = options.directory or clone_directory(project)
+    plural = "inventories" if area == "inventory" else f"{area}s"
+    thing = _one(term(f"{area}.list")[plural], getattr(options, area), area,
+                 f"fleet {area} list")
+    if thing["kind"] != "managed":
+        raise Usage(f"{thing['name']} is not written in the interface: only such a {area}"
+                    " is cloned here" + (" (a git project is cloned from its URL)"
+                                         if area == "project" else ""))
+    directory = options.directory or clone_directory(thing)
     if Path(directory).exists():
         raise Usage(f"{directory} exists already")
     _git(term, ["init", "--quiet", "--initial-branch=main", "--", directory])
-    _git(term, ["config", "fleet.project", project["id"]], directory)
-    revision = _fetch(term, project["id"], directory)
+    _git(term, ["config", f"fleet.{area}", thing["id"]], directory)
+    revision = _fetch(term, thing["id"], directory)
     _git(term, ["reset", "--quiet", "--hard", _BASE], directory)
     if not term.as_json:
-        term.say(f"{project['name']} is in {directory}, at {revision[:12]}: commit there, then"
-                 " fleet project push")
+        term.say(f"{thing['name']} is in {directory}, at {revision[:12]}: commit there, then"
+                 f" fleet {area} push")
     else:
-        term.show({"project": project["id"], "directory": directory, "revision": revision})
+        term.show({area: thing["id"], "directory": directory, "revision": revision})
     return OK
 
 
-def _project_pull(term: Terminal, args: list[str]) -> int:
-    parser = _parser("project pull", "Bring into a clone what was written in the interface"
+def _local_pull(term: Terminal, area: str, args: list[str]) -> int:
+    parser = _parser(f"{area} pull", "Bring into a clone what was written in the interface"
                      " since it was cloned or last pulled.")
     parser.add_argument("directory", nargs="?", default=".", help="the clone; here by default")
     options = parser.parse_args(args)
-    project_id = _clone_of(term, options.directory)
-    revision = _fetch(term, project_id, options.directory)
+    thing_id = _clone_of(term, options.directory, area)
+    revision = _fetch(term, thing_id, options.directory)
     code, _out, _err = term.git(["merge", "--quiet", "--ff-only", _BASE], options.directory)
     if code != 0:
-        raise Failure("the project changed and so did your commits: git rebase fleet/main,"
-                      " then fleet project push")
+        raise Failure(f"the {area} changed and so did your commits: git rebase fleet/main,"
+                      f" then fleet {area} push")
     if not term.as_json:
-        term.say(f"up to date with the project, at {revision[:12]}")
+        term.say(f"up to date with the {area}, at {revision[:12]}")
     return OK
 
 
-def _project_push(term: Terminal, args: list[str]) -> int:
-    parser = _parser("project push", "Send the commits of the branch main of a clone to its"
-                     " project, as if written in the interface. Taken only on top of what the"
-                     " project has: when it changed meanwhile, pull first.")
+def _local_push(term: Terminal, area: str, args: list[str]) -> int:
+    parser = _parser(f"{area} push", "Send the commits of the branch main of a clone to its"
+                     f" {area}, as if written in the interface. Taken only on top of what the"
+                     f" {area} has: when it changed meanwhile, pull first.")
     parser.add_argument("directory", nargs="?", default=".", help="the clone; here by default")
     options = parser.parse_args(args)
     directory = options.directory
-    project_id = _clone_of(term, directory)
+    project_id = _clone_of(term, directory, area)
     base = _git(term, ["rev-parse", "--verify", f"{_BASE}^{{commit}}"], directory).strip()
     head = _git(term, ["rev-parse", "--verify", "main^{commit}"], directory).strip()
     if head == base:
-        term.say("nothing to push: main is where the project is")
+        term.say(f"nothing to push: main is where the {area} is")
         return OK
     if _git(term, ["status", "--porcelain"], directory).strip():
         term.err.write("fleet: what is not committed stays here\n")
@@ -957,10 +964,12 @@ def _project_push(term: Terminal, args: list[str]) -> int:
     if term.as_json:
         term.show(answer)
         return OK
-    term.say(f"pushed: the project is at {answer['revision'][:12]},"
+    term.say(f"pushed: the {area} is at {answer['revision'][:12]},"
              f" {len(answer['files'])} file{'s' if len(answer['files']) != 1 else ''} changed")
     for run_id in answer["check_run_ids"]:
         term.say(f"syntax check: fleet result {run_id}")
+    for run_id in answer.get("inventory_run_ids", []):
+        term.say(f"inventory read again: fleet result {run_id}")
     return OK
 
 
@@ -971,16 +980,16 @@ def _help(term: Terminal, commands: dict[str, Command], args: list[str]) -> int:
     if found is not None:
         term.out.write(describe(found[0]))
         return OK
-    if args[:1] == ["project"] and len(args) == 2 and args[1] in LOCAL_VERBS:
-        return run(term, commands, ["project", args[1], "--help"])
+    if args[:1] and args[0] in LOCAL_AREAS and len(args) == 2 and args[1] in LOCAL_VERBS:
+        return run(term, commands, [args[0], args[1], "--help"])
     if len(args) == 1 and any(name.startswith(f"{args[0]}.") for name in commands):
         names = sorted(name for name in commands
                        if name.startswith(f"{args[0]}.") and name not in _UNLISTED)
         for name in names:
             term.say(f"fleet {name.replace('.', ' '):<24}{summary(commands[name])}")
-        if args[0] == "project":
+        if args[0] in LOCAL_AREAS:
             for verb, text in LOCAL_VERBS.items():
-                term.say(f"fleet {'project ' + verb:<24}{text}")
+                term.say(f"fleet {args[0] + ' ' + verb:<24}{text.format(area=args[0])}")
         return OK
     if args:
         raise Usage(f"no command {' '.join(args)}: fleet help lists them")
@@ -1003,10 +1012,10 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
             return shortcut[words[0]](term, words[1:])
         except SystemExit as done:  # --help of a shortcut
             return int(done.code or 0)
-    if words[:1] == ["project"] and len(words) >= 2 and words[1] in LOCAL_VERBS:
-        verb = {"clone": _project_clone, "pull": _project_pull, "push": _project_push}[words[1]]
+    if words[:1] and words[0] in LOCAL_AREAS and len(words) >= 2 and words[1] in LOCAL_VERBS:
+        verb = {"clone": _local_clone, "pull": _local_pull, "push": _local_push}[words[1]]
         try:
-            return verb(term, words[2:])
+            return verb(term, words[0], words[2:])
         except SystemExit as done:  # --help
             return int(done.code or 0)
     found = find_command(commands, words)

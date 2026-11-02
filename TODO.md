@@ -15,7 +15,7 @@ AlmaLinux 10; CI green after a test stopped needing `systemd-analyze`.
 Phase 10 (release 0.1.0) closed on 2 November: the project is public at
 `github.com/lineadicomando/cockpit-fleet`, under `LGPL-2.1-or-later`, its
 history rewritten with no workstation details, the GitHub workflow green.
-**Next:** phase 11 (files and inventories as trees), below.
+**Next:** close phase 11 (files and inventories as trees) on a VM, below.
 
 Phase 8 brought time series (schema 12, `metrics.py`), maintenance (schema
 13, `maintenance.py`), the charts (`MetricHistory.tsx`,
@@ -297,10 +297,13 @@ Decided on 2 November (Decisions, "Files and inventories").
 - [x] An archive imported into a managed project or inventory as one
       commit (2 November: `file.import`, the `unpack` job, then the files
       taken as the editor writes them)
-- [ ] `fleet inventory clone/pull/push` at the terminal
+- [x] `fleet inventory clone/pull/push` at the terminal (2 November)
 - [ ] Integration: `files.sh`, `inventories.sh` with a tree like
-      `ansible-win_edulab`'s `inventories/school`, `negative.sh`, `cli.sh`;
-      `make ct-test` on the three; the pages in a browser on a VM
+      `ansible-win_edulab`'s `inventories/school`, `negative.sh`, `cli.sh`
+      (done); `make ct-test` of `files upload inventories cli adhoc
+      negative runs` on the three, all passing (2 November); left: the
+      pages on a VM (SELinux, Lighthouse), not done for lack of memory on
+      the host
 
 ## Future
 
