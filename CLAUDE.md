@@ -8,11 +8,16 @@ Agent instructions for this project.
 from the browser, inspired by Semaphore UI, and that also collects, stores and
 notifies on information from managed nodes using Ansible only (agentless).
 
-Four documents, each with one job; do not repeat one in another:
+Documents of the project, each with one job; do not repeat one in another:
 
-- `TODO.md`: status, decisions, open points and what is left to do.
-  Read it first. Tick items as they are completed, record a decision when it
-  changes, and keep it short: what is done moves out, to the place below.
+- `TODO.md`: status, the phase under way and what is left to do. Read it
+  first. Tick items as they are completed, and keep it short: what is done
+  moves out, to the places below.
+- `docs/decisions.md`: what was decided with the user, one row per topic.
+  Record a decision there when it is taken or changes (the detail of the
+  phase under way stays in `TODO.md` until the phase closes).
+- `docs/limits.md`: known limits left as they are, by area. Add one when a
+  change leaves something undone, remove it when it is done.
 - `docs/architecture.md`: what exists, why it is built that way, and what was
   measured. Update it with every change of design.
 - `CHANGELOG.md`: what changed in each release, for its users. Add a line
@@ -28,8 +33,8 @@ turning the chat on. Keep them in step with what they describe (roles,
 `config.toml`, the catalog, `fleet_result`, the files a controller keeps,
 `[chat]`) when that changes.
 
-`CLAUDE.local.md`, `Makefile.local` and `.env`, when present, are not
-tracked: they describe one developer's own workstation (the state of its test
+`CLAUDE.local.md` (and other `*.local.md`), `Makefile.local` and `.env`,
+when present, are not tracked: they describe one developer's own workstation (the state of its test
 VMs, passwords, paths, hosting, deploy targets). Nothing of them goes into tracked files, which must make sense to
 anyone who clones the repository.
 

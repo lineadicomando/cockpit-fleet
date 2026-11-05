@@ -2394,6 +2394,14 @@ What each closed phase had to show, and how it was shown.
   on Fedora 44 and AlmaLinux 10 with no denial; in a browser on Debian,
   approving as an administrator and as an approver with no role, the steps
   of a workflow run, the editor.
+- **10, release 0.1.0** (25 October to 2 November): a security review of
+  the root helpers, the sandbox, sudoers, archives, git and bundles, and
+  negative tests over the whole registry (`test_negative.py`,
+  `negative.sh`), what they found fixed and what was left recorded in
+  [limits.md](limits.md); Lighthouse 100 for accessibility on every tab,
+  light and dark; upgrade, removal and purge of the `.deb` and the `.rpm`
+  from phase 8's commit (`make ct-lifecycle`) on the three; the `.rpm`
+  built and linted in CI; the GitHub workflow green on its first run.
 - **11, files and inventories as trees** (2 November): a managed project
   changed many files at once, directories moved, copied and deleted, a
   path restored, a directory downloaded, an archive imported (`files.sh`);

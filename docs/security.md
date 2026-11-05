@@ -131,8 +131,8 @@ Known limits, none of which lets a role do more than this page says:
 - A failed run leaves its unit failed until `systemctl reset-failed`, which
   makes the system "degraded" meanwhile.
 
-The full list, with what is left in every area, is in the
-[TODO](../TODO.md), "Leftovers".
+The full list, with what is left in every area, is in
+[limits.md](limits.md).
 
 ## Advice
 
