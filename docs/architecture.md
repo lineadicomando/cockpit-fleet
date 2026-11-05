@@ -270,7 +270,8 @@ the galaxy job, whose result takes longer to take in. A unit that is gone withou
 **Runs in series.** Two templates on one inventory launched one after the
 other run at once, and may step on each other's hosts. A run of a template
 or an ad-hoc command launched with `serial` (`options.serial`, no column of
-its own) is passed over by `dispatch` while another run is running on its
+its own; the box of the launch forms is ticked by default, the API and
+`fleet launch` leave it off unless asked) is passed over by `dispatch` while another run is running on its
 inventory, or one launched before it (a lower `rowid`) is queued there; it
 takes no place in its lane meanwhile, so runs on other inventories start
 past it. Running ones count whatever their age, since a run approved after

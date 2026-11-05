@@ -194,7 +194,7 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
     const { t } = useTranslation();
     const [limit, setLimit] = useState(initialLimit);
     const [check, setCheck] = useState(false);
-    const [serial, setSerial] = useState(false);
+    const [serial, setSerial] = useState(true);
     const [answers, setAnswers] = useState(() => initialAnswers(template.survey));
 
     async function submit() {

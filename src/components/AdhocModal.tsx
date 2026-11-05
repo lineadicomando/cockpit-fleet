@@ -40,7 +40,7 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
     const [vaultIds, setVaultIds] = useState<string[]>([]);
     const [become, setBecome] = useState(false);
     const [check, setCheck] = useState(false);
-    const [serial, setSerial] = useState(false);
+    const [serial, setSerial] = useState(true);
 
     const data = choices.data;
     const inventory = data?.inventories.find(item => item.id === inventoryId);
