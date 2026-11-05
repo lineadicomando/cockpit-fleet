@@ -16,6 +16,7 @@ fleet \- drive Ansible through cockpit-fleet from a terminal
 .IR pattern ]
 .RB [ \-\-check ]
 .RB [ \-\-diff ]
+.RB [ \-\-serial ]
 .RB [ \-\-detach ]
 .br
 .B fleet log
@@ -150,6 +151,10 @@ a required one left out is asked for at the terminal, and so is every secret
 question, which is never taken from the command line: the value goes to the
 backend on the standard input of
 .BR fleet\-secret .
+With
+.BR \-\-serial ,
+the run waits in the queue while another run is running on its inventory or
+one launched before it is queued there, whatever their outcome.
 .TP
 .B log
 Prints the output of a run;

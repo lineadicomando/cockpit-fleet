@@ -33,17 +33,22 @@ def run_row(row) -> dict:
              "check": Bool(),
              "diff": Bool(),
              "answers": Obj(),
+             "serial": Bool("Wait in the queue while another run is running on the same"
+                            " inventory, or one launched before it is queued there,"
+                            " whatever their outcome"),
          })
 def run_start(ctx: Context, params: Values) -> dict:
     """Launch a job template. The caller may narrow it, not widen it. A run of a
     template that needs approval waits, as pending_approval, until another user
-    approves it."""
+    approves it. One launched in series waits in the queue while another run is
+    running on its inventory, or one launched before it is queued there."""
     return launch(ctx, params["template_id"], params["limit"], params["check"], params["diff"],
-                  params["answers"])
+                  params["answers"], serial=params["serial"])
 
 
 def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, answers: dict,
-           schedule=None, created_by: str | None = None, workflow: dict | None = None) -> dict:
+           schedule=None, created_by: str | None = None, workflow: dict | None = None,
+           serial: bool = False) -> dict:
     """Queue a run of a template: what run.start does, what a schedule does
     at its time, with the answers stored with it, and what a workflow does for
     one of its steps, with what the steps before it passed on."""
@@ -109,6 +114,8 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     if sets:
         # Which sets of variables it took, by name as they were then.
         options["variable_sets"] = sets
+    if serial:
+        options["serial"] = True
     run = {"id": run_id, "kind": "playbook", "title": template["name"],
            "template_id": template_id, "project_id": project["id"],
            "inventory_id": inventory["id"], "revision": project["revision"],
@@ -142,6 +149,9 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
              "module": Str(required=True, max_length=200),
              "limit": Str(required=True, max_length=512),
              "machine_credential_id": Id(required=False),
+             "serial": Bool("Wait in the queue while another run is running on the same"
+                            " inventory, or one launched before it is queued there,"
+                            " whatever their outcome"),
          })
 def run_adhoc(ctx: Context, params: Values) -> dict:
     """Run one module on hosts of an inventory, without a template.
@@ -206,6 +216,8 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
 
     options = {"module": module, "free_form": free_form, "args": args, "limit": limit,
                "check": check, "diff": spec["diff"], "become": become}
+    if params["serial"]:
+        options["serial"] = True
     jobs.enqueue(ctx, {"id": run_id, "kind": "adhoc", "title": f"{module} [{limit}]",
                        "project_id": project_id, "inventory_id": inventory_id,
                        "revision": project["revision"] if project else "",
@@ -245,7 +257,9 @@ def run_list(ctx: Context, params: Values) -> dict:
         " AND (? = '' AND kind != 'check' OR kind = ?) ORDER BY rowid DESC LIMIT ?",
         (before, before, status, status, kind, kind, limit),
     ).fetchall()
-    return {"runs": [{**run_row(row), "cursor": row["rowid"]} for row in rows],
+    return {"runs": [{**run_row(row), "cursor": row["rowid"],
+                      "waiting_for": jobs.waiting_for(ctx.conn, row["id"])
+                      if row["status"] == "queued" else None} for row in rows],
             "more": len(rows) == limit}
 
 
@@ -259,6 +273,7 @@ def run_get(ctx: Context, params: Values) -> dict:
     run_id = params["id"]
     jobs.reconcile(ctx)
     run = run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
+    run["waiting_for"] = jobs.waiting_for(ctx.conn, run_id)
     approval = approvals.of_run(ctx, run_id)
     if approval:
         run["approval"] = {**approval, "can_decide": run["status"] == jobs.WAITING

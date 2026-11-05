@@ -279,6 +279,89 @@ class RunTest(Base):
         self.assertEqual(statuses(), ["successful", "running", "running", "queued"])
         self.assertEqual(self.started, ids[:3])
 
+    def second(self, template, name="other", inventory_id=None, **extra):
+        """Another template of the same project, on the same inventory unless told."""
+        return self.ok("template.create", {"name": name, "project_id": template["project_id"],
+                                           "playbook": "site.yml",
+                                           "inventory_id": inventory_id or template["inventory_id"],
+                                           **extra})
+
+    def test_a_run_in_series_waits_for_those_before_it_on_its_inventory(self):
+        first = self.template()
+        other = self.second(first)
+        elsewhere = self.ok("inventory.create", {"name": "inv2", "kind": "managed",
+                                                 "content": "all:\n  hosts:\n    b:\n"})
+        apart = self.second(first, "apart", elsewhere["id"])
+        a = self.ok("run.start", {"template_id": first["id"]})
+        b = self.ok("run.start", {"template_id": other["id"], "serial": True}, role="operator")
+        self.assertEqual((a["status"], b["status"]), ("running", "queued"))
+        self.assertTrue(b["options"]["serial"])
+        self.assertEqual(self.ok("run.get", {"id": b["id"]}, role="viewer")["waiting_for"],
+                         {"id": a["id"], "title": "deploy"})
+        # It takes no place meanwhile: a run on another inventory starts.
+        c = self.ok("run.start", {"template_id": apart["id"]})
+        self.assertEqual(c["status"], "running")
+        # A third in series waits for the second, which is the nearer.
+        self.finish(c["id"])
+        d = self.ok("run.start", {"template_id": first["id"], "serial": True})
+        listed = {run["id"]: run for run in self.ok("run.list")["runs"]}
+        self.assertEqual(listed[d["id"]]["waiting_for"]["id"], b["id"])
+        self.assertIsNone(listed[a["id"]]["waiting_for"])
+        # A failure does not hold it back: the order is all it asks for.
+        self.finish(a["id"], rc=2)
+        self.assertEqual([self.ok("run.get", {"id": i})["status"] for i in (a["id"], b["id"], d["id"])],
+                         ["failed", "running", "queued"])
+        self.finish(b["id"])
+        self.assertEqual(self.ok("run.get", {"id": d["id"]})["status"], "running")
+        self.assertEqual(self.started, [a["id"], c["id"], b["id"], d["id"]])
+
+    def test_a_run_not_in_series_does_not_wait(self):
+        first = self.template()
+        a = self.ok("run.start", {"template_id": first["id"], "serial": True})
+        b = self.ok("run.start", {"template_id": self.second(first)["id"]})
+        self.assertEqual((a["status"], b["status"]), ("running", "running"))
+        self.assertNotIn("serial", b["options"])
+
+    def test_a_run_in_series_does_not_wait_for_an_approval(self):
+        first = self.template()
+        gated = self.second(first, "gated", needs_approval=True)
+        waiting = self.ok("run.start", {"template_id": gated["id"], "serial": True})
+        self.assertEqual(waiting["status"], "pending_approval")
+        later = self.ok("run.start", {"template_id": first["id"], "serial": True})
+        self.assertEqual(later["status"], "running")
+        # Approved while a run launched after it runs: it waits for that one.
+        approved = self.ok("approval.approve", {"id": waiting["id"]})
+        self.assertEqual(approved["status"], "queued")
+        self.assertEqual(self.ok("run.get", {"id": waiting["id"]})["waiting_for"]["id"],
+                         later["id"])
+        self.finish(later["id"])
+        self.assertEqual(self.ok("run.get", {"id": waiting["id"]})["status"], "running")
+
+    def test_a_run_chosen_in_the_same_pass_holds_back_one_in_series(self):
+        first = self.template()
+        elsewhere = self.ok("inventory.create", {"name": "inv2", "kind": "managed",
+                                                 "content": "all:\n  hosts:\n    b:\n"})
+        apart = self.second(first, "apart", elsewhere["id"])
+        busy = [self.ok("run.start", {"template_id": apart["id"]})["id"] for _ in range(2)]
+        serial = self.ok("run.start", {"template_id": first["id"], "serial": True})
+        urgent = self.ok("run.start", {"template_id": first["id"]})
+        self.ctx().conn.execute("UPDATE runs SET priority = 5 WHERE id = ?", (urgent["id"],))
+        for run_id in busy:
+            self.finish(run_id)
+        # Both places are free in one pass: the urgent one goes first, alone.
+        self.assertEqual(self.ok("run.get", {"id": urgent["id"]})["status"], "running")
+        got = self.ok("run.get", {"id": serial["id"]})
+        self.assertEqual((got["status"], got["waiting_for"]["id"]), ("queued", urgent["id"]))
+
+    def test_an_adhoc_command_in_series(self):
+        first = self.template()
+        a = self.ok("run.start", {"template_id": first["id"]})
+        adhoc = self.ok("run.adhoc", {"inventory_id": first["inventory_id"], "limit": "all",
+                                      "module": "ansible.builtin.ping", "serial": True})
+        self.assertEqual((adhoc["status"], adhoc["options"]["serial"]), ("queued", True))
+        self.finish(a["id"])
+        self.assertEqual(self.ok("run.get", {"id": adhoc["id"]})["status"], "running")
+
     def test_cancel_a_queued_and_a_running_run(self):
         template = self.template()
         ids = [self.ok("run.start", {"template_id": template["id"]})["id"] for _ in range(3)]

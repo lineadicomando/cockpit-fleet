@@ -267,6 +267,26 @@ get there together, and what a job left can be moved only once; found with
 the galaxy job, whose result takes longer to take in. A unit that is gone without a
 `result.json` is recorded as an error, or as canceled if that was asked.
 
+**Runs in series.** Two templates on one inventory launched one after the
+other run at once, and may step on each other's hosts. A run of a template
+or an ad-hoc command launched with `serial` (`options.serial`, no column of
+its own) is passed over by `dispatch` while another run is running on its
+inventory, or one launched before it (a lower `rowid`) is queued there; it
+takes no place in its lane meanwhile, so runs on other inventories start
+past it. Running ones count whatever their age, since a run approved after
+a later launch is queued only then; one chosen in the same pass counts too,
+as a later run of a higher priority may come first. Runs waiting for
+approval do not hold it back (they may wait a day), nor do check cycles,
+which have lanes of their own, nor workflow runs, whose steps count.
+Outcomes do not matter: it asks for an order, not for a success, which is
+what a workflow is for. The check is on the inventory, not on the hosts its
+limit leaves: two inventories that list the same hosts are not ordered, and
+two limits that share no host are. The waiting run keeps what it was given
+at launch (a copy of the project, the inventory, `known_hosts`), as one
+waiting for approval does. `run.get` and `run.list` say what it waits for
+(`waiting_for`: the last launched of the runs that hold it back). Nothing
+starts it but `dispatch`, which runs when a unit ends, so no process waits.
+
 **Git projects.** A sync job makes a fresh shallow fetch of one reference into
 its own directory and drops `.git`; the result replaces the project's tree
 only if the fetch succeeded. Hooks are disabled, submodules are not followed,

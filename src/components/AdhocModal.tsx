@@ -40,6 +40,7 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
     const [vaultIds, setVaultIds] = useState<string[]>([]);
     const [become, setBecome] = useState(false);
     const [check, setCheck] = useState(false);
+    const [serial, setSerial] = useState(false);
 
     const data = choices.data;
     const inventory = data?.inventories.find(item => item.id === inventoryId);
@@ -52,7 +53,7 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
         const run = await call<Run>("run.adhoc", {
             inventory_id: inventoryId, project_id: projectId, limit: limit.trim(),
             module: chosenModule, free_form: freeForm.trim(),
-            machine_credential_id: machineId, vault_credential_ids: vaultIds, become, check,
+            machine_credential_id: machineId, vault_credential_ids: vaultIds, become, check, serial,
         });
         cockpit.location.go(["runs", run.id]);
     }
@@ -132,6 +133,10 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
                     </FormGroup>
                     <FormGroup fieldId="adhoc-check">
                         <Checkbox id="adhoc-check" label={t("Dry run: show what would change, change nothing")} isChecked={check} onChange={(_e, value) => setCheck(value)} />
+                    </FormGroup>
+                    <FormGroup fieldId="adhoc-serial">
+                        <Checkbox id="adhoc-serial" label={t("Start after the runs already launched on this inventory")} isChecked={serial} onChange={(_e, value) => setSerial(value)}
+                            description={t("It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome.")} />
                     </FormGroup>
                 </>
             )}

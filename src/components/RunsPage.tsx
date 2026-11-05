@@ -88,7 +88,10 @@ export function RunsPage() {
                                             <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", run.id])}>{run.title}</Button>
                                             {run.options.check && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Dry run")}</Label>}
                                         </Td>
-                                        <Td dataLabel={t("Status")}><RunStatusLabel status={run.status} /></Td>
+                                        <Td dataLabel={t("Status")}>
+                                            <RunStatusLabel status={run.status} />
+                                            {run.waiting_for && <Content component="small" style={{ display: "block" }}>{t("After {{title}}", { title: run.waiting_for.title })}</Content>}
+                                        </Td>
                                         <Td dataLabel={t("Type")}>{kinds[run.kind]}</Td>
                                         <Td dataLabel={t("Launched by")}>{run.created_by}</Td>
                                         <Td dataLabel={t("Started")}>{formatTime(run.started_at ?? run.created_at, i18n.language)}</Td>
@@ -411,6 +414,16 @@ export function RunDetailPage({ id }: { id: string }) {
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{t("Answers")}</DescriptionListTerm>
                                 <DescriptionListDescription><Answered answers={data.options.answers ?? {}} secrets={data.options.secret_answers} /></DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
+                        {data.options.serial && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("In series")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    {data.waiting_for
+                                        ? <>{t("Waits for")} <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", data.waiting_for!.id])}>{data.waiting_for.title}</Button></>
+                                        : t("After the runs launched before it on its inventory")}
+                                </DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
                         {data.workflow_run_id && (

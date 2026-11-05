@@ -197,7 +197,7 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(name, "run.start")
         self.assertEqual(params, {"template_id": "t1", "limit": "a", "check": False, "diff": False,
                                   "answers": {"greeting": "ciao", "count": 3, "token": TICKET},
-                                  "via": "cli"})
+                                  "serial": False, "via": "cli"})
         self.assertNotIn("hush", json.dumps(fake.calls))
 
     def test_what_is_missing_is_asked_at_a_terminal_and_refused_elsewhere(self):
@@ -243,6 +243,20 @@ class LaunchTest(unittest.TestCase):
         self.assertIn("Greet on a: boom", out)
         offsets = [params["offset"] for name, params in fake.calls if name == "run.log"]
         self.assertEqual(offsets, [0, 10, 10, 10])
+
+    def test_a_launch_in_series_says_what_it_waits_for(self):
+        fake = Fake({
+            "template.list": {"templates": [{**TEMPLATE, "survey": []}]},
+            "run.start": RUN,
+            "run.log": {"text": "", "offset": 0, "more": False},
+            "run.get": [{"status": "queued", "waiting_for": {"id": "r0", "title": "backup"}},
+                        {"status": "successful"}],
+            "run.result": {**RESULT, "status": "successful"},
+        })
+        t = term(fake)
+        terminal.run(t, COMMANDS, ["launch", "t1", "--serial"])
+        self.assertTrue(fake.calls[1][1]["serial"])
+        self.assertIn("It waits for run r0 (backup) on the same inventory", t.err.getvalue())
 
     def test_result_waits_until_the_end(self):
         fake = Fake({"run.result": [{**RESULT, "status": "running", "done": False},

@@ -13,7 +13,7 @@ export function shellLine(words: string[]): string {
 
 // fleet launch, with the answers a person may type: never those of secret
 // questions, which fleet asks for at the terminal.
-export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean): string {
+export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean, serial = false): string {
     const words = ["fleet", "launch", template];
     for (const [name, value] of Object.entries(answers)) {
         if (value === undefined || value === null || value === "") continue;
@@ -21,6 +21,7 @@ export function launchCommand(template: string, answers: Record<string, unknown>
     }
     if (limit.trim()) words.push("--limit", limit.trim());
     if (check) words.push("--check");
+    if (serial) words.push("--serial");
     return shellLine(words);
 }
 

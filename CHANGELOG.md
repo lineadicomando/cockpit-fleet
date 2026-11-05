@@ -8,6 +8,17 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+### Added
+
+- Runs launched in series: a job template or an ad-hoc command launched
+  with "Start after the runs already launched on this inventory" waits in
+  the queue while another run is running on its inventory, or one launched
+  before it is queued there, whatever their outcome; it takes no place in
+  the queue meanwhile. Runs waiting for approval and check cycles do not
+  hold it back. The page of runs says what it waits for (`serial` of
+  `run.start` and `run.adhoc`, `waiting_for` of `run.get` and `run.list`,
+  `fleet launch --serial`).
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

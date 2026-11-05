@@ -439,21 +439,67 @@ def lanes(config) -> list[tuple[str, str, int]]:
             ("slow", f"kind = 'check' AND {slow} != 0", config.checks_max_concurrent)]
 
 
+# What a run launched in series waits for: any run running on its inventory,
+# and those queued there that were launched before it. Running ones whatever
+# their age, since one approved after a later launch is queued only then. Not
+# check cycles, which have lanes of their own, nor workflows, whose steps count;
+# nor runs waiting for approval, which may wait for a day.
+_AHEAD = ("SELECT id, title FROM runs WHERE inventory_id = ? AND rowid != ?"
+          " AND (status = 'running' OR status = 'queued' AND rowid < ?)"
+          " AND kind NOT IN ('check', 'workflow') ORDER BY rowid DESC LIMIT 1")
+
+
+def _serial(options: str) -> bool:
+    return bool(store.loads(options, {}).get("serial"))
+
+
+def waiting_for(conn, run_id: str) -> dict | None:
+    """The run that a queued run launched in series waits for, if any: the
+    last launched of those it waits for."""
+    row = conn.execute("SELECT rowid, status, inventory_id, options FROM runs WHERE id = ?",
+                       (run_id,)).fetchone()
+    if row is None or row["status"] != "queued" or not row["inventory_id"] \
+            or not _serial(row["options"]):
+        return None
+    ahead = conn.execute(_AHEAD, (row["inventory_id"], row["rowid"], row["rowid"])).fetchone()
+    return {"id": ahead["id"], "title": ahead["title"]} if ahead else None
+
+
 def dispatch(ctx) -> None:
     """Start queued runs while fewer than the configured maximum are running:
     those of a higher priority first, then the oldest. Check cycles have a
     limit of their own, and do not count against that of the other runs;
-    cycles of the slow kinds have another, so as not to hold the others back."""
+    cycles of the slow kinds have another, so as not to hold the others back.
+    A run launched in series is passed over while another run is running on
+    its inventory, or one launched before it is queued there, and takes no
+    place meanwhile."""
     conn = ctx.conn
     conn.execute("BEGIN IMMEDIATE")
     try:
         chosen = []
-        for _name, lane, limit in lanes(ctx.config):
+        # Inventories a run was chosen on in this pass: it is still queued in the
+        # table, and one launched later but of a higher priority comes first.
+        claimed = set()
+        for name, lane, limit in lanes(ctx.config):
             running = conn.execute(f"SELECT count(*) FROM runs WHERE status = 'running'"  # noqa: S608
                                    f" AND {lane}").fetchone()[0]
-            chosen += [row["id"] for row in conn.execute(
-                f"SELECT id FROM runs WHERE status = 'queued' AND {lane}"  # noqa: S608
-                " ORDER BY priority DESC, created_at LIMIT ?", (max(limit - running, 0),))]
+            free = limit - running
+            if free <= 0:
+                continue
+            for row in conn.execute(
+                    f"SELECT rowid, id, inventory_id, options FROM runs"  # noqa: S608
+                    f" WHERE status = 'queued' AND {lane}"
+                    " ORDER BY priority DESC, created_at").fetchall():
+                inventory = row["inventory_id"]
+                if inventory and _serial(row["options"]) and (inventory in claimed or conn.execute(
+                        _AHEAD, (inventory, row["rowid"], row["rowid"])).fetchone()):
+                    continue
+                if name == "runs":
+                    claimed.add(inventory)
+                chosen.append(row["id"])
+                free -= 1
+                if free == 0:
+                    break
         for run_id in chosen:
             conn.execute("UPDATE runs SET status = 'running', started_at = ? WHERE id = ?",
                          (store.now(), run_id))

@@ -1057,5 +1057,11 @@
   "The extra variables below are not a JSON object yet: only the sets are shown.": "Le variabili extra qui sotto non sono ancora un oggetto JSON: sono mostrati solo gli insiemi.",
   "This template": "Questo template",
   "instead of {{sets}}": "al posto di {{sets}}",
-  "A survey's answer, and what earlier steps of a workflow pass on, win over these.": "Le risposte di una survey, e ciò che passano gli step precedenti di un workflow, vincono su queste."
+  "A survey's answer, and what earlier steps of a workflow pass on, win over these.": "Le risposte di una survey, e ciò che passano gli step precedenti di un workflow, vincono su queste.",
+  "Start after the runs already launched on this inventory": "Avvia dopo i run già lanciati su questo inventory",
+  "It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome.": "Resta in coda finché un altro run è in esecuzione sull'inventory, o uno lanciato prima è ancora in coda, qualunque sia il loro esito.",
+  "After {{title}}": "Dopo {{title}}",
+  "In series": "In serie",
+  "Waits for": "In attesa di",
+  "After the runs launched before it on its inventory": "Dopo i run lanciati prima sul suo inventory"
 }

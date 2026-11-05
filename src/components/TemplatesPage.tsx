@@ -194,6 +194,7 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
     const { t } = useTranslation();
     const [limit, setLimit] = useState(initialLimit);
     const [check, setCheck] = useState(false);
+    const [serial, setSerial] = useState(false);
     const [answers, setAnswers] = useState(() => initialAnswers(template.survey));
 
     async function submit() {
@@ -201,7 +202,7 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
         // A secret goes to the helper that encrypts it; the launch carries a ticket.
         for (const [name, value] of Object.entries(secretAnswers(template.survey, answers)))
             given[name] = await answerSecret(value);
-        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given });
+        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given, serial });
         cockpit.location.go(["runs", run.id]);
     }
 
@@ -224,7 +225,11 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
             <FormGroup fieldId="launch-check">
                 <Checkbox id="launch-check" label={t("Dry run: show what would change, change nothing")} isChecked={check} onChange={(_e, value) => setCheck(value)} />
             </FormGroup>
-            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check)} />
+            <FormGroup fieldId="launch-serial">
+                <Checkbox id="launch-serial" label={t("Start after the runs already launched on this inventory")} isChecked={serial} onChange={(_e, value) => setSerial(value)}
+                    description={t("It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome.")} />
+            </FormGroup>
+            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check, serial)} />
         </FormModal>
     );
 }

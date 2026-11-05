@@ -369,9 +369,13 @@ export interface Run {
         filename?: string; size?: number; sha256?: string;
         // An ad-hoc command: the module and its arguments, as those of a task.
         module?: string; free_form?: string; args?: Record<string, unknown>; become?: boolean;
+        // Launched in series: it waits for the runs on its inventory before it.
+        serial?: boolean;
     };
     stats: Record<string, HostStats>;
     cursor?: number;
+    // run.get and run.list: what a queued run in series waits for.
+    waiting_for?: { id: string; title: string } | null;
 }
 
 // What ansible-doc says of a module: module.help.

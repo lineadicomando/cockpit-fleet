@@ -3136,3 +3136,21 @@ msgstr "al posto di {{sets}}"
 
 msgid "A survey's answer, and what earlier steps of a workflow pass on, win over these."
 msgstr "Le risposte di una survey, e ciò che passano gli step precedenti di un workflow, vincono su queste."
+
+msgid "Start after the runs already launched on this inventory"
+msgstr "Avvia dopo i run già lanciati su questo inventory"
+
+msgid "It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome."
+msgstr "Resta in coda finché un altro run è in esecuzione sull'inventory, o uno lanciato prima è ancora in coda, qualunque sia il loro esito."
+
+msgid "After {{title}}"
+msgstr "Dopo {{title}}"
+
+msgid "In series"
+msgstr "In serie"
+
+msgid "Waits for"
+msgstr "In attesa di"
+
+msgid "After the runs launched before it on its inventory"
+msgstr "Dopo i run lanciati prima sul suo inventory"

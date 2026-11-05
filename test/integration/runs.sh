@@ -1,6 +1,6 @@
 #!/bin/sh
 # The whole path of a run through fleetctl: project, credential, host key,
-# inventory, template, launch, outcome, cancel, queue, git sync.
+# inventory, template, launch, outcome, cancel, queue, runs in series, git sync.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
 # Needs IT_SSH_USER and IT_SSH_PASSWORD (an account of this machine that accepts
 # password logins); IT_GIT_URL (a public https repository) is optional.
@@ -62,6 +62,14 @@ cat > "$SRC/demo/wait.yml" <<'YAML'
         timeout: 300
       delegate_to: localhost
 YAML
+cat > "$SRC/demo/short.yml" <<'YAML'
+- hosts: all
+  gather_facts: false
+  tasks:
+    - ansible.builtin.wait_for:
+        timeout: 8
+      delegate_to: localhost
+YAML
 cat > "$SRC/demo/hosts.yml" <<'YAML'
 - hosts: all
   gather_facts: false
@@ -89,7 +97,7 @@ project_id=$(get "$project" 'a["data"]["id"]')
 expect_eq "local project is accepted under an allowed root" "$(get "$project" 'a["ok"]')" True
 expect_eq "local project is refused elsewhere" \
     "$(get "$(admin project.create '{"name": "etc", "kind": "local", "path": "/etc"}')" 'a["error"]["code"]')" conflict
-expect_eq "project files are listed" "$(get "$(admin project.files "{\"id\": \"$project_id\"}")" 'sorted(a["data"]["files"])')" "['hosts.yml', 'secret.yml', 'site.yml', 'wait.yml']"
+expect_eq "project files are listed" "$(get "$(admin project.files "{\"id\": \"$project_id\"}")" 'sorted(a["data"]["files"])')" "['hosts.yml', 'secret.yml', 'short.yml', 'site.yml', 'wait.yml']"
 
 inventory=$(admin inventory.create '{"name": "self", "kind": "managed", "format": "ini", "content": "[local]\nself ansible_host=127.0.0.1\n"}')
 inventory_id=$(get "$inventory" 'a["data"]["id"]')
@@ -263,6 +271,23 @@ sleep 4
 expect_eq "the queued run starts when the slot frees" "$(db "SELECT status FROM runs WHERE id = '$second'")" running
 expect_eq "cancel the second run" "$(get "$(ctl itoperator run.cancel "{\"id\": \"$second\"}")" 'a["data"]["status"]')" canceled
 
+# --- in series: the second waits for the first on the same inventory --------------
+sed -i 's/^max_concurrent = .*/max_concurrent = 4/' "$CONFIG"
+admin template.create "{\"name\": \"short\", \"project_id\": \"$project_id\", \"playbook\": \"short.yml\", \"inventory_id\": \"$inventory_id\"}" > /tmp/fleet-it-short.json
+short_id=$(get "$(cat /tmp/fleet-it-short.json)" 'a["data"]["id"]'); rm -f /tmp/fleet-it-short.json
+first=$(get "$(ctl itoperator run.start "{\"template_id\": \"$short_id\"}")" 'a["data"]["id"]')
+second=$(get "$(ctl itoperator run.start "{\"template_id\": \"$short_id\", \"serial\": true}")" 'a["data"]["id"]')
+third=$(get "$(ctl itoperator run.start "{\"template_id\": \"$short_id\"}")" 'a["data"]["id"]')
+sleep 3
+expect_eq "a run not in series starts beside another" "$(db "SELECT status FROM runs WHERE id = '$third'")" running
+expect_eq "a run in series waits for the one before it" "$(db "SELECT status FROM runs WHERE id = '$second'")" queued
+expect_eq "it says which one it waits for" "$(get "$(ctl itoperator run.get "{\"id\": \"$second\"}")" 'a["data"]["waiting_for"]["id"]')" "$third"
+expect_run "the first ends" "$first" 60 successful
+expect_run "the one in series ends" "$second" 90 successful
+expect_eq "it started once the others had ended" \
+    "$(db "SELECT (SELECT started_at FROM runs WHERE id = '$second') >= max(finished_at) FROM runs WHERE id IN ('$first', '$third')")" 1
+sed -i 's/^max_concurrent = .*/max_concurrent = 1/' "$CONFIG"
+
 # --- export, and import on an empty installation ---------------------------------
 exported=$(admin config.export)
 expect_eq "the configuration is exported by name" \
@@ -280,7 +305,7 @@ expect_eq "and exports the same again" \
     "$(get "$(admin config.export)" '{k: v for k, v in a["data"].items() if k != "exported_at"}')" \
     "$(get "$exported" '{k: v for k, v in a["data"].items() if k != "exported_at"}')"
 expect_eq "an imported credential has no secret" "$(get "$(admin credential.list)" '[c["secrets"]["password"] for c in a["data"]["credentials"] if c["name"] == "local ssh"]')" "[False]"
-expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 4
+expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 5
 
 # --- git project ---------------------------------------------------------------
 if [ -n "${IT_GIT_URL:-}" ]; then

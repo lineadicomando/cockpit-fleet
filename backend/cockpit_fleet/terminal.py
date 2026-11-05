@@ -668,13 +668,17 @@ def _launch(term: Terminal, args: list[str]) -> int:
     parser.add_argument("--limit", default="", help="a host pattern that narrows the hosts")
     parser.add_argument("--check", action="store_true", help="dry run: change nothing")
     parser.add_argument("--diff", action="store_true", help="show the differences")
+    parser.add_argument("--serial", action="store_true",
+                        help="wait while another run is running on its inventory, or one"
+                        " launched before it is queued there")
     parser.add_argument("--detach", action="store_true", help="do not follow the run")
     options = parser.parse_args(args)
     template = _one(term("template.list")["templates"], options.template, "template",
                     "fleet template list")
     answers = _answers(term, template, options.answer)
     run = term("run.start", {"template_id": template["id"], "limit": options.limit,
-                             "check": options.check, "diff": options.diff, "answers": answers})
+                             "check": options.check, "diff": options.diff, "answers": answers,
+                             "serial": options.serial})
     if options.detach:
         term.show(run)
         return OK
@@ -683,6 +687,11 @@ def _launch(term: Terminal, args: list[str]) -> int:
         if run["status"] == "pending_approval":
             term.err.write("It starts once another user approves it (fleet approval approve"
                            f" --id {run['id']}); Ctrl-C stops following it.\n")
+        elif run["status"] == "queued" and options.serial:
+            ahead = term("run.get", {"id": run["id"]}).get("waiting_for")
+            if ahead:
+                term.err.write(f"It waits for run {ahead['id']} ({ahead['title']}) on the same"
+                               " inventory; Ctrl-C stops following it.\n")
     return _follow(term, run["id"])
 
 
