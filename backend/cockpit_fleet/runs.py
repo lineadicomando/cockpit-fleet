@@ -135,7 +135,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 
-@command("run.adhoc", role="admin", mutating=True,
+@command("run.adhoc", role="admin", mutating=True, agent="adhoc",
          params={
              "inventory_id": Id(),
              "project_id": Id(required=False),

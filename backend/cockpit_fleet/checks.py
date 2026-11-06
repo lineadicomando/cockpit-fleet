@@ -1057,7 +1057,7 @@ def check_update(ctx: Context, params: Values) -> dict:
     return _check(ctx, store.fetch(ctx.conn, "checks", row["id"], "check"))
 
 
-@command("check.delete", role="admin", mutating=True,
+@command("check.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })

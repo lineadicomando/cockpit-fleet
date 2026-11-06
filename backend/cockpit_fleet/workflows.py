@@ -192,7 +192,7 @@ def workflow_update(ctx: Context, params: Values) -> dict:
     return _workflow(ctx, store.fetch(ctx.conn, "workflows", params["id"], "workflow"))
 
 
-@command("workflow.delete", role="admin", mutating=True,
+@command("workflow.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })

@@ -108,7 +108,10 @@ them needs the user's explicit agreement.
   `Bool`, `Id`, `Strs`, `Objs`, `Obj`, `Choice` from `cli.py`), read them from
   the `Values` the handler gets, and give the handler a docstring: with the
   parameters it is what an agent sees of the command as a tool (`tool=False`
-  keeps it from agents) and what `fleet help` shows of it at a terminal. Raise the errors in `errors.py`; their codes are part of the
+  keeps it from agents) and what `fleet help` shows of it at a terminal.
+  Give it `agent=` when its class for agents is not the default (ad-hoc,
+  files, projects, credentials, deletes: see `cli.AGENT_CLASSES`), and add
+  it to `CLASS_TABLE` in `test_agents.py`. Raise the errors in `errors.py`; their codes are part of the
   interface, so add but never rename. Test it in `backend/tests/test_cli.py` style.
 - **A schema change**: append an entry to `MIGRATIONS` in `db.py`. Never edit
   an entry that has been released.

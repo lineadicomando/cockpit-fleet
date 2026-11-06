@@ -97,7 +97,8 @@ def template_tool(template, project: str, inventory: str) -> dict | None:
 def mcp_tools(ctx: Context, params: Values) -> dict:
     """The tools the caller may use: for fleet-mcp, which offers them to an agent.
 
-    Each one says which command it calls and with which fixed parameters.
+    Each one says which command it calls, with which fixed parameters, and
+    its class (cli.AGENT_CLASSES).
     """
     role = ctx.caller.role
     tools = []
@@ -107,7 +108,7 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
                 "name": _tool_name(name),
                 "description": " ".join((spec.handler.__doc__ or name).split()),
                 "command": name, "fixed": {}, "inputSchema": spec.schema(),
-                "readOnly": not spec.mutating,
+                "readOnly": not spec.mutating, "class": spec.agent,
             })
     if role_at_least(role, COMMANDS["run.start"].role):
         projects = {row["id"]: row["name"] for row in ctx.conn.execute(
@@ -118,7 +119,7 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
             tool = template_tool(template, projects.get(template["project_id"], ""),
                                  inventories.get(template["inventory_id"], ""))
             if tool is not None:
-                tools.append({**tool, "readOnly": False})
+                tools.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
     return {"tools": tools, "role": role, "user": ctx.caller.user}
 
 

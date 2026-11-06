@@ -542,7 +542,7 @@ def channel_update(ctx: Context, params: Values) -> dict:
     return _channel(ctx, store.fetch(ctx.conn, "channels", channel_id, "channel"))
 
 
-@command("channel.delete", role="admin", mutating=True,
+@command("channel.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -670,7 +670,7 @@ def rule_update(ctx: Context, params: Values) -> dict:
     return _rule(ctx, store.fetch(ctx.conn, "notify_rules", params["id"], "rule"))
 
 
-@command("rule.delete", role="admin", mutating=True,
+@command("rule.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -717,7 +717,7 @@ def notification_list(ctx: Context, params: Values) -> dict:
             "more": len(rows) == params["limit"]}
 
 
-@command("notification.retry", role="admin", mutating=True,
+@command("notification.retry", role="admin", mutating=True, agent="run",
          params={
              "id": Int(1, 2**62),
          })

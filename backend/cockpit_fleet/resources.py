@@ -86,7 +86,7 @@ def _credential_values(params: Values, kind: str) -> dict:
             "vault_id": vault_id if kind == "vault" else ""}
 
 
-@command("credential.create", role="admin", mutating=True,
+@command("credential.create", role="admin", mutating=True, agent="code",
          params={"kind": Choice(tuple(CREDENTIAL_FIELDS)), **_CREDENTIAL_PARAMS})
 def credential_create(ctx: Context, params: Values) -> dict:
     """Create a credential. Its secrets are entered afterwards, by a person."""
@@ -98,7 +98,7 @@ def credential_create(ctx: Context, params: Values) -> dict:
     return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
 
 
-@command("credential.update", role="admin", mutating=True,
+@command("credential.update", role="admin", mutating=True, agent="code",
          params={"id": Id(), **_CREDENTIAL_PARAMS})
 def credential_update(ctx: Context, params: Values) -> dict:
     """Change the name and the non-secret fields; secrets go through fleet-secret."""
@@ -109,7 +109,7 @@ def credential_update(ctx: Context, params: Values) -> dict:
     return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
 
 
-@command("credential.delete", role="admin", mutating=True,
+@command("credential.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -172,7 +172,7 @@ def _project_values(ctx: Context, params: Values, kind: str) -> dict:
     return values
 
 
-@command("project.create", role="admin", mutating=True,
+@command("project.create", role="admin", mutating=True, agent="code",
          params={"kind": Choice(("local", "git", "managed", "archive")), **_PROJECT_PARAMS})
 def project_create(ctx: Context, params: Values) -> dict:
     """Create a project: a git repository, a local directory, or an empty one to write or upload."""
@@ -192,7 +192,7 @@ def project_create(ctx: Context, params: Values) -> dict:
     return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
-@command("project.update", role="admin", mutating=True,
+@command("project.update", role="admin", mutating=True, agent="code",
          params={"id": Id(), **_PROJECT_PARAMS})
 def project_update(ctx: Context, params: Values) -> dict:
     """Change a project; where its files come from cannot change."""
@@ -203,7 +203,7 @@ def project_update(ctx: Context, params: Values) -> dict:
     return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
 
 
-@command("project.delete", role="admin", mutating=True,
+@command("project.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -215,7 +215,7 @@ def project_delete(ctx: Context, params: Values) -> dict:
     return {}
 
 
-@command("project.sync", role="admin", mutating=True,
+@command("project.sync", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -241,7 +241,7 @@ def project_sync(ctx: Context, params: Values) -> dict:
     return {"run_id": run_id}
 
 
-@command("project.collections", role="admin", mutating=True,
+@command("project.collections", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -260,7 +260,7 @@ def project_collections(ctx: Context, params: Values) -> dict:
 _MAX_UPLOAD_TEXT = MAX_UPLOAD_MB * 1024 * 1024 * 4 // 3 + 4
 
 
-@command("project.upload", role="admin", mutating=True, redact=("data",),
+@command("project.upload", role="admin", mutating=True, agent="code", redact=("data",),
          tool=False,
          max_input=_MAX_UPLOAD_TEXT + 64 * 1024,
          params={
@@ -489,7 +489,7 @@ def inventory_update(ctx: Context, params: Values) -> dict:
     return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
-@command("inventory.delete", role="admin", mutating=True,
+@command("inventory.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })
@@ -674,7 +674,7 @@ def hostkey_scan(ctx: Context, params: Values) -> dict:
     return {"keys": keys, "unanswered": unanswered}
 
 
-@command("hostkey.add", role="admin", mutating=True,
+@command("hostkey.add", role="admin", mutating=True, agent="code",
          params={
              "host": Str(required=True, max_length=300),
              "key_type": Str(required=True, max_length=64),
@@ -703,7 +703,7 @@ def hostkey_add(ctx: Context, params: Values) -> dict:
     return {}
 
 
-@command("hostkey.remove", role="admin", mutating=True,
+@command("hostkey.remove", role="admin", mutating=True, agent="code",
          params={
              "id": Int(1, 2**62),
          })
@@ -887,7 +887,7 @@ def template_update(ctx: Context, params: Values) -> dict:
     return _save_template(ctx, template_id, values, vaults, create=False, sets=sets)
 
 
-@command("template.delete", role="admin", mutating=True,
+@command("template.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })

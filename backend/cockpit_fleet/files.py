@@ -670,7 +670,7 @@ def file_read(ctx: Context, params: Values) -> dict:
             "binary": binary, "size": len(data)}
 
 
-@command("file.write", role="admin", mutating=True, redact=("content",),
+@command("file.write", role="admin", mutating=True, agent="code", redact=("content",),
          max_input=_MAX_WRITE_INPUT,
          params={
              "id": Id(),
@@ -694,7 +694,7 @@ def file_write(ctx: Context, params: Values) -> dict:
             "collections_run_id": done["collections_run_id"]}
 
 
-@command("file.delete", role="admin", mutating=True,
+@command("file.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
              "path": Str(required=True, max_length=1024),
@@ -708,7 +708,7 @@ def file_delete(ctx: Context, params: Values) -> dict:
     return {"revision": change(ctx, project, [operation], _message(params, ""))["revision"]}
 
 
-@command("file.move", role="admin", mutating=True,
+@command("file.move", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
              "path": Str(required=True, max_length=1024),
@@ -722,7 +722,7 @@ def file_move(ctx: Context, params: Values) -> dict:
     return {"revision": change(ctx, project, [operation], _message(params, ""))["revision"]}
 
 
-@command("file.change", role="admin", mutating=True,
+@command("file.change", role="admin", mutating=True, agent="code",
          redact=("operations[].content", "operations[].data"),
          max_input=_MAX_BUNDLE_TEXT + 64 * 1024,
          params={
@@ -756,7 +756,7 @@ def file_change(ctx: Context, params: Values) -> dict:
     return change(ctx, project, operations, _message(params, ""), revision)
 
 
-@command("file.restore", role="admin", mutating=True,
+@command("file.restore", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
              "path": Str(required=True, max_length=1024),
@@ -845,7 +845,7 @@ def _pack(directory_fd: int, prefix: str, archive: tarfile.TarFile, budget: list
                 archive.addfile(entry, source)
 
 
-@command("file.download", role="admin", mutating=True, tool=False,
+@command("file.download", role="admin", mutating=True, agent="read", tool=False,
          params={
              "id": Id(),
              "path": Str("A file or a directory; empty for the whole project",
@@ -884,7 +884,7 @@ def file_download(ctx: Context, params: Values) -> dict:
     return {"name": f"{name}.tar.gz", "archive": True, "data": base64.b64encode(data).decode()}
 
 
-@command("file.import", role="admin", mutating=True, redact=("data",), tool=False,
+@command("file.import", role="admin", mutating=True, agent="code", redact=("data",), tool=False,
          max_input=_MAX_BUNDLE_TEXT + 64 * 1024,
          params={
              "id": Id(),
@@ -1055,7 +1055,7 @@ def file_diff(ctx: Context, params: Values) -> dict:
     return {"text": text[:MAX_DIFF], "cut": len(text) > MAX_DIFF}
 
 
-@command("file.check", role="admin", mutating=True,
+@command("file.check", role="admin", mutating=True, agent="run",
          params={
              "id": Id(),
              "path": Str(required=True, max_length=1024),
@@ -1076,7 +1076,7 @@ def file_check(ctx: Context, params: Values) -> dict:
 
 # --- at a terminal: clone and push --------------------------------------------------------
 
-@command("file.bundle", role="admin", mutating=True, tool=False,
+@command("file.bundle", role="admin", mutating=True, agent="read", tool=False,
          params={
              "id": Id(),
          })
@@ -1123,7 +1123,7 @@ def _incoming_files(project_id: str, base: str) -> list[str]:
     return [path for path in changed.split("\0") if path]
 
 
-@command("file.push", role="admin", mutating=True, redact=("bundle",), tool=False,
+@command("file.push", role="admin", mutating=True, agent="code", redact=("bundle",), tool=False,
          max_input=_MAX_BUNDLE_TEXT + 64 * 1024,
          params={
              "id": Id(),

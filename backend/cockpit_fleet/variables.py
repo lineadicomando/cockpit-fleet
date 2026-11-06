@@ -110,7 +110,7 @@ def varset_update(ctx: Context, params: Values) -> dict:
                                       "set of variables"))
 
 
-@command("varset.delete", role="admin", mutating=True, params={"id": Id()})
+@command("varset.delete", role="admin", mutating=True, agent="code", params={"id": Id()})
 def varset_delete(ctx: Context, params: Values) -> dict:
     """Delete a set of variables that no job template uses."""
     store.delete(ctx.conn, "variable_sets", params["id"], "set of variables")

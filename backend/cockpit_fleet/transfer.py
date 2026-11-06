@@ -303,7 +303,7 @@ class _Importer:
         self._create("rule.create", params)
 
 
-@command("config.import", role="admin", mutating=True, redact=("document",),
+@command("config.import", role="admin", mutating=True, agent="code", redact=("document",),
          max_input=_MAX_IMPORT,
          params={
              "document": Obj(),

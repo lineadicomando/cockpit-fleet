@@ -12,10 +12,10 @@ Decisions: [docs/decisions.md](docs/decisions.md). Known limits:
 
 Phases 0–11 closed; 0.2.0 released on 2 November (sets of variables, the
 assistant's setup guide). Since then, under `[Unreleased]`: runs launched in
-series on an inventory (5 November). **Next:** phase 12, below; nothing
-written for it yet.
+series on an inventory (5 November). **Under way:** phase 12, below; the
+classes of commands done (6 November), next the profiles in the backend.
 
-Last test runs: on 5 November the unit tests (515 backend, 130 frontend);
+Last test runs: on 6 November the unit tests (518 backend, 130 frontend);
 on 1 November `make ct-test` of every script on Debian and AlmaLinux, and
 on the three before that day's fixes (`cmdb` fails on Fedora only in a
 container: `podman network connect`, netavark "invalid namespace path");
@@ -110,9 +110,11 @@ today); trusted by class for a conversation; autonomous.
 
 Each step on its own, tested, before the next:
 
-- [ ] Classes of commands: `agent=` in `@command`, a default from `role`
+- [x] Classes of commands: `agent=` in `@command`, a default from `role`
       and `mutating`, set by hand where it differs (ad-hoc, deletes, files,
-      credentials); a test that every tool has one; `mcp.tools` gives it
+      credentials); a test that every tool has one; `mcp.tools` gives it.
+      `run.adhoc` is `adhoc`; adhoc-diagnostic is decided per call, by the
+      module, in the next step
 - [ ] Profiles in the backend: `[chat] profiles` and `default_profile`,
       `[mcp] adhoc_modules` (a subset of `[adhoc] modules`); the profile
       passed by `fleet-chat` to `fleet-mcp` and added to every call beside

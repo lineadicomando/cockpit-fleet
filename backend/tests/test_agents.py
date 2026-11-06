@@ -10,6 +10,57 @@ from test_phase2 import Base
 
 from cockpit_fleet import agents, cli, mcp, paths
 
+# What each tool lets an agent do, beyond reading. A new tool, or one moved to
+# another class, fails here until this table says so: the profiles of the
+# assistant are made of these classes.
+CLASS_TABLE = {
+    "run": """check.run file.check inventory.parse maintenance.create maintenance.delete
+        notification.retry run.cancel run.start schedule.disable schedule.enable schedule.run
+        state.ack state.unack workflow.launch workflow.resume""",
+    "adhoc": "run.adhoc",
+    "config": """channel.create channel.test channel.update check.create check.update
+        inventory.create inventory.update rule.create rule.update schedule.create
+        schedule.update template.create template.update varset.create varset.update
+        workflow.create workflow.update""",
+    "code": """channel.delete check.delete config.import credential.create credential.delete
+        credential.update file.change file.delete file.move file.restore file.write hostkey.add
+        hostkey.remove inventory.delete project.collections project.create project.delete
+        project.sync project.update rule.delete schedule.delete template.delete varset.delete
+        workflow.delete""",
+}
+
+
+class ClassTest(unittest.TestCase):
+    def setUp(self):
+        cli.load_commands()
+
+    def test_every_tool_has_its_class(self):
+        expected = {name: kind for kind, names in CLASS_TABLE.items() for name in names.split()}
+        for name, spec in cli.COMMANDS.items():
+            self.assertIn(spec.agent, cli.AGENT_CLASSES, name)
+            if spec.tool:
+                self.assertEqual(spec.agent, expected.pop(name, "read"), name)
+        self.assertEqual(expected, {}, "not tools")
+
+    def test_a_command_that_changes_nothing_reads(self):
+        for name, spec in cli.COMMANDS.items():
+            if spec.agent == "read" and spec.tool:
+                self.assertFalse(spec.mutating, name)
+
+    def test_the_default_comes_from_role_and_mutating(self):
+        register = cli.command
+        try:
+            for role, mutating, agent, kind in (("viewer", False, "", "read"),
+                                                ("operator", True, "", "run"),
+                                                ("admin", True, "", "config"),
+                                                ("admin", True, "code", "code")):
+                register("test.class", role, mutating, agent=agent)(lambda ctx, params: {})
+                self.assertEqual(cli.COMMANDS["test.class"].agent, kind)
+            with self.assertRaises(ValueError):
+                register("test.class", "admin", True, agent="everything")
+        finally:
+            cli.COMMANDS.pop("test.class", None)
+
 
 class SchemaTest(unittest.TestCase):
     def test_every_command_describes_itself(self):
@@ -128,8 +179,11 @@ class ToolsTest(Base):
         for hidden in ("project_upload", "run_reconcile", "module_list", "mcp_tools", "run_events"):
             self.assertNotIn(hidden, names["admin"])
         tool = next(tool for tool in self.ok("mcp.tools")["tools"] if tool["name"] == "run_cancel")
-        self.assertEqual((tool["command"], tool["fixed"], tool["readOnly"]),
-                         ("run.cancel", {}, False))
+        self.assertEqual((tool["command"], tool["fixed"], tool["readOnly"], tool["class"]),
+                         ("run.cancel", {}, False, "run"))
+        classes = {tool["name"]: tool["class"] for tool in self.ok("mcp.tools")["tools"]}
+        self.assertEqual((classes["run_list"], classes["run_adhoc"], classes["file_write"]),
+                         ("read", "adhoc", "code"))
         self.assertEqual(tool["inputSchema"]["required"], ["id"])
         self.assertEqual(tool["description"], "Cancel a run that is queued, running or waiting for approval.")
 
@@ -144,8 +198,8 @@ class ToolsTest(Base):
         tools = self.ok("mcp.tools", role="operator")["tools"]
         tool = next(tool for tool in tools if tool["name"].startswith("launch_"))
         self.assertEqual(tool["name"], f"launch_deploy_{template['id'][-6:]}")
-        self.assertEqual((tool["command"], tool["fixed"]),
-                         ("run.start", {"template_id": template["id"]}))
+        self.assertEqual((tool["command"], tool["fixed"], tool["class"]),
+                         ("run.start", {"template_id": template["id"]}, "run"))
         answers = tool["inputSchema"]["properties"]["answers"]
         self.assertEqual(answers["required"], ["version"])
         self.assertEqual(sorted(answers["properties"]), ["count", "env", "version"])

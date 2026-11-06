@@ -1646,6 +1646,21 @@ useful to an agent, and those only the backend calls. There is no tool for
 secrets, because `fleet-secret` is not a command of `fleetctl`: an agent may
 create a credential, a person enters its value.
 
+**Classes of tools.** Every command declares what it lets an agent do, one
+of five classes from the least to the most: `read`; `run` (start, stop and
+follow work already defined: launches, cancels, checks, schedules turned on
+or off, acknowledgements, maintenance windows, a syntax check); `adhoc` (any
+module on the nodes); `config` (create and change templates, inventories,
+schedules, rules, channels, checks, sets of variables, workflows); `code`
+(the files of projects, projects themselves, credentials, host keys,
+`config.import`, and every delete). The default comes from the declaration:
+a command that changes nothing reads, one that changes something is `run`
+for an operator and `config` for an administrator; the others say theirs
+(`agent=` in `@command`). `mcp.tools` gives each tool its class, a
+template's being `run`. The profiles of the assistant are made of these
+classes; a test holds the table of them, so moving a command to another
+class is a decision.
+
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
 runs and where, and its parameters are the questions of its survey, typed and

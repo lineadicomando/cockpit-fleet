@@ -319,7 +319,7 @@ def schedule_update(ctx: Context, params: Values) -> dict:
     return _schedule(ctx, store.fetch(ctx.conn, "schedules", schedule_id, "schedule"))
 
 
-@command("schedule.delete", role="admin", mutating=True,
+@command("schedule.delete", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
          })

@@ -27,6 +27,11 @@ from .errors import BadRequest, FleetError, Forbidden
 from .names import check_id
 
 MAX_INPUT = 1024 * 1024
+# What a command lets an agent do, from the least to the most: read; start,
+# stop and follow work already defined; run any module on the nodes; change
+# what is defined; change the code that runs, the secrets, or delete. The
+# profiles of the assistant are made of these.
+AGENT_CLASSES = ("read", "run", "adhoc", "config", "code")
 # How a call that does not come from the interface names what it came through.
 _VIA_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}")
 
@@ -160,6 +165,8 @@ class Command:
     tool: bool = True
     # A right that lets a caller use the command whatever their role.
     right: str = ""
+    # Which of AGENT_CLASSES the command is in.
+    agent: str = "read"
 
     def read(self, data: dict) -> Values:
         """Check the parameters of a call against the declaration."""
@@ -186,18 +193,26 @@ COMMANDS: dict[str, Command] = {}
 
 def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...] = (),
             max_input: int = MAX_INPUT, params: Mapping[str, Field] | None = None,
-            tool: bool = True, right: str = ""):
+            tool: bool = True, right: str = "", agent: str = ""):
     """Register a handler. Every command states the least role that may call
     it and the parameters it takes; the handler gets them checked, as Values.
     A command that names a right may also be called by whoever has it.
+
+    agent is its class (AGENT_CLASSES). By default a command that changes
+    nothing reads, one that changes something is run for an operator and
+    config for an administrator; the others say theirs.
 
     max_input is for the commands that take a file: the others never need
     more than the default.
     """
 
+    kind = agent or ("read" if not mutating else "config" if role == "admin" else "run")
+    if kind not in AGENT_CLASSES:
+        raise ValueError(f"{name}: unknown class {kind}")
+
     def register(handler: Callable) -> Callable:
         COMMANDS[name] = Command(name, role, handler, mutating, redact, max_input, params or {},
-                                 tool, right)
+                                 tool, right, kind)
         return handler
 
     return register
