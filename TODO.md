@@ -1,30 +1,27 @@
 # cockpit-fleet — plan
 
-Cockpit plugin that runs Ansible from the browser and collects, stores and
-notifies on data from the nodes, with Ansible only (nothing in real time).
-Decisions: [docs/decisions.md](docs/decisions.md); known limits:
-[docs/limits.md](docs/limits.md); how each phase was accepted and how each
-part works: `docs/architecture.md`.
+Status and what is left. Decisions: `docs/decisions.md`; known limits:
+`docs/limits.md`; how each part works and how each phase was accepted:
+`docs/architecture.md` (2500 lines: list its sections with `grep -n '^## '
+docs/architecture.md` and read only the one needed).
 
 ## Status (6 November 2026)
 
 Phases 0–11 closed; 0.2.0 released on 2 November. Under `[Unreleased]`:
-runs in series on an inventory, and steps 1–6 of phase 12 (below). The
-commits of phase 12 on `main` are not pushed (`git log origin/main..`).
-**Next:** phase 12, the instructions in layers.
+runs in series on an inventory, and phase 12 up to the instructions in
+layers. Phase 12's 8 commits on `main` are not pushed (`git log
+origin/main..`). **Next:** phase 12, the page (below).
 
-Tests: on 6 November the unit tests (573 backend, 130 frontend), drafts
-in unit tests only, and `ct-test` of `files negative mcp` on AlmaLinux
-after them; before them,
-`ct-test` of `mcp chat cli adhoc negative workflows roles runs` on
-AlmaLinux and Debian; not Fedora, no VM, and the forms of approval not
-seen in a browser. Last full `ct-test`: 1 November, on the three (`cmdb`
-fails on Fedora only in a container: netavark "invalid namespace path").
-Run two distributions' `ct-test` one after the other, not together.
+To resume: `git status`; `make check`. Each backend module says what it is
+in its docstring; `cli.py` is the registry, `db.py` the schema (24).
 
-To resume: `CLAUDE.md`, `CLAUDE.local.md` if present; `git status`;
-`make check`. Each backend module says what it is in its docstring;
-`cli.py` is the registry, `db.py` the schema (24; drafts need none).
+Tests on 6 November: unit tests (576 backend, 130 frontend); `ct-test` of
+`files negative mcp` and `chat cli mcp` on AlmaLinux. Before, on 5–6
+November: `mcp chat cli adhoc negative workflows roles runs` on AlmaLinux
+and Debian. Not Fedora, no VM, nothing of phase 12 seen in a browser. Last
+full `ct-test`: 1 November, on the three (`cmdb` fails on Fedora only in a
+container: netavark "invalid namespace path"). Run two distributions'
+`ct-test` one after the other, not together.
 
 ## Phase 12 — Profiles of the assistant
 
@@ -32,27 +29,31 @@ Decided with the user on 5 November: what an agent may do is held by the
 backend, by classes of commands and profiles, because the output of runs is
 written by the nodes and an agent that reads it can be steered by a node.
 
-**Done** (how it works: `docs/architecture.md`, "Agents" and "Approvals"):
+**Built** (`docs/architecture.md`, "Agents", "Approvals", "The chat"):
 classes of commands (`agent=` in `@command`, `cli.AGENT_CLASSES`,
-`CLASS_TABLE` in `test_agents.py`); five profiles (`profiles.py`; `[chat]
-profiles`, `default_profile`, `[mcp] adhoc_modules`), held in
-`cli._through`, passed by `fleet-chat --profile` to `fleet-mcp --profile`,
-in the audit (schema 22); limits of autonomy (`autonomy.py`, `[chat]
-autonomous_runs`, `autonomous_dry_run`, a session drawn by `fleet-mcp` and
-in the audit, schema 23); modes of approval (`approvals.py`: `none`,
-`confirm`, `other`, `[approvals] admins_exempt`, schema 24, `needs_approval`
-deprecated); an agent's ad-hoc command waits for its person's confirmation
-unless diagnostic; drafts (`files.place`, `drafts.py`: a branch
-`drafts/SESSION` with its own work tree, `draft.list`, `draft.diff`,
-`draft.merge` file by file, `draft.discard`). Decided on 6 November along the way: an autonomous
-agent launches nothing on an inventory with a maintenance window open and
-never calls `state.ack`/`unack` or `maintenance.*`; a diagnostic ad-hoc
-command never waits; `approval.approve`/`reject` need the role operator or
-the right, `may_decide` does the rest.
+`CLASS_TABLE` in `test_agents.py`); five profiles (`profiles.py`, held in
+`cli._through`, `fleet-chat --profile` → `fleet-mcp --profile`); limits of
+autonomy (`autonomy.py`, a session drawn by `fleet-mcp`); modes of approval
+(`approvals.py`); an agent's ad-hoc command waits for its person unless
+diagnostic; drafts (`files.place`, `drafts.py`); instructions in layers
+(`instructions.py`, given by `chat.start` and `_fleet/ready`).
 
-**Still to build, as decided:**
+Decided on 6 November along the way (into `decisions.md` when the phase
+closes): an autonomous agent launches nothing on an inventory with a
+maintenance window open and never calls `state.ack`/`unack` or
+`maintenance.*`; a diagnostic ad-hoc command never waits;
+`approval.approve`/`reject` need the role operator or the right; a draft
+is merged file by file, not line by line (a file changed in `main` too is
+a conflict); instructions of the controller too large or not UTF-8 refuse
+the session rather than being cut.
 
-| Profile | Classes | Questions (page and terminal) |
+Open question for the user: should `inventory.create`/`inventory.update`
+(class config) write a managed inventory through a draft too? Today they
+write `main` (in `limits.md`).
+
+Questions asked by the page and the terminal, by profile:
+
+| Profile | Classes | Questions |
 |---|---|---|
 | observer | read | none |
 | assisted (default) | read, run | changes |
@@ -60,52 +61,47 @@ the right, `may_decide` does the rest.
 | autonomous | read, run | none (the backend holds it) |
 | administrator | all | every change, no "always" for adhoc, config, code |
 
-Questions: every call; changes only (today); trusted by class for a
-conversation; none. adhoc and code are never autonomous.
-
-- **Drafts**: files an agent writes go to a branch of the session, never
-  to `main`; templates, schedules and checks run from `main` only; a person
-  reviews the diff with its syntax check and merges, by a command refused
-  to agents.
-- **Risks told**: a profile beyond assisted is accepted once by the user
-  after what it may do, steering by the nodes and what goes to the provider
-  are told (audited); the active profile is in the header of the session
-  and in every question.
-- **Instructions in layers**, composed by `chat.start` for the page and the
-  terminal alike: base and profile (the package, not removable), controller
-  (an administrator's file under `/etc/cockpit-fleet/`, size limit); per
-  project later; none per user. Shown to the user; not a control; sent to
-  the provider, so no secrets in them.
+Kinds of question: every call; changes only (today); trusted by class for
+a conversation ("always"); none. adhoc and code are never autonomous.
+Risks told: a profile beyond assisted is accepted once by the user after
+what it may do, steering by the nodes and what goes to the provider are
+told (audited); the active profile is in the header of the session and in
+every question.
 
 Steps, each tested before the next:
 
-- [ ] Instructions in layers composed by `chat.start` (today
-      `INSTRUCTIONS` in `src/lib/chat.ts` and in `chat_agent.py` for the
-      terminal's `{instructions}`)
-- [ ] Page: choice of profile at the start (`chat.agents` gives `profiles`
-      and `default_profile`; `src/lib/chat-agent.ts` must pass `--profile`
-      to `fleet-chat`, and the profile to `mcp.tools`, which today lists
-      every tool of the role), its risks told and accepted once (audited),
-      the profile in the header and in each question, questions by class
-      (`class` of each tool) with its floor, "always" for a class, the
-      instructions the agent got, the review of a draft (`draft.list`,
-      `draft.diff` with its checks, `draft.merge` of all or some paths,
-      `draft.discard`, editing with `draft` on the file commands)
+- [ ] Page:
+  - choice of profile at the start: `chat.agents` gives `profiles` and
+    `default_profile`; `src/lib/chat-agent.ts` must pass `--profile` to
+    `fleet-chat`, and the page the profile to `mcp.tools` (it accepts
+    `profile` already; the page does not pass it, so it lists every tool
+    of the role);
+  - its risks told and accepted once (audited: needs a command);
+  - the profile in the header and in each question; questions by class
+    (`class` of each tool from `mcp.tools`) with the floor of the table,
+    "always" for a class;
+  - the instructions the agent got (`layers` of `_fleet/ready`, kept in
+    `src/lib/chat.ts`'s `setup`);
+  - the review of a draft: `draft.list`, `draft.diff` with its checks,
+    `draft.merge` of all or some paths, `draft.discard`, editing with
+    `draft` on the file commands.
 - [ ] Terminal: `fleet assistant --profile` (`fleet-chat --terminal
-      --profile` exists), the profile as options of the agent's CLI
-      (permission mode, tools allowed); `fleet draft list|diff|merge|discard`
-- [ ] Docs: `chat.md` (profiles, risks, instructions), `security.md`,
-      `architecture.md`, `config.toml`; `CHANGELOG.md`
+      --profile` exists; `terminal.py` `_assistant`), the profile as
+      options of the agent's CLI (permission mode, tools allowed); `fleet
+      draft list|diff|merge|discard`.
+- [ ] Docs: `chat.md` (profiles, risks), `security.md`, `architecture.md`,
+      `config.toml`; `CHANGELOG.md`.
 - [ ] Integration: `chat.sh` by profile, drafts in `mcp.sh`; `make ct-test`
       on the three; the page in a browser on a VM with the adapter and its
       model; then the acceptance of the phase in `architecture.md`, its
-      decisions into `decisions.md`
+      decisions into `decisions.md`.
 
 ## Future
 
 Sets of variables: secret variables in a set (encrypted as credentials
 are, kept off the page and out of export), and sets for ad-hoc commands.
-External triggers (git webhooks, auto-remediation); `ansible-pull` for very
-large fleets; secrets on OpenBao or Bitwarden; export to Prometheus or
-InfluxDB; execution environments in containers; other controller
-distributions. A limit on the rows of state changes (off by default).
+Instructions per project for the assistant. External triggers (git
+webhooks, auto-remediation); `ansible-pull` for very large fleets; secrets
+on OpenBao or Bitwarden; export to Prometheus or InfluxDB; execution
+environments in containers; other controller distributions. A limit on the
+rows of state changes (off by default).

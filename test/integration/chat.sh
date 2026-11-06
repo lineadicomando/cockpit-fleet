@@ -18,6 +18,7 @@ cleanup() {
     pkill -f "^/usr/bin/python3 -I $CHAT" 2>/dev/null
     for user in itviewer itnobody; do userdel -r "$user" 2>/dev/null; done
     rm -rf /usr/local/lib/fleet-it
+    rm -f /etc/cockpit-fleet/assistant.md
     wipe
 }
 trap cleanup EXIT
@@ -113,7 +114,14 @@ assistant() {
 out=$(assistant itadmin)
 expect_eq "fleet assistant runs the agent's program for a terminal, on the terminal" \
     "$(printf '%s' "$out" | grep -o 'servers=.*')" \
-    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin told=True"
+    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin told=True rules=False"
+printf 'IT-RULE: never touch the inventory school.\n' > /etc/cockpit-fleet/assistant.md
+expect_eq "the instructions of the controller follow those of the package" \
+    "$(assistant itadmin | grep -o 'told=.*')" "told=True rules=True"
+head -c 9000 /dev/zero | tr '\0' x > /etc/cockpit-fleet/assistant.md
+expect_eq "and when too large the session does not start" \
+    "$(assistant itadmin | grep -c 'larger than 8 kB')" 1
+rm -f /etc/cockpit-fleet/assistant.md
 expect_eq "it is a session as those of the page" \
     "$(get "$(admin audit.list)" '[(e["user"], e["params"]) for e in a["data"]["entries"] if e["command"] == "chat.start"][0]')" \
     "('itadmin', '{\"agent\": \"fake\", \"terminal\": true}')"

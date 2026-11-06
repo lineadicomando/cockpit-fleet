@@ -167,6 +167,24 @@ started stays as it is: once logged in, send the message again.
   reloaded. Conversations are kept by the agent in the user's home and can be
   continued from the page.
 
+## What the assistant is told
+
+Before the first message, the agent is given instructions in layers: a base
+and a part for its profile, which come with the package and cannot be
+removed, then the controller's own, if there is a file
+`/etc/cockpit-fleet/assistant.md`. Write there what every assistant of this
+controller should know: the inventories not to touch, who to ask about what,
+the conventions of the projects. Plain text or Markdown, up to 8 kB, in
+UTF-8; it is read at the start of each session, so a change applies to the
+next one. A file larger than that, or not text, stops every session from
+starting, with a message that says so. The layers are given to the
+user's page as well.
+
+Instructions guide the assistant, they do not hold it: what it may do is
+decided by the role, the profile and `[chat]`, whatever it was told. And
+they are sent to the provider with every conversation: put no password,
+address or name in them that should not leave the controller.
+
 ## At a terminal
 
 `fleet assistant` starts the same agent in a terminal on the controller (an
@@ -181,8 +199,8 @@ terminal = ["/opt/cockpit-fleet-agent/bin/claude", "--mcp-config", "{mcp_config}
 ```
 
 `{mcp_config}` becomes a file, private to the session and deleted at its
-end, that names `fleet-mcp` as the only server; `{instructions}` a few lines
-on where the agent is. The options keep the agent to the tools of
+end, that names `fleet-mcp` as the only server; `{instructions}` the
+instructions of the session (see "What the assistant is told"). The options keep the agent to the tools of
 `fleet-mcp`, with none of its own and none of the user's settings, as in the
 page. What the user gets is the same: the role under `[mcp] max_role`, the
 start in the audit log (`chat.start`, with `terminal`), a session counted in

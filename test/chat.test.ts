@@ -141,7 +141,7 @@ class Agent {
 
     async ready(): Promise<void> {
         this.chat.start("claude");
-        this.say({ jsonrpc: "2.0", method: "_fleet/ready", params: { agent: "claude", cwd: "/home/anna", mcp: { command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: [], env: [] } } });
+        this.say({ jsonrpc: "2.0", method: "_fleet/ready", params: { agent: "claude", cwd: "/home/anna", instructions: "Be brief.", mcp: { command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: [], env: [] } } });
         await tick();
     }
 
@@ -185,6 +185,7 @@ test("the first message opens a session with fleet-mcp as the only server and no
     assert.equal(created.cwd, "/home/anna");
     assert.deepEqual(created.mcpServers, [{ name: "cockpit-fleet", command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: [], env: [] }]);
     assert.equal(created._meta.disableBuiltInTools, true);
+    assert.deepEqual(created._meta.systemPrompt, { append: "Be brief." });
     assert.deepEqual(created._meta.claudeCode.options, { settingSources: [], strictMcpConfig: true });
     assert.deepEqual(agent.last("session/prompt").params, { sessionId: "s1", prompt: [{ type: "text", text: "how are the nodes?" }] });
     const state = agent.chat.getState();

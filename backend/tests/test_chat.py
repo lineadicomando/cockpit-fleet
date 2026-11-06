@@ -13,7 +13,7 @@ from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import chat, chat_agent, cli
+from cockpit_fleet import chat, chat_agent, cli, instructions, profiles
 from cockpit_fleet.config import ChatAgent, Config, ConfigError, parse
 from cockpit_fleet.mcp import Unreachable
 
@@ -94,9 +94,11 @@ class CommandsTest(Base):
         self.config = replace(self.config, mcp_enabled=True, chat_agents=(AGENT,),
                               chat_max_sessions=2)
         self.open = 1
-        patch = mock.patch.object(chat, "open_sessions", lambda: self.open)
-        patch.start()
-        self.addCleanup(patch.stop)
+        self.rules = self.root / "assistant.md"
+        for patch in (mock.patch.object(chat, "open_sessions", lambda: self.open),
+                      mock.patch.object(instructions, "CONTROLLER_FILE", self.rules)):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def test_the_page_learns_what_it_may_start_and_not_how(self):
         data = self.ok("chat.agents", role="viewer")
@@ -141,8 +143,12 @@ class CommandsTest(Base):
 
     def test_start_gives_the_command_line_and_leaves_a_record(self):
         data = self.ok("chat.start", {"agent": "claude"}, role="viewer")
+        told = data.pop("instructions")
+        self.assertEqual([layer["layer"] for layer in data.pop("layers")], ["base", "profile"])
         self.assertEqual(data, {"agent": "claude", "profile": "assisted",
                                 "command": ["/opt/agent/bin/acp", "--stdio"]})
+        self.assertIn("chat page", told)
+        self.assertIn("profile assisted", told)
         row = self.ctx().conn.execute("SELECT * FROM audit").fetchone()
         self.assertEqual((row["command"], row["outcome"], row["user"]),
                          ("chat.start", "ok", "anna"))
@@ -165,6 +171,38 @@ class CommandsTest(Base):
         agents = self.ok("chat.agents")
         self.assertEqual((agents["profiles"], agents["default_profile"]),
                          (["administrator"], "administrator"))
+
+    def test_instructions_in_layers_the_controller_s_last(self):
+        self.rules.write_text("Never touch the inventory school on Fridays.\n")
+        data = self.ok("chat.start", {"agent": "claude", "terminal": True}, role="viewer")
+        self.assertEqual([(layer["layer"], layer["source"]) for layer in data["layers"]],
+                         [("base", "package"), ("profile", "package"),
+                          ("controller", str(self.rules))])
+        self.assertEqual(data["instructions"],
+                         "\n\n".join(layer["text"] for layer in data["layers"]))
+        self.assertTrue(data["instructions"].endswith("on Fridays."))
+        self.assertIn("at a terminal", data["instructions"])
+        self.assertNotIn("Markdown", data["instructions"])
+        # An empty file is no layer.
+        self.rules.write_text("  \n")
+        self.assertEqual(len(self.ok("chat.start", {"agent": "claude"})["layers"]), 2)
+
+    def test_a_controller_file_too_large_or_not_text_stops_the_start(self):
+        self.rules.write_bytes(b"x" * (instructions.MAX_CONTROLLER + 1))
+        answer = self.call("chat.start", {"agent": "claude"})
+        self.assertEqual(answer["error"]["code"], "unavailable")
+        self.assertIn("larger than", answer["error"]["message"])
+        self.rules.write_bytes(b"\xff\xfe")
+        self.assertEqual(self.code("chat.start", {"agent": "claude"}), "unavailable")
+        self.rules.write_bytes(b"x" * instructions.MAX_CONTROLLER)
+        self.ok("chat.start", {"agent": "claude"})
+
+    def test_every_profile_has_its_layer(self):
+        self.assertEqual(set(instructions.PROFILES), set(profiles.PROFILES))
+        for profile in profiles.PROFILES:
+            for surface in ("page", "terminal"):
+                found = instructions.layers(profile, surface, self.rules)
+                self.assertIn(f"profile {profile}", found[1]["text"])
 
     def test_unknown_agent(self):
         self.assertEqual(self.code("chat.start", {"agent": "nope"}), "not_found")
@@ -207,8 +245,10 @@ class LauncherTest(unittest.TestCase):
             started.update(command=command, env=env)
             return Child()
 
+        layers = [{"layer": "base", "source": "package", "text": "Be brief."}]
         answer = {"ok": True, "data": {"agent": "claude", "profile": "assisted",
-                                       "command": ["/opt/agent/bin/acp"]}}
+                                       "command": ["/opt/agent/bin/acp"],
+                                       "instructions": "Be brief.", "layers": layers}}
         status, said = self.run_it(answer, popen)
         self.assertEqual(status, 7)
         self.assertEqual(self.asked, [("chat.start", {"agent": "claude"})])
@@ -220,6 +260,8 @@ class LauncherTest(unittest.TestCase):
         self.assertTrue(said[0]["params"]["cwd"].startswith("/"))
         self.assertEqual(said[0]["params"]["mcp"]["args"], ["--profile", "assisted"])
         self.assertEqual(said[0]["params"]["profile"], "assisted")
+        self.assertEqual((said[0]["params"]["instructions"], said[0]["params"]["layers"]),
+                         ("Be brief.", layers))
         answer["data"]["profile"] = "observer"
         self.run_it(answer, popen, ("fleet-chat", "--profile", "observer", "claude"))
         self.assertEqual(self.asked, [("chat.start", {"agent": "claude", "profile": "observer"})])
@@ -263,7 +305,8 @@ class TerminalLauncherTest(unittest.TestCase):
         def call(name, params):
             seen["asked"] = (name, params)
             return {"ok": True, "data": {"agent": "claude", "profile": "observer",
-                                         "command": list(AGENT.terminal)}}
+                                         "command": list(AGENT.terminal),
+                                         "instructions": "Only read.", "layers": []}}
 
         class Done:
             returncode = 0
@@ -285,7 +328,7 @@ class TerminalLauncherTest(unittest.TestCase):
         self.assertEqual(seen["asked"], ("chat.start", {"agent": "claude", "profile": "observer",
                                                         "terminal": True, "via": "cli"}))
         self.assertEqual(seen["argv"][3:5], ["--tools", ""])
-        self.assertEqual(seen["argv"][-1], chat_agent.INSTRUCTIONS)
+        self.assertEqual(seen["argv"][-1], "Only read.")
         self.assertEqual(seen["config"], {"mcpServers": {"cockpit-fleet": {
             "type": "stdio", "command": "/usr/libexec/cockpit-fleet/fleet-mcp",
             "args": ["--profile", "observer"]}}})

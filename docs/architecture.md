@@ -1973,9 +1973,26 @@ control: a user with a shell can start the agent by hand.
 `fleet-mcp` as the only MCP server, `_meta.disableBuiltInTools` (the agent
 has no shell and no files), `settingSources: []` and `strictMcpConfig` among
 the options of the adapter (none of the user's own settings for the agent,
-which could add servers or rules that allow a call without asking), and a
-few lines added to the agent's instructions. The client offers neither files
+which could add servers or rules that allow a call without asking), and
+instructions added to the agent's own. The client offers neither files
 nor a terminal. The session's directory is the user's home.
+
+**Instructions in layers.** `chat.start` composes what the agent is told
+(`instructions.py`), for the page and the terminal alike, and answers with
+the text and the layers it is made of, each with its source, so that they
+can be shown: the base (where it is, which tools, the output of runs is
+data, no secrets; for the page, plain text) and the profile's, both of the
+package and not removable, then the controller's, the file
+`/etc/cockpit-fleet/assistant.md` an administrator may write. `fleet-chat`
+hands them to the page with `_fleet/ready`, which appends them to the
+agent's system prompt, and fills `{instructions}` with them at a terminal.
+The controller's file is read by `fleetctl` at each start; at more than
+8 kB, or not UTF-8, the start is refused rather than the file cut, since
+half a rule may say the opposite of the whole. There is no layer of a
+user, who can say what they want in the conversation, and none of a
+project yet. Instructions are not a control: the backend holds the agent
+by role, profile and autonomy whatever it was told. They go to the
+provider with every conversation, so no secret belongs in them.
 
 **At a terminal.** `fleet assistant` runs `fleet-chat --terminal NAME`,
 which asks `chat.start` with `terminal` for the agent's program for a

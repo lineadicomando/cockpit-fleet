@@ -26,4 +26,4 @@ for line in done.stdout.splitlines():
         role = json.loads(answer["result"]["content"][0]["text"])["role"]
 print(f"servers={','.join(servers)} role={role} tty={sys.stdin.isatty()}"
       f" no-tools={args[args.index('--tools') + 1] == ''} user={os.environ.get('USER')}"
-      f" told={'cockpit-fleet' in args[-1]}")
+      f" told={'cockpit-fleet' in args[-1]} rules={'IT-RULE' in args[-1]}")

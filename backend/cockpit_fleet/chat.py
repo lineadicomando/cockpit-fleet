@@ -10,6 +10,7 @@ these commands say what may be started and count what is.
 import os
 from pathlib import Path
 
+from . import instructions
 from .cli import Bool, Context, Str, Values, command
 from .errors import Conflict, NotFound, Unavailable
 from .paths import LIBEXEC_DIR
@@ -109,9 +110,10 @@ def chat_agents(ctx: Context, params: Values) -> dict:
 def chat_start(ctx: Context, params: Values) -> dict:
     """The command line of an agent, for fleet-chat, which is about to run it
     as the caller: the one that speaks the protocol with the page, or with
-    terminal the one for a terminal; and the profile of the session, which
-    must be among those enabled. Refused when the sessions open are as many
-    as allowed."""
+    terminal the one for a terminal; the profile of the session, which
+    must be among those enabled; and the instructions the agent is given,
+    as one text and as the layers it is made of, to show. Refused when the
+    sessions open are as many as allowed."""
     problem = _needs_agents(ctx)
     if problem:
         raise Unavailable(problem)
@@ -131,5 +133,7 @@ def chat_start(ctx: Context, params: Values) -> dict:
     if open_sessions() > limit:
         raise Conflict(f"{limit} chat sessions are open already, the most this controller"
                        " allows ([chat] max_sessions in config.toml)")
+    found = instructions.layers(profile, "terminal" if params["terminal"] else "page")
     return {"agent": agent.name, "profile": profile,
-            "command": list(agent.terminal if params["terminal"] else agent.command)}
+            "command": list(agent.terminal if params["terminal"] else agent.command),
+            "instructions": instructions.compose(found), "layers": found}

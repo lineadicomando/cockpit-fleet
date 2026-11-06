@@ -56,6 +56,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
   its files in as one commit of the person, and `draft.discard` throws it
   away. Agents can do neither. The file commands take `draft` to read or
   edit one.
+- Instructions of the assistant in layers: a base and a part for the
+  profile of the session, from the package, then the controller's own, from
+  `/etc/cockpit-fleet/assistant.md` if an administrator writes one (up to
+  8 kB). `chat.start` gives them, as one text and by layer, to the page and
+  to `fleet assistant` alike.
 
 ### Fixed
 
