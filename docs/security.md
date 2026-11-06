@@ -105,10 +105,14 @@ add `_UID=$(id -u cockpit-fleet)`, a field the journal sets itself.
 who starts it, and the chat page starts one for the user who opens it
 ([chat.md](chat.md)). Both are off as installed (`[mcp]` in `config.toml`).
 An agent never has more than that user's role, nor more than
-`[mcp] max_role` (operator by default); it approves nothing, and no tool
-reads or writes a secret. The output of runs is written by the nodes: an
-agent that reads it and may also change things can be steered by what a
-node writes, which is why the limit is there.
+`[mcp] max_role` (operator by default), nor more than its profile of the
+assistant allows (`[chat] profiles`: as installed, reading, and launching
+what is defined); it approves nothing, and no tool reads or writes a
+secret. The output of runs is written by the nodes: an agent that reads it
+and may also change things can be steered by what a node writes, which is
+why the limits are there. A profile is held by `fleetctl`, not by the agent
+or the page: one that names another, or none, gets no more than the
+default one.
 
 ## What it does not do
 

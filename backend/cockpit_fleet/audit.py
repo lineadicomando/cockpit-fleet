@@ -76,11 +76,13 @@ def record(
     redact: tuple[str, ...] = (),
     via: str = "",
     secrets: tuple[str, ...] = (),
+    profile: str = "",
 ) -> None:
     text = _params_text(params, redact, secrets)
     # The journal first: it still gets the record when the database is unusable.
     journal.send(
-        f"{caller.user}{f' via {via}' if via else ''} {command}: {outcome}"
+        f"{caller.user}{f' via {via}' if via else ''}{f' ({profile})' if profile else ''}"
+        f" {command}: {outcome}"
         + (f" ({detail})" if detail else ""),
         _PRIORITY[outcome],
         FLEET_USER=caller.user,
@@ -90,19 +92,20 @@ def record(
         FLEET_OUTCOME=outcome,
         FLEET_PARAMS=text,
         **({"FLEET_VIA": via} if via else {}),
+        **({"FLEET_PROFILE": profile} if profile else {}),
     )
     if conn is not None:
         conn.execute(
-            "INSERT INTO audit (ts, uid, user, role, command, params, outcome, detail, via)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO audit (ts, uid, user, role, command, params, outcome, detail, via,"
+            " profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (time.time(), caller.uid, caller.user, caller.role, command, text, outcome, detail,
-             via),
+             via, profile),
         )
 
 
 def entries(conn: sqlite3.Connection, limit: int, before: int | None) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, ts, user, role, command, params, outcome, detail, via FROM audit"
+        "SELECT id, ts, user, role, command, params, outcome, detail, via, profile FROM audit"
         " WHERE (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
         (before, before, limit),
     )

@@ -29,7 +29,10 @@ in [security.md](security.md); the decisions behind these limits in
 - Masking: other encodings, and secrets a run decrypts itself, not masked.
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a
   process up to 50 s; 216 of 329 parameters have no description (205 of
-  307 of the tools; 5 November).
+  307 of the tools; 5 November); in the profile diagnostic, `setup` with
+  `fact_path` runs the `*.fact` programs of that directory on the node; the
+  page lists every tool of the role, not only those of the session's
+  profile (phase 12 under way).
 - Chat: plain text; conversations not deletable; model not choosable; one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,

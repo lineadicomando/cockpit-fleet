@@ -2,7 +2,8 @@
 # Negative tests on the installed package: hostile input to every fleetctl
 # command through sudo, as each role (negative-inputs.py); what the caller's
 # environment and working directory cannot bring into fleetctl; a secret typed
-# where a ticket was expected, refused and recorded nowhere.
+# where a ticket was expected, refused and recorded nowhere; an agent held to
+# its profile of the assistant.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -90,6 +91,8 @@ expect_denied "nor in the journal" sh -c "journalctl --since @$started -o export
 expect_denied "nor in the files of the runs" grep -rqa "$MARK" /var/lib/cockpit-fleet/runs
 
 # --- hostile input to every command ---------------------------------------------------
+# Agents up to admin, in two profiles: negative-inputs.py holds them to these.
+printf '[mcp]\nenabled = true\nmax_role = "admin"\n[chat]\nprofiles = ["observer", "diagnostic"]\n' >> "$CONFIG"
 python3 -I "$(dirname "$0")/negative-inputs.py" "$CANARY" || FAILED=1
 
 expect_eq "the database is whole" "$(db 'PRAGMA integrity_check')" ok

@@ -86,6 +86,7 @@ export function AuditPage() {
                                 <Td dataLabel={t("User")}>
                                     {entry.user}
                                     {entry.via && <Label isCompact color="purple" style={{ marginInlineStart: "0.5rem" }} title={t("Done by an agent, through {{via}}", { via: entry.via })}>{entry.via}</Label>}
+                                    {entry.profile && <Label isCompact color="purple" variant="outline" style={{ marginInlineStart: "0.25rem" }} title={t("Profile of the assistant")}>{entry.profile}</Label>}
                                 </Td>
                                 <Td dataLabel={t("Action")}><code>{entry.command}</code></Td>
                                 <Td dataLabel={t("Outcome")}>

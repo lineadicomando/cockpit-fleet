@@ -19,6 +19,23 @@ entries go under `[Unreleased]`, under the heading of their kind.
   command line and the API launch in series only when asked. The page of runs says what it waits for (`serial` of
   `run.start` and `run.adhoc`, `waiting_for` of `run.get` and `run.list`,
   `fleet launch --serial`).
+- Profiles of the assistant, held by the backend: `observer` (reads),
+  `assisted` (also launches and cancels what is defined), `diagnostic` (also
+  ad-hoc commands of modules that change nothing, `[mcp] adhoc_modules`),
+  `autonomous` (as `assisted` for now) and `administrator` (whatever the
+  role allows). The administrator enables them in `[chat] profiles` and
+  names the one an agent gets by default (`default_profile`); `fleet-mcp
+  --profile` and `fleet-chat --profile` start a session in one. The audit
+  log records the profile of each call made by an agent, and `mcp.tools`
+  gives each tool its class.
+
+### Breaking
+
+- An agent gets the tools of its profile, `assisted` unless configured:
+  with `[mcp] max_role = "admin"`, ad-hoc commands, changes to templates,
+  inventories and the rest, files, projects and credentials now need
+  `administrator` among `[chat] profiles` and chosen, or as
+  `default_profile`.
 
 ## [0.2.0] - 2026-11-02
 

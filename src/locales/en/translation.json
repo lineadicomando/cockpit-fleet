@@ -693,6 +693,7 @@
   "Processor": "Processor",
   "Processor busy (%)": "Processor busy (%)",
   "Processor time used over one second (its load on Windows), and the load averages on Linux.": "Processor time used over one second (its load on Windows), and the load averages on Linux.",
+  "Profile of the assistant": "Profile of the assistant",
   "Project": "Project",
   "Project {{name}}": "Project {{name}}",
   "Project {{name}}, revision {{revision}}": "Project {{name}}, revision {{revision}}",

@@ -11,9 +11,10 @@ import json
 import re
 import time
 
-from . import jobs, store
+from . import jobs, profiles, store
 from .auth import role_at_least
-from .cli import COMMANDS, Context, Id, Int, Values, command
+from .cli import COMMANDS, Context, Id, Int, Str, Values, command
+from .errors import BadRequest
 from .runs import run_row
 
 _MAX_TASKS = 300
@@ -93,24 +94,53 @@ def template_tool(template, project: str, inventory: str) -> dict | None:
     }
 
 
-@command("mcp.tools", role="viewer", tool=False)
+def _diagnostic_tool(tool: dict, modules: tuple[str, ...]) -> dict:
+    """run_adhoc as a profile that only diagnoses offers it: the modules that
+    change nothing, and no become."""
+    schema = json.loads(json.dumps(tool["inputSchema"]))
+    schema["properties"]["module"] = {"type": "string", "enum": list(modules),
+                                      "description": "The module, by its full name."}
+    schema["properties"].pop("become", None)
+    return {**tool, "inputSchema": schema, "class": profiles.DIAGNOSTIC,
+            "description": tool["description"] + " In this profile only modules that change"
+            " nothing, without become."}
+
+
+@command("mcp.tools", role="viewer", tool=False,
+         params={"profile": Str("For the page: the tools of an agent in this profile.",
+                                max_length=32)})
 def mcp_tools(ctx: Context, params: Values) -> dict:
     """The tools the caller may use: for fleet-mcp, which offers them to an agent.
 
     Each one says which command it calls, with which fixed parameters, and
-    its class (cli.AGENT_CLASSES).
+    its class (cli.AGENT_CLASSES, or adhoc-diagnostic). For an agent, only
+    those of its profile of the assistant; for the page, those of the profile
+    it names, or all.
     """
     role = ctx.caller.role
+    profile = ctx.profile or params["profile"] or ""
+    if profile and profile not in ctx.config.chat_profiles:
+        raise BadRequest(f"{profile} is not a profile enabled on this controller")
+    modules = ctx.config.mcp_adhoc_modules
+
+    def offered(kind: str) -> bool:
+        return not profile or profiles.allows(profile, kind)
+
     tools = []
     for name, spec in sorted(COMMANDS.items()):
-        if spec.tool and role_at_least(role, spec.role):
-            tools.append({
-                "name": _tool_name(name),
-                "description": " ".join((spec.handler.__doc__ or name).split()),
-                "command": name, "fixed": {}, "inputSchema": spec.schema(),
-                "readOnly": not spec.mutating, "class": spec.agent,
-            })
-    if role_at_least(role, COMMANDS["run.start"].role):
+        if not spec.tool or not role_at_least(role, spec.role):
+            continue
+        tool = {
+            "name": _tool_name(name),
+            "description": " ".join((spec.handler.__doc__ or name).split()),
+            "command": name, "fixed": {}, "inputSchema": spec.schema(),
+            "readOnly": not spec.mutating, "class": spec.agent,
+        }
+        if offered(spec.agent):
+            tools.append(tool)
+        elif name == "run.adhoc" and modules and offered(profiles.DIAGNOSTIC):
+            tools.append(_diagnostic_tool(tool, modules))
+    if role_at_least(role, COMMANDS["run.start"].role) and offered(COMMANDS["run.start"].agent):
         projects = {row["id"]: row["name"] for row in ctx.conn.execute(
             "SELECT id, name FROM projects")}
         inventories = {row["id"]: row["name"] for row in ctx.conn.execute(
@@ -120,7 +150,7 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
                                  inventories.get(template["inventory_id"], ""))
             if tool is not None:
                 tools.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
-    return {"tools": tools, "role": role, "user": ctx.caller.user}
+    return {"tools": tools, "role": role, "user": ctx.caller.user, "profile": profile}
 
 
 def summarize(lines) -> list[dict]:

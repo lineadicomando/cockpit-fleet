@@ -5,7 +5,8 @@ role: what the unit tests give the registry, on the installed package.
     negative-inputs.py CANARY_DIR
 
 Prints PASS and FAIL lines like lib.sh, and exits 1 when something failed.
-Run as root, with the accounts itviewer, itoperator and itadmin in place.
+Run as root, with the accounts itviewer, itoperator and itadmin in place,
+and config.toml enabling agents up to admin, in the profiles AGENT_PROFILES.
 """
 
 import concurrent.futures
@@ -16,13 +17,15 @@ import sys
 
 sys.path.insert(0, "/usr/lib/cockpit-fleet")
 
-from cockpit_fleet import cli  # noqa: E402
+from cockpit_fleet import cli, profiles  # noqa: E402
 from cockpit_fleet.auth import ROLES  # noqa: E402
 
 FLEETCTL = "/usr/libexec/cockpit-fleet/fleetctl"
 USERS = {"viewer": "itviewer", "operator": "itoperator", "admin": "itadmin"}
 CANARY_DIR = sys.argv[1]
 CANARY = os.path.join(CANARY_DIR, "PWNED")
+# What negative.sh enables in config.toml; the first is the default.
+AGENT_PROFILES = ("observer", "diagnostic")
 STRINGS = ["../" * 24 + CANARY.lstrip("/"), "-PWNED", f"$(touch {CANARY})", f"x\ntouch {CANARY}",
            "{{ lookup('pipe', 'touch " + CANARY + "') }}"]
 WRONG = {"string": 1, "integer": "1", "boolean": "true", "id": "../x", "strings": [1],
@@ -93,6 +96,27 @@ for name in sorted(commands):
                           f"{name} {key}={json.dumps(value)[:50]}"))
 problems = [f"{label}: {answer['error']}" for label, answer in run_all(cases) if broken(answer)]
 report(not problems, f"no hostile value breaks a command ({len(cases)} calls)", problems)
+
+# --- as an agent: held to its profile, whatever it says it is ----------------------
+said = (None, "observer", "diagnostic", "administrator", "Observer", ["administrator"])
+cases = []
+for name in sorted(commands):
+    for profile in said:
+        params = {"via": "mcp:it", **({} if profile is None else {"profile": profile})}
+        cases.append(("itadmin", name, json.dumps(params).encode(),
+                      f"{name} profile={json.dumps(profile)}"))
+problems = []
+for (_, name, raw, _), (label, answer) in zip(cases, run_all(cases), strict=True):
+    spec = commands[name]
+    profile = json.loads(raw).get("profile", AGENT_PROFILES[0])
+    allowed = ((spec.tool or name == "mcp.tools") and profile in AGENT_PROFILES
+               and profiles.allows(profile, profiles.call_class(name, spec.agent, {}, ())))
+    if not allowed and (answer["ok"] or answer["error"]["code"] != "forbidden"):
+        problems.append(f"{label}: not refused: {answer}")
+    elif allowed and (broken(answer) or answer.get("error", {}).get("code") == "forbidden"):
+        problems.append(f"{label}: {answer['error']}")
+report(not problems, f"an agent gets only what its profile allows ({len(cases)} calls)",
+       problems)
 
 # --- input that is not a JSON object, as a viewer ---------------------------------
 garbage = [b"[]", b"\xff\xfe", b"[" * 200_000, b'{"a": "' + b"x" * (2 * 1024 * 1024) + b'"}',

@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, "/usr/lib/cockpit-fleet")
 
-from cockpit_fleet.mcp import serve  # noqa: E402
+from cockpit_fleet.mcp import main  # noqa: E402
 
 if __name__ == "__main__":
-    sys.exit(serve())
+    sys.exit(main(sys.argv))

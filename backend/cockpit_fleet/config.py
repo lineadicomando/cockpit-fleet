@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
 from .errors import Unavailable
+from .profiles import DIAGNOSTIC_MODULES, PROFILES
 from .validators import MODULE_RE
 
 # An archive reaches fleetctl whole, on its input: this bounds its memory.
@@ -66,8 +67,15 @@ class Config:
     inventory_scripts: bool = False
     mcp_enabled: bool = False
     mcp_max_role: str = "operator"
+    # Modules of an ad-hoc command an agent may run in a profile that only
+    # diagnoses; always among adhoc_modules.
+    mcp_adhoc_modules: tuple[str, ...] = DIAGNOSTIC_MODULES
     chat_agents: tuple[ChatAgent, ...] = ()
     chat_max_sessions: int = 2
+    # The profiles of the assistant a user may pick, and the one an agent
+    # gets when it names none (profiles.py).
+    chat_profiles: tuple[str, ...] = ("observer", "assisted")
+    chat_default_profile: str = "assisted"
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""
     # Check cycles: how many at once (apart from runs), at most so many hosts
@@ -205,18 +213,39 @@ def parse(text: str) -> Config:
     if not isinstance(scripts, bool):
         raise ConfigError("inventories.scripts must be true or false")
 
-    mcp = _section(data, "mcp", {"enabled", "max_role"})
+    mcp = _section(data, "mcp", {"enabled", "max_role", "adhoc_modules"})
     mcp_enabled = mcp.get("enabled", False)
     if not isinstance(mcp_enabled, bool):
         raise ConfigError("mcp.enabled must be true or false")
     mcp_max_role = mcp.get("max_role", Config.mcp_max_role)
     if mcp_max_role not in ("viewer", "operator", "admin"):
         raise ConfigError("mcp.max_role must be viewer, operator or admin")
+    adhoc_modules = tuple(dict.fromkeys(_module(module) for module in modules))
+    if "adhoc_modules" in mcp:
+        diagnostic = mcp["adhoc_modules"]
+        if not isinstance(diagnostic, list) or len(diagnostic) > 200:
+            raise ConfigError("mcp.adhoc_modules must be a list of at most 200 module names")
+        outside = [module for module in diagnostic if module not in adhoc_modules]
+        if outside:
+            raise ConfigError("mcp.adhoc_modules must be among adhoc.modules:"
+                              f" {', '.join(map(str, outside))}")
+        diagnostic = tuple(dict.fromkeys(diagnostic))
+    else:
+        diagnostic = tuple(module for module in DIAGNOSTIC_MODULES if module in adhoc_modules)
 
-    chat = _section(data, "chat", {"agents", "max_sessions"})
+    chat = _section(data, "chat", {"agents", "max_sessions", "profiles", "default_profile"})
     agents = chat.get("agents", {})
     if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
         raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
+    profiles = chat.get("profiles", list(Config.chat_profiles))
+    if (not isinstance(profiles, list) or not profiles
+            or any(profile not in PROFILES for profile in profiles)):
+        raise ConfigError(f"chat.profiles must be a list of some of: {', '.join(PROFILES)}")
+    default_profile = chat.get("default_profile", Config.chat_default_profile)
+    if "default_profile" not in chat and default_profile not in profiles:
+        default_profile = profiles[0]
+    if default_profile not in profiles:
+        raise ConfigError("chat.default_profile must be one of chat.profiles")
 
     notifications = _section(data, "notifications", {"url"})
     notify_url = notifications.get("url", "")
@@ -246,12 +275,15 @@ def parse(text: str) -> Config:
         max_upload_mb=_int(projects, "projects", "max_upload_mb", Config.max_upload_mb,
                            1, MAX_UPLOAD_MB),
         proxy=proxy,
-        adhoc_modules=tuple(dict.fromkeys(_module(module) for module in modules)),
+        adhoc_modules=adhoc_modules,
         inventory_scripts=scripts,
         mcp_enabled=mcp_enabled,
         mcp_max_role=mcp_max_role,
+        mcp_adhoc_modules=diagnostic,
         chat_agents=tuple(_agent(name, section) for name, section in agents.items()),
         chat_max_sessions=_int(chat, "chat", "max_sessions", Config.chat_max_sessions, 1, 64),
+        chat_profiles=tuple(dict.fromkeys(profiles)),
+        chat_default_profile=default_profile,
         notify_url=notify_url.rstrip("/"),
         checks_max_concurrent=_int(checks, "checks", "max_concurrent",
                                    Config.checks_max_concurrent, 1, 16),

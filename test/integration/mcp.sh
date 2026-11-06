@@ -19,15 +19,17 @@ cleanup() { loginctl terminate-user itoperator 2>/dev/null && sleep 2; wipe; rm 
 trap cleanup EXIT
 prepare
 
-# mcp USER MESSAGE...: the answers of fleet-mcp, started by that user, to an
-# initialize followed by these JSON-RPC messages, one per line.
+# mcp USER MESSAGE...: the answers of fleet-mcp, started by that user (with
+# --profile PROFILE when set), to an initialize followed by these JSON-RPC
+# messages, one per line.
+PROFILE=
 mcp() {
     user=$1; shift
     {
         printf '%s\n' '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"it-client","version":"1"}}}'
         printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized"}'
         for message in "$@"; do printf '%s\n' "$message"; done
-    } | sudo -u "$user" "$MCP" 2>&1
+    } | sudo -u "$user" "$MCP" ${PROFILE:+--profile "$PROFILE"} 2>&1
 }
 # answer TEXT ID EXPRESSION: python EXPRESSION on the answer "a" with that id
 answer() {
@@ -102,7 +104,7 @@ expect_eq "a failure is told with what the node said" \
     "$(answer "$out" 3 '(lambda r: (r["status"], r["tasks"][-1]["failed"], "self" in r["tasks"][-1]["problems"]))(a["result"]["structuredContent"])')" "('failed', 1, True)"
 expect_eq "the launch is recorded as the user's, through the agent" \
     "$(get "$(admin audit.list)" '[(e["user"], e["outcome"], e["via"]) for e in a["data"]["entries"] if e["command"] == "run.start"][0]')" "('itoperator', 'ok', 'mcp:it-client')"
-expect_ok "and is in the journal with FLEET_VIA" sh -c "journalctl -t cockpit-fleet FLEET_VIA=mcp:it-client FLEET_COMMAND=run.start --since -5min -o cat | grep -q 'itoperator via mcp:it-client run.start: ok'"
+expect_ok "and is in the journal with FLEET_VIA and the profile" sh -c "journalctl -t cockpit-fleet FLEET_VIA=mcp:it-client FLEET_COMMAND=run.start --since -5min -o cat | grep -q 'itoperator via mcp:it-client (assisted) run.start: ok'"
 
 # --- what an agent cannot do --------------------------------------------------------
 out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "x"}, "template_id": "other", "via": "interface"}')")
@@ -117,13 +119,34 @@ out=$(mcp itoperator "$LIST" "$(call 2 run_log "{\"id\": \"$run_id\"}")" "$(call
 if printf '%s' "$out" | grep -qi 'ciphertext\|BEGIN OPENSSH\|\.cred"'; then fail "a secret is in an answer"; else pass "no secret in the answers"; fi
 expect_eq "there is no tool for secrets" "$(answer "$out" 1 'any("secret" in t["name"] for t in a["result"]["tools"])')" False
 
-# --- raising the ceiling ------------------------------------------------------------
+# --- raising the ceiling, and the profiles of the assistant ------------------------
 sed -i 's/^\[mcp\]$/[mcp]\nmax_role = "admin"/' "$CONFIG"
-out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "{\"inventory_id\": \"$inventory_id\", \"limit\": \"all\", \"module\": \"ansible.builtin.command\", \"free_form\": \"id -un\"}")")
-expect_eq "with the ceiling at admin, ad-hoc commands are a tool" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" True
+ADHOC="{\"inventory_id\": \"$inventory_id\", \"limit\": \"all\", \"module\": \"ansible.builtin.command\", \"free_form\": \"id -un\"}"
+PING="{\"inventory_id\": \"$inventory_id\", \"limit\": \"all\", \"module\": \"ansible.builtin.ping\"}"
+out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")")
+expect_eq "with the ceiling at admin, the default profile still gives no ad-hoc command" \
+    "$(answer "$out" 1 'any(t["name"] in ("run_adhoc", "credential_create") for t in a["result"]["tools"])')" False
+expect_eq "nor does a call that names it" "$(answer "$out" 2 'a["error"]["code"] if "error" in a else a["result"]["isError"]')" -32602
+printf '[chat]\nprofiles = ["assisted", "diagnostic", "administrator"]\n' >> "$CONFIG"
+PROFILE=diagnostic
+out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")" "$(call 3 run_adhoc "$PING")")
+expect_eq "in the profile diagnostic, ad-hoc commands of modules that change nothing" \
+    "$(answer "$out" 1 '[t["inputSchema"]["properties"]["module"]["enum"][0] for t in a["result"]["tools"] if t["name"] == "run_adhoc"]')" "['ansible.builtin.ping']"
+expect_eq "any other module is refused" "$(answer "$out" 2 'a["result"]["isError"]')" True
+expect_run "a ping runs" "$(answer "$out" 3 'a["result"]["structuredContent"]["id"]')" 90 successful
+expect_eq "the profile is in the audit log" \
+    "$(get "$(admin audit.list)" '[(e["command"], e["outcome"], e["profile"]) for e in a["data"]["entries"] if e["command"] == "run.adhoc"][:2]')" \
+    "[('run.adhoc', 'ok', 'diagnostic'), ('run.adhoc', 'denied', 'diagnostic')]"
+PROFILE=administrator
+out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")")
+expect_eq "in the profile administrator, ad-hoc commands are a tool" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" True
 expect_run "and an agent runs one" "$(answer "$out" 2 'a["result"]["structuredContent"]["id"]')" 90 successful
 out=$(mcp itoperator "$LIST")
 expect_eq "the user's own role still holds" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" False
+PROFILE=observer
+out=$(mcp itadmin "$LIST")
+expect_eq "a profile not enabled gives nothing" "$(answer "$out" 1 '"not enabled" in a["error"]["message"]')" True
+PROFILE=
 
 # --- over ssh, with a key that reaches fleet-mcp and nothing else ----------------------
 ssh-keygen -q -t ed25519 -N '' -f "$KEYS/agent"

@@ -97,6 +97,14 @@
 # an agent that reads it and may also change things can be steered by it.
 #enabled = false
 #max_role = "operator"
+# Modules of an ad-hoc command an agent may run in the profile diagnostic
+# (see [chat] profiles), without become: modules that change nothing, among
+# those of [adhoc] modules. By default these, less those [adhoc] leaves out:
+#adhoc_modules = [
+#    "ansible.builtin.ping", "ansible.builtin.setup",
+#    "ansible.builtin.service_facts", "ansible.builtin.package_facts",
+#    "ansible.windows.win_ping", "ansible.windows.setup",
+#]
 
 [chat]
 # The chat page starts an agent as the user who opens it and gives it the
@@ -113,6 +121,20 @@
 #       ansible-playbook -i localhost, -c local lineadicomando.fleet.chat_agent
 # Sessions open at the same time, for all users: one takes about 360 MB.
 #max_sessions = 2
+# The profiles of the assistant a user may pick, by what an agent may call:
+#   observer       reads
+#   assisted       reads, launches and cancels what is defined
+#   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules
+#   autonomous     as assisted
+#   administrator  everything the role allows: ad-hoc commands, changes to
+#                  templates and the rest, files, projects, credentials
+# A profile only restricts, under the user's role and [mcp] max_role. It
+# holds for fleet-mcp started by hand too: an agent that names none gets
+# default_profile (by default assisted, or the first of profiles when assisted
+# is not among them). Giving agents ad-hoc commands or changes takes a profile that
+# allows them, max_role = "admin", and a user who is an administrator.
+#profiles = ["observer", "assisted"]
+#default_profile = "assisted"
 #[chat.agents.claude]
 #command = ["/opt/cockpit-fleet-agent/bin/claude-agent-acp"]
 #label = "Claude"

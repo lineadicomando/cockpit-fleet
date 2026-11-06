@@ -93,6 +93,8 @@ def chat_agents(ctx: Context, params: Values) -> dict:
         "unavailable": _needs_agents(ctx),
         "guide": _guide(ctx),
         "max_role": config.mcp_max_role,
+        "profiles": list(config.chat_profiles),
+        "default_profile": config.chat_default_profile,
         "max_sessions": config.chat_max_sessions,
         "open_sessions": open_sessions(),
     }
@@ -101,12 +103,15 @@ def chat_agents(ctx: Context, params: Values) -> dict:
 @command("chat.start", role="viewer", mutating=True, tool=False,
          params={"agent": Str("The name of the agent, as in config.toml.", required=True,
                               max_length=32),
-                 "terminal": Bool("Its program for a terminal, for fleet assistant")})
+                 "terminal": Bool("Its program for a terminal, for fleet assistant"),
+                 "profile": Str("The profile of the assistant for the session; by default"
+                                " the one config.toml names.", max_length=32)})
 def chat_start(ctx: Context, params: Values) -> dict:
     """The command line of an agent, for fleet-chat, which is about to run it
     as the caller: the one that speaks the protocol with the page, or with
-    terminal the one for a terminal. Refused when the sessions open are as
-    many as allowed."""
+    terminal the one for a terminal; and the profile of the session, which
+    must be among those enabled. Refused when the sessions open are as many
+    as allowed."""
     problem = _needs_agents(ctx)
     if problem:
         raise Unavailable(problem)
@@ -114,6 +119,10 @@ def chat_start(ctx: Context, params: Values) -> dict:
                  None)
     if agent is None:
         raise NotFound(f"no such agent: {params['agent']}")
+    profile = params["profile"] or ctx.config.chat_default_profile
+    if profile not in ctx.config.chat_profiles:
+        raise Conflict(f"the profile {profile} is not enabled on this controller"
+                       " ([chat] profiles in config.toml)")
     if params["terminal"] and not agent.terminal:
         raise Conflict(f"the agent {agent.name} has no program for a terminal"
                        " (terminal in [chat.agents] of config.toml)")
@@ -122,5 +131,5 @@ def chat_start(ctx: Context, params: Values) -> dict:
     if open_sessions() > limit:
         raise Conflict(f"{limit} chat sessions are open already, the most this controller"
                        " allows ([chat] max_sessions in config.toml)")
-    return {"agent": agent.name,
+    return {"agent": agent.name, "profile": profile,
             "command": list(agent.terminal if params["terminal"] else agent.command)}

@@ -4,7 +4,9 @@ It is started by a user, on the controller or over ssh, and runs as that
 user with nothing of its own: every tool is a call to fleetctl through sudo,
 exactly what the interface does, so the roles and the audit trail are the
 same. It adds "via" to every call, which makes fleetctl apply what
-config.toml allows to agents and record where the call came from.
+config.toml allows to agents and record where the call came from, and with
+--profile the profile of the assistant the session was started in (without,
+fleetctl applies the default one).
 
 The protocol is JSON-RPC 2.0, one message per line. Only tools are offered.
 """
@@ -28,6 +30,7 @@ INSTRUCTIONS = (
     " interface."
 )
 _TIMEOUT = 120
+_PROFILE_RE = re.compile(r"[a-z]{1,32}")
 
 
 class Unreachable(Exception):
@@ -52,14 +55,15 @@ def fleetctl(name: str, params: dict) -> dict:
 
 
 class Server:
-    def __init__(self, call=fleetctl):
+    def __init__(self, call=fleetctl, profile: str = ""):
         self._call = call
         self._via = "mcp"
+        self._profile = profile
         # Tool name -> (command, parameters the tool fixes).
         self._tools: dict[str, tuple[str, dict]] = {}
 
     def _list(self) -> list[dict]:
-        answer = self._call("mcp.tools", {"via": self._via})
+        answer = self._call("mcp.tools", self._through())
         if not answer["ok"]:
             raise Unreachable(answer["error"]["message"])
         tools = answer["data"]["tools"]
@@ -67,6 +71,10 @@ class Server:
         return [{"name": tool["name"], "description": tool["description"],
                  "inputSchema": tool["inputSchema"],
                  "annotations": {"readOnlyHint": bool(tool.get("readOnly"))}} for tool in tools]
+
+    def _through(self) -> dict:
+        """What this server adds to every call."""
+        return {"via": self._via, **({"profile": self._profile} if self._profile else {})}
 
     def _tool(self, params: dict) -> dict:
         name, arguments = params.get("name"), params.get("arguments")
@@ -79,8 +87,9 @@ class Server:
         if name not in self._tools:
             raise ValueError(f"unknown tool: {name}")
         command, fixed = self._tools[name]
-        # What the tool fixes and where the call comes from are not the agent's to say.
-        answer = self._call(command, {**arguments, **fixed, "via": self._via})
+        # What the tool fixes, where the call comes from and its profile are not
+        # the agent's to say.
+        answer = self._call(command, {**arguments, **fixed, **self._through()})
         if answer["ok"]:
             data = answer["data"]
             result = {"content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}],
@@ -149,3 +158,14 @@ def serve(source=sys.stdin, sink=sys.stdout, server: Server | None = None) -> in
             sink.write(json.dumps(answer, ensure_ascii=False) + "\n")
             sink.flush()
     return 0
+
+
+def main(argv: list[str], source=sys.stdin, sink=sys.stdout, call=fleetctl) -> int:
+    """fleet-mcp [--profile NAME]"""
+    profile = ""
+    if len(argv) == 3 and argv[1] == "--profile" and _PROFILE_RE.fullmatch(argv[2]):
+        profile = argv[2]
+    elif len(argv) != 1:
+        print("usage: fleet-mcp [--profile NAME]", file=sys.stderr)
+        return 2
+    return serve(source, sink, Server(call, profile))

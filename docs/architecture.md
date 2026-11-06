@@ -1661,6 +1661,23 @@ template's being `run`. The profiles of the assistant are made of these
 classes; a test holds the table of them, so moving a command to another
 class is a decision.
 
+**Profiles of the assistant.** A profile is a set of classes
+(`profiles.py`): `observer` reads, `assisted` and `autonomous` also run,
+`diagnostic` also `adhoc-diagnostic`, which is not the class of a command
+but of a call (`run.adhoc` with a module of `[mcp] adhoc_modules`, without
+become), `administrator` has them all. `fleet-chat --profile` asks
+`chat.start` whether the profile is enabled (`[chat] profiles`) and starts
+`fleet-mcp --profile`, which adds it to every call beside `via`. In
+`_through`, after the ceiling lowers the role, a call whose class the
+profile does not allow is refused and audited; a call with no profile gets
+`default_profile`, one with a profile not enabled is refused. So the
+profile, like `via`, can only restrict: naming another gains nothing that
+the default does not give, and leaving `via` out is what a person does by
+hand with the same role. `mcp.tools` lists only the tools of the profile,
+`run_adhoc` in `diagnostic` with the enum of its modules and without
+`become`. The audit has a `profile` column (schema 22), and the journal
+`FLEET_PROFILE`.
+
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
 runs and where, and its parameters are the questions of its survey, typed and

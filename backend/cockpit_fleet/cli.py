@@ -19,7 +19,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from . import audit, db, journal, paths
+from . import audit, db, journal, paths, profiles
 from .auth import ROLES, Caller, allowed, resolve_caller
 from .config import Config
 from .config import load as load_config
@@ -225,6 +225,8 @@ class Context:
     config_file: Path = paths.CONFIG_FILE
     # Set when the call says it comes from an agent: see dispatch().
     via: str = ""
+    # The profile of the assistant an agent's call is held to; "" for a person.
+    profile: str = ""
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _config: Config | None = field(default=None, repr=False)
 
@@ -365,11 +367,12 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
 
     fleet-mcp adds "mcp:CLIENT" to everything it sends, the command fleet
     adds "cli". For an agent saying it can only restrict: the caller's role
-    is lowered to the ceiling, never raised, and nothing goes through while
-    agents are not enabled. Any other value is only recorded. Not saying it,
-    or saying another, is not a way around anything the caller could not
-    already do by hand. An agent has no right beyond its role: a person
-    approves a run, not a program acting for them.
+    is lowered to the ceiling, never raised, the call is held to the profile
+    of the assistant fleet-mcp adds beside it ("profile", or the default),
+    and nothing goes through while agents are not enabled. Any other value
+    is only recorded. Not saying it, or saying another, is not a way around
+    anything the caller could not already do by hand. An agent has no right
+    beyond its role: a person approves a run, not a program acting for them.
     """
     via = params.pop("via", None)
     if via is None:
@@ -379,21 +382,37 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     ctx.via = via
     if not is_agent(via):
         return
-    if not ctx.config.mcp_enabled:
-        audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                     "agents are not enabled", redact, via)
-        raise _recorded(Forbidden("agents are not enabled on this controller"
-                                  " ([mcp] in config.toml)"))
+    profile = params.pop("profile", None)
+    config = ctx.config
+
+    def refuse(reason: str, message: str) -> FleetError:
+        audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied", reason, redact,
+                     via, profile=ctx.profile)
+        return _recorded(Forbidden(message))
+
+    if not config.mcp_enabled:
+        raise refuse("agents are not enabled",
+                     "agents are not enabled on this controller ([mcp] in config.toml)")
+    if profile is None:
+        profile = config.chat_default_profile
+    if not isinstance(profile, str) or profile not in config.chat_profiles:
+        asked = profile[:40] if isinstance(profile, str) else "?"
+        raise refuse(f"profile {asked!r} not enabled", "this profile of the assistant is not"
+                     " enabled on this controller ([chat] profiles in config.toml)")
+    ctx.profile = profile
     spec = COMMANDS.get(name)
     if spec is not None and not spec.tool and name != "mcp.tools":
         # fleet-mcp offers no such tool; a call that names one anyway is refused.
-        audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                     "not a tool for agents", redact, via)
-        raise _recorded(Forbidden(f"{name} is not for agents"))
-    ceiling = ctx.config.mcp_max_role
+        raise refuse("not a tool for agents", f"{name} is not for agents")
+    ceiling = config.mcp_max_role
     if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
         ctx.caller = replace(ctx.caller, role=ceiling)
     ctx.caller = replace(ctx.caller, rights=frozenset())
+    if spec is not None:
+        kind = profiles.call_class(name, spec.agent, params, config.mcp_adhoc_modules)
+        if not profiles.allows(profile, kind):
+            raise refuse(f"{kind} is outside the profile {profile}",
+                         f"{name} ({kind}) is not allowed to an agent in the profile {profile}")
 
 
 def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
@@ -407,11 +426,12 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         _through(ctx, params, name, spec.redact)
         if not allowed(ctx.caller, spec.role, spec.right):
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                         f"requires {spec.role}", spec.redact, ctx.via)
+                         f"requires {spec.role}", spec.redact, ctx.via, profile=ctx.profile)
             raise _recorded(Forbidden(f"{name} requires the {spec.role} role"))
         data = spec.call(ctx, params)
         if spec.mutating:
-            audit.record(ctx.conn, ctx.caller, name, params, "ok", redact=spec.redact, via=ctx.via)
+            audit.record(ctx.conn, ctx.caller, name, params, "ok", redact=spec.redact, via=ctx.via,
+                         profile=ctx.profile)
         return {"ok": True, "data": data}
     except FleetError as error:
         if spec is not None and getattr(error, "audited", False):
@@ -419,10 +439,10 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         elif spec is not None and isinstance(error, Forbidden):
             # Refused by the command itself: approving one's own launch, say.
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                         str(error), spec.redact, ctx.via, error.secrets)
+                         str(error), spec.redact, ctx.via, error.secrets, ctx.profile)
         elif spec is not None and spec.mutating:
             audit.record(ctx.conn_or_none(), ctx.caller, name, params, "error",
-                         str(error), spec.redact, ctx.via, error.secrets)
+                         str(error), spec.redact, ctx.via, error.secrets, ctx.profile)
         return {"ok": False, "error": {"code": error.code, "message": str(error)}}
     except Exception:
         # The details go to the journal, not to the browser.

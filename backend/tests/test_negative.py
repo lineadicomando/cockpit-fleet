@@ -29,7 +29,7 @@ from unittest import mock
 from test_checks import CheckBase
 from test_notify import WEBHOOK
 
-from cockpit_fleet import cli, journal, paths, runner, schedules
+from cockpit_fleet import cli, journal, paths, profiles, runner, schedules
 from cockpit_fleet.auth import ROLES, Caller
 from cockpit_fleet.errors import BadRequest
 
@@ -578,14 +578,17 @@ class RoleTest(Fixture):
         rights = {name: spec.right for name, spec in cli.COMMANDS.items() if spec.right}
         self.assertEqual(rights, RIGHTS)
 
-    def reached(self, name, role, rights=frozenset(), via=None, config=None):
+    def reached(self, name, role, rights=frozenset(), via=None, config=None, profile=None,
+                params=None):
         """Whether a call got to the handler of the command."""
         called = []
         spec = cli.COMMANDS[name]
         stand_in = dataclasses.replace(spec, handler=lambda ctx, params: called.append(1) or {})
-        params = self.valid(name)
+        params = params or self.valid(name)
         if via is not None:
             params["via"] = via
+        if profile is not None:
+            params["profile"] = profile
         ctx = cli.Context(Caller(1001, "mallory", role, rights), self.root / "fleet.db",
                           self.root / "config.toml")
         ctx._config = config or self.config
@@ -630,6 +633,43 @@ class RoleTest(Fixture):
                                               enabled), expected, (name, via))
             # While agents are not enabled, nothing goes through for them at all.
             self.assertFalse(self.reached(name, "admin", via="mcp:client"), name)
+
+    def test_an_agent_is_held_to_its_profile(self):
+        enabled = dataclasses.replace(self.config, mcp_enabled=True, mcp_max_role="admin",
+                                      chat_profiles=tuple(profiles.PROFILES))
+        for name, spec in sorted(cli.COMMANDS.items()):
+            tool = spec.tool or name == "mcp.tools"
+            kind = profiles.call_class(name, spec.agent, self.valid(name),
+                                       enabled.mcp_adhoc_modules)
+            for profile in profiles.PROFILES:
+                expected = tool and profiles.allows(profile, kind)
+                self.assertEqual(self.reached(name, "admin", via="mcp:x", config=enabled,
+                                              profile=profile), expected, (name, profile))
+            # One made up, or not enabled, opens nothing.
+            for profile in ("root", "Administrator", "", 1, ["observer"], {}):
+                self.assertFalse(self.reached(name, "admin", via="mcp:x", config=enabled,
+                                              profile=profile), (name, profile))
+            only = dataclasses.replace(enabled, chat_profiles=("observer",),
+                                       chat_default_profile="observer")
+            self.assertFalse(self.reached(name, "admin", via="mcp:x", config=only,
+                                          profile="administrator"), name)
+            self.assertEqual(self.reached(name, "admin", via="mcp:x", config=only),
+                             tool and kind == "read", name)
+
+    def test_a_diagnostic_profile_reaches_only_diagnostic_commands(self):
+        enabled = dataclasses.replace(self.config, mcp_enabled=True, mcp_max_role="admin",
+                                      chat_profiles=("diagnostic",),
+                                      chat_default_profile="diagnostic")
+        base = self.valid("run.adhoc")
+        for module in enabled.adhoc_modules:
+            for become in (False, True, 1, "yes"):
+                params = {**base, "module": module, "become": become}
+                expected = module in enabled.mcp_adhoc_modules and become is False
+                self.assertEqual(self.reached("run.adhoc", "admin", via="mcp:x", config=enabled,
+                                              params=params), expected, (module, become))
+        for module in ("ansible.builtin.Ping", "ansible.builtin.ping ", "ping", ["ping"]):
+            self.assertFalse(self.reached("run.adhoc", "admin", via="mcp:x", config=enabled,
+                                          params={**base, "module": module}), module)
 
     def test_saying_where_a_call_comes_from_never_raises_a_role(self):
         enabled = dataclasses.replace(self.config, mcp_enabled=True, mcp_max_role="admin")

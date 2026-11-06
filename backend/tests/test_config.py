@@ -29,6 +29,35 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.local_project_roots, ("/srv/ansible", "/opt/playbooks"))
         self.assertEqual(config.proxy, "http://proxy.example:3128")
 
+    def test_profiles_of_the_assistant(self):
+        config = parse("")
+        self.assertEqual((config.chat_profiles, config.chat_default_profile),
+                         (("observer", "assisted"), "assisted"))
+        config = parse('[chat]\nprofiles = ["diagnostic", "administrator"]')
+        self.assertEqual(config.chat_default_profile, "diagnostic")
+        config = parse('[chat]\nprofiles = ["observer", "administrator"]\n'
+                       'default_profile = "administrator"')
+        self.assertEqual(config.chat_default_profile, "administrator")
+        for bad in ('profiles = []', 'profiles = ["root"]', 'profiles = "observer"',
+                    'profiles = ["observer"]\ndefault_profile = "assisted"',
+                    'default_profile = "administrator"'):
+            with self.assertRaises(ConfigError, msg=bad):
+                parse("[chat]\n" + bad)
+
+    def test_diagnostic_modules_are_among_those_of_ad_hoc_commands(self):
+        self.assertIn("ansible.builtin.setup", parse("").mcp_adhoc_modules)
+        self.assertNotIn("ansible.builtin.shell", parse("").mcp_adhoc_modules)
+        config = parse('[adhoc]\nmodules = ["ansible.builtin.ping", "ansible.builtin.shell"]')
+        self.assertEqual(config.mcp_adhoc_modules, ("ansible.builtin.ping",))
+        self.assertEqual(parse("[adhoc]\nmodules = []").mcp_adhoc_modules, ())
+        config = parse('[mcp]\nadhoc_modules = ["ansible.builtin.ping"]')
+        self.assertEqual(config.mcp_adhoc_modules, ("ansible.builtin.ping",))
+        for bad in ('[mcp]\nadhoc_modules = ["ansible.builtin.nope"]',
+                    '[adhoc]\nmodules = []\n[mcp]\nadhoc_modules = ["ansible.builtin.ping"]',
+                    '[mcp]\nadhoc_modules = "ansible.builtin.ping"'):
+            with self.assertRaises(ConfigError, msg=bad):
+                parse(bad)
+
     def test_inventory_scripts_are_off_unless_asked(self):
         self.assertFalse(parse("").inventory_scripts)
         self.assertTrue(parse("[inventories]\nscripts = true").inventory_scripts)

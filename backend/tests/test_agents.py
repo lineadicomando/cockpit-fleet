@@ -5,10 +5,11 @@ import io
 import json
 import unittest
 from dataclasses import replace
+from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import agents, cli, mcp, paths
+from cockpit_fleet import agents, cli, mcp, paths, profiles
 
 # What each tool lets an agent do, beyond reading. A new tool, or one moved to
 # another class, fails here until this table says so: the profiles of the
@@ -137,7 +138,9 @@ class CeilingTest(Base):
                          "forbidden")
 
     def test_a_command_above_the_ceiling_is_refused_and_recorded(self):
-        answer = self.via("credential.create", {"name": "x", "kind": "vault"}, mcp_enabled=True)
+        answer = self.via("credential.create", {"name": "x", "kind": "vault"}, mcp_enabled=True,
+                          chat_profiles=("administrator",),
+                          chat_default_profile="administrator")
         self.assertEqual(answer["error"]["code"], "forbidden")
         self.assertEqual(self.audit(), [("credential.create", "denied", "operator",
                                          "mcp:test-client", "requires admin")])
@@ -165,6 +168,129 @@ class CeilingTest(Base):
         self.config = replace(self.config, mcp_enabled=True)
         for bad in ("", "x" * 100, "a\nb", 3, ["mcp"], "-x"):
             self.assertEqual(self.call("whoami", {"via": bad})["error"]["code"], "bad_request", bad)
+
+
+class ProfileTest(Base):
+    def setUp(self):
+        super().setUp()
+        self.config = replace(self.config, mcp_enabled=True, mcp_max_role="admin",
+                              chat_profiles=tuple(profiles.PROFILES))
+
+    def via(self, name, params=None, profile=None, role="admin"):
+        extra = {} if profile is None else {"profile": profile}
+        return self.call(name, {**(params or {}), "via": "mcp:test", **extra}, role)
+
+    def audit(self):
+        return [(row["command"], row["outcome"], row["profile"], row["detail"])
+                for row in self.ctx().conn.execute("SELECT * FROM audit ORDER BY id")]
+
+    def adhoc(self, module="ansible.builtin.ping", **extra):
+        if not hasattr(self, "inventory"):
+            self.inventory = self.ok("inventory.create", {
+                "name": "inv", "kind": "managed", "content": "all:\n  hosts:\n    a:\n"})
+        return {"inventory_id": self.inventory["id"], "module": module, "limit": "all", **extra}
+
+    def test_an_agent_that_names_none_gets_the_default_and_it_is_recorded(self):
+        template = self.template()
+        self.assertTrue(self.via("run.start", {"template_id": template["id"]})["ok"])
+        self.assertEqual(self.audit()[-1][:3], ("run.start", "ok", "assisted"))
+        self.assertEqual(self.ok("audit.list")["entries"][0]["profile"], "assisted")
+        self.ok("run.list")
+        self.ok("credential.create", {"name": "x", "kind": "vault"})
+        self.assertEqual(self.audit()[-1][:3], ("credential.create", "ok", ""))
+
+    def test_a_class_outside_the_profile_is_refused_and_recorded(self):
+        template = self.template()
+        answer = self.via("run.start", {"template_id": template["id"]}, "observer")
+        self.assertEqual(answer["error"]["code"], "forbidden")
+        self.assertIn("observer", answer["error"]["message"])
+        self.assertEqual(self.audit()[-1], ("run.start", "denied", "observer",
+                                            "run is outside the profile observer"))
+        self.assertTrue(self.via("run.list", {}, "observer")["ok"])
+        for profile in ("assisted", "diagnostic", "autonomous"):
+            answer = self.via("template.delete", {"id": template["id"]}, profile)
+            self.assertEqual(answer["error"]["code"], "forbidden", profile)
+            answer = self.via("channel.create", {"name": "x"}, profile)
+            self.assertEqual(answer["error"]["code"], "forbidden", profile)
+            answer = self.via("credential.create", {"name": "x", "kind": "vault"}, profile)
+            self.assertEqual(answer["error"]["code"], "forbidden", profile)
+        self.assertTrue(self.via("credential.create", {"name": "x", "kind": "vault"},
+                                 "administrator")["ok"])
+
+    def test_a_profile_not_enabled_is_refused_and_one_made_up_too(self):
+        self.config = replace(self.config, chat_profiles=("observer", "assisted"))
+        for profile in ("administrator", "root", 3, ["assisted"]):
+            answer = self.via("whoami", {}, profile)
+            self.assertEqual(answer["error"]["code"], "forbidden", profile)
+        self.assertEqual(self.audit()[0][3], "profile 'administrator' not enabled")
+
+    def test_the_profile_of_a_person_is_no_parameter(self):
+        self.assertEqual(self.code("whoami", {"profile": "observer"}), "bad_request")
+        self.assertEqual(self.code("whoami", {"profile": "observer", "via": "cli"}),
+                         "bad_request")
+
+    def test_a_diagnostic_profile_runs_only_modules_that_change_nothing(self):
+        refused = [self.adhoc("ansible.builtin.shell", free_form="reboot"),
+                   self.adhoc(become=True)]
+        for params in refused:
+            answer = self.via("run.adhoc", params, "diagnostic")
+            self.assertEqual(answer["error"]["code"], "forbidden", params)
+        self.assertEqual(self.audit()[-1][3], "adhoc is outside the profile diagnostic")
+        self.assertTrue(self.via("run.adhoc", self.adhoc(), "diagnostic")["ok"])
+        self.assertEqual(self.audit()[-1][:3], ("run.adhoc", "ok", "diagnostic"))
+        self.assertEqual(self.via("run.adhoc", self.adhoc(), "assisted")["error"]["code"],
+                         "forbidden")
+        self.config = replace(self.config, mcp_adhoc_modules=())
+        self.assertEqual(self.via("run.adhoc", self.adhoc(), "diagnostic")["error"]["code"],
+                         "forbidden")
+        self.assertTrue(self.via("run.adhoc", self.adhoc("ansible.builtin.shell",
+                                                         free_form="uptime"),
+                                 "administrator")["ok"])
+
+    def test_the_role_still_bounds_a_profile(self):
+        self.config = replace(self.config, mcp_max_role="operator")
+        answer = self.via("credential.create", {"name": "x", "kind": "vault"}, "administrator")
+        self.assertEqual(answer["error"]["code"], "forbidden")
+        self.assertEqual(self.audit()[-1][3], "requires admin")
+
+    def test_tools_are_those_of_the_profile(self):
+        self.template()
+
+        def tools(profile):
+            answer = self.via("mcp.tools", {}, profile)
+            self.assertEqual(answer["data"]["profile"], profile or "assisted")
+            return {tool["name"]: tool for tool in answer["data"]["tools"]}
+
+        observer = tools("observer")
+        self.assertEqual({tool["class"] for tool in observer.values()}, {"read"})
+        self.assertIn("run_list", observer)
+        assisted = tools(None)
+        self.assertEqual({tool["class"] for tool in assisted.values()}, {"read", "run"})
+        self.assertTrue(any(name.startswith("launch_") for name in assisted))
+        self.assertNotIn("run_adhoc", assisted)
+        adhoc = tools("diagnostic")["run_adhoc"]
+        self.assertEqual(adhoc["class"], "adhoc-diagnostic")
+        self.assertEqual(adhoc["inputSchema"]["properties"]["module"]["enum"],
+                         list(self.config.mcp_adhoc_modules))
+        self.assertNotIn("become", adhoc["inputSchema"]["properties"])
+        self.assertIn("become", cli.COMMANDS["run.adhoc"].schema()["properties"])
+        administrator = tools("administrator")
+        self.assertEqual(administrator["run_adhoc"]["class"], "adhoc")
+        self.assertIn("file_write", administrator)
+        self.config = replace(self.config, mcp_adhoc_modules=())
+        self.assertNotIn("run_adhoc", tools("diagnostic"))
+
+    def test_the_page_asks_the_tools_of_a_profile(self):
+        names = {tool["name"] for tool in self.ok("mcp.tools", {"profile": "observer"})["tools"]}
+        self.assertNotIn("run_start", names)
+        self.assertIn("run_start", {tool["name"] for tool in self.ok("mcp.tools")["tools"]})
+        self.config = replace(self.config, chat_profiles=("assisted",))
+        self.assertEqual(self.code("mcp.tools", {"profile": "observer"}), "bad_request")
+
+    def test_no_tool_takes_what_fleet_mcp_adds(self):
+        for name, spec in cli.COMMANDS.items():
+            if spec.tool:
+                self.assertFalse({"via", "profile"} & set(spec.params), name)
 
 
 class ToolsTest(Base):
@@ -303,6 +429,26 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(result["structuredContent"], {"id": "r1", "status": "running"})
         self.assertEqual(self.calls[-1], ("run.start", {"answers": {"v": "1"},
                                                         "template_id": "t1", "via": "mcp"}))
+
+    def test_the_profile_goes_with_every_call_and_the_agent_cannot_change_it(self):
+        self.server = mcp.Server(self.server._call, "observer")
+        self.ask("tools/list")
+        self.ask("tools/call", {"name": "launch_deploy_abc123",
+                                "arguments": {"profile": "administrator"}})
+        self.assertEqual(self.calls, [
+            ("mcp.tools", {"via": "mcp", "profile": "observer"}),
+            ("run.start", {"template_id": "t1", "via": "mcp", "profile": "observer"})])
+
+    def test_the_command_line(self):
+        source = io.StringIO('{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}\n')
+        sink = io.StringIO()
+        self.assertEqual(mcp.main(["fleet-mcp", "--profile", "diagnostic"], source, sink,
+                                  self.server._call), 0)
+        self.assertEqual(self.calls, [("mcp.tools", {"via": "mcp", "profile": "diagnostic"})])
+        with mock.patch("sys.stderr", new_callable=io.StringIO):
+            for argv in (["fleet-mcp", "--profile"], ["fleet-mcp", "--profile", "A b"],
+                         ["fleet-mcp", "x"]):
+                self.assertEqual(mcp.main(argv, source, sink, self.server._call), 2, argv)
 
     def test_a_refusal_is_a_tool_error_not_a_protocol_error(self):
         result = self.ask("tools/call", {"name": "run_get", "arguments": {"id": "x"}})["result"]

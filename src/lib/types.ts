@@ -63,6 +63,8 @@ export interface AuditEntry {
     detail: string;
     // What the call came through when it was not the interface: an agent.
     via: string;
+    // The profile of the assistant an agent's call was held to.
+    profile: string;
 }
 
 export type CredentialKind = "machine" | "vault" | "source";

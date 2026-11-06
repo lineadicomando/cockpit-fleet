@@ -13,9 +13,11 @@ Decisions: [docs/decisions.md](docs/decisions.md). Known limits:
 Phases 0–11 closed; 0.2.0 released on 2 November (sets of variables, the
 assistant's setup guide). Since then, under `[Unreleased]`: runs launched in
 series on an inventory (5 November). **Under way:** phase 12, below; the
-classes of commands done (6 November), next the profiles in the backend.
+classes of commands and the profiles in the backend done (6 November),
+next the limits of autonomy.
 
-Last test runs: on 6 November the unit tests (518 backend, 130 frontend);
+Last test runs: on 6 November the unit tests (534 backend, 130 frontend)
+and `ct-test` of `negative mcp chat cli` on AlmaLinux and Debian;
 on 1 November `make ct-test` of every script on Debian and AlmaLinux, and
 on the three before that day's fixes (`cmdb` fails on Fedora only in a
 container: `podman network connect`, netavark "invalid namespace path");
@@ -30,7 +32,7 @@ present (this developer's VMs); `git status`, `git log origin/main..`;
 `make check`; `make ct-test DISTRO=debian` (then `fedora`, `alma`) around a
 change that needs it. Each backend module says what it is in its
 docstring; `cli.py` is the registry, `auth.py` roles and rights, `db.py`
-the schema (21); pages in `src/components/`, node modules in
+the schema (22); pages in `src/components/`, node modules in
 `collection/ansible_collections/lineadicomando/fleet/plugins/modules/`.
 For phase 12: `cli._through`, `agents.py` (`mcp.tools`), `mcp.py`,
 `chat.py`, `chat_agent.py` (`fleet-chat`), `approvals.py`, `files.py`;
@@ -115,15 +117,18 @@ Each step on its own, tested, before the next:
       credentials); a test that every tool has one; `mcp.tools` gives it.
       `run.adhoc` is `adhoc`; adhoc-diagnostic is decided per call, by the
       module, in the next step
-- [ ] Profiles in the backend: `[chat] profiles` and `default_profile`,
+- [x] Profiles in the backend: `[chat] profiles` and `default_profile`,
       `[mcp] adhoc_modules` (a subset of `[adhoc] modules`); the profile
       passed by `fleet-chat` to `fleet-mcp` and added to every call beside
       `via`; `_through` refuses a class outside it, `mcp.tools` lists only
-      its tools, the audit records it; `test_cli.py`, `negative.sh`
+      its tools, the audit records it (schema 22); `negative.sh`, `mcp.sh`
+      (`ct-test` of `negative mcp chat cli` on AlmaLinux and Debian, 6 November). The page still asks `mcp.tools` for
+      all the tools of the role: it passes the session's profile in the
+      step of the page
 - [ ] Limits of autonomy in the backend: runs per session (counted from
       the audit), templates with an approval still waiting, maintenance
       windows; dry run forced where the profile says so
-- [ ] Modes of approval (above): a migration (schema 22) from
+- [ ] Modes of approval (above): a migration (schema 23) from
       `needs_approval` to the mode, of templates and of workflow steps;
       `may_decide` by mode, `[approvals] admins_exempt`; schedules in
       confirm decided as another person; export and import, `fleet`, the

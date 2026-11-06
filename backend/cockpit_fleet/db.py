@@ -720,6 +720,10 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The profile of the assistant a call made for an agent was held to.
+        "ALTER TABLE audit ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
+    ],
 ]
 
 

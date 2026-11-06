@@ -1173,6 +1173,9 @@ msgstr "Valore"
 msgid "Done by an agent, through {{via}}"
 msgstr "Eseguito da un agente, tramite {{via}}"
 
+msgid "Profile of the assistant"
+msgstr "Profilo dell'assistente"
+
 msgid "Assistant, thinking"
 msgstr "Assistente, ragionamento"
 

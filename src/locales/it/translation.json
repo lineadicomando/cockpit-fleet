@@ -389,6 +389,7 @@
   "Type the name of a module installed on the controller.": "Scrivi il nome di un modulo installato sul controller.",
   "Value": "Valore",
   "Done by an agent, through {{via}}": "Eseguito da un agente, tramite {{via}}",
+  "Profile of the assistant": "Profilo dell'assistente",
   "Assistant, thinking": "Assistente, ragionamento",
   "Allow once": "Consenti una volta",
   "Allow this action?": "Consentire questa azione?",

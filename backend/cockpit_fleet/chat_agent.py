@@ -14,6 +14,10 @@ With --terminal, for fleet assistant, it runs the agent's own program for a
 terminal instead, on the terminal of the user, with fleet-mcp as its only
 server in a file of its own that is gone when the agent ends. It is counted
 as a session all the same.
+
+With --profile, the session is in that profile of the assistant; without,
+in the default one. fleetctl says whether it is enabled, and fleet-mcp is
+started with it.
 """
 
 import json
@@ -65,10 +69,20 @@ def workspace() -> str:
     return path
 
 
-def terminal(name: str, call=fleetctl, run=subprocess.run) -> int:
+def _start(name: str, profile: str) -> dict:
+    """The parameters of chat.start."""
+    return {"agent": name, **({"profile": profile} if profile else {})}
+
+
+def mcp_args(answer: dict) -> list[str]:
+    """The arguments of fleet-mcp for the session chat.start answered for."""
+    return ["--profile", answer["data"]["profile"]]
+
+
+def terminal(name: str, call=fleetctl, run=subprocess.run, profile: str = "") -> int:
     """fleet-chat --terminal NAME: the agent on the user's terminal."""
     try:
-        answer = call("chat.start", {"agent": name, "terminal": True, "via": "cli"})
+        answer = call("chat.start", {**_start(name, profile), "terminal": True, "via": "cli"})
     except Unreachable as error:
         print(f"fleet assistant: {error}", file=sys.stderr)
         return 3
@@ -81,7 +95,7 @@ def terminal(name: str, call=fleetctl, run=subprocess.run) -> int:
         with open(config, "w", encoding="utf-8") as sink:
             json.dump({"mcpServers": {MCP_NAME: {"type": "stdio",
                                                  "command": str(LIBEXEC_DIR / "fleet-mcp"),
-                                                 "args": []}}}, sink)
+                                                 "args": mcp_args(answer)}}}, sink)
         # ^C is the agent's, which has the terminal: this one only waits for it.
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
@@ -102,13 +116,19 @@ def _notify(sink, method: str, params: dict) -> None:
 
 def main(argv: list[str], sink=sys.stdout, call=fleetctl, popen=subprocess.Popen,
          run=subprocess.run) -> int:
-    if len(argv) == 3 and argv[1] == "--terminal":
-        return terminal(argv[2], call, run)
-    if len(argv) != 2:
-        print("usage: fleet-chat AGENT | --terminal AGENT", file=sys.stderr)
+    words = argv[1:]
+    at_terminal = words[:1] == ["--terminal"]
+    words = words[at_terminal:]
+    profile = ""
+    if len(words) == 3 and words[0] == "--profile" and words[1]:
+        profile, words = words[1], words[2:]
+    if len(words) != 1:
+        print("usage: fleet-chat [--terminal] [--profile PROFILE] AGENT", file=sys.stderr)
         return 2
+    if at_terminal:
+        return terminal(words[0], call, run, profile)
     try:
-        answer = call("chat.start", {"agent": argv[1]})
+        answer = call("chat.start", _start(words[0], profile))
     except Unreachable as error:
         _notify(sink, "_fleet/error", {"code": "unreachable", "message": str(error)})
         return 1
@@ -126,7 +146,8 @@ def main(argv: list[str], sink=sys.stdout, call=fleetctl, popen=subprocess.Popen
     _notify(sink, "_fleet/ready", {
         "agent": answer["data"]["agent"],
         "cwd": os.path.expanduser("~"),
+        "profile": answer["data"]["profile"],
         "mcp": {"name": MCP_NAME, "command": str(LIBEXEC_DIR / "fleet-mcp"),
-                "args": [], "env": []},
+                "args": mcp_args(answer), "env": []},
     })
     return child.wait()

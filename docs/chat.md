@@ -142,9 +142,19 @@ started stays as it is: once logged in, send the message again.
 - The role they have in Fleet, lowered to `[mcp] max_role`: with the default,
   an administrator's assistant is an operator's. The reason is in
   `config.toml`: the output of a run is written by the nodes.
+- Within that, what the profile of the assistant allows (`[chat] profiles`,
+  `default_profile`): `observer` reads; `assisted`, the default, also
+  launches and cancels what is defined (templates, workflows, checks,
+  schedules turned on or off); `diagnostic` also runs ad-hoc commands of the
+  modules in `[mcp] adhoc_modules`, which change nothing, without become;
+  `autonomous` is as `assisted` for now; `administrator` gets whatever the
+  role allows: ad-hoc commands, changes to templates, inventories and the
+  rest, files, projects, credentials, deletes. Only `observer` and
+  `assisted` are enabled as installed. The backend refuses what is outside
+  the profile, and `fleet-mcp` started by hand gets the default one.
 - Every start of a session is in the audit log (`chat.start`), and so is
   everything the assistant changes, as the user's own action with `mcp:` and
-  the name of the agent in the "via" column.
+  the name of the agent in the "via" column and the profile beside it.
 - The agent runs while the page is open and ends when it is closed or
   reloaded. Conversations are kept by the agent in the user's home and can be
   continued from the page.

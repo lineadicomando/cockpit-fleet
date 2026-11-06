@@ -141,7 +141,8 @@ class CommandsTest(Base):
 
     def test_start_gives_the_command_line_and_leaves_a_record(self):
         data = self.ok("chat.start", {"agent": "claude"}, role="viewer")
-        self.assertEqual(data, {"agent": "claude", "command": ["/opt/agent/bin/acp", "--stdio"]})
+        self.assertEqual(data, {"agent": "claude", "profile": "assisted",
+                                "command": ["/opt/agent/bin/acp", "--stdio"]})
         row = self.ctx().conn.execute("SELECT * FROM audit").fetchone()
         self.assertEqual((row["command"], row["outcome"], row["user"]),
                          ("chat.start", "ok", "anna"))
@@ -151,6 +152,19 @@ class CommandsTest(Base):
         self.assertEqual(data["command"][0], "/opt/agent/bin/claude")
         self.config = replace(self.config, chat_agents=(ChatAgent("plain", ("/bin/sh",)),))
         self.assertEqual(self.code("chat.start", {"agent": "plain", "terminal": True}), "conflict")
+
+    def test_a_profile_must_be_enabled(self):
+        self.assertEqual(self.ok("chat.start", {"agent": "claude", "profile": "observer"},
+                                 role="viewer")["profile"], "observer")
+        for profile in ("administrator", "nope"):
+            self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": profile}),
+                             "conflict")
+        self.config = replace(self.config, chat_profiles=("administrator",),
+                              chat_default_profile="administrator")
+        self.assertEqual(self.ok("chat.start", {"agent": "claude"})["profile"], "administrator")
+        agents = self.ok("chat.agents")
+        self.assertEqual((agents["profiles"], agents["default_profile"]),
+                         (["administrator"], "administrator"))
 
     def test_unknown_agent(self):
         self.assertEqual(self.code("chat.start", {"agent": "nope"}), "not_found")
@@ -193,8 +207,9 @@ class LauncherTest(unittest.TestCase):
             started.update(command=command, env=env)
             return Child()
 
-        status, said = self.run_it({"ok": True, "data": {"agent": "claude",
-                                                         "command": ["/opt/agent/bin/acp"]}}, popen)
+        answer = {"ok": True, "data": {"agent": "claude", "profile": "assisted",
+                                       "command": ["/opt/agent/bin/acp"]}}
+        status, said = self.run_it(answer, popen)
         self.assertEqual(status, 7)
         self.assertEqual(self.asked, [("chat.start", {"agent": "claude"})])
         self.assertEqual(started["command"], ["/opt/agent/bin/acp"])
@@ -203,6 +218,11 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(said[0]["params"]["mcp"]["command"],
                          "/usr/libexec/cockpit-fleet/fleet-mcp")
         self.assertTrue(said[0]["params"]["cwd"].startswith("/"))
+        self.assertEqual(said[0]["params"]["mcp"]["args"], ["--profile", "assisted"])
+        self.assertEqual(said[0]["params"]["profile"], "assisted")
+        answer["data"]["profile"] = "observer"
+        self.run_it(answer, popen, ("fleet-chat", "--profile", "observer", "claude"))
+        self.assertEqual(self.asked, [("chat.start", {"agent": "claude", "profile": "observer"})])
 
     def test_a_refusal_reaches_the_page_and_nothing_is_started(self):
         def popen(command, env):
@@ -225,7 +245,10 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(said[0]["params"]["code"], "unavailable")
 
     def test_wants_one_name(self):
-        self.assertEqual(self.run_it(None, argv=("fleet-chat",))[0], 2)
+        for argv in (("fleet-chat",), ("fleet-chat", "--profile", "claude"),
+                     ("fleet-chat", "claude", "--profile", "x"),
+                     ("fleet-chat", "--profile", "", "claude")):
+            self.assertEqual(self.run_it(None, argv=argv)[0], 2, argv)
         self.assertEqual(self.asked, [])
 
 
@@ -239,7 +262,8 @@ class TerminalLauncherTest(unittest.TestCase):
 
         def call(name, params):
             seen["asked"] = (name, params)
-            return {"ok": True, "data": {"agent": "claude", "command": list(AGENT.terminal)}}
+            return {"ok": True, "data": {"agent": "claude", "profile": "observer",
+                                         "command": list(AGENT.terminal)}}
 
         class Done:
             returncode = 0
@@ -254,15 +278,17 @@ class TerminalLauncherTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, home)
         with mock.patch.object(chat_agent.signal, "signal"), \
                 mock.patch.dict(os.environ, {"HOME": home, "XDG_STATE_HOME": ""}):
-            status = chat_agent.main(["fleet-chat", "--terminal", "claude"], call=call, run=run)
+            status = chat_agent.main(["fleet-chat", "--terminal", "--profile", "observer",
+                                      "claude"], call=call, run=run)
             again = chat_agent.workspace()
         self.assertEqual(status, 0)
-        self.assertEqual(seen["asked"], ("chat.start", {"agent": "claude", "terminal": True,
-                                                        "via": "cli"}))
+        self.assertEqual(seen["asked"], ("chat.start", {"agent": "claude", "profile": "observer",
+                                                        "terminal": True, "via": "cli"}))
         self.assertEqual(seen["argv"][3:5], ["--tools", ""])
         self.assertEqual(seen["argv"][-1], chat_agent.INSTRUCTIONS)
         self.assertEqual(seen["config"], {"mcpServers": {"cockpit-fleet": {
-            "type": "stdio", "command": "/usr/libexec/cockpit-fleet/fleet-mcp", "args": []}}})
+            "type": "stdio", "command": "/usr/libexec/cockpit-fleet/fleet-mcp",
+            "args": ["--profile", "observer"]}}})
         self.assertEqual(seen["mode"], 0o700)
         self.assertFalse(seen["path"].exists())
         self.assertEqual(seen["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"], "false")
