@@ -166,10 +166,10 @@ test/integration/upload.sh           # a project uploaded as an archive, hostile
 test/integration/galaxy.sh           # collections from a requirements file (IT_GALAXY_NET=yes for git); WIPES
 test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
 test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
-test/integration/mcp.sh              # fleet-mcp: tools by role, ceiling, via in the audit, forced-command key; WIPES
+test/integration/mcp.sh              # fleet-mcp: tools by role, ceiling, profiles, autonomy, an agent's ad-hoc confirmed, via in the audit, forced-command key; WIPES
 test/integration/chat.sh             # fleet-chat with fake-agent.py: start, limit on sessions, tools by role; WIPES
 test/integration/cli.sh              # fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin; WIPES
-test/integration/workflows.sh        # workflows: an approval at a step, set_stats passed on, resume, cancel; WIPES
+test/integration/workflows.sh        # workflows: an approval at a step, a confirmation by who launched it, set_stats passed on, resume, cancel; WIPES
 test/integration/schedules.sh        # the timer, ten schedules on one minute, missed times, overlap (about 5 min); WIPES
 test/integration/notify.sh           # notifications to stand-ins of the four channels, a retry by the tick (about 3 min); WIPES
 test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about, a cycle falling behind (about 10 min); WIPES
