@@ -16,16 +16,12 @@ origin/main..`).
 To resume: `git status`; `make check`. Each backend module says what it is
 in its docstring; `cli.py` is the registry, `db.py` the schema (25).
 
-Tests on 6 November: unit tests (577 backend, 133 frontend); the page
-in a browser on `deb13` with `fake-agent.py` (choice of profile, risks
-accepted, a question of the administrator, instructions, a draft
-reviewed, edited and merged); `ct-test` of
-`files negative mcp` and `chat cli mcp` on AlmaLinux. Before, on 5–6
-November: `mcp chat cli adhoc negative workflows roles runs` on AlmaLinux
-and Debian. Not Fedora; the page not yet with the adapter and its model. Last
-full `ct-test`: 1 November, on the three (`cmdb` fails on Fedora only in a
-container: netavark "invalid namespace path"). Run two distributions'
-`ct-test` one after the other, not together.
+Tests on 6 November: unit tests (582 backend, 133 frontend); full
+`ct-test` on the three, all passed but `cmdb` on Fedora (only in a
+container: netavark "invalid namespace path", as on 1 November); the page
+in a browser on `deb13` with `fake-agent.py`. Not yet with the adapter and
+its model. Run two distributions' `ct-test` one after the other, not
+together.
 
 ## Phase 12 — Profiles of the assistant
 
@@ -88,10 +84,13 @@ Steps, each tested before the next:
       person. To try with Claude's CLI: that `--allowedTools` works beside
       `--permission-mode manual`.
 - [x] Docs.
-- [ ] Integration: `chat.sh` by profile, drafts in `mcp.sh`; `make ct-test`
-      on the three; the page in a browser on a VM with the adapter and its
-      model; then the acceptance of the phase in `architecture.md`, its
-      decisions into `decisions.md`.
+- [x] Integration scripts: `chat.sh` by profile (page and terminal),
+      drafts in `mcp.sh`; `make ct-test` on the three.
+- [ ] The page in a browser on a VM with the adapter and its model (the
+      user logs in to Claude there), `fleet assistant --profile` with
+      Claude's CLI (`--allowedTools` beside `--permission-mode manual`);
+      then the acceptance of the phase in `architecture.md`, its decisions
+      into `decisions.md`.
 
 ## Future
 

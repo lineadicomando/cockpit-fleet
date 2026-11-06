@@ -146,6 +146,13 @@ expect_eq "the acceptance is in the audit trail" \
     "[('itadmin', 'ok', '{\"profile\": \"autonomous\"}')]"
 expect_eq "and it is not asked again" \
     "$(assistant itadmin "--profile autonomous" | grep -c -e 'steer the assistant' -e 'launches-unasked=True')" 1
+out=$(printf '%s\n' "$INIT" | sudo -u itoperator "$CHAT" --profile autonomous fake 2>&1)
+expect_eq "for the page too, a profile whose risks were not accepted does not start" \
+    "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" not_accepted
+out=$(printf '%s\n' "$INIT" | sudo -u itoperator "$CHAT" --profile observer fake 2>&1)
+expect_eq "one that needs no acceptance starts, fleet-mcp in it" \
+    "$(line "$out" 'm.get("method") == "_fleet/ready"' '(m["params"]["profile"], m["params"]["mcp"]["args"])')" \
+    "('observer', ['--profile', 'observer'])"
 expect_eq "it wants a terminal" "$(sudo -u itadmin fleet assistant </dev/null 2>&1 | grep -c 'needs a terminal')" 1
 
 # --- what cannot be started -------------------------------------------------------------

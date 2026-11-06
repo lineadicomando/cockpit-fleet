@@ -148,6 +148,46 @@ expect_eq "the agent reads that it is not done" "$(answer "$out" 2 'a["result"][
 expect_eq "and has no tool to confirm it" "$(answer "$out" 3 'a["error"]["code"] if "error" in a else a["result"]["isError"]')" -32602
 expect_eq "the person confirms it" "$(get "$(admin approval.approve "{\"id\": \"$adhoc_run\"}")" 'a["data"]["approval"]["decided_by"]')" itadmin
 expect_run "and it runs" "$adhoc_run" 90 successful
+# Drafts: what an agent writes in a project written in Fleet waits for a person.
+managed=$(get "$(admin project.create '{"name": "drafted", "kind": "managed"}')" 'a["data"]["id"]')
+admin file.write "{\"id\": \"$managed\", \"path\": \"site.yml\", \"content\": \"- hosts: all\\n  tasks: []\\n\", \"expected\": \"\"}" > /dev/null
+main_sha=$(get "$(admin file.read "{\"id\": \"$managed\", \"path\": \"site.yml\"}")" 'a["data"]["sha256"]')
+out=$(mcp itadmin "$(call 2 file_write "{\"id\": \"$managed\", \"path\": \"agent.yml\", \"content\": \"- hosts: all\\n  gather_facts: false\\n  tasks: []\\n\", \"expected\": \"\"}")" \
+    "$(call 3 draft_merge "{\"id\": \"$managed\", \"draft\": \"x\", \"revision\": \"x\"}")")
+draft=$(answer "$out" 2 'a["result"]["structuredContent"]["draft"]')
+expect_eq "a file an agent writes goes to a draft of its session" "$(printf '%s' "$draft" | grep -c '^[0-9a-f]\{16\}$')" 1
+expect_eq "which it has no tool to merge" "$(answer "$out" 3 'a["error"]["code"] if "error" in a else a["result"]["isError"]')" -32602
+expect_eq "main does not have it" \
+    "$(get "$(admin file.list "{\"id\": \"$managed\"}")" '[f["path"] for f in a["data"]["files"]]')" "['site.yml']"
+expect_eq "the person sees the draft" \
+    "$(get "$(admin draft.list)" '[(d["name"], d["draft"], d["changes"], d["conflicts"]) for d in a["data"]["drafts"]]')" \
+    "[('drafted', '$draft', 1, 0)]"
+diff=$(admin draft.diff "{\"id\": \"$managed\", \"draft\": \"$draft\"}")
+check_run=$(get "$diff" '[c["run_id"] for c in a["data"]["checks"] if c["path"] == "agent.yml"][0]')
+expect_run "the playbook of the draft is checked" "$check_run" 90 successful
+expect_eq "what it changes, against what was reviewed" \
+    "$(get "$diff" '[(c["path"], c["status"]) for c in a["data"]["changes"]], "+  gather_facts: false" in a["data"]["text"]')" \
+    "[('agent.yml', 'added')] True"
+revision=$(get "$diff" 'a["data"]["revision"]')
+expect_eq "a revision other than the one reviewed is refused" \
+    "$(get "$(admin draft.merge "{\"id\": \"$managed\", \"draft\": \"$draft\", \"revision\": \"$main_sha\"}")" 'a["error"]["code"]')" conflict
+expect_eq "the person merges it, and the draft goes" \
+    "$(get "$(admin draft.merge "{\"id\": \"$managed\", \"draft\": \"$draft\", \"revision\": \"$revision\"}")" 'a["data"]["left"], a["data"]["discarded"]')" "0 True"
+expect_eq "main has it now" \
+    "$(get "$(admin file.list "{\"id\": \"$managed\"}")" 'sorted(f["path"] for f in a["data"]["files"])')" "['agent.yml', 'site.yml']"
+expect_eq "the merge is the person's, in the audit log" \
+    "$(get "$(admin audit.list)" '[(e["user"], e["outcome"], e["via"]) for e in a["data"]["entries"] if e["command"] == "draft.merge"][0]')" \
+    "('itadmin', 'ok', '')"
+out=$(mcp itadmin "$(call 2 file_write "{\"id\": \"$managed\", \"path\": \"site.yml\", \"content\": \"- hosts: web\\n  tasks: []\\n\", \"expected\": \"$main_sha\"}")")
+draft=$(answer "$out" 2 'a["result"]["structuredContent"]["draft"]')
+admin file.write "{\"id\": \"$managed\", \"path\": \"site.yml\", \"content\": \"- hosts: db\\n  tasks: []\\n\", \"expected\": \"$main_sha\"}" > /dev/null
+diff=$(admin draft.diff "{\"id\": \"$managed\", \"draft\": \"$draft\"}")
+expect_eq "a file changed in main too is a conflict" "$(get "$diff" '[c["conflict"] for c in a["data"]["changes"]]')" "[True]"
+expect_eq "which is not merged" \
+    "$(get "$(admin draft.merge "{\"id\": \"$managed\", \"draft\": \"$draft\", \"revision\": \"$(get "$diff" 'a["data"]["revision"]')\"}")" 'a["error"]["code"]')" conflict
+admin draft.discard "{\"id\": \"$managed\", \"draft\": \"$draft\"}" > /dev/null
+expect_eq "a draft discarded is gone, main as the person left it" \
+    "$(get "$(admin draft.list)" 'len(a["data"]["drafts"])') $(get "$(admin file.read "{\"id\": \"$managed\", \"path\": \"site.yml\"}")" '"hosts: db" in a["data"]["content"]')" "0 True"
 out=$(mcp itoperator "$LIST")
 expect_eq "the user's own role still holds" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" False
 PROFILE=autonomous
