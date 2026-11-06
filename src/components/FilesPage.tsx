@@ -36,6 +36,7 @@ import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./c
 import { FileTree } from "./FileTree.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { PathInput } from "./PathInput.tsx";
+import { DraftReview, PendingDrafts } from "./Drafts.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
 import { Alert, FileUpload, Modal, SearchInput, Spinner, TabPanel, Tabs } from "./pf.tsx";
 
@@ -181,20 +182,21 @@ function CommitEntry({ id, commit, onRestore }: { id: string; commit: Commit; on
     );
 }
 
-function HistoryModal({ id, path, editable, onRestored, onClose }: {
+function HistoryModal({ id, draft, path, editable, onRestored, onClose }: {
     id: string;
+    draft: Record<string, string>;
     path?: string;
     editable: boolean;
     onRestored: () => void;
     onClose: () => void;
 }) {
     const { t } = useTranslation();
-    const history = useLoad(() => call<{ commits: Commit[] }>("file.history", path ? { id, path } : { id }));
+    const history = useLoad(() => call<{ commits: Commit[] }>("file.history", path ? { id, path, ...draft } : { id, ...draft }));
     const [problem, setProblem] = useState<string | null>(null);
     const restore = async (commit: Commit) => {
         setProblem(null);
         try {
-            await call("file.restore", { id, path, revision: commit.revision });
+            await call("file.restore", { id, path, revision: commit.revision, ...draft });
             onRestored();
             onClose();
         } catch (ex) {
@@ -296,16 +298,21 @@ type Dialog =
 
 // The files of one project: shown for any project, edited when the project is
 // written here. Also those of an inventory written here, whose id starts with i.
-export function FilesPage({ id }: { id: string }) {
+// With draft, those of a draft an agent left there, edited before it is merged.
+export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
     const { t } = useTranslation();
     const can = useCan();
     const ofInventory = id.startsWith("i");
+    // What every call about the files adds, to read and write the draft.
+    const inDraft = useMemo((): Record<string, string> => (draft ? { draft } : {}), [draft]);
+    const keptKey = draft ? `${id}:${draft}` : id;
+    const [reviewing, setReviewing] = useState(false);
     // Whose files they are: a project, or an inventory with no kind of project.
     const owners = useLoad<{ id: string; name: string; kind: Project["kind"] | Inventory["kind"] }[]>(() => ofInventory
         ? call<{ inventories: Inventory[] }>("inventory.list").then(data => data.inventories)
         : call<{ projects: Project[] }>("project.list").then(data => data.projects));
-    const list = useLoad(() => call<ProjectFiles>("file.list", { id }));
-    const saved = kept.get(id);
+    const list = useLoad(() => call<ProjectFiles>("file.list", { id, ...inDraft }));
+    const saved = kept.get(keptKey);
     const [tabs, setTabs] = useState<OpenFile[]>(saved?.tabs ?? []);
     const [current, setCurrent] = useState<string | null>(saved?.current ?? null);
     const [open, setOpen] = useState<Set<string> | null>(null);
@@ -328,7 +335,7 @@ export function FilesPage({ id }: { id: string }) {
     const tab = tabs.find(candidate => candidate.path === current) ?? null;
     const anyDirty = tabs.some(isDirty);
 
-    useEffect(() => { kept.set(id, { tabs, current }); }, [id, tabs, current]);
+    useEffect(() => { kept.set(keptKey, { tabs, current }); }, [keptKey, tabs, current]);
 
     // Leaving the page with changes not saved asks first.
     useEffect(() => {
@@ -353,7 +360,7 @@ export function FilesPage({ id }: { id: string }) {
 
     async function read(path: string) {
         try {
-            const loaded = await call<FileContent>("file.read", { id, path });
+            const loaded = await call<FileContent>("file.read", { id, path, ...inDraft });
             patchTab(path, { file: loaded, text: loaded.content, error: null });
         } catch (ex) {
             patchTab(path, { error: message(ex) });
@@ -389,7 +396,7 @@ export function FilesPage({ id }: { id: string }) {
     // One change of the files, all or nothing, on the revision listed.
     async function apply(operations: object[], message?: string): Promise<ChangeResult> {
         const done = await call<ChangeResult>("file.change", {
-            id, operations, revision: list.data?.revision ?? "", ...(message ? { message } : {}),
+            id, operations, revision: list.data?.revision ?? "", ...(message ? { message } : {}), ...inDraft,
         });
         setSelected(new Set());
         list.reload();
@@ -441,7 +448,7 @@ export function FilesPage({ id }: { id: string }) {
         const operations = [];
         for (const file of chosen) {
             const path = into ? `${into}/${file.name}` : file.name;
-            const expected = replace.includes(path) ? (await call<FileContent>("file.read", { id, path })).sha256 : "";
+            const expected = replace.includes(path) ? (await call<FileContent>("file.read", { id, path, ...inDraft })).sha256 : "";
             operations.push({ op: "write", path, data: await fileBase64(file), expected });
         }
         await apply(operations, chosen.length === 1 ? undefined : t("Upload {{number}} files", { number: chosen.length }));
@@ -473,7 +480,7 @@ export function FilesPage({ id }: { id: string }) {
         setProblem(null);
         try {
             const done = await call<{ sha256: string; check_run_id: string | null }>(
-                "file.write", { id, path, content: text, expected: tab.file.sha256, message: note });
+                "file.write", { id, path, content: text, expected: tab.file.sha256, message: note, ...inDraft });
             patchTab(path, { file: { ...tab.file, content: text, sha256: done.sha256 } });
             setNote("");
             setCheckId(done.check_run_id);
@@ -486,7 +493,7 @@ export function FilesPage({ id }: { id: string }) {
 
     async function check() {
         if (!current) return;
-        await attempt(async () => setCheckId((await call<{ run_id: string }>("file.check", { id, path: current })).run_id));
+        await attempt(async () => setCheckId((await call<{ run_id: string }>("file.check", { id, path: current, ...inDraft })).run_id));
     }
 
     function toggle(path: string) {
@@ -514,7 +521,7 @@ export function FilesPage({ id }: { id: string }) {
                 { title: t("New file here"), onClick: () => setDialog({ kind: "new-file", in: node.path }) },
                 { title: t("New folder here"), onClick: () => setDialog({ kind: "new-folder", in: node.path }) },
                 { title: t("Upload files here"), onClick: () => pickFiles(node.path) },
-                { title: t("Import an archive here"), onClick: () => setDialog({ kind: "import", into: node.path }) },
+                ...(draft ? [] : [{ title: t("Import an archive here"), onClick: () => setDialog({ kind: "import", into: node.path }) }]),
                 { isSeparator: true },
             );
         }
@@ -525,7 +532,7 @@ export function FilesPage({ id }: { id: string }) {
                 { title: t("Copy to…"), onClick: () => setDialog({ kind: "copy", paths: selected.has(node.path) ? [...selected] : [node.path] }) },
             );
         }
-        items.push({ title: isDirectory ? t("Download as an archive") : t("Download"), onClick: () => download(node.path) });
+        if (!draft) items.push({ title: isDirectory ? t("Download as an archive") : t("Download"), onClick: () => download(node.path) });
         if (editable && !isDirectory) items.push({ title: t("Changes"), onClick: () => setDialog({ kind: "history", path: node.path }) });
         if (editable) {
             items.push({ isSeparator: true },
@@ -541,14 +548,20 @@ export function FilesPage({ id }: { id: string }) {
 
     return (
         <>
-            <SectionHeader title={project?.name ?? t("Files")}>
-                {editable && <Button variant="primary" onClick={() => setDialog({ kind: "new-file", in: currentDirectory })}>{t("New file")}</Button>}
+            <SectionHeader title={project ? (draft ? t("{{name}}: a draft", { name: project.name }) : project.name) : t("Files")}>
+                {draft && <Button variant="primary" onClick={() => setReviewing(true)}>{t("Review and merge")}</Button>}
+                {editable && <Button variant={draft ? "secondary" : "primary"} onClick={() => setDialog({ kind: "new-file", in: currentDirectory })}>{t("New file")}</Button>}
                 {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "new-folder", in: currentDirectory })}>{t("New folder")}</Button>}
                 {editable && <Button variant="secondary" onClick={() => pickFiles("")}>{t("Upload files")}</Button>}
-                {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "import", into: "" })}>{t("Import an archive")}</Button>}
+                {editable && !draft && <Button variant="secondary" onClick={() => setDialog({ kind: "import", into: "" })}>{t("Import an archive")}</Button>}
                 {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "history" })}>{t("All changes")}</Button>}
-                <Button variant="secondary" onClick={() => download("")}>{t("Download all")}</Button>
+                {!draft && <Button variant="secondary" onClick={() => download("")}>{t("Download all")}</Button>}
                 {can("module.help") && !ofInventory && <ModuleHelpButton />}
+                {draft && (
+                    <Button variant="secondary" onClick={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go([ofInventory ? "inventories" : "projects", id]))}>
+                        {t("Back to main")}
+                    </Button>
+                )}
                 {ofInventory
                     ? <Button variant="secondary" onClick={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go(["inventories"]))}>{t("All inventories")}</Button>
                     : <Button variant="secondary" onClick={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go(["projects"]))}>{t("All projects")}</Button>}
@@ -563,6 +576,13 @@ export function FilesPage({ id }: { id: string }) {
                             ? t("These files come from an uploaded archive: to change them, upload another one.")
                             : t("These files are a directory of this server: they are changed there.")} />
             )}
+            {draft && (
+                <Alert variant="info" isInline style={{ marginBottom: "1rem" }}
+                    title={t("This is a draft the assistant wrote: no run uses it until it is merged into main.")}>
+                    {t("Changes saved here go to the draft, under your name. Syntax checks check the draft.")}
+                </Alert>
+            )}
+            {!draft && editable && can("draft.list") && <PendingDrafts id={id} onChanged={list.reload} />}
             {problem && <Alert variant="danger" isInline title={problem} style={{ marginBottom: "1rem" }} />}
             {importId && <div style={{ marginBottom: "1rem" }}><ImportResult key={importId} id={importId} onDone={list.reload} /></div>}
             <ListState loaded={list} isEmpty={data => data.files.length === 0 && data.directories.length === 0 && !editable}
@@ -621,7 +641,7 @@ export function FilesPage({ id }: { id: string }) {
                                                     <Flex gap={{ default: "gapSm" }}>
                                                         {(ofInventory ? !tab.file?.binary : isYaml(tab.path)) && <Button variant="secondary" onClick={check} isDisabled={!tab.file || isDirty(tab)}>{t("Check syntax")}</Button>}
                                                         {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "history", path: tab.path })}>{t("Changes")}</Button>}
-                                                        <Button variant="secondary" onClick={() => download(tab.path)}>{t("Download")}</Button>
+                                                        {!draft && <Button variant="secondary" onClick={() => download(tab.path)}>{t("Download")}</Button>}
                                                         <Button variant="secondary" onClick={() => guardClose([tab.path])}>{t("Close")}</Button>
                                                     </Flex>
                                                 </Flex>
@@ -667,7 +687,7 @@ export function FilesPage({ id }: { id: string }) {
                             await apply([{ op: "mkdir", path: next }]);
                             setOpen(previous => new Set([...(previous ?? []), ...ancestors(next), next]));
                         } else {
-                            await call("file.write", { id, path: next, content: "", expected: "" });
+                            await call("file.write", { id, path: next, content: "", expected: "", ...inDraft });
                             list.reload();
                             openFile(next);
                         }
@@ -708,12 +728,16 @@ export function FilesPage({ id }: { id: string }) {
                 <ImportModal id={id} into={dialog.into} onStarted={setImportId} onClose={() => setDialog(null)} />
             )}
             {dialog?.kind === "history" && (
-                <HistoryModal id={id} path={dialog.path} editable={editable} onClose={() => setDialog(null)}
+                <HistoryModal id={id} draft={inDraft} path={dialog.path} editable={editable} onClose={() => setDialog(null)}
                     onRestored={() => {
                         list.reload();
                         const restored = dialog.path;
                         tabs.filter(candidate => restored && isInside(candidate.path, restored)).forEach(candidate => read(candidate.path));
                     }} />
+            )}
+            {reviewing && (
+                <DraftReview id={id} draft={draft} onClose={() => setReviewing(false)}
+                    onDone={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go([ofInventory ? "inventories" : "projects", id]))} />
             )}
             {dialog?.kind === "discard" && (
                 <FormModal title={t("Discard the changes?")} submitLabel={t("Discard")} isDanger variant={ModalVariant.small}

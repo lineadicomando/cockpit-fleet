@@ -38,8 +38,57 @@ export interface ChatInfo {
     // How far this machine is from a chat with Claude, and the line that goes the rest of the way.
     guide: ChatGuide;
     max_role: Role;
+    // The profiles of the assistant enabled, the one named by default, and
+    // those whose risks the user has yet to accept (chat.accept).
+    profiles: string[];
+    default_profile: string;
+    to_accept: string[];
+    // What holds an agent in the profile autonomous.
+    autonomous_runs: number;
+    autonomous_dry_run: boolean;
     max_sessions: number;
     open_sessions: number;
+}
+
+// A draft an agent left in a managed project or inventory (draft.list).
+export interface DraftInfo {
+    id: string;
+    name: string;
+    kind: "project" | "inventory";
+    draft: string;
+    revision: string;
+    author: string;
+    time: number;
+    changes: number;
+    conflicts: number;
+}
+
+export interface DraftChange {
+    path: string;
+    status: "added" | "changed" | "deleted";
+    directory: boolean;
+    conflict: boolean;
+}
+
+export interface DraftCheck {
+    run_id: string;
+    path: string;
+    status: RunStatus;
+    revision: string;
+    // Whether it checked the draft as it is now.
+    current: boolean;
+    lint?: string | null;
+}
+
+export interface DraftDiff {
+    draft: string;
+    revision: string;
+    author: string;
+    time: number;
+    changes: DraftChange[];
+    text: string;
+    cut: boolean;
+    checks: DraftCheck[];
 }
 
 export type CheckStatus = "ok" | "warn" | "fail";

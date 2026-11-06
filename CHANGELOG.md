@@ -61,6 +61,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
   `/etc/cockpit-fleet/assistant.md` if an administrator writes one (up to
   8 kB). `chat.start` gives them, as one text and by layer, to the page and
   to `fleet assistant` alike.
+- The assistant's page: the profile chosen at the start, with what it may
+  do; for `diagnostic`, `autonomous` and `administrator`, their risks
+  accepted once by each user (`chat.accept`, recorded in the audit log;
+  `chat.start` refuses with `not_accepted` until then). The profile is
+  shown in the header and in each question; questions follow the class of
+  the tool, "always" trusts a class for the conversation, and ad-hoc
+  commands, changes and files are asked about every time. The
+  instructions the assistant was given can be read there. Drafts waiting
+  for review are told on the page and on the files of their project, to be
+  reviewed, merged in whole or in part, discarded, or edited first.
 
 ### Fixed
 

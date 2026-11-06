@@ -46,6 +46,12 @@ class Conflict(FleetError):
     code = "conflict"
 
 
+class NotAccepted(Conflict):
+    """A profile of the assistant whose risks the caller has not accepted."""
+
+    code = "not_accepted"
+
+
 class Unavailable(FleetError):
     """Something the command needs is missing or broken on this machine."""
 

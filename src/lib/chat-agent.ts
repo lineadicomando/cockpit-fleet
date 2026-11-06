@@ -12,10 +12,11 @@ interface Failure {
     problem?: string | null;
 }
 
-// The page names the agent and nothing else: fleet-chat gets its command line
-// from the backend. The channel closes with the page, and the agent with it.
-function spawnAgent(agent: string, onData: (text: string) => void, onExit: (error: string) => void): Transport {
-    const process = cockpit.spawn([FLEET_CHAT, agent], { err: "message" });
+// The page names the agent and its profile and nothing else: fleet-chat gets
+// its command line from the backend, which says whether the profile may be
+// used. The channel closes with the page, and the agent with it.
+function spawnAgent(agent: string, profile: string, onData: (text: string) => void, onExit: (error: string) => void): Transport {
+    const process = cockpit.spawn([FLEET_CHAT, ...(profile ? ["--profile", profile] : []), agent], { err: "message" });
     process.stream(onData);
     process.then(
         () => onExit(""),
@@ -31,4 +32,4 @@ function spawnAgent(agent: string, onData: (text: string) => void, onExit: (erro
     };
 }
 
-export const chat = new Chat(spawnAgent, async () => (await call<{ tools: ToolInfo[] }>("mcp.tools")).tools);
+export const chat = new Chat(spawnAgent, async profile => (await call<{ tools: ToolInfo[] }>("mcp.tools", profile ? { profile } : {})).tools);

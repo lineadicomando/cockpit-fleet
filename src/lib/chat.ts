@@ -9,7 +9,37 @@ export interface ToolInfo {
     name: string;
     description: string;
     readOnly: boolean;
+    // What it lets an agent do: read, run, adhoc, adhoc-diagnostic, config or code.
+    class: string;
     inputSchema: { properties?: Record<string, { description?: string }> };
+}
+
+// One layer of the instructions the agent was given, as chat.start composed them.
+export interface Layer {
+    layer: string;
+    source: string;
+    text: string;
+}
+
+// How the page treats a call: made with no question, asked about with
+// "always" for its class in the conversation, or asked about every time.
+export type Question = "none" | "ask" | "every";
+
+// The classes whose calls are asked about every time: ad-hoc commands,
+// changes of what is defined, files. None of them is ever trusted for a
+// conversation, nor made without a question.
+const ALWAYS_ASKED = ["adhoc", "config", "code"];
+
+// The questions of a profile, a floor the backend holds again: what a
+// profile does not allow is refused there whatever is answered here.
+export function question(profile: string, tool: ToolInfo | null): Question {
+    if (!tool) return "every";
+    if (tool.readOnly || tool.class === "read") return "none";
+    if (ALWAYS_ASKED.includes(tool.class)) return "every";
+    if (profile === "diagnostic" && tool.class === "adhoc-diagnostic") return "none";
+    // The backend holds an autonomous agent to its limits instead.
+    if (profile === "autonomous" && tool.class === "run") return "none";
+    return "ask";
 }
 
 export interface SessionInfo {
@@ -24,6 +54,8 @@ export interface Ask {
     // The tool of ours it is, when it is one we know.
     tool: ToolInfo | null;
     input: unknown;
+    // Whether "always" may be answered, for the class of the tool.
+    always: boolean;
 }
 
 export type Answer = "once" | "always" | "refuse";
@@ -31,6 +63,10 @@ export type Answer = "once" | "always" | "refuse";
 export interface ChatState {
     phase: "idle" | "starting" | "ready" | "ended";
     agent: string;
+    // The profile of the assistant of the session, as the backend said it.
+    profile: string;
+    // The instructions the agent was given, layer by layer.
+    layers: Layer[];
     // Why the agent ended, when it was not asked to.
     error: string;
     needsLogin: boolean;
@@ -48,16 +84,20 @@ export interface Transport {
     close(): void;
 }
 
-// Starts the agent; onExit says why it ended, or "" when it was closed.
-export type Spawn = (agent: string, onData: (text: string) => void, onExit: (error: string) => void) => Transport;
+// Starts the agent in a profile; onExit says why it ended, or "" when it was closed.
+export type Spawn = (agent: string, profile: string, onData: (text: string) => void, onExit: (error: string) => void) => Transport;
+
+// The tools of an agent in a profile.
+export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 
 const IDLE: ChatState = {
-    phase: "idle", agent: "", error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [],
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [],
 };
 
 interface Waiting {
     ask: Ask;
-    name: string;
+    // The class "always" would trust, empty when it may not be answered.
+    trusts: string;
     resolve: (answer: Answer | null) => void;
 }
 
@@ -69,7 +109,7 @@ export class Chat {
     private state: ChatState = IDLE;
     private readonly listeners = new Set<() => void>();
     private readonly spawn: Spawn;
-    private readonly loadTools: () => Promise<ToolInfo[]>;
+    private readonly loadTools: LoadTools;
     private transport: Transport | null = null;
     private connection: Connection | null = null;
     private tools = new Map<string, ToolInfo>();
@@ -78,10 +118,11 @@ export class Chat {
     // fleetctl composed for it, added to the agent's own.
     private setup: { cwd: string; mcp: unknown; instructions: string } | null = null;
     private canList = false;
+    // The classes of tools trusted for the conversation.
     private always = new Set<string>();
     private waiting: Waiting[] = [];
 
-    constructor(spawn: Spawn, loadTools: () => Promise<ToolInfo[]>) {
+    constructor(spawn: Spawn, loadTools: LoadTools) {
         this.spawn = spawn;
         this.loadTools = loadTools;
     }
@@ -98,20 +139,28 @@ export class Chat {
         for (const listener of this.listeners) listener();
     }
 
-    start(agent: string): void {
+    start(agent: string, profile: string): void {
         if (this.state.phase === "starting" || this.state.phase === "ready") return;
         this.state = IDLE;
-        this.set({ phase: "starting", agent });
+        this.set({ phase: "starting", agent, profile });
         this.always.clear();
+        this.tools = new Map();
         this.setup = null;
-        const transport = this.spawn(agent, text => this.connection?.feed(text), error => this.ended(transport, error));
+        const transport = this.spawn(agent, profile, text => this.connection?.feed(text), error => this.ended(transport, error));
         this.transport = transport;
         this.connection = new Connection(
             line => transport.send(line),
             (method, params) => this.notified(method, params),
             (method, params) => this.requested(method, params),
         );
-        this.loadTools().then(tools => { this.tools = new Map(tools.map(tool => [tool.name, tool])); }, () => undefined);
+    }
+
+    private async reloadTools(): Promise<void> {
+        try {
+            this.tools = new Map((await this.loadTools(this.state.profile)).map(tool => [tool.name, tool]));
+        } catch {
+            // A tool not known is asked about every time.
+        }
     }
 
     // Ends the agent. The conversation stays where the agent keeps it.
@@ -150,6 +199,12 @@ export class Chat {
                 mcp: { ...(isObject(params.mcp) ? params.mcp : {}), name: MCP_SERVER },
                 instructions: typeof params.instructions === "string" ? params.instructions : "",
             };
+            const layers = (Array.isArray(params.layers) ? params.layers : []).filter(isObject).map(one => ({
+                layer: String(one.layer ?? ""), source: String(one.source ?? ""), text: String(one.text ?? ""),
+            }));
+            // The profile the backend settled on: the default one when none was named.
+            this.set({ profile: typeof params.profile === "string" && params.profile ? params.profile : this.state.profile, layers });
+            this.reloadTools();
             this.initialize().catch(ex => { this.fail(ex); this.stop(); });
         } else if (method === "_fleet/error") {
             this.set({ phase: "ended", error: String(params.message ?? "") });
@@ -253,19 +308,15 @@ export class Chat {
     private async requested(method: string, params: Record<string, unknown>): Promise<unknown> {
         if (method !== "session/request_permission") throw new AcpError(-32601, `method not found: ${method}`);
         const name = fleetTool(params.toolCall);
-        if (name && !this.tools.has(name)) {
-            // A template made after the chat began is a tool the page has not seen.
-            try {
-                this.tools = new Map((await this.loadTools()).map(tool => [tool.name, tool]));
-            } catch {
-                // Asked about as a tool that is not known.
-            }
-        }
+        // A template made after the chat began is a tool the page has not seen.
+        if (name && !this.tools.has(name)) await this.reloadTools();
         const tool = this.tools.get(name) ?? null;
-        if (tool && (tool.readOnly || this.always.has(name))) return permissionOutcome(params.options, true);
+        const kind = question(this.state.profile, tool);
+        if (kind === "none" || (kind === "ask" && this.always.has(tool!.class))) return permissionOutcome(params.options, true);
         const call = isObject(params.toolCall) ? params.toolCall : {};
+        const trusts = kind === "ask" ? tool!.class : "";
         const answer = await new Promise<Answer | null>(resolve => {
-            this.waiting.push({ ask: { title: String(call.title ?? ""), tool, input: call.rawInput ?? null }, name, resolve });
+            this.waiting.push({ ask: { title: String(call.title ?? ""), tool, input: call.rawInput ?? null, always: !!trusts }, trusts, resolve });
             this.set({ ask: this.waiting[0].ask });
         });
         if (answer === null) return { outcome: { outcome: "cancelled" } };
@@ -276,10 +327,10 @@ export class Chat {
     answer(answer: Answer): void {
         const waiting = this.waiting.shift();
         if (!waiting) return;
-        if (answer === "always" && waiting.ask.tool) this.always.add(waiting.name);
+        if (answer === "always" && waiting.trusts) this.always.add(waiting.trusts);
         waiting.resolve(answer);
-        // The same tool, asked for again meanwhile, has its answer already.
-        while (this.waiting[0] && this.waiting[0].ask.tool && this.always.has(this.waiting[0].name)) {
+        // A tool of the same class, asked for again meanwhile, has its answer already.
+        while (this.waiting[0] && this.waiting[0].trusts && this.always.has(this.waiting[0].trusts)) {
             this.waiting.shift()!.resolve("once");
         }
         this.set({ ask: this.waiting[0]?.ask ?? null });

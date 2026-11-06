@@ -23,6 +23,9 @@ PROFILES: dict[str, tuple[str, ...]] = {
 }
 # Profiles in which nobody confirms the calls: autonomy.py holds them.
 AUTONOMOUS = ("autonomous",)
+# Profiles beyond assisted, whose risks a user accepts once before a session
+# in them (chat.accept).
+RISKY = ("diagnostic", "autonomous", "administrator")
 
 # The modules of an ad-hoc command that only read, when config.toml does not
 # say: those of [adhoc] modules among them.

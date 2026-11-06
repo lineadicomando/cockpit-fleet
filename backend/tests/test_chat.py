@@ -167,10 +167,37 @@ class CommandsTest(Base):
                              "conflict")
         self.config = replace(self.config, chat_profiles=("administrator",),
                               chat_default_profile="administrator")
+        self.ok("chat.accept", {"profile": "administrator"})
         self.assertEqual(self.ok("chat.start", {"agent": "claude"})["profile"], "administrator")
         agents = self.ok("chat.agents")
         self.assertEqual((agents["profiles"], agents["default_profile"]),
                          (["administrator"], "administrator"))
+
+    def test_a_profile_beyond_assisted_is_accepted_once_by_each_user(self):
+        self.config = replace(self.config, chat_profiles=("assisted", "diagnostic", "autonomous"))
+        self.assertEqual(self.ok("chat.agents", role="viewer")["to_accept"],
+                         ["diagnostic", "autonomous"])
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "diagnostic"},
+                                   role="viewer"), "not_accepted")
+        first = self.ok("chat.accept", {"profile": "diagnostic"}, role="viewer")
+        self.assertEqual(first["profile"], "diagnostic")
+        # Again changes nothing: it was accepted then.
+        self.assertEqual(self.ok("chat.accept", {"profile": "diagnostic"}, role="viewer"), first)
+        self.assertEqual(self.ok("chat.agents", role="viewer")["to_accept"], ["autonomous"])
+        self.ok("chat.start", {"agent": "claude", "profile": "diagnostic"}, role="viewer")
+        rows = self.ctx().conn.execute(
+            "SELECT command, outcome, user, params FROM audit WHERE command = 'chat.accept'"
+        ).fetchall()
+        self.assertEqual([(row["outcome"], row["user"]) for row in rows], [("ok", "anna")] * 2)
+        self.assertIn("diagnostic", rows[0]["params"])
+        # Another user has not accepted it.
+        answer = cli.dispatch("chat.start", b'{"agent": "claude", "profile": "diagnostic"}',
+                              self.ctx("viewer", "bruno"))
+        self.assertEqual(answer["error"]["code"], "not_accepted")
+        # Those up to assisted are not asked about, nor one that is not enabled.
+        for profile in ("assisted", "observer"):
+            self.assertEqual(self.code("chat.accept", {"profile": profile}), "bad_request")
+        self.assertEqual(self.code("chat.accept", {"profile": "administrator"}), "conflict")
 
     def test_instructions_in_layers_the_controller_s_last(self):
         self.rules.write_text("Never touch the inventory school on Fridays.\n")

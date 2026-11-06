@@ -154,3 +154,6 @@
 .fleet-chat-thought { color: var(--pf-t--global--text--color--subtle); font-style: italic; }
 .fleet-chat-tool { margin-block-end: var(--pf-t--global--spacer--md); }
 .fleet-chat-value { white-space: pre-wrap; word-break: break-word; }
+.fleet-chat-instructions { white-space: pre-wrap; word-break: break-word; font-size: var(--pf-t--global--font--size--sm); margin: 0; }
+/* Open, the instructions must leave room for the conversation below them. */
+.fleet-chat-layers { margin-block-start: var(--pf-t--global--spacer--sm); max-block-size: 30vh; overflow-y: auto; }

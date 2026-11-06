@@ -1185,12 +1185,6 @@ msgstr "Consenti una volta"
 msgid "Allow this action?"
 msgstr "Consentire questa azione?"
 
-msgid "Always allow in this conversation"
-msgstr "Consenti sempre in questa conversazione"
-
-msgid "An assistant that works on this controller through Fleet: it reads what you may read and launches what you may launch, and asks you before every action that changes something."
-msgstr "Un assistente che lavora su questo controller attraverso Fleet: legge ciò che puoi leggere e lancia ciò che puoi lanciare, e ti chiede conferma prima di ogni azione che modifica qualcosa."
-
 msgid "Assistant"
 msgstr "Assistente"
 
@@ -3178,3 +3172,190 @@ msgstr "Il suo job template lo richiede già."
 
 msgid "Confirmation"
 msgstr "Conferma"
+
+msgid "{{author}}, {{time}}: {{changes}}"
+msgstr "{{author}}, {{time}}: {{changes}}"
+
+msgid "{{name}}: a draft"
+msgstr "{{name}}: una bozza"
+
+msgid "ad-hoc commands"
+msgstr "comandi ad-hoc"
+
+msgid "Ad-hoc commands run on the managed nodes without a question. They only read, but what they read (facts, services, packages) goes to the provider of the model."
+msgstr "I comandi ad-hoc girano sui nodi gestiti senza domande. Leggono soltanto, ma ciò che leggono (fact, servizi, pacchetti) va al fornitore del modello."
+
+msgid "ad-hoc commands that only read"
+msgstr "comandi ad-hoc che leggono soltanto"
+
+msgid "Added"
+msgstr "Aggiunto"
+
+msgid "Always allow {{kind}} in this conversation"
+msgstr "Consenti sempre {{kind}} in questa conversazione"
+
+msgid "An assistant that works on this controller through Fleet, within what you may do and what its profile allows."
+msgstr "Un assistente che lavora su questo controller attraverso Fleet, entro ciò che puoi fare tu e ciò che il suo profilo consente."
+
+msgid "ansible-lint has remarks"
+msgstr "ansible-lint ha delle osservazioni"
+
+msgid "As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches."
+msgstr "Come assistito, e in più esegue senza chiederti nulla comandi ad-hoc di moduli che leggono soltanto, senza become. Ti chiede prima di ogni lancio."
+
+msgid "Assisted"
+msgstr "Assistito"
+
+msgid "Autonomous"
+msgstr "Autonomo"
+
+msgid "Back to main"
+msgstr "Torna a main"
+
+msgid "Before the first session as {{profile}}"
+msgstr "Prima della prima sessione come {{profile}}"
+
+msgid "Changed in main too"
+msgstr "Cambiato anche in main"
+
+msgid "Changes saved here go to the draft, under your name. Syntax checks check the draft."
+msgstr "Le modifiche salvate qui vanno nella bozza, a tuo nome. I controlli di sintassi controllano la bozza."
+
+msgid "Changes to merge"
+msgstr "Modifiche da unire"
+
+msgid "changes to what is defined"
+msgstr "modifiche a ciò che è definito"
+
+msgid "conflicts_count"
+msgid_plural "conflicts_count_plural"
+msgstr[0] "{{count}} conflitto"
+msgstr[1] "{{count}} conflitti"
+
+msgid "Deleted"
+msgstr "Eliminato"
+
+msgid "Diagnostic"
+msgstr "Diagnostico"
+
+msgid "Discard this draft?"
+msgstr "Scartare questa bozza?"
+
+msgid "drafts_waiting"
+msgid_plural "drafts_waiting_plural"
+msgstr[0] "{{count}} bozza dell'assistente attende una revisione"
+msgstr[1] "{{count}} bozze dell'assistente attendono una revisione"
+
+msgid "Edit the draft"
+msgstr "Modifica la bozza"
+
+msgid "Files changed in main too since the draft started cannot be merged: edit the draft or main so that they agree."
+msgstr "I file cambiati anche in main da quando la bozza è iniziata non si possono unire: modifica la bozza o main perché coincidano."
+
+msgid "files of projects and inventories"
+msgstr "file di progetti e inventari"
+
+msgid "Files the assistant wrote go to a draft, which no run uses until a person merges it."
+msgstr "I file scritti dall'assistente vanno in una bozza, che nessuna run usa finché una persona non la unisce."
+
+msgid "From Fleet"
+msgstr "Da Fleet"
+
+msgid "From Fleet, for the profile"
+msgstr "Da Fleet, per il profilo"
+
+msgid "From this controller ({{source}})"
+msgstr "Da questo controller ({{source}})"
+
+msgid "I understand what it may do and these risks. This is asked once, and recorded in the audit trail."
+msgstr "Ho capito che cosa può fare e questi rischi. Viene chiesto una volta sola, e resta registrato nell'audit."
+
+msgid "Instructions the assistant was given"
+msgstr "Istruzioni date all'assistente"
+
+msgid "It may change templates, inventories, schedules and the rest, and run any ad-hoc command your role allows, once you confirm. A change you confirm is made in your name: read each question."
+msgstr "Può cambiare template, inventari, pianificazioni e il resto, ed eseguire qualunque comando ad-hoc il tuo ruolo consenta, dopo la tua conferma. Una modifica che confermi è fatta a tuo nome: leggi ogni domanda."
+
+msgid "It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, and it never silences a problem."
+msgstr "Legge e lancia ciò che è definito senza chiederti nulla. A trattenerlo è Fleet: al massimo {{runs}} run in una sessione, nulla su un inventario in manutenzione, e non mette mai a tacere un problema."
+
+msgid "It reads what you may read, and launches and changes nothing: it asks you nothing."
+msgstr "Legge ciò che puoi leggere tu, e non lancia né cambia nulla: non ti chiede nulla."
+
+msgid "It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."
+msgstr "Legge, lancia i job template, i workflow, le pianificazioni e i check definiti, e annulla le run. Ti chiede prima di ciascuna di queste azioni."
+
+msgid "Its runs are dry runs only, and it launches no workflow and no schedule."
+msgstr "Le sue run sono solo di prova, e non lancia workflow né pianificazioni."
+
+msgid "launches and cancellations"
+msgstr "lanci e annullamenti"
+
+msgid "Main already has everything in this draft."
+msgstr "Main ha già tutto ciò che c'è in questa bozza."
+
+msgid "Merge into main"
+msgstr "Unisci in main"
+
+msgid "Merge the chosen files"
+msgstr "Unisci i file scelti"
+
+msgid "Nobody confirms its launches: a playbook it launches runs on the nodes as soon as it asks for it."
+msgstr "Nessuno conferma i suoi lanci: un playbook che lancia gira sui nodi appena lo chiede."
+
+msgid "Observer"
+msgstr "Osservatore"
+
+msgid "Of an earlier version"
+msgstr "Di una versione precedente"
+
+msgid "Only the limits of Fleet hold it, not your judgement: within them it may launch what you would not have."
+msgstr "Lo trattengono solo i limiti di Fleet, non il tuo giudizio: entro quei limiti può lanciare ciò che tu non avresti lanciato."
+
+msgid "Optional: by default it says the draft was merged"
+msgstr "Facoltativo: di norma dice che la bozza è stata unita"
+
+msgid "Profile"
+msgstr "Profilo"
+
+msgid "Profile {{profile}}"
+msgstr "Profilo {{profile}}"
+
+msgid "Profile {{profile}} · {{kind}}"
+msgstr "Profilo {{profile}} · {{kind}}"
+
+msgid "reading"
+msgstr "lettura"
+
+msgid "Review"
+msgstr "Rivedi"
+
+msgid "Review a draft"
+msgstr "Revisione di una bozza"
+
+msgid "Review and merge"
+msgstr "Rivedi e unisci"
+
+msgid "Syntax checks of the draft"
+msgstr "Controlli di sintassi della bozza"
+
+msgid "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it."
+msgstr "L'output di run e comandi è scritto dai nodi gestiti. Chi controlla un nodo può scriverci testo fatto per guidare l'assistente, e in questo profilo l'assistente può farci di più."
+
+msgid "They guide it; they do not hold it: what it may do is decided by Fleet, by your role and the profile."
+msgstr "Lo orientano, non lo trattengono: ciò che può fare lo decide Fleet, in base al tuo ruolo e al profilo."
+
+msgid "This is a draft the assistant wrote: no run uses it until it is merged into main."
+msgstr "Questa è una bozza scritta dall'assistente: nessuna run la usa finché non viene unita in main."
+
+msgid "What changes"
+msgstr "Che cosa cambia"
+
+msgid "What the draft holds and main does not is lost."
+msgstr "Ciò che la bozza contiene e main no va perso."
+
+msgid "Whatever your role allows: ad-hoc commands, changes to templates, inventories and the rest, files. It asks you before every change; files it writes go to a draft that you review before any run uses them."
+msgstr "Tutto ciò che il tuo ruolo consente: comandi ad-hoc, modifiche a template, inventari e il resto, file. Ti chiede prima di ogni modifica; i file che scrive vanno in una bozza che rivedi prima che una run li usi."
+
+msgid "Written by {{author}}, last on {{time}}. No run uses it until it is merged."
+msgstr "Scritta da {{author}}, l'ultima volta il {{time}}. Nessuna run la usa finché non viene unita."

@@ -747,6 +747,18 @@ MIGRATIONS: list[list[str]] = [
         """,
         "ALTER TABLE approvals ADD COLUMN mode TEXT NOT NULL DEFAULT 'other'",
     ],
+    [
+        # Who accepted the risks of a profile of the assistant beyond
+        # assisted, once: chat.start refuses that profile to anyone else.
+        """
+        CREATE TABLE profile_acceptances (
+            user         TEXT NOT NULL,
+            profile      TEXT NOT NULL,
+            accepted_at  REAL NOT NULL,
+            PRIMARY KEY (user, profile)
+        )
+        """,
+    ],
 ]
 
 

@@ -10,15 +10,19 @@ docs/architecture.md` and read only the one needed).
 Phases 0–11 closed; 0.2.0 released on 2 November. Under `[Unreleased]`:
 runs in series on an inventory, and phase 12 up to the instructions in
 layers. Phase 12's 8 commits on `main` are not pushed (`git log
-origin/main..`). **Next:** phase 12, the page (below).
+origin/main..`); the page is done in the work tree, not committed.
+**Next:** phase 12, the terminal (below).
 
 To resume: `git status`; `make check`. Each backend module says what it is
-in its docstring; `cli.py` is the registry, `db.py` the schema (24).
+in its docstring; `cli.py` is the registry, `db.py` the schema (25).
 
-Tests on 6 November: unit tests (576 backend, 130 frontend); `ct-test` of
+Tests on 6 November: unit tests (577 backend, 133 frontend); the page
+in a browser on `deb13` with `fake-agent.py` (choice of profile, risks
+accepted, a question of the administrator, instructions, a draft
+reviewed, edited and merged); `ct-test` of
 `files negative mcp` and `chat cli mcp` on AlmaLinux. Before, on 5–6
 November: `mcp chat cli adhoc negative workflows roles runs` on AlmaLinux
-and Debian. Not Fedora, no VM, nothing of phase 12 seen in a browser. Last
+and Debian. Not Fedora; the page not yet with the adapter and its model. Last
 full `ct-test`: 1 November, on the three (`cmdb` fails on Fedora only in a
 container: netavark "invalid namespace path"). Run two distributions'
 `ct-test` one after the other, not together.
@@ -36,7 +40,12 @@ classes of commands (`agent=` in `@command`, `cli.AGENT_CLASSES`,
 autonomy (`autonomy.py`, a session drawn by `fleet-mcp`); modes of approval
 (`approvals.py`); an agent's ad-hoc command waits for its person unless
 diagnostic; drafts (`files.place`, `drafts.py`); instructions in layers
-(`instructions.py`, given by `chat.start` and `_fleet/ready`).
+(`instructions.py`, given by `chat.start` and `_fleet/ready`). The page:
+the profile chosen at the start, its risks accepted once (`chat.accept`,
+table `profile_acceptances`, migration 25; `chat.start` refuses with
+`not_accepted`), questions by class (`question()` in `src/lib/chat.ts`),
+the instructions shown, drafts reviewed (`src/components/Drafts.tsx`) and
+edited on the page of the files (`projects/ID/drafts/SESSION`).
 
 Decided on 6 November along the way (into `decisions.md` when the phase
 closes): an autonomous agent launches nothing on an inventory with a
@@ -45,7 +54,9 @@ maintenance window open and never calls `state.ack`/`unack` or
 `approval.approve`/`reject` need the role operator or the right; a draft
 is merged file by file, not line by line (a file changed in `main` too is
 a conflict); instructions of the controller too large or not UTF-8 refuse
-the session rather than being cut.
+the session rather than being cut; the acceptance of a profile's risks is
+held by the backend (`chat.start` refuses, the terminal must ask too);
+"always" trusts a class of tools, not one tool.
 
 Open question for the user: should `inventory.create`/`inventory.update`
 (class config) write a managed inventory through a draft too? Today they
@@ -70,26 +81,14 @@ every question.
 
 Steps, each tested before the next:
 
-- [ ] Page:
-  - choice of profile at the start: `chat.agents` gives `profiles` and
-    `default_profile`; `src/lib/chat-agent.ts` must pass `--profile` to
-    `fleet-chat`, and the page the profile to `mcp.tools` (it accepts
-    `profile` already; the page does not pass it, so it lists every tool
-    of the role);
-  - its risks told and accepted once (audited: needs a command);
-  - the profile in the header and in each question; questions by class
-    (`class` of each tool from `mcp.tools`) with the floor of the table,
-    "always" for a class;
-  - the instructions the agent got (`layers` of `_fleet/ready`, kept in
-    `src/lib/chat.ts`'s `setup`);
-  - the review of a draft: `draft.list`, `draft.diff` with its checks,
-    `draft.merge` of all or some paths, `draft.discard`, editing with
-    `draft` on the file commands.
+- [x] Page.
 - [ ] Terminal: `fleet assistant --profile` (`fleet-chat --terminal
-      --profile` exists; `terminal.py` `_assistant`), the profile as
+      --profile` exists; `terminal.py` `_assistant`), asking to accept the
+      risks when `chat.start` says `not_accepted`, the profile as
       options of the agent's CLI (permission mode, tools allowed); `fleet
       draft list|diff|merge|discard`.
-- [ ] Docs: `chat.md` (profiles, risks), `security.md`, `architecture.md`,
+- [ ] Docs: `chat.md` (profiles, risks, drafts), `security.md`,
+      `architecture.md` ("The chat": permissions by class, acceptance),
       `config.toml`; `CHANGELOG.md`.
 - [ ] Integration: `chat.sh` by profile, drafts in `mcp.sh`; `make ct-test`
       on the three; the page in a browser on a VM with the adapter and its

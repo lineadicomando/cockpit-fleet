@@ -115,10 +115,12 @@ export function App() {
                         {section === "schedules" && <SchedulesPage />}
                         {section === "notifications" && <NotificationsPage />}
                         {section === "inventories" && (location.path[1]
-                            ? <FilesPage key={location.path[1]} id={location.path[1]} />
+                            ? <FilesPage key={location.path.slice(1).join("/")} id={location.path[1]}
+                                draft={location.path[2] === "drafts" ? location.path[3] ?? "" : ""} />
                             : <InventoriesPage />)}
                         {section === "projects" && (location.path[1]
-                            ? <FilesPage key={location.path[1]} id={location.path[1]} />
+                            ? <FilesPage key={location.path.slice(1).join("/")} id={location.path[1]}
+                                draft={location.path[2] === "drafts" ? location.path[3] ?? "" : ""} />
                             : <ProjectsPage />)}
                         {section === "credentials" && <CredentialsPage />}
                         {section === "variables" && <VariablesPage />}

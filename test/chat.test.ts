@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { AcpError, Connection, applyUpdate, fleetTool, permissionOutcome, type Item } from "../src/lib/acp.ts";
-import { Chat, type ToolInfo, type Transport } from "../src/lib/chat.ts";
+import { Chat, question, type ToolInfo, type Transport } from "../src/lib/chat.ts";
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
@@ -92,8 +92,11 @@ test("a permission is given once or refused, never as a rule the agent would kee
 // --- a whole session, against an agent played by the test ------------------------------
 
 const TOOLS: ToolInfo[] = [
-    { name: "run_list", description: "The runs.", readOnly: true, inputSchema: {} },
-    { name: "run_start", description: "Launch a job template.", readOnly: false, inputSchema: {} },
+    { name: "run_list", description: "The runs.", readOnly: true, class: "read", inputSchema: {} },
+    { name: "run_start", description: "Launch a job template.", readOnly: false, class: "run", inputSchema: {} },
+    { name: "run_cancel", description: "Cancel a run.", readOnly: false, class: "run", inputSchema: {} },
+    { name: "run_adhoc", description: "Run an ad-hoc command.", readOnly: false, class: "adhoc", inputSchema: {} },
+    { name: "template_update", description: "Change a template.", readOnly: false, class: "config", inputSchema: {} },
 ];
 
 interface Message { id?: number; method?: string; params?: any; result?: any }
@@ -102,7 +105,9 @@ class Agent {
     readonly chat: Chat;
     readonly received: Message[] = [];
     closed = false;
-    spawned: string[] = [];
+    spawned: string[][] = [];
+    // The profiles the tools were asked for.
+    listed: string[] = [];
     private onData: (text: string) => void = () => undefined;
     private onExit: (error: string) => void = () => undefined;
     // How the agent answers each method; a function gets the message.
@@ -114,8 +119,8 @@ class Agent {
     };
 
     constructor() {
-        this.chat = new Chat((agent, onData, onExit): Transport => {
-            this.spawned.push(agent);
+        this.chat = new Chat((agent, profile, onData, onExit): Transport => {
+            this.spawned.push([agent, profile]);
             this.onData = onData;
             this.onExit = onExit;
             return {
@@ -131,7 +136,7 @@ class Agent {
                 },
                 close: () => { this.closed = true; },
             };
-        }, async () => TOOLS);
+        }, async profile => { this.listed.push(profile); return TOOLS; });
     }
 
     say(message: object): void { this.onData(JSON.stringify(message) + "\n"); }
@@ -139,9 +144,15 @@ class Agent {
     methods(): (string | undefined)[] { return this.received.map(message => message.method); }
     last(method: string): Message { return this.received.filter(message => message.method === method).slice(-1)[0]; }
 
-    async ready(): Promise<void> {
-        this.chat.start("claude");
-        this.say({ jsonrpc: "2.0", method: "_fleet/ready", params: { agent: "claude", cwd: "/home/anna", instructions: "Be brief.", mcp: { command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: [], env: [] } } });
+    async ready(profile = "assisted"): Promise<void> {
+        this.chat.start("claude", profile);
+        this.say({
+            jsonrpc: "2.0", method: "_fleet/ready", params: {
+                agent: "claude", cwd: "/home/anna", profile, instructions: "Be brief.",
+                layers: [{ layer: "base", source: "package", text: "Be brief." }],
+                mcp: { command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: ["--profile", profile], env: [] },
+            },
+        });
         await tick();
     }
 
@@ -161,8 +172,8 @@ class Agent {
 
 test("the agent is started by name and told nothing until fleet-chat says it is ready", async () => {
     const agent = new Agent();
-    agent.chat.start("claude");
-    assert.deepEqual(agent.spawned, ["claude"]);
+    agent.chat.start("claude", "assisted");
+    assert.deepEqual(agent.spawned, [["claude", "assisted"]]);
     assert.equal(agent.chat.getState().phase, "starting");
     assert.deepEqual(agent.received, []);
     await agent.ready();
@@ -170,6 +181,10 @@ test("the agent is started by name and told nothing until fleet-chat says it is 
     assert.equal(agent.chat.getState().phase, "ready");
     const capabilities = agent.last("initialize").params.clientCapabilities;
     assert.deepEqual(capabilities, { fs: { readTextFile: false, writeTextFile: false }, terminal: false });
+    const state = agent.chat.getState();
+    assert.equal(state.profile, "assisted");
+    assert.deepEqual(state.layers, [{ layer: "base", source: "package", text: "Be brief." }]);
+    assert.deepEqual(agent.listed, ["assisted"]);
 });
 
 test("the first message opens a session with fleet-mcp as the only server and no tool of the agent", async () => {
@@ -183,7 +198,7 @@ test("the first message opens a session with fleet-mcp as the only server and no
     await sent;
     const created = agent.last("session/new").params;
     assert.equal(created.cwd, "/home/anna");
-    assert.deepEqual(created.mcpServers, [{ name: "cockpit-fleet", command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: [], env: [] }]);
+    assert.deepEqual(created.mcpServers, [{ name: "cockpit-fleet", command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: ["--profile", "assisted"], env: [] }]);
     assert.equal(created._meta.disableBuiltInTools, true);
     assert.deepEqual(created._meta.systemPrompt, { append: "Be brief." });
     assert.deepEqual(created._meta.claudeCode.options, { settingSources: [], strictMcpConfig: true });
@@ -218,14 +233,15 @@ test("reading is allowed without asking, a change waits for the person", async (
     assert.equal(agent.chat.getState().ask, null);
 });
 
-test("always is remembered by the page, for the conversation, and answered as once", async () => {
+test("always is remembered by the page for the class, for the conversation, and answered as once", async () => {
     const agent = new Agent();
     await agent.ready();
     agent.chat.send("launch it twice");
     await tick();
     agent.ask(60, "run_start");
-    agent.ask(61, "run_start");
+    agent.ask(61, "run_cancel");
     await tick();
+    assert.equal(agent.chat.getState().ask!.always, true);
     agent.chat.answer("always");
     await tick();
     for (const id of [60, 61]) assert.deepEqual(agent.answerTo(id)!.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
@@ -233,6 +249,54 @@ test("always is remembered by the page, for the conversation, and answered as on
     await tick();
     assert.equal(agent.chat.getState().ask, null);
     assert.ok(agent.answerTo(62));
+});
+
+test("the questions of each profile", () => {
+    const tool = (name: string) => TOOLS.find(one => one.name === name)!;
+    const diagnostic: ToolInfo = { ...tool("run_adhoc"), class: "adhoc-diagnostic" };
+    const table: [string, ToolInfo | null, string][] = [
+        ["observer", tool("run_list"), "none"],
+        ["assisted", tool("run_list"), "none"],
+        ["assisted", tool("run_start"), "ask"],
+        ["diagnostic", diagnostic, "none"],
+        ["diagnostic", tool("run_start"), "ask"],
+        ["autonomous", tool("run_start"), "none"],
+        ["autonomous", tool("run_adhoc"), "every"],
+        ["administrator", tool("run_start"), "ask"],
+        ["administrator", tool("run_adhoc"), "every"],
+        ["administrator", tool("template_update"), "every"],
+        ["administrator", { ...tool("template_update"), class: "code" }, "every"],
+        // Diagnostic only in its own profile: elsewhere the backend would not offer it.
+        ["assisted", diagnostic, "ask"],
+        ["autonomous", null, "every"],
+    ];
+    for (const [profile, one, expected] of table) assert.equal(question(profile, one), expected, `${profile} ${one?.name} ${one?.class}`);
+});
+
+test("an ad-hoc command of an administrator is asked about every time, with no always", async () => {
+    const agent = new Agent();
+    await agent.ready("administrator");
+    agent.chat.send("check the disks");
+    await tick();
+    agent.ask(90, "run_adhoc");
+    await tick();
+    assert.equal(agent.chat.getState().ask!.always, false);
+    agent.chat.answer("always");
+    await tick();
+    agent.ask(91, "run_adhoc");
+    await tick();
+    assert.equal(agent.chat.getState().ask!.tool?.name, "run_adhoc");
+});
+
+test("an autonomous agent launches with no question; the backend holds it", async () => {
+    const agent = new Agent();
+    await agent.ready("autonomous");
+    agent.chat.send("launch it");
+    await tick();
+    agent.ask(95, "run_start");
+    await tick();
+    assert.equal(agent.chat.getState().ask, null);
+    assert.deepEqual(agent.answerTo(95)!.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
 });
 
 test("something that is not a tool of ours is always asked about, with no always", async () => {
@@ -304,7 +368,7 @@ test("an earlier conversation is replayed by the agent", async () => {
 
 test("a refusal by the backend ends the start and is what the page shows", async () => {
     const agent = new Agent();
-    agent.chat.start("claude");
+    agent.chat.start("claude", "assisted");
     agent.say({ jsonrpc: "2.0", method: "_fleet/error", params: { code: "conflict", message: "2 chat sessions are open already" } });
     agent.exit("exit status 1");
     const state = agent.chat.getState();

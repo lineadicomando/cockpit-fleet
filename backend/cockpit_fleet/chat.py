@@ -10,9 +10,9 @@ these commands say what may be started and count what is.
 import os
 from pathlib import Path
 
-from . import instructions
-from .cli import Bool, Context, Str, Values, command
-from .errors import Conflict, NotFound, Unavailable
+from . import instructions, profiles, store
+from .cli import Bool, Choice, Context, Str, Values, command
+from .errors import Conflict, NotAccepted, NotFound, Unavailable
 from .paths import LIBEXEC_DIR
 
 LAUNCHER = str(LIBEXEC_DIR / "fleet-chat")
@@ -75,10 +75,19 @@ def _needs_agents(ctx: Context) -> str:
     return ""
 
 
+def _accepted(ctx: Context) -> set[str]:
+    """The profiles whose risks the caller accepted."""
+    return {row["profile"] for row in ctx.conn.execute(
+        "SELECT profile FROM profile_acceptances WHERE user = ?", (ctx.caller.user,))}
+
+
 @command("chat.agents", role="viewer", tool=False)
 def chat_agents(ctx: Context, params: Values) -> dict:
-    """The agents the chat page may start, and whether it may start one now."""
+    """The agents the chat page may start, and whether it may start one now;
+    the profiles of the assistant enabled, and which of them the caller has
+    yet to accept the risks of."""
     config = ctx.config
+    accepted = _accepted(ctx)
     agents = []
     for agent in config.chat_agents:
         program = agent.command[0]
@@ -96,6 +105,12 @@ def chat_agents(ctx: Context, params: Values) -> dict:
         "max_role": config.mcp_max_role,
         "profiles": list(config.chat_profiles),
         "default_profile": config.chat_default_profile,
+        # Those of them the caller must accept the risks of before a session.
+        "to_accept": [profile for profile in config.chat_profiles
+                      if profile in profiles.RISKY and profile not in accepted],
+        # What holds an agent in the profile autonomous, to tell the user.
+        "autonomous_runs": config.chat_autonomous_runs,
+        "autonomous_dry_run": config.chat_autonomous_dry_run,
         "max_sessions": config.chat_max_sessions,
         "open_sessions": open_sessions(),
     }
@@ -111,7 +126,8 @@ def chat_start(ctx: Context, params: Values) -> dict:
     """The command line of an agent, for fleet-chat, which is about to run it
     as the caller: the one that speaks the protocol with the page, or with
     terminal the one for a terminal; the profile of the session, which
-    must be among those enabled; and the instructions the agent is given,
+    must be among those enabled and, beyond assisted, accepted by the
+    caller (chat.accept); and the instructions the agent is given,
     as one text and as the layers it is made of, to show. Refused when the
     sessions open are as many as allowed."""
     problem = _needs_agents(ctx)
@@ -125,6 +141,8 @@ def chat_start(ctx: Context, params: Values) -> dict:
     if profile not in ctx.config.chat_profiles:
         raise Conflict(f"the profile {profile} is not enabled on this controller"
                        " ([chat] profiles in config.toml)")
+    if profile in profiles.RISKY and profile not in _accepted(ctx):
+        raise NotAccepted(f"the risks of the profile {profile} have not been accepted yet")
     if params["terminal"] and not agent.terminal:
         raise Conflict(f"the agent {agent.name} has no program for a terminal"
                        " (terminal in [chat.agents] of config.toml)")
@@ -137,3 +155,22 @@ def chat_start(ctx: Context, params: Values) -> dict:
     return {"agent": agent.name, "profile": profile,
             "command": list(agent.terminal if params["terminal"] else agent.command),
             "instructions": instructions.compose(found), "layers": found}
+
+
+@command("chat.accept", role="viewer", mutating=True, tool=False,
+         params={"profile": Choice(profiles.RISKY, "A profile of the assistant beyond assisted.")})
+def chat_accept(ctx: Context, params: Values) -> dict:
+    """Record that the caller was told what an agent in a profile beyond
+    assisted may do, how the managed nodes can steer it and what goes to the
+    provider of its model, and accepted it: once, for every later session in
+    that profile. The audit trail keeps who and when."""
+    profile = params["profile"]
+    if profile not in ctx.config.chat_profiles:
+        raise Conflict(f"the profile {profile} is not enabled on this controller"
+                       " ([chat] profiles in config.toml)")
+    when = store.now()
+    ctx.conn.execute("INSERT OR IGNORE INTO profile_acceptances (user, profile, accepted_at)"
+                     " VALUES (?, ?, ?)", (ctx.caller.user, profile, when))
+    row = ctx.conn.execute("SELECT accepted_at FROM profile_acceptances"
+                           " WHERE user = ? AND profile = ?", (ctx.caller.user, profile)).fetchone()
+    return {"profile": profile, "accepted_at": row["accepted_at"]}

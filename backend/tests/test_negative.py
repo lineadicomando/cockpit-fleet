@@ -42,7 +42,8 @@ ROLE_TABLE = """
 approval.approve operator M   approval.list viewer -        approval.reject operator M
 audit.list admin -            channel.create admin M        channel.delete admin M
 channel.list viewer -         channel.test admin M          channel.update admin M
-chat.agents viewer -          chat.start viewer M           check.catalog viewer -
+chat.accept viewer M          chat.agents viewer -          chat.start viewer M
+check.catalog viewer -
 check.create admin M          check.delete admin M          check.list viewer -
 check.run operator M          check.update admin M          cmdb.get viewer -
 cmdb.list viewer -            cmdb.packages viewer -        config.export admin -
@@ -395,6 +396,7 @@ class Fixture(CheckBase):
         "module.help": lambda fx: {"name": "ansible.builtin.ping"},
         "cmdb.packages": lambda fx: {"name": "openssl"},
         "chat.start": lambda fx: {"agent": "claude"},
+        "chat.accept": lambda fx: {"profile": "diagnostic"},
         "notification.retry": lambda fx: {"id": 1},
         "config.import": lambda fx: {"document": fx["export"]},
         "channel.update": lambda fx: {"settings": WEBHOOK["settings"]},

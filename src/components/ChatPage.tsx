@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next";
 import {
     Button,
+    Checkbox,
     Content,
     DescriptionList,
     DescriptionListDescription,
@@ -31,7 +32,60 @@ import { useSession } from "../lib/session.tsx";
 import type { ChatAgentInfo, ChatGuide, ChatInfo } from "../lib/types.ts";
 import { SectionHeader, TerminalCommand as Command } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
+import { PendingDrafts } from "./Drafts.tsx";
 import { Alert, Modal, Spinner } from "./pf.tsx";
+
+// What each profile of the assistant is called, and what it may do.
+function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_run">) {
+    const { t } = useTranslation();
+    const names: Record<string, string> = {
+        observer: t("Observer"),
+        assisted: t("Assisted"),
+        diagnostic: t("Diagnostic"),
+        autonomous: t("Autonomous"),
+        administrator: t("Administrator"),
+    };
+    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
+    const what: Record<string, string> = {
+        observer: t("It reads what you may read, and launches and changes nothing: it asks you nothing."),
+        assisted: t("It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."),
+        diagnostic: t("As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches."),
+        autonomous: info?.autonomous_dry_run ? `${autonomous} ${t("Its runs are dry runs only, and it launches no workflow and no schedule.")}` : autonomous,
+        administrator: t("Whatever your role allows: ad-hoc commands, changes to templates, inventories and the rest, files. It asks you before every change; files it writes go to a draft that you review before any run uses them."),
+    };
+    const risks: Record<string, string[]> = {
+        diagnostic: [
+            t("Ad-hoc commands run on the managed nodes without a question. They only read, but what they read (facts, services, packages) goes to the provider of the model."),
+        ],
+        autonomous: [
+            t("Nobody confirms its launches: a playbook it launches runs on the nodes as soon as it asks for it."),
+            t("Only the limits of Fleet hold it, not your judgement: within them it may launch what you would not have."),
+        ],
+        administrator: [
+            t("It may change templates, inventories, schedules and the rest, and run any ad-hoc command your role allows, once you confirm. A change you confirm is made in your name: read each question."),
+        ],
+    };
+    const steering = t("The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it.");
+    return {
+        name: (profile: string) => names[profile] ?? profile,
+        what: (profile: string) => what[profile] ?? "",
+        risks: (profile: string) => [...(risks[profile] ?? []), steering],
+    };
+}
+
+// What a class of tools lets the assistant do, as said in a question.
+function useClasses() {
+    const { t } = useTranslation();
+    const names: Record<string, string> = {
+        read: t("reading"),
+        run: t("launches and cancellations"),
+        adhoc: t("ad-hoc commands"),
+        "adhoc-diagnostic": t("ad-hoc commands that only read"),
+        config: t("changes to what is defined"),
+        code: t("files of projects and inventories"),
+    };
+    return (kind: string) => names[kind] ?? kind;
+}
 
 function shown(value: unknown): string {
     return typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -87,15 +141,20 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
 }
 
 // A call that changes something, said in words before it is made.
-function AskModal({ ask }: { ask: Ask }) {
+function AskModal({ ask, profile }: { ask: Ask; profile: string }) {
     const { t } = useTranslation();
+    const profiles = useProfiles();
+    const kind = useClasses();
     const fields = ask.input && typeof ask.input === "object" && !Array.isArray(ask.input)
         ? Object.entries(ask.input as Record<string, unknown>)
         : [];
     const explained = ask.tool?.inputSchema.properties ?? {};
     return (
         <Modal variant={ModalVariant.medium} isOpen onClose={() => chat.answer("refuse")}>
-            <ModalHeader title={t("Allow this action?")} titleIconVariant="warning" />
+            <ModalHeader title={t("Allow this action?")} titleIconVariant="warning"
+                description={ask.tool
+                    ? t("Profile {{profile}} · {{kind}}", { profile: profiles.name(profile), kind: kind(ask.tool.class) })
+                    : t("Profile {{profile}}", { profile: profiles.name(profile) })} />
             <ModalBody>
                 {ask.tool
                     ? <Content component="p">{ask.tool.description}</Content>
@@ -117,7 +176,11 @@ function AskModal({ ask }: { ask: Ask }) {
             </ModalBody>
             <ModalFooter>
                 <Button variant="primary" onClick={() => chat.answer("once")}>{t("Allow once")}</Button>
-                {ask.tool && <Button variant="secondary" onClick={() => chat.answer("always")}>{t("Always allow in this conversation")}</Button>}
+                {ask.always && ask.tool && (
+                    <Button variant="secondary" onClick={() => chat.answer("always")}>
+                        {t("Always allow {{kind}} in this conversation", { kind: kind(ask.tool.class) })}
+                    </Button>
+                )}
                 <Button variant="link" onClick={() => chat.answer("refuse")}>{t("Refuse")}</Button>
             </ModalFooter>
         </Modal>
@@ -125,20 +188,72 @@ function AskModal({ ask }: { ask: Ask }) {
 }
 
 // What happens when the chat is started, said before it is.
-function Start({ info, state }: { info: ChatInfo; state: ChatState }) {
+function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; onAccepted: () => void }) {
     const { t } = useTranslation();
+    const profiles = useProfiles(info);
     const [name, setName] = useState(state.agent || info.agents[0].name);
+    const [profile, setProfile] = useState(info.profiles.includes(state.profile) ? state.profile : info.default_profile);
+    const [accepted, setAccepted] = useState(false);
+    const [problem, setProblem] = useState<string | null>(null);
+    const [starting, setStarting] = useState(false);
     const full = info.open_sessions >= info.max_sessions;
     const agent = info.agents.find(one => one.name === name) ?? info.agents[0];
+    const toAccept = info.to_accept.includes(profile);
+
+    async function start() {
+        setProblem(null);
+        if (toAccept) {
+            setStarting(true);
+            try {
+                await call("chat.accept", { profile });
+            } catch (ex) {
+                setProblem(ex instanceof Error ? ex.message : String(ex));
+                setStarting(false);
+                return;
+            }
+            setStarting(false);
+            onAccepted();
+        }
+        chat.start(agent.name, profile);
+    }
+
     return (
         <>
             {state.error && <Alert variant="danger" isInline title={t("The assistant ended")} style={{ marginBlockEnd: "1rem" }}><pre>{state.error}</pre></Alert>}
-            <Content component="p">{t("An assistant that works on this controller through Fleet: it reads what you may read and launches what you may launch, and asks you before every action that changes something.")}</Content>
+            {problem && <Alert variant="danger" isInline title={problem} style={{ marginBlockEnd: "1rem" }} />}
+            <Content component="p">{t("An assistant that works on this controller through Fleet, within what you may do and what its profile allows.")}</Content>
             <Content component="ul">
                 <Content component="li">{t("What you write, and what Fleet answers to the assistant (inventories, job templates, the outcome of runs and, when asked, their output), is sent to the provider of the model.")}</Content>
                 <Content component="li">{t("It acts with your role, and never above the one set for agents on this controller: {{role}}.", { role: info.max_role })}</Content>
                 <Content component="li">{t("It runs while this page is open: closing or reloading the page ends it. The conversation is kept, and can be continued later.")}</Content>
             </Content>
+            <DescriptionList isHorizontal isCompact style={{ marginBlockEnd: "1rem" }}>
+                <DescriptionListGroup>
+                    <DescriptionListTerm>{t("Profile")}</DescriptionListTerm>
+                    <DescriptionListDescription>
+                        {info.profiles.length > 1
+                            ? (
+                                <div style={{ maxInlineSize: "20rem" }}>
+                                    <FormSelect value={profile} aria-label={t("Profile")}
+                                        onChange={(_event, value) => { setProfile(value); setAccepted(false); }}>
+                                        {info.profiles.map(one => <FormSelectOption key={one} value={one} label={profiles.name(one)} />)}
+                                    </FormSelect>
+                                </div>
+                            )
+                            : profiles.name(profile)}
+                        <Content component="p" style={{ marginBlockStart: "0.5rem" }}>{profiles.what(profile)}</Content>
+                    </DescriptionListDescription>
+                </DescriptionListGroup>
+            </DescriptionList>
+            {toAccept && (
+                <Alert variant="warning" isInline title={t("Before the first session as {{profile}}", { profile: profiles.name(profile) })} style={{ marginBlockEnd: "1rem" }}>
+                    <Content component="ul">
+                        {profiles.risks(profile).map(risk => <Content component="li" key={risk}>{risk}</Content>)}
+                    </Content>
+                    <Checkbox id="chat-accept" isChecked={accepted} onChange={(_event, checked) => setAccepted(checked)}
+                        label={t("I understand what it may do and these risks. This is asked once, and recorded in the audit trail.")} />
+                </Alert>
+            )}
             {full && <Alert variant="info" isInline title={t("{{open}} sessions of the assistant are open on this controller, the most it allows.", { open: info.open_sessions })} style={{ marginBlockEnd: "1rem" }} />}
             {!agent.installed && (
                 <Alert variant="warning" isInline title={t("{{agent}} is not installed on this machine", { agent: agent.label })} style={{ marginBlockEnd: "1rem" }}>
@@ -160,9 +275,37 @@ function Start({ info, state }: { info: ChatInfo; state: ChatState }) {
                         </FormSelect>
                     </FlexItem>
                 )}
-                <Button variant="primary" isDisabled={!agent.installed} onClick={() => chat.start(agent.name)}>{t("Start the assistant")}</Button>
+                <Button variant="primary" isDisabled={!agent.installed || (toAccept && !accepted) || starting} isLoading={starting}
+                    onClick={start}>{t("Start the assistant")}</Button>
             </Flex>
         </>
+    );
+}
+
+// What the agent was told before the first message, layer by layer.
+function Instructions({ state }: { state: ChatState }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    if (state.layers.length === 0) return null;
+    const from = (layer: { layer: string; source: string }) => {
+        if (layer.layer === "base") return t("From Fleet");
+        if (layer.layer === "profile") return t("From Fleet, for the profile");
+        if (layer.layer === "controller") return t("From this controller ({{source}})", { source: layer.source });
+        return layer.source;
+    };
+    return (
+        <ExpandableSection toggleText={t("Instructions the assistant was given")} isExpanded={open}
+            onToggle={(_event, expanded) => setOpen(expanded)} style={{ marginBlockEnd: "0.5rem" }}>
+            <Content component="small">{t("They guide it; they do not hold it: what it may do is decided by Fleet, by your role and the profile.")}</Content>
+            <DescriptionList isCompact className="fleet-chat-layers">
+                {state.layers.map(layer => (
+                    <DescriptionListGroup key={layer.layer}>
+                        <DescriptionListTerm>{from(layer)}</DescriptionListTerm>
+                        <DescriptionListDescription><pre className="fleet-chat-instructions">{layer.text}</pre></DescriptionListDescription>
+                    </DescriptionListGroup>
+                ))}
+            </DescriptionList>
+        </ExpandableSection>
     );
 }
 
@@ -252,6 +395,7 @@ function Setup({ guide, onCheck }: { guide: ChatGuide; onCheck: () => void }) {
 export function ChatPage() {
     const { t, i18n } = useTranslation();
     const session = useSession();
+    const profiles = useProfiles();
     const state = useSyncExternalStore(chat.subscribe, chat.getState);
     // Asked again when the agent starts or ends: the sessions open change.
     const info = useLoad(() => call<ChatInfo>("chat.agents"));
@@ -282,6 +426,11 @@ export function ChatPage() {
             <SectionHeader title={running && agent ? t("Assistant: {{agent}}", { agent: agent.label }) : t("Assistant")}>
                 {running && (
                     <>
+                        <FlexItem>
+                            <Label color={state.profile === "autonomous" || state.profile === "administrator" ? "orange" : "blue"}>
+                                {t("Profile {{profile}}", { profile: profiles.name(state.profile) })}
+                            </Label>
+                        </FlexItem>
                         {state.sessions.length > 0 && (
                             <FlexItem style={{ inlineSize: "20rem", maxInlineSize: "100%" }}>
                                 <FormSelect value={state.sessions.some(one => one.sessionId === state.sessionId) ? state.sessionId : ""}
@@ -301,6 +450,9 @@ export function ChatPage() {
                 )}
             </SectionHeader>
             {state.phase === "starting" && <Spinner aria-label={t("Starting the assistant")} />}
+            {/* Asked for again after each answer: the assistant may have written one. */}
+            {session.commands.includes("draft.list") && <PendingDrafts stamp={state.busy ? "" : `${state.sessionId}:${state.items.length}`} />}
+            {running && <Instructions state={state} />}
             {state.phase === "ended" && state.items.length > 0 && <Conversation items={state.items} busy={false} />}
             {running && (
                 <Conversation items={state.items} busy={state.busy || state.loading}>
@@ -309,8 +461,8 @@ export function ChatPage() {
             )}
             {running && state.needsLogin && <Login agent={agent} />}
             {running && <Composer state={state} />}
-            {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} />}
-            {state.ask && <AskModal ask={state.ask} />}
+            {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} onAccepted={reload} />}
+            {state.ask && <AskModal ask={state.ask} profile={state.profile} />}
         </div>
     );
 }
