@@ -72,7 +72,7 @@ export function filterTemplates(templates: Template[], view: TemplatesView, name
         if (view.project && template.project_id !== view.project) return false;
         if (view.inventory && template.inventory_id !== view.inventory) return false;
         if (view.outcome && outcomeOf(template) !== view.outcome) return false;
-        if (view.trait === "approval" && !template.needs_approval) return false;
+        if (view.trait === "approval" && template.approval === "none") return false;
         if (view.trait === "survey" && template.survey.length === 0) return false;
         if (view.trait === "scheduled" && names.schedules(template.id) === 0) return false;
         if (view.trait === "unscheduled" && names.schedules(template.id) > 0) return false;

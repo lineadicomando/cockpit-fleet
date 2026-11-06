@@ -685,8 +685,13 @@ def _launch(term: Terminal, args: list[str]) -> int:
     if not term.as_json:
         term.err.write(f"run {run['id']}: {run['title']}, {run['status']}\n")
         if run["status"] == "pending_approval":
-            term.err.write("It starts once another user approves it (fleet approval approve"
-                           f" --id {run['id']}); Ctrl-C stops following it.\n")
+            approval = term("run.get", {"id": run["id"]}).get("approval") or {}
+            if approval.get("mode") == "confirm" and approval.get("can_decide"):
+                term.err.write("It waits for your confirmation (fleet approval approve --id"
+                               f" {run['id']}); Ctrl-C stops following it.\n")
+            else:
+                term.err.write("It starts once another user approves it (fleet approval"
+                               f" approve --id {run['id']}); Ctrl-C stops following it.\n")
         elif run["status"] == "queued" and options.serial:
             ahead = term("run.get", {"id": run["id"]}).get("waiting_for")
             if ahead:

@@ -851,8 +851,16 @@ scheduled, and an optional one is left unanswered.
 
 ## Approvals
 
-A job template may need approval (`needs_approval`): each of its runs waits
-until someone other than who launched it lets it start. What waits is the
+A job template, or a step of a workflow, says whether its runs wait for an
+approval and from whom (`approval`): `none`; `confirm`, a checkpoint that
+who launched the run may pass too, without the right to approve, on their
+own run or between two steps; `other`, another person. A step waits as the
+stronger of its own mode and its template's. `needs_approval`, the yes or no
+of before (schema 24 turned it into `other`), is still taken and given:
+true is `other`, and an export carries both, so that an older controller
+importing it keeps an approval, in `other` where it was `confirm`. Steps
+kept in the options of runs from before are read as they were
+(`workflows.step_mode`). What waits is the
 run as it will be: `runs.launch` prepares its directory as for any other
 run (the copy of the project, the ciphertext of its secrets, a secret answer
 taken from its ticket, `spec.json`) and records it as `pending_approval`,
@@ -877,18 +885,24 @@ their role, even none: an approver who is neither operator nor viewer gets
 `whoami` and the three commands of approvals, and the page shows them only
 the runs that wait, with what each would do (template, project and revision,
 inventory and limit, dry run, the answers and which secrets were given).
-Not the user who launched it, except an administrator, who could launch
+In `confirm`, also who launched it: `approval.approve` and `reject` need
+the role operator (who can launch) or the right, and `approvals.may_decide`
+does the rest. In `other`, not who launched it, except an administrator
+while `[approvals] admins_exempt` is true (the default), who could launch
 the same playbook without the approval anyway by changing the template. A
 run of a schedule is launched by `schedule:NAME`, so anyone allowed may
-approve it; for that, only an administrator turns on a schedule of a
-template that needs an approval (an operator who did could approve what it
-launches, one person doing both). An operator still turns one off. An agent never approves: a call made for one has no right, and
-the commands refuse it whatever its role; `approval.list` is a tool,
-deciding is not. Through `fleet` at a terminal, a person does.
+approve it, and one in `confirm` waits as in `other` (`approvals.request`
+stores the mode it waits in); for that, only an administrator turns on a
+schedule of a template that needs an approval (an operator who did could
+approve what it launches, one person doing both). An operator still turns
+one off. An agent never approves nor confirms, not even a run it launched
+for its user: a call made for one has no right, and the commands refuse it
+whatever its role; `approval.list` is a tool, deciding is not. Through
+`fleet` at a terminal, a person does.
 
 **Records.** The table `approvals` (schema 16) has one row per run that
-waited: who asked and when, until when, the decision, who took it and when,
-and a comment. A decision is claimed by a conditional update, so two
+waited: who asked and when, until when, in which mode (schema 24), the
+decision, who took it and when, and a comment. A decision is claimed by a conditional update, so two
 approvers at once give one decision and a conflict. Every decision made by
 a person is in the audit trail; an expiry is in the journal. `run.get`
 carries the approval of its run and whether the caller may decide.

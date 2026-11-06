@@ -258,6 +258,28 @@ class LaunchTest(unittest.TestCase):
         self.assertTrue(fake.calls[1][1]["serial"])
         self.assertIn("It waits for run r0 (backup) on the same inventory", t.err.getvalue())
 
+    def test_a_launch_that_waits_says_who_decides(self):
+        for approval, said in (({"mode": "confirm", "can_decide": True},
+                                "It waits for your confirmation"),
+                               ({"mode": "other", "can_decide": False},
+                                "It starts once another user approves it")):
+            fake = Fake({
+                "template.list": {"templates": [{**TEMPLATE, "survey": []}]},
+                "run.start": {**RUN, "status": "pending_approval"},
+                "run.get": {"status": "pending_approval", "approval": approval},
+            })
+            t = term(fake)
+            terminal.run(t, COMMANDS, ["launch", "t1", "--detach"])
+            self.assertEqual(t.err.getvalue(), "")
+            fake.answers.update({"run.log": {"text": "", "offset": 0, "more": False},
+                                 "run.get": [{"status": "pending_approval",
+                                              "approval": approval},
+                                             {"status": "successful"}],
+                                 "run.result": {**RESULT, "status": "successful"}})
+            t = term(fake)
+            terminal.run(t, COMMANDS, ["launch", "t1"])
+            self.assertIn(said, t.err.getvalue())
+
     def test_result_waits_until_the_end(self):
         fake = Fake({"run.result": [{**RESULT, "status": "running", "done": False},
                                     {**RESULT, "status": "successful"}]})

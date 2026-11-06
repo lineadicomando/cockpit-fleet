@@ -103,6 +103,9 @@ class Config:
     metrics_daily_days: int = 730
     # Hours a run waits for its approval before it expires.
     approvals_expire_hours: int = 24
+    # Whether an administrator may approve their own run that waits for
+    # another person.
+    approvals_admins_exempt: bool = True
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -272,7 +275,10 @@ def parse(text: str) -> Config:
     if not raw_days <= hourly_days <= daily_days:
         raise ConfigError("metrics: raw_days, hourly_days and daily_days must not decrease")
 
-    approvals = _section(data, "approvals", {"expire_hours"})
+    approvals = _section(data, "approvals", {"expire_hours", "admins_exempt"})
+    admins_exempt = approvals.get("admins_exempt", True)
+    if not isinstance(admins_exempt, bool):
+        raise ConfigError("approvals.admins_exempt must be true or false")
 
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
@@ -313,6 +319,7 @@ def parse(text: str) -> Config:
         metrics_daily_days=daily_days,
         approvals_expire_hours=_int(approvals, "approvals", "expire_hours",
                                     Config.approvals_expire_hours, 1, 24 * 30),
+        approvals_admins_exempt=admins_exempt,
     )
 
 

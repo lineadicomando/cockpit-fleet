@@ -221,7 +221,9 @@ export interface Template {
     forks: number | null;
     verbosity: number;
     become: boolean;
-    // Each run waits until someone other than who launched it approves it.
+    // Whether each run waits for an approval, and from whom.
+    approval: ApprovalMode;
+    // approval other than none: what it was before approval had modes.
     needs_approval: boolean;
     // Its latest run, a step of a workflow included; null when never launched.
     last_run: { id: string; status: RunStatus; created_at: number; finished_at: number | null } | null;
@@ -229,12 +231,16 @@ export interface Template {
 
 export type StepCondition = "success" | "failure" | "always";
 
+// None; confirm, which who launched the run may give too; other, another person.
+export type ApprovalMode = "none" | "confirm" | "other";
+
 export interface WorkflowNode {
     id: string;
     name: string;
     template_id: string;
     limit: string;
     answers: Record<string, SurveyValue>;
+    approval: ApprovalMode;
     needs_approval: boolean;
 }
 
@@ -311,6 +317,8 @@ export interface Approval {
     decided_by: string;
     decided_at: number | null;
     comment: string;
+    // What it waits for: a confirmation, or another person.
+    mode: "confirm" | "other";
     // Whether the caller may approve or reject it now.
     can_decide?: boolean;
 }

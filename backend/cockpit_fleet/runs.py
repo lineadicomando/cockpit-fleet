@@ -127,9 +127,10 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     if workflow:
         run.update(workflow_run_id=workflow["run_id"], workflow_node=workflow["node"],
                    title=workflow["title"] or template["name"])
-    if template["needs_approval"] or (workflow and workflow["needs_approval"]):
+    mode = approvals.strongest(template["approval"], workflow["approval"] if workflow else "none")
+    if mode != "none":
         jobs.queue(ctx, run, spec, directory, jobs.WAITING)
-        approvals.request(ctx, run_id)
+        approvals.request(ctx, run_id, mode)
     else:
         jobs.enqueue(ctx, run, spec, directory)
     return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
@@ -278,7 +279,7 @@ def run_get(ctx: Context, params: Values) -> dict:
     if approval:
         run["approval"] = {**approval, "can_decide": run["status"] == jobs.WAITING
                            and not approval["decision"]
-                           and approvals.may_decide(ctx, approval["requested_by"])}
+                           and approvals.may_decide(ctx, approval)}
     return run
 
 

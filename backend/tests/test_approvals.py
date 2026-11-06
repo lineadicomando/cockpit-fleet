@@ -246,6 +246,114 @@ class ApprovalTest(ApprovalBase):
         self.assertEqual(schedules._active_runs(self.ctx(), schedule["id"]), [run["id"]])
 
 
+class ModeTest(ApprovalBase):
+    def launched(self, mode, user="olga", role="operator", **launch):
+        if not hasattr(self, "by_mode"):
+            self.by_mode = {}
+        if not self.by_mode:
+            self.by_mode[mode] = self.template(approval=mode)
+        elif mode not in self.by_mode:
+            first = next(iter(self.by_mode.values()))
+            self.by_mode[mode] = self.ok("template.create", {
+                **{key: first[key] for key in ("project_id", "playbook", "inventory_id")},
+                "name": mode, "approval": mode})
+        template = self.by_mode[mode]
+        run = self.ok_as("run.start", {"template_id": template["id"], **launch}, user=user,
+                         role=role)
+        self.assertEqual(run["status"], "pending_approval")
+        return run
+
+    def test_a_confirmation_is_given_by_who_launched_it_too(self):
+        run = self.launched("confirm")
+        self.assertEqual(self.ok_as("run.get", {"id": run["id"]}, user="olga")["approval"]
+                         ["mode"], "confirm")
+        self.assertTrue(self.ok_as("run.get", {"id": run["id"]}, user="olga")["approval"]
+                        ["can_decide"])
+        # Not another operator, nor a viewer, without the right to approve.
+        self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="piero"),
+                         "forbidden")
+        self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="olga",
+                                      role="viewer"), "forbidden")
+        approved = self.ok_as("approval.approve", {"id": run["id"]}, user="olga")
+        self.assertEqual(approved["approval"]["decided_by"], "olga")
+        # An approver may confirm it as well, and reject it.
+        run = self.launched("confirm")
+        self.ok_as("approval.reject", {"id": run["id"]}, user="piero", role="viewer",
+                   rights=("approve",))
+
+    def test_an_agent_does_not_confirm_even_its_own_run(self):
+        self.config = replace(self.config, mcp_enabled=True, mcp_max_role="admin",
+                              chat_profiles=("administrator",),
+                              chat_default_profile="administrator")
+        run = self.launched("confirm", via="mcp:test")
+        self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="olga",
+                                      via="mcp:test"), "forbidden")
+        self.ok_as("approval.approve", {"id": run["id"]}, user="olga")
+
+    def test_another_person_and_whether_administrators_are_exempt(self):
+        run = self.launched("other", user="anna", role="admin")
+        self.assertEqual(self.ok_as("run.get", {"id": run["id"]}, user="anna", role="admin")
+                         ["approval"]["mode"], "other")
+        self.config = replace(self.config, approvals_admins_exempt=False)
+        self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="anna",
+                                      role="admin"), "forbidden")
+        self.ok_as("approval.approve", {"id": run["id"]}, user="carlo", role="admin")
+        self.config = replace(self.config, approvals_admins_exempt=True)
+        run = self.launched("other", user="anna", role="admin")
+        self.ok_as("approval.approve", {"id": run["id"]}, user="anna", role="admin")
+
+    def test_none_and_what_is_given_for_compatibility(self):
+        template = self.template(approval="none")
+        self.assertEqual(self.ok("run.start", {"template_id": template["id"]})["status"],
+                         "running")
+        listed = self.ok("template.list")["templates"][0]
+        self.assertEqual((listed["approval"], listed["needs_approval"]), ("none", False))
+        base = {key: template[key] for key in ("id", "name", "project_id", "playbook",
+                                               "inventory_id")}
+        for given, mode in (({"needs_approval": True}, "other"),
+                            ({"approval": "confirm", "needs_approval": True}, "confirm"),
+                            ({"approval": "confirm"}, "confirm"), ({}, "none")):
+            updated = self.ok("template.update", {**base, **given})
+            self.assertEqual((updated["approval"], updated["needs_approval"]),
+                             (mode, mode != "none"), given)
+        for bad in ({"approval": "maybe"}, {"approval": "none", "needs_approval": True},
+                    {"approval": "other", "needs_approval": False}):
+            self.assertEqual(self.code("template.update", {**base, **bad}), "bad_request", bad)
+
+    def test_a_run_of_a_schedule_in_confirm_waits_for_another_person(self):
+        template = self.template(approval="confirm")
+        analyze = mock.patch.object(schedules, "analyze",
+                                    lambda calendar, timezone="", count=1:
+                                    (calendar, [START + 3600 * (index + 1)
+                                                for index in range(count)]))
+        analyze.start()
+        self.addCleanup(analyze.stop)
+        schedule = self.ok("schedule.create", {"name": "nightly", "template_id": template["id"],
+                                               "calendar": "daily", "enabled": False})
+        run = self.ok_as("schedule.run", {"id": schedule["id"]}, user="olga")
+        self.assertEqual(self.ok_as("run.get", {"id": run["id"]}, user="olga")["approval"]
+                         ["mode"], "other")
+        self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="olga"),
+                         "forbidden")
+        # And only an administrator turns such a schedule on.
+        self.assertEqual(self.code_as("schedule.enable", {"id": schedule["id"]}, user="olga"),
+                         "forbidden")
+
+    def test_a_template_exports_its_mode_for_old_and_new_controllers(self):
+        self.template(approval="confirm")
+        document = self.ok("config.export")
+        exported = document["templates"][0]
+        self.assertEqual((exported["approval"], exported["needs_approval"]), ("confirm", True))
+        self.ok("template.delete", {"id": self.ok("template.list")["templates"][0]["id"]})
+        self.assertEqual(self.ok("config.import", {"document": document})["failed"], 0)
+        self.assertEqual(self.ok("template.list")["templates"][0]["approval"], "confirm")
+
+    def test_the_strongest_mode_wins(self):
+        self.assertEqual(approvals.strongest("none", "confirm"), "confirm")
+        self.assertEqual(approvals.strongest("other", "confirm"), "other")
+        self.assertEqual(approvals.strongest("none", "none"), "none")
+
+
 class RightsTest(unittest.TestCase):
     def test_rights_come_from_their_groups_and_add_to_a_role(self):
         self.assertEqual(rights_from_groups(["cockpit-fleet-approver", "users"]), {"approve"})

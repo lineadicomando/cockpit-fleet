@@ -24,7 +24,7 @@ import fcntl
 import json
 import os
 
-from . import jobs, journal, runs, store, survey
+from . import approvals, jobs, journal, runs, store, survey
 from .cli import Context, Id, Objs, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
 from .names import check_id
@@ -57,7 +57,7 @@ def _check_nodes(ctx: Context, nodes: list[dict]) -> list[dict]:
     seen: set[str] = set()
     checked = []
     for node in nodes:
-        unknown = set(node) - {"id", "name", "template_id", "limit", "answers",
+        unknown = set(node) - {"id", "name", "template_id", "limit", "answers", "approval",
                                "needs_approval"}
         if unknown:
             raise BadRequest(f"unknown key in a step: {', '.join(sorted(unknown))}")
@@ -75,9 +75,7 @@ def _check_nodes(ctx: Context, nodes: list[dict]) -> list[dict]:
         limit = node.get("limit", "")
         if not isinstance(limit, str):
             raise BadRequest("the limit of a step is a host pattern")
-        approval = node.get("needs_approval", False)
-        if not isinstance(approval, bool):
-            raise BadRequest("needs_approval of a step is true or false")
+        approval = approvals.mode_of(node, "a step")
         answers = node.get("answers", {})
         if not isinstance(answers, dict):
             raise BadRequest("the answers of a step are an object")
@@ -87,9 +85,22 @@ def _check_nodes(ctx: Context, nodes: list[dict]) -> list[dict]:
             "limit": check_limit(limit) if limit.strip() else "",
             "answers": survey.stored_answers(template, answers, "a step of a workflow",
                                               "a workflow"),
-            "needs_approval": approval,
+            "approval": approval,
         })
     return checked
+
+
+def step_mode(node: dict) -> str:
+    """The mode of approval of a stored step; one stored before modes says
+    needs_approval."""
+    return node.get("approval") or ("other" if node.get("needs_approval") else "none")
+
+
+def node_out(node: dict) -> dict:
+    """A stored step as commands give it: with needs_approval too, as it was
+    given before approval had modes."""
+    mode = step_mode(node)
+    return {**node, "approval": mode, "needs_approval": mode != "none"}
 
 
 def _check_edges(nodes: list[dict], edges: list[dict]) -> list[dict]:
@@ -138,9 +149,9 @@ def _workflow(ctx: Context, row) -> dict:
         "SELECT id, status, created_at FROM runs WHERE workflow_id = ? AND kind = 'workflow'"
         " ORDER BY created_at DESC LIMIT 1", (row["id"],)).fetchone()
     return {"id": row["id"], "name": row["name"], "description": row["description"],
-            "nodes": store.loads(row["nodes"], []), "edges": store.loads(row["edges"], []),
-            "created_at": row["created_at"], "updated_at": row["updated_at"],
-            "last_run": dict(last) if last else None}
+            "nodes": [node_out(node) for node in store.loads(row["nodes"], [])],
+            "edges": store.loads(row["edges"], []), "created_at": row["created_at"],
+            "updated_at": row["updated_at"], "last_run": dict(last) if last else None}
 
 
 _WORKFLOW_PARAMS = {
@@ -148,8 +159,9 @@ _WORKFLOW_PARAMS = {
     "description": Str(default="", max_length=2000),
     "nodes": Objs("The steps: id (a-z, 0-9, - and _), name, template_id, limit (a host"
                   " pattern that narrows the template's), answers (to its survey, no secret),"
-                  " needs_approval (the step waits for an approval even if its template"
-                  " does not ask for one)", max_items=MAX_NODES),
+                  " approval (none, confirm or other: the step waits for an approval in"
+                  " this mode, or in its template's when that asks more; needs_approval,"
+                  " deprecated, true is other)", max_items=MAX_NODES),
     "edges": Objs("The links: from and to (ids of steps), condition (success, failure or"
                   " always: when the step from ends so, the step to runs). A step with no"
                   " link to it runs first; one with several runs once all of them have"
@@ -406,7 +418,7 @@ def _launch_step(ctx: Context, run, node: dict, artifacts: dict) -> None:
     runs.launch(ctx, node["template_id"], node["limit"], False, False, node["answers"],
                 created_by=run["created_by"],
                 workflow={"run_id": run["id"], "node": node["id"], "title": node["name"],
-                          "vars": artifacts, "needs_approval": node["needs_approval"]})
+                          "vars": artifacts, "approval": step_mode(node)})
 
 
 def cancel(ctx: Context, run_id: str) -> str:
@@ -445,7 +457,7 @@ def workflow_progress(ctx: Context, params: Values) -> dict:
         state = states[node["id"]]
         if state == "ready" and run["status"] != "running":
             state = "skipped"  # never started: the run ended first
-        out.append({**node, "state": state,
+        out.append({**node_out(node), "state": state,
                     "run": runs.run_row(step) if step else None,
                     "carried": node["id"] in carried and step is not None
                     and step["id"] == carried[node["id"]],

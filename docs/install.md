@@ -70,8 +70,11 @@ domain), and what they may do in Fleet comes from the group of that account:
 | `cockpit-fleet-admin` | everything: projects, inventories, credentials and their secrets, host keys, templates, schedules, checks, notifications, ad-hoc commands, the audit log, export and import |
 | `cockpit-fleet-approver` | approve or reject the runs of templates that ask for it, whatever their role, or alone |
 
-The highest of the three roles wins; the approver group adds to it. Nobody
-approves their own launch but an administrator.
+The highest of the three roles wins; the approver group adds to it. A
+template or a step of a workflow asks for a confirmation, which who
+launched the run may give too, or for another person: then nobody approves
+their own launch but an administrator (unless `[approvals] admins_exempt =
+false`).
 
 ```sh
 sudo usermod -aG cockpit-fleet-operator anna

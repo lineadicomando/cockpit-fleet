@@ -10,7 +10,7 @@ Things refer to each other by name, since identifiers differ between two
 installations.
 """
 
-from . import audit, files, resources, store, variables
+from . import audit, files, resources, store, variables, workflows
 from .cli import COMMANDS, Context, Obj, Values, command
 from .errors import BadRequest, FleetError
 
@@ -79,12 +79,15 @@ def config_export(ctx: Context, params: Values) -> dict:
                               for one in variables.template_sets(conn, row["id"])],
             "survey": store.loads(row["survey"], []), "forks": row["forks"],
             "verbosity": row["verbosity"], "become": bool(row["become"]),
-            "needs_approval": bool(row["needs_approval"]),
+            # needs_approval too, for a controller from before modes: there
+            # confirm becomes another person, which asks more, not less.
+            "approval": row["approval"], "needs_approval": row["approval"] != "none",
         })
     templates = _names(ctx, "templates")
     document["workflows"] = [
         {"name": row["name"], "description": row["description"],
-         "nodes": [{**{key: value for key, value in node.items() if key != "template_id"},
+         "nodes": [{**{key: value for key, value in workflows.node_out(node).items()
+                       if key != "template_id"},
                     "template": templates.get(node["template_id"], "")}
                    for node in store.loads(row["nodes"], [])],
          "edges": store.loads(row["edges"], [])}
@@ -245,7 +248,7 @@ class _Importer:
                                  for name in sets],
         }
         for key in ("limit_hosts", "tags", "skip_tags", "extra_vars", "survey", "verbosity",
-                    "become", "needs_approval"):
+                    "become", "approval", "needs_approval"):
             if key in item:
                 params[key] = item[key]
         if item.get("forks") is not None:

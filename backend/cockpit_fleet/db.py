@@ -730,6 +730,23 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE audit ADD COLUMN session TEXT NOT NULL DEFAULT ''",
         "CREATE INDEX audit_session ON audit (session) WHERE session != ''",
     ],
+    [
+        # Modes of approval instead of yes or no: needs_approval, left in
+        # place unused, was another person. Steps of workflows say it in
+        # their JSON; those kept in the options of past runs are read as
+        # they are (workflows.step_mode).
+        "ALTER TABLE templates ADD COLUMN approval TEXT NOT NULL DEFAULT 'none'",
+        "UPDATE templates SET approval = 'other' WHERE needs_approval",
+        """
+        UPDATE workflows SET nodes = (
+            SELECT json_group_array(json(json_set(json_remove(step.value, '$.needs_approval'),
+                '$.approval', CASE WHEN json_extract(step.value, '$.needs_approval')
+                                   THEN 'other' ELSE 'none' END)))
+            FROM json_each(workflows.nodes) AS step)
+        WHERE json_array_length(nodes) > 0
+        """,
+        "ALTER TABLE approvals ADD COLUMN mode TEXT NOT NULL DEFAULT 'other'",
+    ],
 ]
 
 

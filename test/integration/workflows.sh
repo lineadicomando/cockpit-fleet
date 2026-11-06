@@ -138,6 +138,21 @@ expect_eq "the step that had succeeded was not run again" "$(get "$progress" '[n
 expect_eq "and still passed on what it had set" \
     "$(sed 's/\x1b\[[0-9;]*m//g' "/var/lib/cockpit-fleet/runs/$(step_run "$again_id" deploy)/stdout.log" | grep -c 'deploying version 7')" 1
 
+# --- a checkpoint: a confirmation who launched it gives --------------------------
+check=$(get "$(admin workflow.create "{\"name\": \"checkpoint\", \"nodes\": [
+    {\"id\": \"build\", \"template_id\": \"$build\"},
+    {\"id\": \"report\", \"template_id\": \"$report\", \"approval\": \"confirm\"}],
+  \"edges\": [{\"from\": \"build\", \"to\": \"report\", \"condition\": \"success\"}]}")" 'a["data"]["id"]')
+run_id=$(get "$(ctl itoperator workflow.launch "{\"id\": \"$check\"}")" 'a["data"]["id"]')
+expect_run "the step before the checkpoint runs" "$(wait_step "$run_id" build 10)" 120 successful
+second=$(wait_step "$run_id" report 30)
+expect_eq "the step after waits for a confirmation" \
+    "$(wait_status "$second" 5) $(get "$(ctl itoperator run.get "{\"id\": \"$second\"}")" 'a["data"]["approval"]["mode"], a["data"]["approval"]["can_decide"]')" \
+    "pending_approval confirm True"
+expect_eq "who launched it confirms it, without the right to approve" \
+    "$(get "$(ctl itoperator approval.approve "{\"id\": \"$second\"}")" 'a["data"]["approval"]["decided_by"]')" itoperator
+expect_run "and the workflow completes" "$run_id" 120 successful
+
 # --- cancel --------------------------------------------------------------------
 slow=$(get "$(admin workflow.create "{\"name\": \"slow\", \"nodes\": [
     {\"id\": \"wait\", \"template_id\": \"$waits\"}, {\"id\": \"after\", \"template_id\": \"$report\"}],

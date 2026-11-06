@@ -2463,8 +2463,6 @@ msgstr[1] "{{count}} non riusciti"
 msgid "{{role}}, approver"
 msgstr "{{role}}, approvatore"
 
-msgid "A run waits until a member of cockpit-fleet-approver, or an administrator, other than who launched it approves it. An administrator may approve their own."
-msgstr "Una run attende finché un membro di cockpit-fleet-approver, o un amministratore, diverso da chi l'ha lanciata non la approva. Un amministratore può approvare le proprie."
 
 msgid "Also approving the runs of the job templates that need it, except those you launched."
 msgstr "Anche approvare le run dei job template che lo richiedono, tranne quelle lanciate da te."
@@ -2484,8 +2482,6 @@ msgstr "Approvare {{name}}?"
 msgid "Approved by {{user}} on {{when}}"
 msgstr "Approvata da {{user}} il {{when}}"
 
-msgid "Each run needs approval"
-msgstr "Ogni run richiede un'approvazione"
 
 msgid "Expired"
 msgstr "Scaduta"
@@ -2625,8 +2621,6 @@ msgstr "riesce"
 msgid "This job template asks for a secret at launch, so it cannot be a step: a workflow never stores a secret."
 msgstr "Questo job template chiede un segreto al lancio, quindi non può essere un passo: un workflow non conserva mai un segreto."
 
-msgid "Wait for an approval before this step"
-msgstr "Attendi un'approvazione prima di questo passo"
 
 msgid "When it"
 msgstr "Quando"
@@ -3157,3 +3151,30 @@ msgstr "In attesa di"
 
 msgid "After the runs launched before it on its inventory"
 msgstr "Dopo i run lanciati prima sul suo inventory"
+
+msgid "No approval"
+msgstr "Nessuna approvazione"
+
+msgid "A confirmation"
+msgstr "Una conferma"
+
+msgid "Another person's approval"
+msgstr "L'approvazione di un'altra persona"
+
+msgid "Runs start as soon as they are launched."
+msgstr "Le run partono appena lanciate."
+
+msgid "A run waits until who launched it confirms it, or a member of cockpit-fleet-approver or an administrator approves it. A run launched by a schedule waits for another person. An agent never confirms."
+msgstr "Una run attende finché chi l'ha lanciata non la conferma, o un membro di cockpit-fleet-approver o un amministratore non la approva. Una run lanciata da una pianificazione attende un'altra persona. Un agente non conferma mai."
+
+msgid "A run waits until a member of cockpit-fleet-approver, or an administrator, other than who launched it approves it. An administrator may approve their own unless config.toml says otherwise."
+msgstr "Una run attende finché un membro di cockpit-fleet-approver, o un amministratore, diverso da chi l'ha lanciata non la approva. Un amministratore può approvare le proprie, salvo diversa indicazione in config.toml."
+
+msgid "Before it starts"
+msgstr "Prima di partire"
+
+msgid "Its job template asks for this already."
+msgstr "Il suo job template lo richiede già."
+
+msgid "Confirmation"
+msgstr "Conferma"

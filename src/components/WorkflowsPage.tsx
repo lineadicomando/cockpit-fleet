@@ -5,7 +5,6 @@ import {
     Card,
     CardBody,
     CardTitle,
-    Checkbox,
     Content,
     Flex,
     FlexItem,
@@ -30,7 +29,8 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
 import { layers, nextStepId } from "../lib/workflow.ts";
-import type { Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
+import type { ApprovalMode, Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
+import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
@@ -41,15 +41,15 @@ interface StepDraft {
     name: string;
     template_id: string;
     limit: string;
-    needs_approval: boolean;
+    approval: ApprovalMode;
     answers: Answers;
     after: { from: string; condition: StepCondition }[];
 }
 
 function toDrafts(workflow: Workflow | undefined, templates: Template[]): StepDraft[] {
-    if (!workflow) return [{ id: "s1", name: "", template_id: "", limit: "", needs_approval: false, answers: {}, after: [] }];
+    if (!workflow) return [{ id: "s1", name: "", template_id: "", limit: "", approval: "none", answers: {}, after: [] }];
     return workflow.nodes.map(node => ({
-        id: node.id, name: node.name, template_id: node.template_id, limit: node.limit, needs_approval: node.needs_approval,
+        id: node.id, name: node.name, template_id: node.template_id, limit: node.limit, approval: node.approval,
         answers: storedAnswers(templates.find(item => item.id === node.template_id), node.answers),
         after: workflow.edges.filter(edge => edge.to === node.id).map(edge => ({ from: edge.from, condition: edge.condition })),
     }));
@@ -108,10 +108,8 @@ function StepEditor({ step, steps, templates, onChange, onRemove }: {
                     <TextInput id={`wf-${step.id}-limit`} value={step.limit} placeholder={template?.limit_hosts || "web01,web02"} onChange={(_e, value) => onChange({ ...step, limit: value })} />
                 </FormGroup>
                 <SurveyAnswers survey={surveyOf(template)} answers={step.answers} onChange={answers => onChange({ ...step, answers })} />
-                <FormGroup fieldId={`wf-${step.id}-approval`}>
-                    <Checkbox id={`wf-${step.id}-approval`} label={t("Wait for an approval before this step")} isChecked={step.needs_approval || !!template?.needs_approval}
-                        isDisabled={!!template?.needs_approval} onChange={(_e, value) => onChange({ ...step, needs_approval: value })} />
-                </FormGroup>
+                <ApprovalModeField id={`wf-${step.id}-approval`} value={step.approval} floor={template?.approval ?? "none"}
+                    onChange={approval => onChange({ ...step, approval })} />
                 <FormGroup label={t("Runs after")} fieldId={`wf-${step.id}-after`} role="group">
                     {step.after.map((link, index) => (
                         <Grid key={index} hasGutter style={{ marginBlockEnd: "0.5rem" }}>
@@ -162,7 +160,7 @@ function WorkflowModal({ workflow, templates, onClose, onDone }: { workflow?: Wo
     async function submit() {
         const nodes = steps.map(step => ({
             id: step.id, name: step.name.trim(), template_id: step.template_id, limit: step.limit.trim(),
-            needs_approval: step.needs_approval,
+            approval: step.approval,
             answers: collectAnswers(surveyOf(templates.find(item => item.id === step.template_id)), step.answers),
         }));
         const edges: WorkflowEdge[] = steps.flatMap(step => step.after.map(link => ({ from: link.from, to: step.id, condition: link.condition })));
@@ -194,7 +192,7 @@ function WorkflowModal({ workflow, templates, onClose, onDone }: { workflow?: Wo
                 <Button variant="secondary" onClick={() => {
                     const last = steps[steps.length - 1];
                     const id = nextStepId(steps.map(step => step.id));
-                    setSteps([...steps, { id, name: "", template_id: "", limit: "", needs_approval: false, answers: {}, after: last ? [{ from: last.id, condition: "success" }] : [] }]);
+                    setSteps([...steps, { id, name: "", template_id: "", limit: "", approval: "none", answers: {}, after: last ? [{ from: last.id, condition: "success" }] : [] }]);
                 }}>{t("Add a step")}</Button>
             </div>
         </FormModal>
@@ -346,7 +344,7 @@ export function WorkflowSteps({ id }: { id: string }) {
                                     <CardBody>
                                         <StepStateLabel node={node} />
                                         {node.carried && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Done before")}</Label>}
-                                        {(node.needs_approval) && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("Approval")}</Label>}
+                                        {node.approval !== "none" && <span style={{ marginInlineStart: "0.5rem" }}><ApprovalModeLabel mode={node.approval} color="orange" /></span>}
                                         {node.limit && <Content component="small" style={{ display: "block" }}><code>{node.limit}</code></Content>}
                                         {node.run?.started_at && <Content component="small" style={{ display: "block" }}>{formatTime(node.run.started_at, i18n.language)}</Content>}
                                         {after.map(edge => (

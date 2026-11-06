@@ -34,6 +34,21 @@ entries go under `[Unreleased]`, under the heading of their kind.
   maintenance window opened or closed, and with `[chat]
   autonomous_dry_run` dry runs only.
 
+- Modes of approval for a job template and a step of a workflow: none, a
+  confirmation, which who launched the run may give too (a checkpoint on
+  their own run, or between two steps), or another person, as before
+  (`approval`: `none`, `confirm`, `other`). A run of a schedule in confirm
+  waits for another person, and an agent never confirms. `[approvals]
+  admins_exempt = false` makes an administrator need someone else to
+  approve their own run. Existing templates and steps that needed an
+  approval wait for another person, as before.
+
+### Deprecated
+
+- `needs_approval` of `template.create`, `template.update` and the steps of
+  `workflow.create` and `workflow.update`: use `approval`. It is still
+  taken (true is `other`) and given, and an export carries both.
+
 ### Breaking
 
 - An agent gets the tools of its profile, `assisted` unless configured:

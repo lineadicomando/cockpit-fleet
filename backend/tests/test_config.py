@@ -44,6 +44,12 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaises(ConfigError, msg=bad):
                 parse("[chat]\n" + bad)
 
+    def test_administrators_may_approve_their_own_unless_told_otherwise(self):
+        self.assertTrue(parse("").approvals_admins_exempt)
+        self.assertFalse(parse("[approvals]\nadmins_exempt = false").approvals_admins_exempt)
+        with self.assertRaises(ConfigError):
+            parse('[approvals]\nadmins_exempt = "no"')
+
     def test_limits_of_autonomy(self):
         config = parse("")
         self.assertEqual((config.chat_autonomous_runs, config.chat_autonomous_dry_run),

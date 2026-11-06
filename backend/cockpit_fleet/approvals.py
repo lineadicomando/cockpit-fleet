@@ -1,5 +1,5 @@
-"""Approvals: a run of a template that needs one waits until someone else
-lets it start.
+"""Approvals: a run of a template, or a step of a workflow, that needs one
+waits until someone lets it start.
 
 The run is prepared when it is launched, as any other: its copy of the
 project, the ciphertext of its secrets, its spec. What is approved is then
@@ -8,32 +8,64 @@ meanwhile. It waits as pending_approval, which dispatch() never starts;
 approving it queues it, rejecting it or letting it expire ends it and
 removes what was prepared.
 
-Who may approve: an administrator, or a member of cockpit-fleet-approver,
-whatever their role. Not the user who launched it, unless an administrator.
-An agent never does, whatever role it acts with.
+A template or a step says how (MODES): "none"; "confirm", a checkpoint
+that the user who launched the run may pass too, without the right to
+approve; "other", another person. Who else may decide: an administrator, or
+a member of cockpit-fleet-approver, whatever their role; in "other" not the
+user who launched it, unless an administrator and [approvals] admins_exempt.
+A run a schedule launches has nobody who launched it at hand: in "confirm"
+it waits as in "other". An agent never decides, whatever role it acts with,
+not even on a run it launched.
 """
 
 from . import jobs, journal, notify, store
 from .auth import role_at_least
 from .cli import Choice, Context, Id, Int, Str, Values, command, is_agent
-from .errors import Conflict, Forbidden
+from .errors import BadRequest, Conflict, Forbidden
+
+MODES = ("none", "confirm", "other")
 
 
-def request(ctx: Context, run_id: str) -> None:
-    """Record that a run just queued as pending_approval waits, and tell about it."""
+def strongest(*modes: str) -> str:
+    """The mode that asks the most of the ones given."""
+    return max(modes, key=MODES.index)
+
+
+def mode_of(item: dict, what: str) -> str:
+    """The mode a template or a step is given: "approval", or the older
+    "needs_approval", which meant another person. Both, they must agree."""
+    mode = item.get("approval")
+    legacy = item.get("needs_approval")
+    if mode is not None and mode not in MODES:
+        raise BadRequest(f"approval of {what} is one of: {', '.join(MODES)}")
+    if legacy is not None and not isinstance(legacy, bool):
+        raise BadRequest(f"needs_approval of {what} is true or false")
+    if legacy is None:
+        return mode or "none"
+    if mode is not None and (mode != "none") != legacy:
+        raise BadRequest(f"approval and needs_approval of {what} disagree: give approval only")
+    return mode or ("other" if legacy else "none")
+
+
+def request(ctx: Context, run_id: str, mode: str) -> None:
+    """Record that a run just queued as pending_approval waits, in MODE, and
+    tell about it."""
     now = store.now()
     run = store.fetch(ctx.conn, "runs", run_id, "run")
+    if run["schedule_id"]:
+        mode = "other"
     ctx.conn.execute(
-        "INSERT INTO approvals (run_id, requested_by, requested_at, expires_at)"
-        " VALUES (?, ?, ?, ?)",
-        (run_id, run["created_by"], now, now + ctx.config.approvals_expire_hours * 3600))
+        "INSERT INTO approvals (run_id, requested_by, requested_at, expires_at, mode)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (run_id, run["created_by"], now, now + ctx.config.approvals_expire_hours * 3600, mode))
     journal.send(f"run {run_id}: waits for approval", 5, FLEET_RUN=run_id)
     notify.run_waits(ctx, run_id)
 
 
 def _row(row) -> dict:
     return {key: row[key] for key in ("run_id", "requested_by", "requested_at", "expires_at",
-                                      "decision", "decided_by", "decided_at", "comment")}
+                                      "decision", "decided_by", "decided_at", "comment",
+                                      "mode")}
 
 
 def of_run(ctx: Context, run_id: str) -> dict | None:
@@ -41,14 +73,17 @@ def of_run(ctx: Context, run_id: str) -> dict | None:
     return _row(row) if row else None
 
 
-def may_decide(ctx: Context, requested_by: str) -> bool:
-    """Whether the caller may approve or reject a run launched by requested_by."""
+def may_decide(ctx: Context, approval: dict) -> bool:
+    """Whether the caller may approve or reject a run that waits so."""
     caller = ctx.caller
-    if is_agent(ctx.via):
+    if is_agent(ctx.via) or not approval:
         return False
-    if role_at_least(caller.role, "admin"):
+    own = caller.user == approval["requested_by"]
+    if own and approval["mode"] == "confirm":
         return True
-    return "approve" in caller.rights and caller.user != requested_by
+    if role_at_least(caller.role, "admin"):
+        return not own or ctx.config.approvals_admins_exempt
+    return "approve" in caller.rights and not own
 
 
 def expire(ctx: Context) -> int:
@@ -101,10 +136,13 @@ def _waiting(ctx: Context, run_id: str):
     if approval["expires_at"] <= store.now():
         _decide(ctx, run_id, "expired", "system", "")
         raise Conflict("the time to approve this run is over: it expired")
-    if not may_decide(ctx, approval["requested_by"]):
+    if not may_decide(ctx, approval):
         if is_agent(ctx.via):
             raise Forbidden("an agent cannot approve or reject a run: a person must")
-        raise Forbidden("you launched this run: another user must approve it")
+        if ctx.caller.user == approval["requested_by"]:
+            raise Forbidden("you launched this run: another user must approve it")
+        raise Forbidden("approving a run takes an administrator or a member of"
+                        " cockpit-fleet-approver")
     return run
 
 
@@ -114,18 +152,18 @@ _DECIDE_PARAMS = {
 }
 
 
-@command("approval.approve", role="admin", right="approve", mutating=True, tool=False,
+@command("approval.approve", role="operator", right="approve", mutating=True, tool=False,
          params=_DECIDE_PARAMS)
 def approval_approve(ctx: Context, params: Values) -> dict:
-    """Let a run that waits for approval start. The user who launched it
-    cannot, unless an administrator."""
+    """Let a run that waits for approval start. Who launched it may when it
+    waits for a confirmation; otherwise not, unless an administrator."""
     _waiting(ctx, params["id"])
     if not _decide(ctx, params["id"], "approved", ctx.caller.user, params["comment"].strip()):
         raise Conflict("this run was decided meanwhile")
     return _entry(ctx, store.fetch(ctx.conn, "runs", params["id"], "run"))
 
 
-@command("approval.reject", role="admin", right="approve", mutating=True, tool=False,
+@command("approval.reject", role="operator", right="approve", mutating=True, tool=False,
          params=_DECIDE_PARAMS)
 def approval_reject(ctx: Context, params: Values) -> dict:
     """Refuse a run that waits for approval: it ends without starting."""
@@ -151,7 +189,7 @@ def _entry(ctx: Context, run) -> dict:
             "project": name("projects", run["project_id"]),
             "inventory": name("inventories", run["inventory_id"]),
             "can_decide": (run["status"] == jobs.WAITING and not approval.get("decision")
-                           and may_decide(ctx, approval.get("requested_by", ""))),
+                           and may_decide(ctx, approval)),
             }
 
 

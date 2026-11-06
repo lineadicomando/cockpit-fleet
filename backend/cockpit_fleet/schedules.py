@@ -333,7 +333,7 @@ def _set_enabled(ctx: Context, schedule_id: str, enabled: bool) -> dict:
     row = store.fetch(ctx.conn, "schedules", schedule_id, "schedule")
     if enabled and ctx.caller.role != "admin":
         template = store.fetch(ctx.conn, "templates", row["template_id"], "template")
-        if template["needs_approval"]:
+        if template["approval"] != "none":
             # Its runs are launched by the schedule: whoever turned it on
             # could then approve them, and one person would do both.
             raise Forbidden("a schedule of a template whose runs need an approval"

@@ -16,6 +16,11 @@
 # Hours a run of a template that needs approval waits for it before it
 # expires; it then never starts.
 #expire_hours = 24
+# Whether an administrator may approve their own run of a template, or a
+# step, that waits for another person. False: another user must, an
+# administrator or a member of cockpit-fleet-approver. A run that waits for
+# a confirmation may be confirmed by who launched it either way.
+#admins_exempt = true
 
 [projects]
 # Directories of this machine that may be used as a project as they are.

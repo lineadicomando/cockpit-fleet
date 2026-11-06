@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -43,6 +44,38 @@ class DatabaseTest(unittest.TestCase):
             self.assertEqual(db.schema_version(conn), len(extra))
             conn.execute("SELECT x FROM later")
             self.assertEqual(conn.execute("SELECT count(*) FROM audit").fetchone()[0], 1)
+
+    def test_needs_approval_becomes_a_mode(self):
+        with mock.patch.object(db, "MIGRATIONS", db.MIGRATIONS[:23]):
+            conn = db.connect(self.path)
+        conn.execute("PRAGMA foreign_keys = OFF")
+        for name, needs in (("asks", 1), ("free", 0)):
+            conn.execute("INSERT INTO templates (id, name, project_id, playbook, inventory_id,"
+                         " created_at, updated_at, needs_approval)"
+                         " VALUES (?, ?, 'p', 'site.yml', 'i', 0, 0, ?)", (name, name, needs))
+        steps = [{"id": "a", "template_id": "free", "needs_approval": True},
+                 {"id": "b", "template_id": "free", "needs_approval": False},
+                 {"id": "c", "template_id": "asks"}]
+        conn.execute("INSERT INTO workflows (id, name, nodes, created_at, updated_at)"
+                     " VALUES ('w', 'w', ?, 0, 0)", (json.dumps(steps),))
+        conn.execute("INSERT INTO workflows (id, name, created_at, updated_at)"
+                     " VALUES ('empty', 'empty', 0, 0)")
+        conn.execute("INSERT INTO approvals (run_id, requested_by, requested_at, expires_at)"
+                     " VALUES ('r', 'anna', 0, 1)")
+        conn.commit()
+        conn.close()
+        conn = self.opened(db.connect(self.path))
+        self.assertEqual(dict(conn.execute("SELECT id, approval FROM templates").fetchall()),
+                         {"asks": "other", "free": "none"})
+        nodes = json.loads(conn.execute("SELECT nodes FROM workflows WHERE id = 'w'")
+                           .fetchone()[0])
+        self.assertEqual([(node["id"], node["approval"], "needs_approval" in node)
+                          for node in nodes],
+                         [("a", "other", False), ("b", "none", False), ("c", "none", False)])
+        self.assertEqual(nodes[0]["template_id"], "free")
+        self.assertEqual(conn.execute("SELECT nodes FROM workflows WHERE id = 'empty'")
+                         .fetchone()[0], "[]")
+        self.assertEqual(conn.execute("SELECT mode FROM approvals").fetchone()[0], "other")
 
     def test_failed_migration_leaves_the_previous_version(self):
         db.connect(self.path).close()

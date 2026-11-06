@@ -10,7 +10,7 @@ import subprocess
 import unicodedata
 from pathlib import Path, PurePosixPath
 
-from . import files, jobs, paths, store, survey, variables
+from . import approvals, files, jobs, paths, store, survey, variables
 from .cli import Bool, Choice, Context, Id, Int, Obj, Objs, Str, Strs, Values, command
 from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
@@ -749,7 +749,9 @@ def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
                                       "verbosity")}
     data["vault_credential_ids"] = [vault["id"] for vault in template_vaults(ctx, row["id"])]
     data["become"] = bool(row["become"])
-    data["needs_approval"] = bool(row["needs_approval"])
+    data["approval"] = row["approval"]
+    # What it was before approval had modes: still given, for whoever reads it.
+    data["needs_approval"] = row["approval"] != "none"
     data["tags"] = store.loads(row["tags"], [])
     data["skip_tags"] = store.loads(row["skip_tags"], [])
     data["extra_vars"] = store.loads(row["extra_vars"], {})
@@ -777,8 +779,11 @@ _TEMPLATE_PARAMS = {
     "forks": Int(1, 200),
     "verbosity": Int(0, 4, default=0),
     "become": Bool(),
-    "needs_approval": Bool("Each run waits until someone other than who launched it approves it"
-                           " (an administrator may approve their own)"),
+    "approval": Choice(approvals.MODES, "Whether each run waits for an approval: none;"
+                       " confirm, which who launched it may give too; other, another person"
+                       " (an administrator may approve their own, unless config.toml says"
+                       " otherwise)", default="none"),
+    "needs_approval": Bool("Deprecated: true is approval other"),
 }
 
 
@@ -809,7 +814,9 @@ def _template_values(ctx: Context, params: Values) -> dict:
         "forks": forks,
         "verbosity": check_int(params["verbosity"], "verbosity", 0, 4),
         "become": int(params["become"]),
-        "needs_approval": int(params["needs_approval"]),
+        "approval": approvals.mode_of(
+            {key: params[key] for key in ("approval", "needs_approval") if key in params.given},
+            "a template"),
         "updated_at": store.now(),
     }
 

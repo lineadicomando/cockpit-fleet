@@ -39,7 +39,7 @@ cli.load_commands()
 # audited as a change. A command added, or one whose role or kind changes,
 # fails here until this table says so: lowering a role is a decision.
 ROLE_TABLE = """
-approval.approve admin M      approval.list viewer -        approval.reject admin M
+approval.approve operator M   approval.list viewer -        approval.reject operator M
 audit.list admin -            channel.create admin M        channel.delete admin M
 channel.list viewer -         channel.test admin M          channel.update admin M
 chat.agents viewer -          chat.start viewer M           check.catalog viewer -

@@ -112,6 +112,55 @@ class WorkflowTest(WorkflowBase):
         self.end(self.steps(run["id"])["c"][1])
         self.assertEqual(self.ok("run.get", {"id": run["id"]})["status"], "successful")
 
+    def test_a_checkpoint_between_steps_is_passed_by_who_launched_it(self):
+        workflow = self.chain(approval="confirm")
+        node = self.ok("workflow.list")["workflows"][0]["nodes"][1]
+        self.assertEqual((node["approval"], node["needs_approval"]), ("confirm", True))
+        run = self.ok_as("workflow.launch", {"id": workflow["id"]}, user="olga")
+        self.end(self.steps(run["id"])["a"][1])
+        second = self.steps(run["id"])["b"][1]
+        self.assertEqual(self.code_as("approval.approve", {"id": second}, user="piero"),
+                         "forbidden")
+        self.ok_as("approval.approve", {"id": second}, user="olga")
+        self.assertEqual(self.steps(run["id"])["b"][0], "active")
+
+    def test_a_step_waits_as_the_stronger_of_its_mode_and_its_template_s(self):
+        template = {key: self.second[key] for key in ("id", "name", "project_id", "playbook",
+                                                      "inventory_id", "survey")}
+        self.ok("template.update", {**template, "approval": "other"})
+        workflow = self.chain(approval="confirm")
+        run = self.ok_as("workflow.launch", {"id": workflow["id"]}, user="olga")
+        self.end(self.steps(run["id"])["a"][1])
+        second = self.steps(run["id"])["b"][1]
+        self.assertEqual(self.ok("run.get", {"id": second})["approval"]["mode"], "other")
+        self.assertEqual(self.code_as("approval.approve", {"id": second}, user="olga"),
+                         "forbidden")
+
+    def test_a_run_from_before_modes_resumes_with_its_steps_as_they_were(self):
+        workflow = self.chain()
+        run = self.ok_as("workflow.launch", {"id": workflow["id"]}, user="olga")
+        # Its steps as a run kept them before modes: the cleanup waited for another person.
+        conn = self.ctx().conn
+        options = json.loads(conn.execute("SELECT options FROM runs WHERE id = ?",
+                                          (run["id"],)).fetchone()[0])
+        for node in options["nodes"]:
+            node.pop("approval")
+            node["needs_approval"] = node["id"] == "x"
+        conn.execute("UPDATE runs SET options = ? WHERE id = ?",
+                     (json.dumps(options), run["id"]))
+        conn.commit()
+        nodes = {node["id"]: node for node in self.ok("workflow.progress",
+                                                      {"id": run["id"]})["nodes"]}
+        self.assertEqual((nodes["x"]["approval"], nodes["a"]["approval"]), ("other", "none"))
+        self.end(self.steps(run["id"])["a"][1], rc=2)
+        cleanup = self.steps(run["id"])["x"][1]
+        self.assertEqual(self.ok("run.get", {"id": cleanup})["approval"]["mode"], "other")
+        self.ok_as("approval.reject", {"id": cleanup}, user="piero", role="admin")
+        again = self.ok_as("workflow.resume", {"id": run["id"]}, user="olga")
+        self.end(self.steps(again["id"])["a"][1], rc=2)
+        cleanup = self.steps(again["id"])["x"][1]
+        self.assertEqual(self.ok("run.get", {"id": cleanup})["approval"]["mode"], "other")
+
     def test_a_rejected_step_fails_the_workflow(self):
         workflow = self.chain(needs_approval=True)
         run = self.ok_as("workflow.launch", {"id": workflow["id"]}, user="olga")

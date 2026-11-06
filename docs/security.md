@@ -18,7 +18,7 @@ they can reach.
 | Whoever writes a project | write code that runs, in the sandbox of a run, with the credentials of the templates that use it | reach other projects (but see the note on local directories below), other runs, their secrets, or the controller beyond the sandbox |
 | An operator | launch what administrators defined, on fewer hosts than the template says, with answers to its survey | widen a template's hosts, change what it runs, or have an answer read as code |
 | A viewer | see what exists and how runs ended | read the output of runs, which may hold data of the nodes |
-| An approver | let a run that waits for approval start, or refuse it | approve their own launch (an administrator may) |
+| An approver | let a run that waits for approval start, or refuse it | approve their own launch where another person is asked for (an administrator may, unless `[approvals] admins_exempt = false`) |
 | A node | answer what it is asked | report for another host or another check, or have its answers read as code |
 
 An administrator of Fleet is not an administrator of the machine: their
