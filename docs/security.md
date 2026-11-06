@@ -112,7 +112,10 @@ secret. The output of runs is written by the nodes: an agent that reads it
 and may also change things can be steered by what a node writes, which is
 why the limits are there. A profile is held by `fleetctl`, not by the agent
 or the page: one that names another, or none, gets no more than the
-default one.
+default one. An agent that acts without asking (the profile `autonomous`,
+off as installed) launches a bounded number of runs in a session, nothing
+on an inventory in maintenance, and cannot silence a problem; a run that
+needs approval still waits for a person.
 
 ## What it does not do
 

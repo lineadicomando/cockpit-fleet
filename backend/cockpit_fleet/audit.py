@@ -77,6 +77,7 @@ def record(
     via: str = "",
     secrets: tuple[str, ...] = (),
     profile: str = "",
+    session: str = "",
 ) -> None:
     text = _params_text(params, redact, secrets)
     # The journal first: it still gets the record when the database is unusable.
@@ -93,19 +94,21 @@ def record(
         FLEET_PARAMS=text,
         **({"FLEET_VIA": via} if via else {}),
         **({"FLEET_PROFILE": profile} if profile else {}),
+        **({"FLEET_SESSION": session} if session else {}),
     )
     if conn is not None:
         conn.execute(
             "INSERT INTO audit (ts, uid, user, role, command, params, outcome, detail, via,"
-            " profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " profile, session) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (time.time(), caller.uid, caller.user, caller.role, command, text, outcome, detail,
-             via, profile),
+             via, profile, session),
         )
 
 
 def entries(conn: sqlite3.Connection, limit: int, before: int | None) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, ts, user, role, command, params, outcome, detail, via, profile FROM audit"
+        "SELECT id, ts, user, role, command, params, outcome, detail, via, profile, session"
+        " FROM audit"
         " WHERE (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
         (before, before, limit),
     )

@@ -1678,6 +1678,21 @@ hand with the same role. `mcp.tools` lists only the tools of the profile,
 `become`. The audit has a `profile` column (schema 22), and the journal
 `FLEET_PROFILE`.
 
+**Autonomy.** In a profile nobody confirms (`profiles.AUTONOMOUS`),
+`dispatch` hands the call, once the role allows it, to `autonomy.hold`:
+nothing that silences a problem (`state.ack`, `state.unack`,
+`maintenance.*`); launches (templates, ad-hoc, workflows and their resume,
+schedules, checks) only with a session, at most `[chat] autonomous_runs` of
+them, none on an inventory with a maintenance window open, and with
+`autonomous_dry_run` a template's run in check mode and no workflow or
+schedule, which have no dry run. The session is drawn by `fleet-mcp` when
+it starts and added to every call; the audit records it (column `session`,
+schema 23) and the launches are counted from there, so there is no counter
+to keep in step and an agent cannot reset it. A fleet-mcp started again is
+a new session: what a person with a shell could do by hand anyway. Rights
+are taken away from agents, so a run that needs approval waits for a
+person.
+
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
 runs and where, and its parameters are the questions of its survey, typed and

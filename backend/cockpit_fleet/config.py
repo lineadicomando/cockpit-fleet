@@ -76,6 +76,10 @@ class Config:
     # gets when it names none (profiles.py).
     chat_profiles: tuple[str, ...] = ("observer", "assisted")
     chat_default_profile: str = "assisted"
+    # What holds an agent of an autonomous profile: the runs it may launch in
+    # one session, and whether they must all be dry runs (autonomy.py).
+    chat_autonomous_runs: int = 10
+    chat_autonomous_dry_run: bool = False
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""
     # Check cycles: how many at once (apart from runs), at most so many hosts
@@ -233,7 +237,8 @@ def parse(text: str) -> Config:
     else:
         diagnostic = tuple(module for module in DIAGNOSTIC_MODULES if module in adhoc_modules)
 
-    chat = _section(data, "chat", {"agents", "max_sessions", "profiles", "default_profile"})
+    chat = _section(data, "chat", {"agents", "max_sessions", "profiles", "default_profile",
+                                   "autonomous_runs", "autonomous_dry_run"})
     agents = chat.get("agents", {})
     if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
         raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
@@ -246,6 +251,9 @@ def parse(text: str) -> Config:
         default_profile = profiles[0]
     if default_profile not in profiles:
         raise ConfigError("chat.default_profile must be one of chat.profiles")
+    dry_run = chat.get("autonomous_dry_run", False)
+    if not isinstance(dry_run, bool):
+        raise ConfigError("chat.autonomous_dry_run must be true or false")
 
     notifications = _section(data, "notifications", {"url"})
     notify_url = notifications.get("url", "")
@@ -284,6 +292,9 @@ def parse(text: str) -> Config:
         chat_max_sessions=_int(chat, "chat", "max_sessions", Config.chat_max_sessions, 1, 64),
         chat_profiles=tuple(dict.fromkeys(profiles)),
         chat_default_profile=default_profile,
+        chat_autonomous_runs=_int(chat, "chat", "autonomous_runs", Config.chat_autonomous_runs,
+                                  1, 1000),
+        chat_autonomous_dry_run=dry_run,
         notify_url=notify_url.rstrip("/"),
         checks_max_concurrent=_int(checks, "checks", "max_concurrent",
                                    Config.checks_max_concurrent, 1, 16),

@@ -29,7 +29,7 @@ from unittest import mock
 from test_checks import CheckBase
 from test_notify import WEBHOOK
 
-from cockpit_fleet import cli, journal, paths, profiles, runner, schedules
+from cockpit_fleet import autonomy, cli, journal, paths, profiles, runner, schedules
 from cockpit_fleet.auth import ROLES, Caller
 from cockpit_fleet.errors import BadRequest
 
@@ -642,7 +642,11 @@ class RoleTest(Fixture):
             kind = profiles.call_class(name, spec.agent, self.valid(name),
                                        enabled.mcp_adhoc_modules)
             for profile in profiles.PROFILES:
-                expected = tool and profiles.allows(profile, kind)
+                # Without a session an autonomous agent launches nothing, and it
+                # never silences a problem (autonomy.py, tested on its own).
+                held = profile in profiles.AUTONOMOUS and name in (*autonomy.LAUNCHES,
+                                                                   *autonomy.SILENCERS)
+                expected = tool and profiles.allows(profile, kind) and not held
                 self.assertEqual(self.reached(name, "admin", via="mcp:x", config=enabled,
                                               profile=profile), expected, (name, profile))
             # One made up, or not enabled, opens nothing.

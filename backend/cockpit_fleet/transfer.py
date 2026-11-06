@@ -155,10 +155,11 @@ class _Importer:
             spec.call(self.ctx, params)
         except FleetError as error:
             audit.record(self.ctx.conn, self.ctx.caller, name, params, "error", str(error),
-                         spec.redact, self.ctx.via, profile=self.ctx.profile)
+                         spec.redact, self.ctx.via, profile=self.ctx.profile,
+                         session=self.ctx.session)
             raise
         audit.record(self.ctx.conn, self.ctx.caller, name, params, "ok", redact=spec.redact,
-                     via=self.ctx.via, profile=self.ctx.profile)
+                     via=self.ctx.via, profile=self.ctx.profile, session=self.ctx.session)
 
     def _each(self, section: str, items: object, table: str | None, create) -> None:
         if not isinstance(items, list) or len(items) > _MAX_ITEMS:

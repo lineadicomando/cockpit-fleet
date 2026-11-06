@@ -125,7 +125,7 @@
 #   observer       reads
 #   assisted       reads, launches and cancels what is defined
 #   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules
-#   autonomous     as assisted
+#   autonomous     as assisted, without being asked, within the limits below
 #   administrator  everything the role allows: ad-hoc commands, changes to
 #                  templates and the rest, files, projects, credentials
 # A profile only restricts, under the user's role and [mcp] max_role. It
@@ -135,6 +135,15 @@
 # allows them, max_role = "admin", and a user who is an administrator.
 #profiles = ["observer", "assisted"]
 #default_profile = "assisted"
+# An agent in the profile autonomous launches at most this many runs (of
+# templates, workflows, schedules, checks) in one session of fleet-mcp,
+# nothing on an inventory with a maintenance window open, and never
+# acknowledges a problem or opens or closes a maintenance window. A
+# template that needs approval still waits for a person. With
+# autonomous_dry_run, its runs of templates are all dry runs (check mode),
+# and it launches no workflow and no schedule.
+#autonomous_runs = 10
+#autonomous_dry_run = false
 #[chat.agents.claude]
 #command = ["/opt/cockpit-fleet-agent/bin/claude-agent-acp"]
 #label = "Claude"

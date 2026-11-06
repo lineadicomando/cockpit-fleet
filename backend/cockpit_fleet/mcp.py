@@ -6,13 +6,15 @@ exactly what the interface does, so the roles and the audit trail are the
 same. It adds "via" to every call, which makes fleetctl apply what
 config.toml allows to agents and record where the call came from, and with
 --profile the profile of the assistant the session was started in (without,
-fleetctl applies the default one).
+fleetctl applies the default one), and the identifier of this session,
+drawn at its start.
 
 The protocol is JSON-RPC 2.0, one message per line. Only tools are offered.
 """
 
 import json
 import re
+import secrets
 import subprocess
 import sys
 
@@ -59,6 +61,8 @@ class Server:
         self._call = call
         self._via = "mcp"
         self._profile = profile
+        # Drawn here, so that an agent cannot reset what is counted by it.
+        self._session = secrets.token_hex(8)
         # Tool name -> (command, parameters the tool fixes).
         self._tools: dict[str, tuple[str, dict]] = {}
 
@@ -74,7 +78,8 @@ class Server:
 
     def _through(self) -> dict:
         """What this server adds to every call."""
-        return {"via": self._via, **({"profile": self._profile} if self._profile else {})}
+        return {"via": self._via, "session": self._session,
+                **({"profile": self._profile} if self._profile else {})}
 
     def _tool(self, params: dict) -> dict:
         name, arguments = params.get("name"), params.get("arguments")

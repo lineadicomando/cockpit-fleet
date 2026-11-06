@@ -127,7 +127,7 @@ out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")")
 expect_eq "with the ceiling at admin, the default profile still gives no ad-hoc command" \
     "$(answer "$out" 1 'any(t["name"] in ("run_adhoc", "credential_create") for t in a["result"]["tools"])')" False
 expect_eq "nor does a call that names it" "$(answer "$out" 2 'a["error"]["code"] if "error" in a else a["result"]["isError"]')" -32602
-printf '[chat]\nprofiles = ["assisted", "diagnostic", "administrator"]\n' >> "$CONFIG"
+printf '[chat]\nprofiles = ["assisted", "diagnostic", "administrator", "autonomous"]\nautonomous_runs = 1\n' >> "$CONFIG"
 PROFILE=diagnostic
 out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")" "$(call 3 run_adhoc "$PING")")
 expect_eq "in the profile diagnostic, ad-hoc commands of modules that change nothing" \
@@ -143,6 +143,18 @@ expect_eq "in the profile administrator, ad-hoc commands are a tool" "$(answer "
 expect_run "and an agent runs one" "$(answer "$out" 2 'a["result"]["structuredContent"]["id"]')" 90 successful
 out=$(mcp itoperator "$LIST")
 expect_eq "the user's own role still holds" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" False
+PROFILE=autonomous
+out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "a"}}')" "$(call 3 "$tool" '{"answers": {"greeting": "b"}}')" "$(call 4 state_ack '{"host_id": "x", "check_id": "y"}')")
+expect_eq "an autonomous agent launches as many runs as a session may" "$(answer "$out" 2 'a["result"]["isError"]')" False
+expect_eq "and no more" "$(answer "$out" 3 '"as many runs as" in a["result"]["content"][0]["text"]')" True
+expect_eq "it does not silence a problem" "$(answer "$out" 4 '"does not silence" in a["result"]["content"][0]["text"]')" True
+expect_eq "the count is by session, in the audit log" \
+    "$(get "$(admin audit.list)" 'len({e["session"] for e in a["data"]["entries"] if e["profile"] == "autonomous" and e["command"] == "run.start"})')" 1
+expect_eq "a maintenance window opens on the inventory" \
+    "$(get "$(admin maintenance.create "{\"inventory_id\": \"$inventory_id\", \"group\": \"all\", \"ends_at\": $(( $(date +%s) + 600 ))}")" 'a["ok"]')" True
+out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "c"}}')")
+expect_eq "another session counts on its own, and launches nothing on an inventory in maintenance" \
+    "$(answer "$out" 2 '"in maintenance" in a["result"]["content"][0]["text"]')" True
 PROFILE=observer
 out=$(mcp itadmin "$LIST")
 expect_eq "a profile not enabled gives nothing" "$(answer "$out" 1 '"not enabled" in a["error"]["message"]')" True

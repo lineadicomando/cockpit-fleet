@@ -44,6 +44,18 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaises(ConfigError, msg=bad):
                 parse("[chat]\n" + bad)
 
+    def test_limits_of_autonomy(self):
+        config = parse("")
+        self.assertEqual((config.chat_autonomous_runs, config.chat_autonomous_dry_run),
+                         (10, False))
+        config = parse("[chat]\nautonomous_runs = 3\nautonomous_dry_run = true")
+        self.assertEqual((config.chat_autonomous_runs, config.chat_autonomous_dry_run),
+                         (3, True))
+        for bad in ("autonomous_runs = 0", "autonomous_runs = 1001", 'autonomous_runs = "3"',
+                    "autonomous_dry_run = 1"):
+            with self.assertRaises(ConfigError, msg=bad):
+                parse("[chat]\n" + bad)
+
     def test_diagnostic_modules_are_among_those_of_ad_hoc_commands(self):
         self.assertIn("ansible.builtin.setup", parse("").mcp_adhoc_modules)
         self.assertNotIn("ansible.builtin.shell", parse("").mcp_adhoc_modules)

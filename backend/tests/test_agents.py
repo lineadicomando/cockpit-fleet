@@ -3,13 +3,14 @@ made for an agent may do, templates as tools, and the MCP server itself."""
 
 import io
 import json
+import time
 import unittest
 from dataclasses import replace
 from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import agents, cli, mcp, paths, profiles
+from cockpit_fleet import agents, cli, mcp, paths, profiles, schedules
 
 # What each tool lets an agent do, beyond reading. A new tool, or one moved to
 # another class, fails here until this table says so: the profiles of the
@@ -293,6 +294,121 @@ class ProfileTest(Base):
                 self.assertFalse({"via", "profile"} & set(spec.params), name)
 
 
+class AutonomyTest(Base):
+    SESSION = "0123456789abcdef"
+
+    def setUp(self):
+        super().setUp()
+        cli.load_commands()
+        self.config = replace(self.config, mcp_enabled=True, mcp_max_role="admin",
+                              chat_profiles=("assisted", "autonomous"),
+                              chat_default_profile="autonomous", chat_autonomous_runs=2)
+        analyze = mock.patch.object(schedules, "analyze", lambda calendar, timezone="", count=1:
+                                    (calendar, [time.time() + 3600]))
+        analyze.start()
+        self.addCleanup(analyze.stop)
+
+    def via(self, name, params=None, session=SESSION, profile="autonomous", role="admin"):
+        extra = {"session": session} if session else {}
+        return self.call(name, {**(params or {}), "via": "mcp:test", "profile": profile,
+                                **extra}, role)
+
+    def refused(self, answer, words):
+        self.assertFalse(answer["ok"], answer)
+        self.assertEqual(answer["error"]["code"], "forbidden")
+        self.assertIn(words, answer["error"]["message"])
+
+    def window(self, inventory_id, starts=-60, ends=3600):
+        now = int(time.time())
+        return self.ok("maintenance.create", {"inventory_id": inventory_id, "group": "all",
+                                              "starts_at": now + starts, "ends_at": now + ends})
+
+    def test_runs_are_counted_by_session_from_the_audit(self):
+        template = self.template()
+        launch = {"template_id": template["id"]}
+        self.assertTrue(self.via("run.start", launch)["ok"])
+        self.assertEqual(self.via("run.start", {"template_id": "nope"})["error"]["code"],
+                         "not_found")
+        self.assertTrue(self.via("run.start", launch)["ok"])
+        self.refused(self.via("run.start", launch), "as many runs as")
+        row = self.ctx().conn.execute("SELECT * FROM audit ORDER BY id DESC").fetchone()
+        self.assertEqual((row["outcome"], row["session"], row["profile"]),
+                         ("denied", self.SESSION, "autonomous"))
+        self.assertEqual(self.ok("audit.list")["entries"][0]["session"], self.SESSION)
+        # Another session counts on its own; a person and a profile that asks are not held.
+        self.assertTrue(self.via("run.start", launch, session="fedcba9876543210")["ok"])
+        self.assertTrue(self.via("run.start", launch, profile="assisted")["ok"])
+        self.ok("run.start", launch)
+        self.assertTrue(self.via("run.list")["ok"])
+
+    def test_no_launch_without_a_session_and_no_session_made_up(self):
+        template = self.template()
+        self.refused(self.via("run.start", {"template_id": template["id"]}, session=""),
+                     "within a session")
+        for bad in ("x", "0123456789ABCDEF", 3, "0" * 17):
+            self.assertEqual(self.via("run.list", {}, session=bad)["error"]["code"],
+                             "bad_request", bad)
+
+    def test_nothing_on_an_inventory_in_maintenance(self):
+        template = self.template()
+        launch = {"template_id": template["id"]}
+        window = self.window(template["inventory_id"])
+        self.refused(self.via("run.start", launch), "in maintenance")
+        workflow = self.ok("workflow.create", {"name": "w", "nodes": [
+            {"id": "a", "template_id": template["id"]}], "edges": []})
+        self.refused(self.via("workflow.launch", {"id": workflow["id"]}), "in maintenance")
+        schedule = self.ok("schedule.create", {"name": "s", "template_id": template["id"],
+                                               "calendar": "hourly"})
+        self.refused(self.via("schedule.run", {"id": schedule["id"]}), "in maintenance")
+        check = self.ok("check.create", {"name": "disk", "kind": "disk",
+                                         "inventory_id": template["inventory_id"]})
+        self.refused(self.via("check.run", {"id": check["id"]}), "in maintenance")
+        # A person, and an agent that asks, are not held by it.
+        self.ok("run.start", launch)
+        self.assertTrue(self.via("run.start", launch, profile="assisted")["ok"])
+        self.ok("maintenance.delete", {"id": window["id"]})
+        self.window(template["inventory_id"], starts=600)
+        self.assertTrue(self.via("run.start", launch)["ok"])
+
+    def test_it_never_silences_a_problem(self):
+        template = self.template()
+        for name, params in (("maintenance.create", {"inventory_id": template["inventory_id"],
+                                                     "ends_at": int(time.time()) + 60}),
+                             ("maintenance.delete", {"id": "m-x"}),
+                             ("state.ack", {"host_id": "h-x", "check_id": "c-x"}),
+                             ("state.unack", {"host_id": "h-x", "check_id": "c-x"})):
+            self.refused(self.via(name, params), "does not silence")
+            self.assertNotEqual(self.via(name, params, profile="assisted")["error"]["code"],
+                                "forbidden", name)
+        self.assertEqual(self.ok("maintenance.list")["maintenances"], [])
+
+    def test_dry_runs_only(self):
+        self.config = replace(self.config, chat_autonomous_dry_run=True, chat_autonomous_runs=9)
+        template = self.template()
+        run = self.via("run.start", {"template_id": template["id"], "check": False})["data"]
+        self.assertTrue(self.ok("run.get", {"id": run["id"]})["options"]["check"])
+        workflow = self.ok("workflow.create", {"name": "w", "nodes": [
+            {"id": "a", "template_id": template["id"]}], "edges": []})
+        self.refused(self.via("workflow.launch", {"id": workflow["id"]}), "dry runs only")
+        schedule = self.ok("schedule.create", {"name": "s", "template_id": template["id"],
+                                               "calendar": "hourly"})
+        self.refused(self.via("schedule.run", {"id": schedule["id"]}), "dry runs only")
+        check = self.ok("check.create", {"name": "disk", "kind": "disk",
+                                         "inventory_id": template["inventory_id"]})
+        self.assertNotEqual(self.via("check.run", {"id": check["id"]}).get("error", {}).get(
+            "code"), "forbidden")
+        run = self.via("run.start", {"template_id": template["id"]}, profile="assisted")["data"]
+        self.assertFalse(self.ok("run.get", {"id": run["id"]})["options"]["check"])
+
+    def test_a_template_that_needs_approval_still_waits_for_a_person(self):
+        template = self.template(needs_approval=True)
+        run = self.via("run.start", {"template_id": template["id"]})["data"]
+        self.assertEqual(run["status"], "pending_approval")
+        self.assertEqual(self.via("approval.approve", {"run_id": run["id"]})["error"]["code"],
+                         "forbidden")
+        self.assertEqual(self.ok("run.get", {"id": run["id"]})["status"], "pending_approval")
+
+
 class ToolsTest(Base):
     def test_commands_become_tools_by_role(self):
         names = {role: {tool["name"] for tool in self.ok("mcp.tools", role=role)["tools"]}
@@ -389,7 +505,12 @@ class ServerTest(unittest.TestCase):
              "readOnly": False},
         ]
 
+        self.sessions: set[str] = set()
+
         def call(name, params):
+            # The session is drawn at random: the tests see it apart.
+            params = dict(params)
+            self.sessions.add(params.pop("session", None))
             self.calls.append((name, params))
             if name == "mcp.tools":
                 return {"ok": True, "data": {"tools": self.tools}}
@@ -438,6 +559,16 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.calls, [
             ("mcp.tools", {"via": "mcp", "profile": "observer"}),
             ("run.start", {"template_id": "t1", "via": "mcp", "profile": "observer"})])
+
+    def test_one_session_for_every_call_of_a_server(self):
+        self.ask("tools/list")
+        self.ask("tools/call", {"name": "launch_deploy_abc123", "arguments": {
+            "session": "0" * 16}})
+        self.assertEqual(len(self.sessions), 1)
+        session = self.sessions.pop()
+        self.assertRegex(session, "^[0-9a-f]{16}$")
+        mcp.Server(self.server._call).handle({"id": 1, "method": "tools/list"})
+        self.assertNotIn(session, self.sessions)
 
     def test_the_command_line(self):
         source = io.StringIO('{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}\n')

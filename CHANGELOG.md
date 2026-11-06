@@ -26,8 +26,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   role allows). The administrator enables them in `[chat] profiles` and
   names the one an agent gets by default (`default_profile`); `fleet-mcp
   --profile` and `fleet-chat --profile` start a session in one. The audit
-  log records the profile of each call made by an agent, and `mcp.tools`
-  gives each tool its class.
+  log records the profile of each call made by an agent and the session of
+  `fleet-mcp` it came through, and `mcp.tools` gives each tool its class.
+- Limits of an agent acting without asking (profile `autonomous`): at most
+  `[chat] autonomous_runs` launches in a session, none on an inventory
+  with a maintenance window open, no acknowledging a problem and no
+  maintenance window opened or closed, and with `[chat]
+  autonomous_dry_run` dry runs only.
 
 ### Breaking
 

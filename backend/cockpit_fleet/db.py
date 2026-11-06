@@ -724,6 +724,12 @@ MIGRATIONS: list[list[str]] = [
         # The profile of the assistant a call made for an agent was held to.
         "ALTER TABLE audit ADD COLUMN profile TEXT NOT NULL DEFAULT ''",
     ],
+    [
+        # The fleet-mcp a call made for an agent came through: what the runs
+        # an autonomous agent launches are counted by.
+        "ALTER TABLE audit ADD COLUMN session TEXT NOT NULL DEFAULT ''",
+        "CREATE INDEX audit_session ON audit (session) WHERE session != ''",
+    ],
 ]
 
 

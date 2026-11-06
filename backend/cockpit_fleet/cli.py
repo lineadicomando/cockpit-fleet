@@ -19,7 +19,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from . import audit, db, journal, paths, profiles
+from . import audit, autonomy, db, journal, paths, profiles
 from .auth import ROLES, Caller, allowed, resolve_caller
 from .config import Config
 from .config import load as load_config
@@ -227,6 +227,8 @@ class Context:
     via: str = ""
     # The profile of the assistant an agent's call is held to; "" for a person.
     profile: str = ""
+    # The fleet-mcp an agent's call came through, when it says.
+    session: str = ""
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _config: Config | None = field(default=None, repr=False)
 
@@ -360,6 +362,13 @@ def _recorded(error: FleetError) -> FleetError:
     return error
 
 
+def _record(ctx: Context, name: str, params: dict, outcome: str, detail: str = "",
+            redact: tuple[str, ...] = (), secrets: tuple[str, ...] = (), conn=None) -> None:
+    """One record of the audit trail, with what the call came through."""
+    audit.record(conn if conn is not None else ctx.conn_or_none(), ctx.caller, name, params,
+                 outcome, detail, redact, ctx.via, secrets, ctx.profile, ctx.session)
+
+
 def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> None:
     """Take "via" out of the parameters of a call that does not come from the
     interface, and hold a call made for an agent to what config.toml lets
@@ -383,11 +392,15 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     if not is_agent(via):
         return
     profile = params.pop("profile", None)
+    session = params.pop("session", None)
+    if session is not None:
+        if not isinstance(session, str) or not autonomy.SESSION_RE.fullmatch(session):
+            raise BadRequest("session must be what fleet-mcp drew")
+        ctx.session = session
     config = ctx.config
 
     def refuse(reason: str, message: str) -> FleetError:
-        audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied", reason, redact,
-                     via, profile=ctx.profile)
+        _record(ctx, name, params, "denied", reason, redact)
         return _recorded(Forbidden(message))
 
     if not config.mcp_enabled:
@@ -425,24 +438,22 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         params = _parse_input(raw, spec.max_input)
         _through(ctx, params, name, spec.redact)
         if not allowed(ctx.caller, spec.role, spec.right):
-            audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                         f"requires {spec.role}", spec.redact, ctx.via, profile=ctx.profile)
+            _record(ctx, name, params, "denied", f"requires {spec.role}", spec.redact)
             raise _recorded(Forbidden(f"{name} requires the {spec.role} role"))
+        if ctx.profile in profiles.AUTONOMOUS:
+            autonomy.hold(ctx, name, params)
         data = spec.call(ctx, params)
         if spec.mutating:
-            audit.record(ctx.conn, ctx.caller, name, params, "ok", redact=spec.redact, via=ctx.via,
-                         profile=ctx.profile)
+            _record(ctx, name, params, "ok", redact=spec.redact, conn=ctx.conn)
         return {"ok": True, "data": data}
     except FleetError as error:
         if spec is not None and getattr(error, "audited", False):
             pass
         elif spec is not None and isinstance(error, Forbidden):
             # Refused by the command itself: approving one's own launch, say.
-            audit.record(ctx.conn_or_none(), ctx.caller, name, params, "denied",
-                         str(error), spec.redact, ctx.via, error.secrets, ctx.profile)
+            _record(ctx, name, params, "denied", str(error), spec.redact, error.secrets)
         elif spec is not None and spec.mutating:
-            audit.record(ctx.conn_or_none(), ctx.caller, name, params, "error",
-                         str(error), spec.redact, ctx.via, error.secrets, ctx.profile)
+            _record(ctx, name, params, "error", str(error), spec.redact, error.secrets)
         return {"ok": False, "error": {"code": error.code, "message": str(error)}}
     except Exception:
         # The details go to the journal, not to the browser.

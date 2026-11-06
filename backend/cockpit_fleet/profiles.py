@@ -21,6 +21,8 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "autonomous": ("read", "run"),
     "administrator": ("read", "run", "adhoc", "config", "code"),
 }
+# Profiles in which nobody confirms the calls: autonomy.py holds them.
+AUTONOMOUS = ("autonomous",)
 
 # The modules of an ad-hoc command that only read, when config.toml does not
 # say: those of [adhoc] modules among them.
