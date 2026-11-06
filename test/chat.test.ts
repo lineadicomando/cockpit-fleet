@@ -91,13 +91,21 @@ test("a permission is given once or refused, never as a rule the agent would kee
 
 // --- a whole session, against an agent played by the test ------------------------------
 
-const TOOLS: ToolInfo[] = [
+const TOOLS: Omit<ToolInfo, "question">[] = [
     { name: "run_list", description: "The runs.", readOnly: true, class: "read", inputSchema: {} },
     { name: "run_start", description: "Launch a job template.", readOnly: false, class: "run", inputSchema: {} },
     { name: "run_cancel", description: "Cancel a run.", readOnly: false, class: "run", inputSchema: {} },
     { name: "run_adhoc", description: "Run an ad-hoc command.", readOnly: false, class: "adhoc", inputSchema: {} },
-    { name: "template_update", description: "Change a template.", readOnly: false, class: "config", inputSchema: {} },
 ];
+
+// What mcp.tools says of them in a profile (profiles.question in the backend).
+function toolsOf(profile: string): ToolInfo[] {
+    return TOOLS.map(tool => {
+        let asked: ToolInfo["question"] = tool.class === "read" ? "none" : tool.class === "adhoc" ? "every" : "ask";
+        if (profile === "autonomous" && tool.class === "run") asked = "none";
+        return { ...tool, question: asked };
+    });
+}
 
 interface Message { id?: number; method?: string; params?: any; result?: any }
 
@@ -136,7 +144,7 @@ class Agent {
                 },
                 close: () => { this.closed = true; },
             };
-        }, async profile => { this.listed.push(profile); return TOOLS; });
+        }, async profile => { this.listed.push(profile); return toolsOf(profile); });
     }
 
     say(message: object): void { this.onData(JSON.stringify(message) + "\n"); }
@@ -251,26 +259,10 @@ test("always is remembered by the page for the class, for the conversation, and 
     assert.ok(agent.answerTo(62));
 });
 
-test("the questions of each profile", () => {
-    const tool = (name: string) => TOOLS.find(one => one.name === name)!;
-    const diagnostic: ToolInfo = { ...tool("run_adhoc"), class: "adhoc-diagnostic" };
-    const table: [string, ToolInfo | null, string][] = [
-        ["observer", tool("run_list"), "none"],
-        ["assisted", tool("run_list"), "none"],
-        ["assisted", tool("run_start"), "ask"],
-        ["diagnostic", diagnostic, "none"],
-        ["diagnostic", tool("run_start"), "ask"],
-        ["autonomous", tool("run_start"), "none"],
-        ["autonomous", tool("run_adhoc"), "every"],
-        ["administrator", tool("run_start"), "ask"],
-        ["administrator", tool("run_adhoc"), "every"],
-        ["administrator", tool("template_update"), "every"],
-        ["administrator", { ...tool("template_update"), class: "code" }, "every"],
-        // Diagnostic only in its own profile: elsewhere the backend would not offer it.
-        ["assisted", diagnostic, "ask"],
-        ["autonomous", null, "every"],
-    ];
-    for (const [profile, one, expected] of table) assert.equal(question(profile, one), expected, `${profile} ${one?.name} ${one?.class}`);
+test("a tool the page does not know, or says nothing of, is asked about every time", () => {
+    assert.equal(question(null), "every");
+    assert.equal(question({ ...TOOLS[0], question: "none" }), "none");
+    assert.equal(question({ ...TOOLS[0] } as ToolInfo), "every");
 });
 
 test("an ad-hoc command of an administrator is asked about every time, with no always", async () => {

@@ -304,6 +304,46 @@ class ProfileTest(Base):
         self.config = replace(self.config, mcp_adhoc_modules=())
         self.assertNotIn("run_adhoc", tools("diagnostic"))
 
+    def test_each_tool_says_how_a_person_is_asked_about_it(self):
+        self.template()
+
+        def questions(profile):
+            tools = self.ok("mcp.tools", {"profile": profile})["tools"]
+            return {tool["name"]: tool["question"] for tool in tools}
+
+        self.config = replace(self.config, chat_profiles=tuple(profiles.PROFILES))
+        assisted = questions("assisted")
+        self.assertEqual((assisted["run_list"], assisted["run_start"]), ("none", "ask"))
+        self.assertEqual({assisted[name] for name in assisted if name.startswith("launch_")},
+                         {"ask"})
+        autonomous = questions("autonomous")
+        self.assertEqual({autonomous["run_start"], autonomous["run_cancel"]}, {"none"})
+        self.assertEqual(questions("diagnostic")["run_adhoc"], "none")
+        administrator = questions("administrator")
+        self.assertEqual((administrator["run_adhoc"], administrator["file_write"],
+                          administrator["template_update"], administrator["run_start"]),
+                         ("every", "every", "every", "ask"))
+
+    def test_the_table_of_questions(self):
+        table = [
+            ("observer", "read", True, "none"),
+            ("assisted", "run", False, "ask"),
+            ("diagnostic", profiles.DIAGNOSTIC, False, "none"),
+            ("diagnostic", "run", False, "ask"),
+            ("autonomous", "run", False, "none"),
+            ("autonomous", "adhoc", False, "every"),
+            ("administrator", "config", False, "every"),
+            ("administrator", "code", False, "every"),
+            ("administrator", "run", False, "ask"),
+            # Diagnostic is unasked only in its own profile.
+            ("administrator", profiles.DIAGNOSTIC, False, "ask"),
+            # A command that changes nothing never asks, whatever its class.
+            ("assisted", "run", True, "none"),
+        ]
+        for profile, kind, read_only, expected in table:
+            self.assertEqual(profiles.question(profile, kind, read_only), expected,
+                             (profile, kind, read_only))
+
     def test_the_page_asks_the_tools_of_a_profile(self):
         names = {tool["name"] for tool in self.ok("mcp.tools", {"profile": "observer"})["tools"]}
         self.assertNotIn("run_start", names)

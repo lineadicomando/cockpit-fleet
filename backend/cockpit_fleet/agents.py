@@ -112,8 +112,9 @@ def _diagnostic_tool(tool: dict, modules: tuple[str, ...]) -> dict:
 def mcp_tools(ctx: Context, params: Values) -> dict:
     """The tools the caller may use: for fleet-mcp, which offers them to an agent.
 
-    Each one says which command it calls, with which fixed parameters, and
-    its class (cli.AGENT_CLASSES, or adhoc-diagnostic). For an agent, only
+    Each one says which command it calls, with which fixed parameters, its
+    class (cli.AGENT_CLASSES, or adhoc-diagnostic) and how a person is asked
+    about a call of it in the profile (profiles.question). For an agent, only
     those of its profile of the assistant; for the page, those of the profile
     it names, or all.
     """
@@ -121,12 +122,18 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
     profile = ctx.profile or params["profile"] or ""
     if profile and profile not in ctx.config.chat_profiles:
         raise BadRequest(f"{profile} is not a profile enabled on this controller")
+    return {"tools": tools(ctx, role, profile), "role": role, "user": ctx.caller.user,
+            "profile": profile}
+
+
+def tools(ctx: Context, role: str | None, profile: str) -> list[dict]:
+    """The tools of an agent with ROLE in PROFILE (all, with none)."""
     modules = ctx.config.mcp_adhoc_modules
 
     def offered(kind: str) -> bool:
         return not profile or profiles.allows(profile, kind)
 
-    tools = []
+    found = []
     for name, spec in sorted(COMMANDS.items()):
         if not spec.tool or not role_at_least(role, spec.role):
             continue
@@ -137,9 +144,9 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
             "readOnly": not spec.mutating, "class": spec.agent,
         }
         if offered(spec.agent):
-            tools.append(tool)
+            found.append(tool)
         elif name == "run.adhoc" and modules and offered(profiles.DIAGNOSTIC):
-            tools.append(_diagnostic_tool(tool, modules))
+            found.append(_diagnostic_tool(tool, modules))
     if role_at_least(role, COMMANDS["run.start"].role) and offered(COMMANDS["run.start"].agent):
         projects = {row["id"]: row["name"] for row in ctx.conn.execute(
             "SELECT id, name FROM projects")}
@@ -149,8 +156,10 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
             tool = template_tool(template, projects.get(template["project_id"], ""),
                                  inventories.get(template["inventory_id"], ""))
             if tool is not None:
-                tools.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
-    return {"tools": tools, "role": role, "user": ctx.caller.user, "profile": profile}
+                found.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
+    for tool in found:
+        tool["question"] = profiles.question(profile, tool["class"], tool["readOnly"])
+    return found
 
 
 def summarize(lines) -> list[dict]:

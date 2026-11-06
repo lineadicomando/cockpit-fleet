@@ -48,8 +48,10 @@ class ChatAgent:
     # What a user types in a terminal to log the agent in to its model.
     login: str = ""
     # The agent's own program for a terminal, which fleet assistant runs; in
-    # its words {mcp_config} is a file naming fleet-mcp as the only server and
-    # {instructions} what the agent is told of where it is. Empty: none.
+    # its words {mcp_config} is a file naming fleet-mcp as the only server,
+    # {allowed_tools} the tools the profile lets through with no question
+    # (comma-separated) and {instructions} what the agent is told of where it
+    # is. Empty: none.
     terminal: tuple[str, ...] = ()
 
 

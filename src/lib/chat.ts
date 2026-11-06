@@ -11,6 +11,8 @@ export interface ToolInfo {
     readOnly: boolean;
     // What it lets an agent do: read, run, adhoc, adhoc-diagnostic, config or code.
     class: string;
+    // How the person is asked about a call of it in the profile of the session.
+    question: Question;
     inputSchema: { properties?: Record<string, { description?: string }> };
 }
 
@@ -21,25 +23,16 @@ export interface Layer {
     text: string;
 }
 
-// How the page treats a call: made with no question, asked about with
-// "always" for its class in the conversation, or asked about every time.
+// How the page treats a call, as the backend decides it for the profile of
+// the session (profiles.question): made with no question, asked about with
+// "always" for its class in the conversation, or asked about every time. A
+// floor the backend holds again: what a profile does not allow is refused
+// there whatever is answered here.
 export type Question = "none" | "ask" | "every";
 
-// The classes whose calls are asked about every time: ad-hoc commands,
-// changes of what is defined, files. None of them is ever trusted for a
-// conversation, nor made without a question.
-const ALWAYS_ASKED = ["adhoc", "config", "code"];
-
-// The questions of a profile, a floor the backend holds again: what a
-// profile does not allow is refused there whatever is answered here.
-export function question(profile: string, tool: ToolInfo | null): Question {
-    if (!tool) return "every";
-    if (tool.readOnly || tool.class === "read") return "none";
-    if (ALWAYS_ASKED.includes(tool.class)) return "every";
-    if (profile === "diagnostic" && tool.class === "adhoc-diagnostic") return "none";
-    // The backend holds an autonomous agent to its limits instead.
-    if (profile === "autonomous" && tool.class === "run") return "none";
-    return "ask";
+// A call of a tool the page does not know is asked about every time.
+export function question(tool: ToolInfo | null): Question {
+    return tool && ["none", "ask", "every"].includes(tool.question) ? tool.question : "every";
 }
 
 export interface SessionInfo {
@@ -311,7 +304,7 @@ export class Chat {
         // A template made after the chat began is a tool the page has not seen.
         if (name && !this.tools.has(name)) await this.reloadTools();
         const tool = this.tools.get(name) ?? null;
-        const kind = question(this.state.profile, tool);
+        const kind = question(tool);
         if (kind === "none" || (kind === "ask" && this.always.has(tool!.class))) return permissionOutcome(params.options, true);
         const call = isObject(params.toolCall) ? params.toolCall : {};
         const trusts = kind === "ask" ? tool!.class : "";

@@ -362,14 +362,17 @@ class AssistantTest(unittest.TestCase):
                           "installed": True, "terminal": True, "setup": ""},
                          {"name": "acp-only", "label": "", "login": "", "installed": True,
                           "terminal": False, "setup": ""}],
-              "unavailable": "", "max_role": "operator", "max_sessions": 2, "open_sessions": 0}
+              "unavailable": "", "max_role": "operator", "max_sessions": 2, "open_sessions": 0,
+              "profiles": ["observer", "assisted", "administrator"], "default_profile": "assisted",
+              "to_accept": ["administrator"]}
 
     def test_the_agent_with_a_terminal_program_runs_through_fleet_chat(self):
         ran = []
         t = term(Fake({"chat.agents": self.AGENTS}), interactive=True)
         t.execute = lambda argv: ran.append(argv) or 0
         self.assertEqual(terminal.run(t, COMMANDS, ["assistant"]), terminal.OK)
-        self.assertEqual(ran, [["/usr/libexec/cockpit-fleet/fleet-chat", "--terminal", "claude"]])
+        self.assertEqual(ran, [["/usr/libexec/cockpit-fleet/fleet-chat", "--terminal",
+                                "--profile", "assisted", "claude"]])
         t.execute = lambda argv: 1
         self.assertEqual(terminal.run(t, COMMANDS, ["assistant", "claude"]), 1)
         self.assertIn("claude /login", t.err.getvalue())
@@ -387,6 +390,69 @@ class AssistantTest(unittest.TestCase):
                          ["assistant"])
         self.assertEqual(terminal.complete(COMMANDS, ["assistant", ""],
                                            lambda name, params: self.AGENTS), ["claude"])
+        self.assertEqual(terminal.complete(COMMANDS, ["assistant", "--profile", ""],
+                                           lambda name, params: self.AGENTS),
+                         ["observer", "assisted", "administrator"])
+        self.assertEqual(terminal.complete(COMMANDS, ["assistant", "--profile", "observer", ""],
+                                           lambda name, params: self.AGENTS), ["claude"])
+        with self.assertRaisesRegex(Usage, "not enabled here: observer, assisted"):
+            terminal.run(term(Fake({"chat.agents": self.AGENTS}), interactive=True), COMMANDS,
+                         ["assistant", "--profile", "autonomous"])
+
+    def test_a_profile_beyond_assisted_is_accepted_first_once(self):
+        ran = []
+        fake = Fake({"chat.agents": self.AGENTS, "chat.accept": {"profile": "administrator"}})
+        t = term(fake, asked=["no"], interactive=True)
+        t.execute = lambda argv: ran.append(argv) or 0
+        with self.assertRaisesRegex(Failure, "not accepted"):
+            terminal.run(t, COMMANDS, ["assistant", "--profile", "administrator"])
+        self.assertIn("steer the assistant", t.out.getvalue())
+        self.assertEqual((ran, [name for name, _ in fake.calls]), ([], ["chat.agents"]))
+        t = term(fake, asked=["YES"], interactive=True)
+        t.execute = lambda argv: ran.append(argv) or 0
+        self.assertEqual(terminal.run(t, COMMANDS, ["assistant", "--profile", "administrator"]),
+                         terminal.OK)
+        self.assertEqual(fake.calls[-1], ("chat.accept", {"profile": "administrator",
+                                                          "via": "cli"}))
+        self.assertEqual(ran[-1][2:4], ["--profile", "administrator"])
+        # Once accepted, it is not asked again.
+        accepted = {**self.AGENTS, "to_accept": []}
+        t = term(Fake({"chat.agents": accepted}), interactive=True)
+        t.execute = lambda argv: 0
+        self.assertEqual(terminal.run(t, COMMANDS, ["assistant", "--profile", "administrator"]),
+                         terminal.OK)
+
+
+class DraftTest(unittest.TestCase):
+    DIFF = {"draft": "a0574ca423e012e2", "revision": "3fc5" * 10, "author": "anna", "time": 0,
+            "changes": [{"path": "roles/web/tasks/main.yml", "status": "added",
+                         "directory": False, "conflict": False},
+                        {"path": "site.yml", "status": "changed", "directory": False,
+                         "conflict": True}],
+            "text": "--- /dev/null\n+++ b/roles/web/tasks/main.yml\n+- name: \x1b]0;x\x07nginx\n",
+            "cut": False,
+            "checks": [{"run_id": "r1", "path": "site.yml", "status": "failed",
+                        "revision": "x", "current": False, "lint": None}]}
+
+    def test_a_draft_is_shown_with_how_to_merge_what_was_shown(self):
+        fake = Fake({"project.list": {"projects": [{"id": "p1", "name": "demo", "kind": "managed"},
+                                                   {"id": "p2", "name": "git", "kind": "git"}]},
+                     "inventory.list": {"inventories": []}, "draft.diff": self.DIFF})
+        t = term(fake)
+        self.assertEqual(terminal.run(t, COMMANDS, ["draft", "diff", "--id", "demo", "--draft",
+                                                    "a0574ca423e012e2"]), terminal.OK)
+        self.assertEqual(fake.calls[-1], ("draft.diff", {"id": "p1", "draft": "a0574ca423e012e2",
+                                                         "via": "cli"}))
+        out = t.out.getvalue()
+        self.assertIn("added    roles/web/tasks/main.yml", out)
+        self.assertIn("site.yml  (changed in main too: cannot be merged)", out)
+        self.assertIn("failed     site.yml  run r1  (of an earlier version)", out)
+        self.assertIn("+- name: ?]0;x?nginx", out)
+        self.assertNotIn("\x1b", out)
+        self.assertIn(f"fleet draft merge --id p1 --draft a0574ca423e012e2 --revision {'3fc5' * 10}",
+                      out)
+        with self.assertRaisesRegex(Failure, "no project or inventory 'git'"):
+            terminal.run(term(fake), COMMANDS, ["draft", "diff", "--id", "git", "--draft", "x"])
 
 
 class BackendTest(Base):

@@ -75,7 +75,7 @@ talk() {
 expect_eq "no chat tab by default" "$(get "$(ctl itoperator whoami)" 'a["data"]["chat"]')" False
 out=$(chat itoperator fake "$INIT")
 expect_eq "nothing starts while no agent is named" "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" unavailable
-printf '[chat]\nmax_sessions = 2\n[chat.agents.fake]\ncommand = ["%s"]\nlabel = "Fake"\nlogin = "fake login"\nterminal = ["%s", "--mcp-config", "{mcp_config}", "--tools", "", "--append-system-prompt", "{instructions}"]\n[chat.agents.gone]\ncommand = ["/nowhere/agent"]\n' "$AGENT" "$TERMINAL" >> "$CONFIG"
+printf '[chat]\nmax_sessions = 2\nprofiles = ["observer", "assisted", "autonomous"]\n[chat.agents.fake]\ncommand = ["%s"]\nlabel = "Fake"\nlogin = "fake login"\nterminal = ["%s", "--mcp-config", "{mcp_config}", "--tools", "", "--allowedTools", "{allowed_tools}", "--append-system-prompt", "{instructions}"]\n[chat.agents.gone]\ncommand = ["/nowhere/agent"]\n' "$AGENT" "$TERMINAL" >> "$CONFIG"
 expect_eq "the tab is there once one is" "$(get "$(ctl itviewer whoami)" 'a["data"]["chat"]')" True
 out=$(ctl itviewer chat.agents)
 expect_eq "but the chat needs agents enabled" "$(get "$out" '"[mcp]" in a["data"]["unavailable"]')" True
@@ -111,10 +111,15 @@ assistant() {
     sudo -u "$1" -H python3 -c 'import os, pty, sys; sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))' \
         fleet assistant ${2:-} </dev/null 2>&1 | tr -d '\r'
 }
+# answered USER ANSWER ARGS: the same, with ANSWER typed at its question
+answered() {
+    printf '%s\n' "$2" | sudo -u "$1" -H python3 -c 'import os, pty, sys; sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))' \
+        fleet assistant $3 2>&1 | tr -d '\r'
+}
 out=$(assistant itadmin)
 expect_eq "fleet assistant runs the agent's program for a terminal, on the terminal" \
     "$(printf '%s' "$out" | grep -o 'servers=.*')" \
-    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin told=True rules=False"
+    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin reads-unasked=True launches-unasked=False told=True rules=False"
 printf 'IT-RULE: never touch the inventory school.\n' > /etc/cockpit-fleet/assistant.md
 expect_eq "the instructions of the controller follow those of the package" \
     "$(assistant itadmin | grep -o 'told=.*')" "told=True rules=True"
@@ -124,10 +129,23 @@ expect_eq "and when too large the session does not start" \
 rm -f /etc/cockpit-fleet/assistant.md
 expect_eq "it is a session as those of the page" \
     "$(get "$(admin audit.list)" '[(e["user"], e["params"]) for e in a["data"]["entries"] if e["command"] == "chat.start"][0]')" \
-    "('itadmin', '{\"agent\": \"fake\", \"terminal\": true}')"
+    "('itadmin', '{\"agent\": \"fake\", \"profile\": \"assisted\", \"terminal\": true}')"
 expect_eq "its configuration is gone with it" "$(ls -d /tmp/fleet-assistant-* 2>/dev/null | wc -l)" 0
 expect_eq "an agent with no such program is said" "$(assistant itadmin gone | grep -c 'no agent')" 1
 expect_eq "and nothing for a user with no role" "$(assistant itnobody | grep -c 'servers=')" 0
+out=$(answered itadmin no "--profile autonomous")
+expect_eq "a profile beyond assisted tells its risks first, and stops unless accepted" \
+    "$(printf '%s' "$out" | grep -c -e 'steer the assistant' -e 'were not accepted')" 2
+expect_eq "nothing ran" "$(printf '%s' "$out" | grep -c 'servers=')" 0
+out=$(answered itadmin yes "--profile autonomous")
+expect_eq "accepted, it starts in that profile, its launches unasked" \
+    "$(printf '%s' "$out" | grep -o 'reads-unasked=.*launches-unasked=[A-Za-z]*')" \
+    "reads-unasked=True launches-unasked=True"
+expect_eq "the acceptance is in the audit trail" \
+    "$(get "$(admin audit.list)" '[(e["user"], e["outcome"], e["params"]) for e in a["data"]["entries"] if e["command"] == "chat.accept"]')" \
+    "[('itadmin', 'ok', '{\"profile\": \"autonomous\"}')]"
+expect_eq "and it is not asked again" \
+    "$(assistant itadmin "--profile autonomous" | grep -c -e 'steer the assistant' -e 'launches-unasked=True')" 1
 expect_eq "it wants a terminal" "$(sudo -u itadmin fleet assistant </dev/null 2>&1 | grep -c 'needs a terminal')" 1
 
 # --- what cannot be started -------------------------------------------------------------

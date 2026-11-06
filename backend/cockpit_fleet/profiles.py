@@ -56,3 +56,26 @@ def allows(profile: str, kind: str) -> bool:
     classes = PROFILES[profile]
     # Whatever ad-hoc command may run, a diagnostic one may too.
     return kind in classes or (kind == DIAGNOSTIC and "adhoc" in classes)
+
+
+# Classes whose calls a person is asked about every time, in any profile:
+# never trusted for a conversation, never made without a question.
+ALWAYS_ASKED = ("adhoc", "config", "code")
+
+
+def question(profile: str, kind: str, read_only: bool) -> str:
+    """How the page and the agent at a terminal ask the person about a call of
+    the class KIND in PROFILE: "none" (made with no question), "ask" (asked,
+    and "always" may trust the class for the conversation) or "every" (asked
+    every time). A floor, not a control: what the profile does not allow is
+    refused by the backend whatever the person answers."""
+    if read_only or kind == "read":
+        return "none"
+    if kind in ALWAYS_ASKED:
+        return "every"
+    if profile == "diagnostic" and kind == DIAGNOSTIC:
+        return "none"
+    # The backend holds an autonomous agent to its limits instead.
+    if profile in AUTONOMOUS and kind == "run":
+        return "none"
+    return "ask"

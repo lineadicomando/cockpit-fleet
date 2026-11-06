@@ -145,6 +145,7 @@ class CommandsTest(Base):
         data = self.ok("chat.start", {"agent": "claude"}, role="viewer")
         told = data.pop("instructions")
         self.assertEqual([layer["layer"] for layer in data.pop("layers")], ["base", "profile"])
+        self.assertIn("run_list", data.pop("allowed_tools"))
         self.assertEqual(data, {"agent": "claude", "profile": "assisted",
                                 "command": ["/opt/agent/bin/acp", "--stdio"]})
         self.assertIn("chat page", told)
@@ -158,6 +159,23 @@ class CommandsTest(Base):
         self.assertEqual(data["command"][0], "/opt/agent/bin/claude")
         self.config = replace(self.config, chat_agents=(ChatAgent("plain", ("/bin/sh",)),))
         self.assertEqual(self.code("chat.start", {"agent": "plain", "terminal": True}), "conflict")
+
+    def test_the_tools_a_profile_lets_through_unasked(self):
+        self.config = replace(self.config, chat_profiles=("observer", "assisted", "autonomous"))
+        self.ok("chat.accept", {"profile": "autonomous"}, role="operator")
+
+        def allowed(profile, role="operator"):
+            return set(self.ok("chat.start", {"agent": "claude", "profile": profile,
+                                              "terminal": True}, role=role)["allowed_tools"])
+
+        observer, assisted, autonomous = allowed("observer"), allowed("assisted"), \
+            allowed("autonomous")
+        self.assertIn("run_list", observer)
+        self.assertEqual(observer, assisted)
+        self.assertNotIn("run_cancel", assisted)
+        self.assertIn("run_cancel", autonomous)
+        # Under the ceiling for agents: an administrator gets an operator's.
+        self.assertEqual(allowed("assisted", "admin"), assisted)
 
     def test_a_profile_must_be_enabled(self):
         self.assertEqual(self.ok("chat.start", {"agent": "claude", "profile": "observer"},
@@ -332,8 +350,10 @@ class TerminalLauncherTest(unittest.TestCase):
         def call(name, params):
             seen["asked"] = (name, params)
             return {"ok": True, "data": {"agent": "claude", "profile": "observer",
-                                         "command": list(AGENT.terminal),
-                                         "instructions": "Only read.", "layers": []}}
+                                         "command": [*AGENT.terminal[:-2], "--allowedTools",
+                                                     "{allowed_tools}", *AGENT.terminal[-2:]],
+                                         "instructions": "Only read. {allowed_tools}",
+                                         "layers": [], "allowed_tools": ["run_list", "whoami"]}}
 
         class Done:
             returncode = 0
@@ -355,7 +375,10 @@ class TerminalLauncherTest(unittest.TestCase):
         self.assertEqual(seen["asked"], ("chat.start", {"agent": "claude", "profile": "observer",
                                                         "terminal": True, "via": "cli"}))
         self.assertEqual(seen["argv"][3:5], ["--tools", ""])
-        self.assertEqual(seen["argv"][-1], "Only read.")
+        # The administrator's text is left as it is.
+        self.assertEqual(seen["argv"][-1], "Only read. {allowed_tools}")
+        self.assertEqual(seen["argv"][-4:-2], ["--allowedTools", "mcp__cockpit-fleet__run_list,"
+                                                                 "mcp__cockpit-fleet__whoami"])
         self.assertEqual(seen["config"], {"mcpServers": {"cockpit-fleet": {
             "type": "stdio", "command": "/usr/libexec/cockpit-fleet/fleet-mcp",
             "args": ["--profile", "observer"]}}})

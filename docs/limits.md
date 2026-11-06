@@ -30,18 +30,21 @@ in [security.md](security.md); the decisions behind these limits in
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a
   process up to 50 s; 216 of 329 parameters have no description (205 of
   307 of the tools; 5 November); in the profile diagnostic, `setup` with
-  `fact_path` runs the `*.fact` programs of that directory on the node; the
-  page lists every tool of the role, not only those of the session's
-  profile (phase 12 under way); a draft is taken file by file (a file
+  `fact_path` runs the `*.fact` programs of that directory on the node; a draft is taken file by file (a file
   changed in main too is a conflict, settled by hand) and is not brought
   up to date with main, nor exported; `inventory.create` and
   `inventory.update` (class config) write the main file of a managed
-  inventory without a draft; drafts not yet in the page nor at a terminal.
+  inventory without a draft; the acceptance of a profile's risks is not
+  asked again when their text changes.
 - Chat: plain text; conversations not deletable; model not choosable; one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,
-  untried behind a proxy; `fleet assistant` permission answers not kept,
-  read-only calls asked too, Claude's question on trusting its directory
+  untried behind a proxy; `fleet assistant` asks with Claude's own
+  questions, whose "don't ask again" trusts one tool, of any class (adhoc,
+  config and code included), for the session, and only the tools the
+  profile lets through are known when it starts (a template made later is
+  asked about); controllers configured before `{allowed_tools}` ask about
+  every call until the role is run again; Claude's question on trusting its directory
   the first time (it says the agent may edit and run files: it may not);
   the page lists Claude's own `/login` among past conversations; for a viewer
   or an operator the tab appears only once the page is reloaded after the

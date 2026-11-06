@@ -9,9 +9,9 @@ docs/architecture.md` and read only the one needed).
 
 Phases 0–11 closed; 0.2.0 released on 2 November. Under `[Unreleased]`:
 runs in series on an inventory, and phase 12 up to the instructions in
-layers. Phase 12's 8 commits on `main` are not pushed (`git log
-origin/main..`); the page is done in the work tree, not committed.
-**Next:** phase 12, the terminal (below).
+layers. Phase 12's 9 commits on `main` are not pushed (`git log
+origin/main..`); the page is committed, the terminal is in the work tree.
+**Next:** phase 12, the docs (below).
 
 To resume: `git status`; `make check`. Each backend module says what it is
 in its docstring; `cli.py` is the registry, `db.py` the schema (25).
@@ -82,11 +82,11 @@ every question.
 Steps, each tested before the next:
 
 - [x] Page.
-- [ ] Terminal: `fleet assistant --profile` (`fleet-chat --terminal
-      --profile` exists; `terminal.py` `_assistant`), asking to accept the
-      risks when `chat.start` says `not_accepted`, the profile as
-      options of the agent's CLI (permission mode, tools allowed); `fleet
-      draft list|diff|merge|discard`.
+- [x] Terminal: `fleet assistant --profile`, the risks accepted at the
+      first session; `{allowed_tools}` from `chat.start` (`profiles.question`,
+      which the page reads from `mcp.tools` too); `fleet draft diff` for a
+      person. To try with Claude's CLI: that `--allowedTools` works beside
+      `--permission-mode manual`.
 - [ ] Docs: `chat.md` (profiles, risks, drafts), `security.md`,
       `architecture.md` ("The chat": permissions by class, acceptance),
       `config.toml`; `CHANGELOG.md`.

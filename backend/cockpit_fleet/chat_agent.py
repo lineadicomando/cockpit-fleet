@@ -19,7 +19,9 @@ With --profile, the session is in that profile of the assistant; without,
 in the default one. fleetctl says whether it is enabled, and fleet-mcp is
 started with it. fleetctl also composes the instructions the agent is
 given (instructions.py): the page gets them, and their layers, with
-"_fleet/ready"; at a terminal they take the place of {instructions}.
+"_fleet/ready"; at a terminal they take the place of {instructions}, and
+the tools the profile lets through with no question take the place of
+{allowed_tools}, for the agent's own list of tools it may call unasked.
 """
 
 import json
@@ -39,10 +41,18 @@ _ENVIRONMENT = {"ENABLE_CLAUDEAI_MCP_SERVERS": "false"}
 MCP_NAME = "cockpit-fleet"
 
 
-def terminal_argv(command: list[str], mcp_config: str, instructions: str) -> list[str]:
+def allowed_tools(names: list[str]) -> str:
+    """The tools of fleet-mcp the profile lets through with no question, as
+    the agent names them: one word, comma-separated."""
+    return ",".join(f"mcp__{MCP_NAME}__{name}" for name in names)
+
+
+def terminal_argv(command: list[str], mcp_config: str, instructions: str,
+                  allowed: str = "") -> list[str]:
     """The program of an agent for a terminal, with its placeholders filled."""
-    return [word.replace("{mcp_config}", mcp_config).replace("{instructions}", instructions)
-            for word in command]
+    # The instructions last: text of the administrator's may hold a placeholder.
+    return [word.replace("{mcp_config}", mcp_config).replace("{allowed_tools}", allowed)
+            .replace("{instructions}", instructions) for word in command]
 
 
 def workspace() -> str:
@@ -95,7 +105,8 @@ def terminal(name: str, call=fleetctl, run=subprocess.run, profile: str = "") ->
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
             return run(terminal_argv(answer["data"]["command"], config,
-                                     answer["data"]["instructions"]),
+                                     answer["data"]["instructions"],
+                                     allowed_tools(answer["data"].get("allowed_tools", []))),
                        env={**os.environ, **_ENVIRONMENT}, cwd=workspace(), check=False).returncode
         except OSError as error:
             print(f"fleet assistant: cannot start the agent: {error}", file=sys.stderr)

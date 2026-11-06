@@ -12,7 +12,7 @@ its stdin: never on a command line.
     fleet log RUN [-f]
     fleet result RUN [--wait]
     fleet secret CREDENTIAL FIELD | --channel CHANNEL
-    fleet assistant [AGENT]
+    fleet assistant [--profile PROFILE] [AGENT]
     fleet project clone PROJECT [DIR] | pull [DIR] | push [DIR]
     fleet inventory clone INVENTORY [DIR] | pull [DIR] | push [DIR]
     fleet help [AREA [VERB]]
@@ -368,6 +368,12 @@ def resolve_names(term: "Terminal", command: Command, params: dict) -> dict:
     for key, value in params.items():
         spec = command.params.get(key)
         area = id_area(command, key) if spec is not None and spec.kind == "id" else None
+        if area == "draft" and isinstance(value, str):
+            # A draft is of a project or an inventory written in the interface.
+            rows = [*term("project.list")["projects"], *term("inventory.list")["inventories"]]
+            out[key] = _one([row for row in rows if row.get("kind") == "managed"], value,
+                            "project or inventory", "fleet project list")["id"]
+            continue
         if area not in _NAMED or not isinstance(value, str):
             continue
         lister, listed = _NAMED[area]
@@ -510,14 +516,22 @@ def _shortcut_candidates(before: list[str], current: str, areas: list[str],
         return []
     if current.startswith("-"):
         return {"launch": ["--answer", "--limit", "--check", "--diff", "--detach"],
-                "log": ["--follow"], "result": ["--wait"], "secret": ["--channel"]}.get(name, [])
+                "log": ["--follow"], "result": ["--wait"], "secret": ["--channel"],
+                "assistant": ["--profile"]}.get(name, [])
+    if name == "assistant" and given and given[-1] == "--profile":
+        try:
+            return list(lookup("chat.agents", {})["profiles"]) if lookup is not None else []
+        except (Failure, KeyError, TypeError):
+            return []
     if given and given[-1] in ("--answer", "-a", "--limit"):
         return []
     if name == "launch" and not positional:
         return _names(lookup, "template")
     if name in ("log", "result") and not positional:
         return _names(lookup, "run")
-    if name == "assistant" and not positional and lookup is not None:
+    agent_named = [word for index, word in enumerate(given) if not word.startswith("-")
+                   and not (index and given[index - 1] == "--profile")]
+    if name == "assistant" and not agent_named and lookup is not None:
         try:
             return [agent["name"] for agent in lookup("chat.agents", {})["agents"]
                     if agent["terminal"]]
@@ -832,17 +846,65 @@ def _secret(term: Terminal, args: list[str]) -> int:
     return OK
 
 
+# What an agent may do in each profile, and the risks a person accepts once
+# before a session in a profile beyond assisted: as the chat page says them.
+PROFILE_TEXT = {
+    "observer": "It reads what you may read, and launches and changes nothing.",
+    "assisted": "It reads, launches the job templates, workflows, schedules and checks that"
+                " are defined, and cancels runs, asking you before each of these.",
+    "diagnostic": "As assisted, and it runs ad-hoc commands of modules that only read, without"
+                  " become, without asking you.",
+    "autonomous": "It reads and launches what is defined without asking you; Fleet holds it to"
+                  " a few runs in a session, nothing on an inventory in maintenance, and it"
+                  " never silences a problem.",
+    "administrator": "Whatever your role allows: ad-hoc commands, changes to templates,"
+                     " inventories and the rest, files; it asks you before every change, and"
+                     " files it writes go to a draft for you to review (fleet draft).",
+}
+RISKS = {
+    "diagnostic": ["Ad-hoc commands run on the managed nodes without a question; what they read"
+                   " goes to the provider of the model."],
+    "autonomous": ["Nobody confirms its launches: a playbook it launches runs on the nodes as"
+                   " soon as it asks for it.",
+                   "Only the limits of Fleet hold it, not your judgement."],
+    "administrator": ["It may change templates, inventories, schedules and the rest, and run"
+                      " any ad-hoc command your role allows, once you confirm; a change you"
+                      " confirm is made in your name."],
+}
+STEERING = ("The output of runs and commands is written by the managed nodes: whoever controls"
+            " a node can write there text meant to steer the assistant.")
+
+
+def _accept(term: Terminal, profile: str) -> None:
+    """Tell the risks of PROFILE and record that they are accepted, or stop."""
+    term.say(f"The profile {profile}: {PROFILE_TEXT.get(profile, '')}")
+    term.say("Before the first session in it:")
+    for risk in [*RISKS.get(profile, []), STEERING]:
+        term.say(f"  - {risk}")
+    term.say("This is asked once, and recorded in the audit trail.")
+    if term.ask("Type yes to accept", False).strip().lower() != "yes":
+        raise Failure(f"the risks of the profile {profile} were not accepted")
+    term("chat.accept", {"profile": profile})
+
+
 def _assistant(term: Terminal, args: list[str]) -> int:
     parser = _parser("assistant", "Talk to the agent of the chat in this terminal. Its only"
                      " tools are those of fleet-mcp, with your role under the ceiling set for"
-                     " agents; what you write goes to the provider of its model.")
+                     " agents and what its profile allows; what you write goes to the"
+                     " provider of its model.")
     parser.add_argument("agent", nargs="?", help="which agent, when there is more than one")
+    parser.add_argument("--profile", help="the profile of the assistant; by default the one"
+                        " config.toml names")
     options = parser.parse_args(args)
     if not term.interactive:
         raise Usage("the assistant needs a terminal")
     found = term("chat.agents")
     if found["unavailable"]:
         raise Failure(found["unavailable"])
+    profile = options.profile or found.get("default_profile", "")
+    enabled = found.get("profiles", [])
+    if profile and enabled and profile not in enabled:
+        raise Usage(f"the profile {profile} is not enabled here: " + ", ".join(enabled))
     agents = [agent for agent in found["agents"] if agent["terminal"]]
     if options.agent:
         agents = [agent for agent in agents if agent["name"] == options.agent]
@@ -856,7 +918,10 @@ def _assistant(term: Terminal, args: list[str]) -> int:
     if not agent["installed"]:
         raise Failure(f"the agent {agent['name']} is not installed"
                       + (f": {agent['setup']}" if agent["setup"] else ""))
-    code = term.execute([str(LIBEXEC_DIR / "fleet-chat"), "--terminal", agent["name"]])
+    if profile in found.get("to_accept", []):
+        _accept(term, profile)
+    code = term.execute([str(LIBEXEC_DIR / "fleet-chat"), "--terminal",
+                         *(["--profile", profile] if profile else []), agent["name"]])
     if code not in (OK, 130) and agent["login"]:
         term.err.write(f"If the agent is not logged in to its model: {agent['login']}\n")
     return code
@@ -1041,8 +1106,42 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
     if command.name == "project.upload":
         rest, extra = archive_params(rest, term.stdin)
     params = {**extra, **parse_params(command, rest, term.stdin)}
-    term.show(term(command.name, resolve_names(term, command, params)))
+    params = resolve_names(term, command, params)
+    data = term(command.name, params)
+    if command.name == "draft.diff" and not term.as_json:
+        term.out.write(draft_text(params["id"], data))
+    else:
+        term.show(data)
     return OK
+
+
+def draft_text(container: str, data: dict) -> str:
+    """What a draft changes, for a person at a terminal: the files, the syntax
+    checks, the diff, and how to merge exactly what was shown."""
+    lines = [f"Draft {data['draft']} by {data['author']}, last on {_when(data['time'])}."
+             " No run uses it until it is merged.", ""]
+    for change in data["changes"]:
+        conflict = "  (changed in main too: cannot be merged)" if change["conflict"] else ""
+        path = change["path"] + ("/" if change["directory"] else "")
+        lines.append(f"  {change['status']:<8} {_cell('', path)}{conflict}")
+    if not data["changes"]:
+        lines.append("  main already has everything in this draft")
+    if data["checks"]:
+        lines += ["", "Syntax checks of the draft:"]
+        for check in data["checks"]:
+            note = "" if check["current"] else "  (of an earlier version)"
+            lines.append(f"  {check['status']:<10} {_cell('', check['path'])}  run"
+                         f" {check['run_id']}{note}")
+    text = _CONTROL_RE.sub(lambda found: found.group() if found.group() in "\n\t" else "?",
+                           data["text"])
+    lines += ["", text.rstrip("\n")] if text else []
+    if data["cut"]:
+        lines.append("(only the beginning of the change)")
+    if data["changes"]:
+        lines += ["", f"fleet draft merge --id {container} --draft {data['draft']}"
+                      f" --revision {data['revision']}   (--paths to take some files only)",
+                  f"fleet draft discard --id {container} --draft {data['draft']}"]
+    return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str]) -> int:

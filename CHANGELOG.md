@@ -71,6 +71,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   instructions the assistant was given can be read there. Drafts waiting
   for review are told on the page and on the files of their project, to be
   reviewed, merged in whole or in part, discarded, or edited first.
+- `fleet assistant --profile`: the session in a profile, its risks told and
+  accepted at the first one. The agent's program for a terminal gets the
+  tools the profile lets through with no question (`{allowed_tools}` in
+  `terminal` of `[chat.agents.NAME]`, which the role
+  `lineadicomando.fleet.chat_agent` writes when it is run again; without
+  it every call is asked about). `fleet draft diff` shows a draft as a
+  person reads it, with the command that merges what was shown, and the
+  draft commands take the name of a project or inventory.
 
 ### Fixed
 

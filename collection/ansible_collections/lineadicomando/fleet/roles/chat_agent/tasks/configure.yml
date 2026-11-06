@@ -30,10 +30,12 @@
       label = "{{ chat_agent_label }}"
       login = "{{ chat_agent_dir }}/bin/claude /login"
       # For fleet assistant: fleet-mcp the only server, no tool of the agent's
-      # own, none of the user's settings, a question before every call.
+      # own, none of the user's settings, a question before every call but
+      # those the profile of the session lets through.
       terminal = ["{{ chat_agent_dir }}/bin/claude", "--mcp-config", "{mcp_config}",
                   "--strict-mcp-config", "--tools", "", "--setting-sources", "",
-                  "--permission-mode", "manual", "--append-system-prompt", "{instructions}"]
+                  "--permission-mode", "manual", "--allowedTools", "{allowed_tools}",
+                  "--append-system-prompt", "{instructions}"]
     state: "{{ chat_agent_state }}"
     # The file is read by the backend as it is: one it refuses is not written.
     validate: >-
