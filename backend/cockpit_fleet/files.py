@@ -17,6 +17,12 @@ hooks are off.
 At a terminal an administrator clones it, as a git bundle, and pushes back
 commits made on top of it, in another bundle: they are taken only as a fast
 forward of what the project has, file by file under the rules of the editor.
+
+An agent never writes to main: what it writes goes to a draft, the branch
+drafts/SESSION of the same repository, checked out in a work tree of its own
+beside the project's (drafts/SESSION/tree, with its own index), which no run
+reads. A person reviews it and takes all or part of it into main
+(drafts.py), as a commit of theirs.
 """
 
 import base64
@@ -34,12 +40,14 @@ import subprocess
 import tarfile
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from . import jobs, paths, store
-from .cli import Context, Id, Int, Objs, Str, Values, command
+from .autonomy import SESSION_RE
+from .cli import Context, Id, Int, Objs, Str, Values, command, is_agent
 from .config import MAX_UPLOAD_MB
-from .errors import BadRequest, Conflict, NotFound, Unavailable
+from .errors import BadRequest, Conflict, Forbidden, NotFound, Unavailable
 from .names import check_id
 from .validators import check_file_path
 
@@ -54,6 +62,8 @@ MAX_OPERATIONS = 200
 _MAX_WRITE_INPUT = 2 * MAX_FILE + 64 * 1024
 
 _REVISION_RE = re.compile(r"[0-9a-f]{7,64}")
+_DRAFT_DOC = ("A draft to read or write instead of main, by its session; an agent writes"
+              " to the draft of its own session whatever it says, and reads it by default")
 # A bundle, either way, as the base64 of at most an upload.
 MAX_BUNDLE = MAX_UPLOAD_MB * 1024 * 1024
 _MAX_BUNDLE_TEXT = MAX_BUNDLE * 4 // 3 + 4
@@ -104,19 +114,56 @@ def _fetch(ctx: Context, container_id: str):
     return store.fetch(ctx.conn, table, container_id, what)
 
 
-def _git(project_id: str, *args: str, env: dict | None = None, check: bool = True) -> str | None:
-    """Output of one git command on a managed project; None if it fails and may."""
+@dataclass(frozen=True)
+class Draft:
+    """The draft of one session of an agent in a managed project or inventory."""
+
+    container_id: str
+    session: str
+
+    @property
+    def home(self) -> Path:
+        return _home(self.container_id) / "drafts" / self.session
+
+    @property
+    def tree(self) -> Path:
+        return self.home / "tree"
+
+    @property
+    def ref(self) -> str:
+        return f"refs/heads/drafts/{self.session}"
+
+
+def check_draft(value: str) -> str:
+    """The name of a draft: the session of fleet-mcp that wrote it."""
+    if not SESSION_RE.fullmatch(value):
+        raise BadRequest("draft must be the identifier of a session")
+    return value
+
+
+def _run_git(project_id: str, args: tuple[str, ...], env: dict | None, draft: Draft | None,
+             binary: bool):
     home = _home(project_id)
+    tree = draft.tree if draft else home / "tree"
+    extra = {"GIT_INDEX_FILE": str(draft.home / "index")} if draft else {}
     argv = ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "-c", "gc.autoDetach=false",
-            f"--git-dir={home / 'repo.git'}", f"--work-tree={home / 'tree'}", *args]
+            f"--git-dir={home / 'repo.git'}", f"--work-tree={tree}", *args]
+    text = {} if binary else {"encoding": "utf-8", "errors": "replace"}
     try:
-        result = subprocess.run(
-            argv, capture_output=True, encoding="utf-8", errors="replace", timeout=120,
-            check=False, stdin=subprocess.DEVNULL, cwd=home / "tree",
-            env={**_GIT_ENV, "HOME": str(home), **(env or {})},
+        return subprocess.run(
+            argv, capture_output=True, timeout=120, check=False, stdin=subprocess.DEVNULL,
+            cwd=tree if tree.is_dir() else home,
+            env={**_GIT_ENV, "HOME": str(home), **extra, **(env or {})}, **text,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise Unavailable(f"cannot run git: {error}") from error
+
+
+def git(project_id: str, *args: str, env: dict | None = None, check: bool = True,
+         draft: Draft | None = None) -> str | None:
+    """Output of one git command on a managed project, or on a draft of it;
+    None if it fails and may."""
+    result = _run_git(project_id, args, env, draft, binary=False)
     if result.returncode != 0:
         if check:
             raise Unavailable(f"git {args[0]} failed: {result.stderr.strip()[-500:]}")
@@ -124,15 +171,85 @@ def _git(project_id: str, *args: str, env: dict | None = None, check: bool = Tru
     return result.stdout
 
 
+def blob(project_id: str, oid: str) -> bytes:
+    """The content of one file of the repository, by its object id."""
+    result = _run_git(project_id, ("cat-file", "blob", oid), None, None, binary=True)
+    if result.returncode != 0:
+        raise Unavailable(f"git cat-file failed: {result.stderr.decode(errors='replace')[-500:]}")
+    return result.stdout
+
+
+def head(project_id: str) -> str | None:
+    """The commit main is at; None while nothing was committed."""
+    found = git(project_id, "rev-parse", "--verify", "--quiet", "refs/heads/main^{commit}",
+                 check=False)
+    return found.strip() if found else None
+
+
+def draft_tip(draft: Draft) -> str | None:
+    """The last commit of a draft; None if it has none, and so does not exist."""
+    found = git(draft.container_id, "rev-parse", "--verify", "--quiet",
+                 f"{draft.ref}^{{commit}}", check=False)
+    return found.strip() if found else None
+
+
+def draft_base(draft: Draft, tip: str | None = None) -> str | None:
+    """The commit of main a draft started from: None for a draft begun when
+    main had nothing."""
+    tip = tip or draft_tip(draft)
+    main = head(draft.container_id)
+    if tip is None:
+        return main
+    if main is None:
+        return None
+    found = git(draft.container_id, "merge-base", main, tip, check=False)
+    return found.strip() if found else None
+
+
+def drafts_of(container_id: str) -> list[str]:
+    """The sessions that have a draft in a managed project or inventory."""
+    if not (_home(container_id) / "repo.git").is_dir():
+        return []
+    listing = git(container_id, "for-each-ref", "--format=%(refname)", "refs/heads/drafts/",
+                   check=False) or ""
+    prefix = "refs/heads/drafts/"
+    return [line[len(prefix):] for line in listing.splitlines()
+            if line.startswith(prefix) and SESSION_RE.fullmatch(line[len(prefix):])]
+
+
+def _prepare(draft: Draft) -> None:
+    """The work tree of a draft, checked out from its branch, or from main for
+    a new one, made again each time until it has a commit: main may have
+    moved since. Called with the lock held."""
+    tip = draft_tip(draft)
+    if tip and (draft.home / "ready").is_file() and draft.tree.is_dir():
+        return
+    shutil.rmtree(draft.home, ignore_errors=True)  # what a failed attempt left
+    draft.tree.mkdir(mode=0o700, parents=True)
+    source = tip or head(draft.container_id)
+    if source:
+        git(draft.container_id, "read-tree", source, draft=draft)
+        git(draft.container_id, "checkout-index", "--all", "--force", draft=draft)
+    else:
+        git(draft.container_id, "read-tree", "--empty", draft=draft)
+    (draft.home / "ready").touch(mode=0o600)
+
+
+def drop(draft: Draft) -> None:
+    """Remove a draft, its branch and its work tree. Called with the lock held."""
+    git(draft.container_id, "update-ref", "-d", draft.ref, check=False)
+    shutil.rmtree(draft.home, ignore_errors=True)
+
+
 def init_repository(container_id: str) -> None:
     """The empty tree and the repository of a new managed project or inventory."""
     home = _home(container_id)
     (home / "tree").mkdir(mode=0o700, parents=True)
-    _git(container_id, "init", "--quiet", "--initial-branch=main")
+    git(container_id, "init", "--quiet", "--initial-branch=main")
 
 
 @contextmanager
-def _locked(project_id: str):
+def locked(project_id: str):
     """One change at a time: a commit holds what one caller wrote."""
     with open(_home(project_id) / "lock", "w") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
@@ -159,18 +276,73 @@ def _commit(ctx: Context, project, message: str, by_service: bool = False,
     project_id = project["id"]
     _keep_empty(_home(project_id) / "tree")
     # --force: a .gitignore in the tree must not keep a file runs see out of the history.
-    _git(project_id, "add", "--all", "--force")
-    if not _git(project_id, "status", "--porcelain"):
+    git(project_id, "add", "--all", "--force")
+    if not git(project_id, "status", "--porcelain"):
         return project["revision"]  # written again as it was
-    _git(project_id, "commit", "--quiet", f"--message={message}",
+    git(project_id, "commit", "--quiet", f"--message={message}",
          env=_identity(paths.SERVICE_USER if by_service else author or ctx.caller.user))
-    revision = _git(project_id, "rev-parse", "HEAD").strip()
+    revision = git(project_id, "rev-parse", "HEAD").strip()
     table, what = _table(project_id)
     values = {"revision": revision}
     if table == "projects":
         values["synced_at"] = store.now()
     store.update(ctx.conn, table, project_id, values, what)
     return revision
+
+
+def _commit_draft(ctx: Context, draft: Draft, message: str, author: str | None = None) -> str:
+    """Commit whatever differs in the work tree of a draft on its branch;
+    returns its last commit. main, its index and HEAD are not touched."""
+    project_id = draft.container_id
+    _keep_empty(draft.tree)
+    git(project_id, "add", "--all", "--force", draft=draft)
+    tree = git(project_id, "write-tree", draft=draft).strip()
+    tip = draft_tip(draft)
+    parent = tip or head(project_id)
+    if parent and git(project_id, "rev-parse", f"{parent}^{{tree}}").strip() == tree:
+        return parent  # written again as it was
+    identity = _identity(author or ctx.caller.user)
+    commit = git(project_id, "commit-tree", tree, *(["-p", parent] if parent else []),
+                  "-m", message, env=identity).strip()
+    git(project_id, "update-ref", draft.ref, commit, tip or "")
+    return commit
+
+
+def place(ctx: Context, row, given: str, writing: bool) -> Draft | None:
+    """Where a call reads or writes the files of a managed project or
+    inventory: main (None), or a draft. An agent writes to the draft of its
+    session only, made when it first writes, and reads it while it exists; a
+    person names a draft that exists to read it or to edit it."""
+    name = check_draft(given) if given else ""
+    if is_agent(ctx.via):
+        if writing:
+            if not ctx.session:
+                raise Forbidden("an agent writes files only within a session of fleet-mcp")
+            if name and name != ctx.session:
+                raise Forbidden("an agent writes only to the draft of its own session")
+            return Draft(row["id"], ctx.session)
+        name = name or ctx.session
+        if not name:
+            return None
+        draft = Draft(row["id"], name)
+        if draft_tip(draft) is None:
+            if given:
+                raise NotFound(f"no such draft: {name}")
+            return None
+        return draft
+    if not name:
+        return None
+    draft = Draft(row["id"], name)
+    if draft_tip(draft) is None:
+        raise NotFound(f"no such draft: {name}")
+    return draft
+
+
+def draft_tree(draft: Draft) -> Path:
+    """The work tree of a draft that exists, checked out if it was not."""
+    with locked(draft.container_id):
+        _prepare(draft)
+    return draft.tree.resolve()
 
 
 def inventory_tree(ctx: Context, inventory) -> Path:
@@ -180,7 +352,7 @@ def inventory_tree(ctx: Context, inventory) -> Path:
     inventory_id = inventory["id"]
     home = _home(inventory_id)
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with _locked(inventory_id):
+    with locked(inventory_id):
         if not (home / "repo.git").is_dir():
             shutil.rmtree(home / "tree", ignore_errors=True)  # what a failed attempt left
             init_repository(inventory_id)
@@ -288,7 +460,7 @@ def _read(target: Path) -> bytes:
     return data
 
 
-def _digest(data: bytes) -> str:
+def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
@@ -328,6 +500,11 @@ def _project(ctx: Context, params: Values, managed: bool = False):
     return row
 
 
+def managed(ctx: Context, container_id: str):
+    """A managed project or inventory, by its id."""
+    return _project(ctx, {"id": container_id}, managed=True)
+
+
 def looks_like_playbook(path: str, content: str) -> bool:
     """A YAML file whose text is a list with a play in it."""
     if not path.endswith((".yml", ".yaml")):
@@ -337,9 +514,14 @@ def looks_like_playbook(path: str, content: str) -> bool:
     return next(lines, "").startswith("- ") and bool(_PLAY_RE.search(content))
 
 
-def _queue_check(ctx: Context, project, path: PurePosixPath, start: bool = True) -> str:
-    """Queue a job that checks the syntax of one playbook of a project."""
-    tree = jobs.project_tree(project, ctx.config)
+def _queue_check(ctx: Context, project, path: PurePosixPath, start: bool = True,
+                 draft: Draft | None = None) -> str:
+    """Queue a job that checks the syntax of one playbook of a project, or of
+    a draft of it."""
+    if draft is not None:
+        tree, revision = draft_tree(draft), draft_tip(draft) or ""
+    else:
+        tree, revision = jobs.project_tree(project, ctx.config), project["revision"]
     if not _locate(tree, path).is_file():
         raise NotFound(f"no such file: {path}")
     run_id = store.new_id("r")
@@ -350,10 +532,12 @@ def _queue_check(ctx: Context, project, path: PurePosixPath, start: bool = True)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
+    options = {"path": str(path), **({"draft": draft.session} if draft else {})}
+    title = f"{project['name']}: {path}" + (" (draft)" if draft else "")
     (jobs.enqueue if start else jobs.queue)(
-        ctx, {"id": run_id, "kind": "syntax", "title": f"{project['name']}: {path}",
-              "project_id": project["id"], "revision": project["revision"],
-              "options": json.dumps({"path": str(path)})},
+        ctx, {"id": run_id, "kind": "syntax", "title": title,
+              "project_id": project["id"], "revision": revision,
+              "options": json.dumps(options)},
         {"kind": "syntax", "playbook": str(path)}, directory)
     return run_id
 
@@ -498,7 +682,7 @@ def _apply(tree: Path, operation: dict, changed: list[bool]) -> tuple[str, list[
     if kind == "write":
         target = _locate(tree, path)
         exists = target.is_file()
-        current = _digest(_read(target)) if exists else ""
+        current = digest(_read(target)) if exists else ""
         expected = operation["expected"]
         if exists and not expected:
             raise Conflict(f"{path} already exists")
@@ -543,30 +727,50 @@ def _apply(tree: Path, operation: dict, changed: list[bool]) -> tuple[str, list[
     return f"Copy {path} to {to}", [str(to)]
 
 
-def _rollback(project_id: str) -> None:
+def _rollback(project_id: str, draft: Draft | None = None) -> None:
     """Put the tree back as the last commit has it: a list of changes that
-    failed half way leaves nothing."""
-    if _git(project_id, "rev-parse", "--verify", "--quiet", "HEAD", check=False) is not None:
-        _git(project_id, "reset", "--hard", "--quiet", "HEAD")
-    _git(project_id, "clean", "-ffdxq")
+    failed half way leaves nothing. A draft with no commit of its own is
+    removed."""
+    if draft is not None:
+        if draft_tip(draft) is None:
+            drop(draft)
+            return
+        git(project_id, "read-tree", "--reset", "-u", draft.ref, draft=draft)
+        git(project_id, "clean", "-ffdxq", draft=draft)
+        return
+    if git(project_id, "rev-parse", "--verify", "--quiet", "HEAD", check=False) is not None:
+        git(project_id, "reset", "--hard", "--quiet", "HEAD")
+    git(project_id, "clean", "-ffdxq")
 
 
 def change(ctx: Context, project, operations: list[dict], message: str,
            revision: str = "", reread: bool = True, author: str | None = None,
-           start: bool = True) -> dict:
+           start: bool = True, draft: Draft | None = None,
+           tidy=None) -> dict:
     """Make OPERATIONS in a managed project or inventory as one commit, all
     or none, and what follows from them: for a project, syntax checks of the
     playbooks written, the collections a requirements file asks for, its
     inventories read again; for an inventory, reading it again (unless not
     REREAD: inventory.create and inventory.update leave that to the caller).
     The author is AUTHOR, or the caller; the jobs are only queued if not START
-    (reconcile, which starts them after)."""
-    tree = container_tree(ctx, project)
+    (reconcile, which starts them after).
+
+    In a DRAFT, the commit goes on its branch, and only the syntax checks
+    follow, of what the draft holds: nothing else reads a draft. TIDY, if
+    given, is called with the tree once the operations are made."""
     written, touched, said = [], [], []
     changed = [False]
-    with _locked(project["id"]):
+    # Before the lock: an inventory's tree is made under it the first time.
+    tree = None if draft is not None else container_tree(ctx, project)
+    with locked(project["id"]):
         project = _fetch(ctx, project["id"])
-        if revision and project["revision"] != revision:
+        if draft is not None:
+            _prepare(draft)
+            tree = draft.tree.resolve()
+            current = draft_tip(draft) or head(project["id"]) or ""
+        else:
+            current = project["revision"]
+        if revision and current != revision:
             raise Conflict(f"the {_table(project['id'])[1]} was changed by someone else:"
                            " reload it")
         try:
@@ -576,27 +780,38 @@ def change(ctx: Context, project, operations: list[dict], message: str,
                 touched += paths_touched
                 if operation["op"] == "write":
                     written.append(operation)
+            if tidy is not None:
+                changed[0] = True
+                tidy(tree)
             if any(operation["op"] == "copy" for operation in operations):
                 count = sum(len(names) for _current, _dirs, names in os.walk(tree))
                 if count > MAX_LISTED:
                     raise Conflict(f"a tree holds at most {MAX_LISTED} files")
             default = said[0] if len(said) == 1 else f"{len(said)} changes: " + "; ".join(said)
-            new_revision = _commit(ctx, project, message or default[:200], author=author)
+            if draft is not None:
+                new_revision = _commit_draft(ctx, draft, message or default[:200], author)
+            else:
+                new_revision = _commit(ctx, project, message or default[:200], author=author)
         except BaseException:
-            if changed[0]:
-                _rollback(project["id"])
+            if changed[0] or (draft is not None and draft_tip(draft) is None):
+                _rollback(project["id"], draft)
             raise
 
     project = _fetch(ctx, project["id"])
-    files = [{"path": str(op["path"]), "sha256": _digest(op["data"])} for op in written]
+    files = [{"path": str(op["path"]), "sha256": digest(op["data"])} for op in written]
+    done = {"revision": new_revision, "files": files, "check_run_ids": [],
+            "collections_run_id": None, "inventory_run_ids": [],
+            "draft": draft.session if draft else None}
     if is_inventory(project["id"]):
         from .resources import queue_parse  # it builds on this module
-        return {"revision": new_revision, "files": files,
-                "check_run_ids": [queue_parse(ctx, project, start=start, syntax=True)]
-                if reread else [],
-                "collections_run_id": None,
-                "inventory_run_ids": [queue_parse(ctx, project, start=start)] if reread else []}
-    checks = []
+        if draft is not None:
+            done["check_run_ids"] = [queue_parse(ctx, project, start=start, syntax=True,
+                                                 tree=tree, draft=draft.session,
+                                                 revision=new_revision)]
+        elif reread:
+            done["check_run_ids"] = [queue_parse(ctx, project, start=start, syntax=True)]
+            done["inventory_run_ids"] = [queue_parse(ctx, project, start=start)]
+        return done
     # The last content written to each path, if the path is still there: a
     # file written, then moved or deleted by a later change, is not checked.
     last = {str(operation["path"]): operation for operation in written}
@@ -607,21 +822,40 @@ def change(ctx: Context, project, operations: list[dict], message: str,
             continue
         if looks_like_playbook(name, content) and (tree / name).is_file() \
                 and not (tree / name).is_symlink():
-            checks.append(_queue_check(ctx, project, operation["path"], start))
-    collections = None
+            done["check_run_ids"].append(_queue_check(ctx, project, operation["path"], start,
+                                                      draft))
+    if draft is not None:
+        return done
     if any(name == path or name.startswith(path + "/")
            for name in jobs.REQUIREMENTS for path in touched):
-        collections = jobs.install_missing(ctx, project["id"], start=start)
-    inventories = reread_inventories(ctx, project, touched, start=start)
-    return {"revision": new_revision, "files": files, "check_run_ids": checks,
-            "collections_run_id": collections, "inventory_run_ids": inventories}
+        done["collections_run_id"] = jobs.install_missing(ctx, project["id"], start=start)
+    done["inventory_run_ids"] = reread_inventories(ctx, project, touched, start=start)
+    return done
 
 
-@command("file.list", role="admin", params={"id": Id()})
+def _reading(ctx: Context, project, params: Values) -> Draft | None:
+    """The draft a reading call names, or that an agent reads by default."""
+    if project["kind"] != "managed":
+        if params["draft"]:
+            raise Conflict("only a project written in the interface has drafts")
+        return None
+    return place(ctx, project, params["draft"], writing=False)
+
+
+def _done(done: dict) -> dict:
+    return {"revision": done["revision"], "draft": done["draft"]}
+
+
+@command("file.list", role="admin",
+         params={
+             "id": Id(),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
+         })
 def file_list(ctx: Context, params: Values) -> dict:
     """Every file of a project, with its size, and its directories."""
     project = _project(ctx, params)
-    tree = container_tree(ctx, project)
+    draft = _reading(ctx, project, params)
+    tree = draft_tree(draft) if draft else container_tree(ctx, project)
     found: list[dict] = []
     folders: list[str] = []
     for current, directories, names in os.walk(tree):
@@ -647,26 +881,30 @@ def file_list(ctx: Context, params: Values) -> dict:
             break
     return {"files": found[:MAX_LISTED], "directories": folders[:MAX_LISTED],
             "truncated": len(found) > MAX_LISTED, "editable": project["kind"] == "managed",
-            "revision": project["revision"]}
+            "revision": draft_tip(draft) if draft else project["revision"],
+            "draft": draft.session if draft else None}
 
 
 @command("file.read", role="admin",
          params={
              "id": Id(),
              "path": Str(required=True, max_length=1024),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_read(ctx: Context, params: Values) -> dict:
     """The content of one file of a project, with the digest a write must
     quote. A file that is not text is said to be binary, without its content."""
     project = _project(ctx, params)
     path = check_file_path(params["path"])
-    data = _read(_locate(container_tree(ctx, project), path))
+    draft = _reading(ctx, project, params)
+    tree = draft_tree(draft) if draft else container_tree(ctx, project)
+    data = _read(_locate(tree, path))
     try:
         content, binary = data.decode(), False
     except UnicodeDecodeError:
         content, binary = "", True
     # The digest is what a later write says it started from.
-    return {"path": str(path), "content": content, "sha256": _digest(data),
+    return {"path": str(path), "content": content, "sha256": digest(data),
             "binary": binary, "size": len(data)}
 
 
@@ -678,20 +916,24 @@ def file_read(ctx: Context, params: Values) -> dict:
              "expected": Str(required=True, max_length=64),
              "path": Str(required=True, max_length=1024),
              "message": Str(default="", max_length=200),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_write(ctx: Context, params: Values) -> dict:
     """Create or replace one file of a managed project, as one commit.
 
     `expected` is the digest of the content the change started from, empty for
     a new file: a file that someone else changed meanwhile is not overwritten.
+    An agent's change goes to the draft of its session, which a person
+    reviews and merges; runs use main only.
     """
     project = _project(ctx, params, managed=True)
     operation = check_operation(0, {"op": "write", "path": params["path"],
                                "content": params["content"], "expected": params["expected"]})
-    done = change(ctx, project, [operation], _message(params, ""))
+    done = change(ctx, project, [operation], _message(params, ""),
+                  draft=place(ctx, project, params["draft"], writing=True))
     return {"revision": done["revision"], "sha256": done["files"][0]["sha256"],
             "check_run_id": (done["check_run_ids"] or [None])[0],
-            "collections_run_id": done["collections_run_id"]}
+            "collections_run_id": done["collections_run_id"], "draft": done["draft"]}
 
 
 @command("file.delete", role="admin", mutating=True, agent="code",
@@ -699,13 +941,15 @@ def file_write(ctx: Context, params: Values) -> dict:
              "id": Id(),
              "path": Str(required=True, max_length=1024),
              "message": Str(default="", max_length=200),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_delete(ctx: Context, params: Values) -> dict:
     """Delete one file, or a directory with everything in it, of a project
-    written in the interface, as a commit."""
+    written in the interface, as a commit (an agent's, in its draft)."""
     project = _project(ctx, params, managed=True)
     operation = check_operation(0, {"op": "delete", "path": params["path"]})
-    return {"revision": change(ctx, project, [operation], _message(params, ""))["revision"]}
+    return _done(change(ctx, project, [operation], _message(params, ""),
+                        draft=place(ctx, project, params["draft"], writing=True)))
 
 
 @command("file.move", role="admin", mutating=True, agent="code",
@@ -714,12 +958,15 @@ def file_delete(ctx: Context, params: Values) -> dict:
              "path": Str(required=True, max_length=1024),
              "to": Str(required=True, max_length=1024),
              "message": Str(default="", max_length=200),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_move(ctx: Context, params: Values) -> dict:
-    """Rename a file or a directory, or move it to another directory of the project."""
+    """Rename a file or a directory, or move it to another directory of the
+    project (an agent, in its draft)."""
     project = _project(ctx, params, managed=True)
     operation = check_operation(0, {"op": "move", "path": params["path"], "to": params["to"]})
-    return {"revision": change(ctx, project, [operation], _message(params, ""))["revision"]}
+    return _done(change(ctx, project, [operation], _message(params, ""),
+                        draft=place(ctx, project, params["draft"], writing=True)))
 
 
 @command("file.change", role="admin", mutating=True, agent="code",
@@ -737,12 +984,14 @@ def file_move(ctx: Context, params: Values) -> dict:
              "revision": Str("The revision of the project the changes were made on;"
                              " refused if it changed meanwhile", default="", max_length=64),
              "message": Str(default="", max_length=200),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_change(ctx: Context, params: Values) -> dict:
     """Change files and directories of a managed project as one commit: all
     the changes are made, or none of them. A directory left empty, or made
     with mkdir, is kept, with an empty .gitkeep in it that is not listed.
-    Playbooks written are checked, as when written one at a time."""
+    Playbooks written are checked, as when written one at a time. An agent's
+    changes go to the draft of its session, which a person reviews and merges."""
     project = _project(ctx, params, managed=True)
     operations = [check_operation(index, item) for index, item in enumerate(params["operations"])]
     if not operations:
@@ -753,7 +1002,8 @@ def file_change(ctx: Context, params: Values) -> dict:
     revision = params["revision"]
     if revision and not _REVISION_RE.fullmatch(revision):
         raise BadRequest("revision must be a commit id")
-    return change(ctx, project, operations, _message(params, ""), revision)
+    return change(ctx, project, operations, _message(params, ""), revision,
+                  draft=place(ctx, project, params["draft"], writing=True))
 
 
 @command("file.restore", role="admin", mutating=True, agent="code",
@@ -763,11 +1013,12 @@ def file_change(ctx: Context, params: Values) -> dict:
              "revision": Str("The commit to take the file or directory from",
                              required=True, max_length=64),
              "message": Str(default="", max_length=200),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_restore(ctx: Context, params: Values) -> dict:
     """Put a file or a directory of a managed project or inventory back as it was at an
     earlier revision, as a new commit: a directory gets exactly the files it
-    had then."""
+    had then. An agent restores in the draft of its session."""
     project = _project(ctx, params, managed=True)
     path = check_file_path(params["path"])
     revision = params["revision"]
@@ -775,38 +1026,49 @@ def file_restore(ctx: Context, params: Values) -> dict:
         raise BadRequest("revision must be a commit id")
     message = _message(params, "")
     project_id = project["id"]
-    tree = container_tree(ctx, project)
-    with _locked(project_id):
+    draft = place(ctx, project, params["draft"], writing=True)
+    # Before the lock: an inventory's tree is made under it the first time.
+    tree, line = (None, "") if draft is not None else (container_tree(ctx, project), "HEAD")
+    with locked(project_id):
+        if draft is not None:
+            _prepare(draft)
+            tree, line = draft.tree.resolve(), draft.ref if draft_tip(draft) else "HEAD"
         # Only the history of the project: objects a refused push left are not in it.
-        if (_git(project_id, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}",
+        if (git(project_id, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}",
                  check=False) is None
-                or _git(project_id, "merge-base", "--is-ancestor", revision, "HEAD",
+                or git(project_id, "merge-base", "--is-ancestor", revision, line,
                         check=False) is None):
+            if draft is not None and draft_tip(draft) is None:
+                drop(draft)
             raise NotFound(f"no such revision: {revision}")
-        listing = _git(project_id, "ls-tree", "-r", "-z", revision, "--", str(path)) or ""
+        listing = git(project_id, "ls-tree", "-r", "-z", revision, "--", str(path)) or ""
         entries = [entry for entry in listing.split("\0") if entry]
-        if not entries:
-            raise NotFound(f"{path} was not in the project at {revision[:10]}")
-        for entry in entries:
-            mode, kind = entry.split()[:2]
-            if kind != "blob" or mode not in ("100644", "100755"):
-                raise Conflict(f"{entry.partition(chr(9))[2]}: not a regular file")
-        project = _fetch(ctx, project_id)
-        present = _mode_on_way(tree, path) is not None
-        is_directory = present and _entry(tree, path)
         try:
+            if not entries:
+                raise NotFound(f"{path} was not in the project at {revision[:10]}")
+            for entry in entries:
+                mode, kind = entry.split()[:2]
+                if kind != "blob" or mode not in ("100644", "100755"):
+                    raise Conflict(f"{entry.partition(chr(9))[2]}: not a regular file")
+            project = _fetch(ctx, project_id)
+            present = _mode_on_way(tree, path) is not None
+            is_directory = present and _entry(tree, path)
             if is_directory:
                 shutil.rmtree(tree / path)
             elif present:
                 (tree / path).unlink()
-            _git(project_id, "checkout", revision, "--", str(path))
-            new_revision = _commit(ctx, project,
-                                   message or f"Restore {path} as of {revision[:10]}")
+            git(project_id, "checkout", revision, "--", str(path), draft=draft)
+            message = message or f"Restore {path} as of {revision[:10]}"
+            new_revision = _commit_draft(ctx, draft, message) if draft is not None \
+                else _commit(ctx, project, message)
         except BaseException:
-            _rollback(project_id)
+            _rollback(project_id, draft)
             raise
+    if draft is not None:
+        return {"revision": new_revision, "inventory_run_ids": [], "draft": draft.session}
     return {"revision": new_revision,
-            "inventory_run_ids": _reread(ctx, _fetch(ctx, project_id), [str(path)])}
+            "inventory_run_ids": _reread(ctx, _fetch(ctx, project_id), [str(path)]),
+            "draft": None}
 
 
 def _pack(directory_fd: int, prefix: str, archive: tarfile.TarFile, budget: list[int]) -> None:
@@ -917,7 +1179,7 @@ def file_import(ctx: Context, params: Values) -> dict:
                          " (projects.max_upload_mb in config.toml)")
     shown = "".join(ch for ch in PurePosixPath(params["filename"].replace("\\", "/")).name
                     if ch.isprintable())[:200]
-    options = {"filename": shown, "size": len(content), "sha256": _digest(content),
+    options = {"filename": shown, "size": len(content), "sha256": digest(content),
                "import": {"into": into, "author": ctx.caller.user, "message": message}}
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
@@ -1002,7 +1264,7 @@ def take_import(ctx: Context, run, directory: Path) -> str:
                 operations.append({"op": "mkdir", "path": path})
             continue
         target = _locate(tree, path)
-        expected = _digest(_read(target)) if target.is_file() else ""
+        expected = digest(_read(target)) if target.is_file() else ""
         operations.append({"op": "write", "path": path, "data": data, "expected": expected})
     if not operations:
         raise Conflict("the archive holds no file")
@@ -1018,23 +1280,26 @@ def take_import(ctx: Context, run, directory: Path) -> str:
              "id": Id(),
              "path": Str(default="", max_length=1024),
              "limit": Int(1, 500, default=50),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_history(ctx: Context, params: Values) -> dict:
     """The changes of a managed project, newest first; of one file if asked."""
     project = _project(ctx, params, managed=True)
+    draft = _reading(ctx, project, params)
     path = params["path"]
     limit = params["limit"]
     selection = ["--", str(check_file_path(path))] if path else []
     # Nothing committed yet is not an error: git says so by failing.
-    output = _git(project["id"], "log", f"--max-count={limit}", "-z",
-                  "--format=%H%x1f%an%x1f%at%x1f%s", *selection, check=False) or ""
+    output = git(project["id"], "log", f"--max-count={limit}", "-z",
+                  "--format=%H%x1f%an%x1f%at%x1f%s", draft.ref if draft else "HEAD",
+                  *selection, check=False) or ""
     commits = []
     for record in output.split("\0"):
         fields = record.strip("\n").split("\x1f")
         if len(fields) == 4:
             commits.append({"revision": fields[0], "author": fields[1], "time": int(fields[2]),
                             "subject": fields[3]})
-    return {"commits": commits}
+    return {"commits": commits, "draft": draft.session if draft else None}
 
 
 @command("file.diff", role="admin",
@@ -1048,7 +1313,7 @@ def file_diff(ctx: Context, params: Values) -> dict:
     revision = params["revision"]
     if not _REVISION_RE.fullmatch(revision):
         raise BadRequest("revision must be a commit id")
-    text = _git(project["id"], "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv",
+    text = git(project["id"], "show", "--format=", "--no-color", "--no-ext-diff", "--no-textconv",
                 f"{revision}^{{commit}}", check=False)
     if text is None:
         raise NotFound(f"no such revision: {revision}")
@@ -1059,19 +1324,26 @@ def file_diff(ctx: Context, params: Values) -> dict:
          params={
              "id": Id(),
              "path": Str(required=True, max_length=1024),
+             "draft": Str(_DRAFT_DOC, default="", max_length=16),
          })
 def file_check(ctx: Context, params: Values) -> dict:
     """Queue a syntax check of one playbook, of any kind of project; in an
     inventory written in the interface, of the whole inventory, as it reads
-    the file at path among its sources or their variables."""
+    the file at path among its sources or their variables. In a draft, of
+    what the draft holds."""
     project = _project(ctx, params)
     path = check_file_path(params["path"])
+    draft = _reading(ctx, project, params)
     if is_inventory(project["id"]):
         from .resources import queue_parse  # it builds on this module
-        if not _locate(container_tree(ctx, project), path).is_file():
+        tree = draft_tree(draft) if draft else container_tree(ctx, project)
+        if not _locate(tree, path).is_file():
             raise NotFound(f"no such file: {path}")
+        if draft is not None:
+            return {"run_id": queue_parse(ctx, project, syntax=True, tree=tree,
+                                          draft=draft.session, revision=draft_tip(draft))}
         return {"run_id": queue_parse(ctx, project, syntax=True)}
-    return {"run_id": _queue_check(ctx, project, path)}
+    return {"run_id": _queue_check(ctx, project, path, draft=draft)}
 
 
 # --- at a terminal: clone and push --------------------------------------------------------
@@ -1085,11 +1357,11 @@ def file_bundle(ctx: Context, params: Values) -> dict:
     fleet project clone and pull; recorded in the audit trail, as a copy of
     every file of the project is."""
     project = _project(ctx, params, managed=True)
-    with _locked(project["id"]), tempfile.TemporaryDirectory(dir=_home(project["id"])) as work:
+    with locked(project["id"]), tempfile.TemporaryDirectory(dir=_home(project["id"])) as work:
         target = Path(work) / "project.bundle"
-        if _git(project["id"], "rev-parse", "--verify", "--quiet", "HEAD", check=False) is None:
+        if git(project["id"], "rev-parse", "--verify", "--quiet", "HEAD", check=False) is None:
             raise Conflict("nothing was written in this project yet")
-        _git(project["id"], "bundle", "create", "--quiet", str(target), "main")
+        git(project["id"], "bundle", "create", "--quiet", str(target), "main")
         data = target.read_bytes()
     if len(data) > MAX_BUNDLE:
         raise Conflict(f"the project is larger than {MAX_UPLOAD_MB} MB as a bundle")
@@ -1100,11 +1372,11 @@ def _incoming_files(project_id: str, base: str) -> list[str]:
     """The paths the pushed commits change, after checking that every file of
     their last tree is one the editor could have written, and that they are a
     line of commits on top of base."""
-    if _git(project_id, "merge-base", "--is-ancestor", base, _INCOMING, check=False) is None:
+    if git(project_id, "merge-base", "--is-ancestor", base, _INCOMING, check=False) is None:
         raise Conflict("the commits pushed do not follow the revision of the project")
-    if (_git(project_id, "rev-list", "--merges", f"{base}..{_INCOMING}") or "").strip():
+    if (git(project_id, "rev-list", "--merges", f"{base}..{_INCOMING}") or "").strip():
         raise BadRequest("the commits pushed hold a merge: push a line of commits")
-    listing = _git(project_id, "ls-tree", "-r", "-l", "-z", "--full-tree", _INCOMING) or ""
+    listing = git(project_id, "ls-tree", "-r", "-l", "-z", "--full-tree", _INCOMING) or ""
     count = 0
     for entry in listing.split("\0"):
         if not entry:
@@ -1119,7 +1391,7 @@ def _incoming_files(project_id: str, base: str) -> list[str]:
             raise BadRequest(f"{path} is larger than {MAX_FILE // 1024} kB")
     if count > MAX_LISTED:
         raise BadRequest(f"more than {MAX_LISTED} files")
-    changed = _git(project_id, "diff", "--name-only", "-z", "--no-renames", base, _INCOMING) or ""
+    changed = git(project_id, "diff", "--name-only", "-z", "--no-renames", base, _INCOMING) or ""
     return [path for path in changed.split("\0") if path]
 
 
@@ -1146,24 +1418,24 @@ def file_push(ctx: Context, params: Values) -> dict:
     except ValueError as error:
         raise BadRequest("bundle is not valid base64") from error
     project_id = project["id"]
-    with _locked(project_id), tempfile.TemporaryDirectory(dir=_home(project_id)) as work:
+    with locked(project_id), tempfile.TemporaryDirectory(dir=_home(project_id)) as work:
         project = _fetch(ctx, project_id)
         if project["revision"] != expected:
             raise Conflict(f"the {_table(project_id)[1]} changed since your clone: pull, then push")
         bundle = Path(work) / "incoming.bundle"
         bundle.write_bytes(data)
-        if _git(project_id, "bundle", "verify", "--quiet", str(bundle), check=False) is None:
+        if git(project_id, "bundle", "verify", "--quiet", str(bundle), check=False) is None:
             raise BadRequest("this is not a bundle of commits on top of the project")
         # Every object checked, not only those of the tree that is looked at.
-        _git(project_id, "fetch", "--quiet", "--no-tags", str(bundle), f"+main:{_INCOMING}",
+        git(project_id, "fetch", "--quiet", "--no-tags", str(bundle), f"+main:{_INCOMING}",
              env={"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "transfer.fsckObjects",
                   "GIT_CONFIG_VALUE_0": "true"})
         try:
             changed = _incoming_files(project_id, expected)
-            _git(project_id, "merge", "--quiet", "--ff-only", _INCOMING)
+            git(project_id, "merge", "--quiet", "--ff-only", _INCOMING)
         finally:
-            _git(project_id, "update-ref", "-d", _INCOMING, check=False)
-        revision = _git(project_id, "rev-parse", "HEAD").strip()
+            git(project_id, "update-ref", "-d", _INCOMING, check=False)
+        revision = git(project_id, "rev-parse", "HEAD").strip()
         table, what = _table(project_id)
         store.update(ctx.conn, table, project_id,
                      {"revision": revision, **({"synced_at": store.now()}

@@ -78,7 +78,8 @@ template.update admin M       whoami viewer -               workflow.create admi
 workflow.delete admin M       workflow.launch operator M    workflow.list viewer -
 workflow.progress viewer -    workflow.resume operator M    workflow.update admin M
 varset.create admin M         varset.delete admin M         varset.list viewer -
-varset.update admin M
+varset.update admin M         draft.diff admin -            draft.discard admin M
+draft.list admin -            draft.merge admin M
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()
@@ -286,7 +287,7 @@ class Fixture(CheckBase):
 
     # The id each command takes as "id", by what it names.
     ID_OF = {"approval": "pending", "channel": "channel", "check": "check",
-             "credential": "credential", "file": "managed", "inventory": "inventory",
+             "credential": "credential", "draft": "managed", "file": "managed", "inventory": "inventory",
              "maintenance": "maintenance", "project": "project", "rule": "rule",
              "run": "run", "schedule": "schedule", "template": "template",
              "workflow": "workflow", "host": "host", "varset": "varset"}

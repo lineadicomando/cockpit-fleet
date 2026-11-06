@@ -9,11 +9,13 @@ part works: `docs/architecture.md`.
 ## Status (6 November 2026)
 
 Phases 0–11 closed; 0.2.0 released on 2 November. Under `[Unreleased]`:
-runs in series on an inventory, and steps 1–5 of phase 12 (below). Five
+runs in series on an inventory, and steps 1–6 of phase 12 (below). The
 commits of phase 12 on `main` are not pushed (`git log origin/main..`).
-**Next:** phase 12, step 6, the drafts of files.
+**Next:** phase 12, the instructions in layers.
 
-Tests: on 6 November the unit tests (557 backend, 130 frontend) and
+Tests: on 6 November the unit tests (573 backend, 130 frontend), drafts
+in unit tests only, and `ct-test` of `files negative mcp` on AlmaLinux
+after them; before them,
 `ct-test` of `mcp chat cli adhoc negative workflows roles runs` on
 AlmaLinux and Debian; not Fedora, no VM, and the forms of approval not
 seen in a browser. Last full `ct-test`: 1 November, on the three (`cmdb`
@@ -22,7 +24,7 @@ Run two distributions' `ct-test` one after the other, not together.
 
 To resume: `CLAUDE.md`, `CLAUDE.local.md` if present; `git status`;
 `make check`. Each backend module says what it is in its docstring;
-`cli.py` is the registry, `db.py` the schema (24).
+`cli.py` is the registry, `db.py` the schema (24; drafts need none).
 
 ## Phase 12 — Profiles of the assistant
 
@@ -40,7 +42,9 @@ autonomous_runs`, `autonomous_dry_run`, a session drawn by `fleet-mcp` and
 in the audit, schema 23); modes of approval (`approvals.py`: `none`,
 `confirm`, `other`, `[approvals] admins_exempt`, schema 24, `needs_approval`
 deprecated); an agent's ad-hoc command waits for its person's confirmation
-unless diagnostic. Decided on 6 November along the way: an autonomous
+unless diagnostic; drafts (`files.place`, `drafts.py`: a branch
+`drafts/SESSION` with its own work tree, `draft.list`, `draft.diff`,
+`draft.merge` file by file, `draft.discard`). Decided on 6 November along the way: an autonomous
 agent launches nothing on an inventory with a maintenance window open and
 never calls `state.ack`/`unack` or `maintenance.*`; a diagnostic ad-hoc
 command never waits; `approval.approve`/`reject` need the role operator or
@@ -75,14 +79,6 @@ conversation; none. adhoc and code are never autonomous.
 
 Steps, each tested before the next:
 
-- [ ] Drafts of files: an agent's `file.write`/`file.change` on a branch of
-      the session; templates, schedules and checks from `main` only; a
-      merge command refused to agents (class `code`, `tool=False`); the
-      diff and the syntax check of a draft; drafts left behind listed and
-      discarded. Start from `files.py` (a managed project is a work tree
-      with its git repository beside it, one commit per change;
-      `file.history`, `file.diff`, `file.restore`), `jobs.project_tree` and
-      `jobs.snapshot` (what a run copies); the session is `ctx.session`
 - [ ] Instructions in layers composed by `chat.start` (today
       `INSTRUCTIONS` in `src/lib/chat.ts` and in `chat_agent.py` for the
       terminal's `{instructions}`)
@@ -92,11 +88,12 @@ Steps, each tested before the next:
       every tool of the role), its risks told and accepted once (audited),
       the profile in the header and in each question, questions by class
       (`class` of each tool) with its floor, "always" for a class, the
-      instructions the agent got, the review of a draft (diff, accept all
-      or part, discard, edit before merging)
+      instructions the agent got, the review of a draft (`draft.list`,
+      `draft.diff` with its checks, `draft.merge` of all or some paths,
+      `draft.discard`, editing with `draft` on the file commands)
 - [ ] Terminal: `fleet assistant --profile` (`fleet-chat --terminal
       --profile` exists), the profile as options of the agent's CLI
-      (permission mode, tools allowed)
+      (permission mode, tools allowed); `fleet draft list|diff|merge|discard`
 - [ ] Docs: `chat.md` (profiles, risks, instructions), `security.md`,
       `architecture.md`, `config.toml`; `CHANGELOG.md`
 - [ ] Integration: `chat.sh` by profile, drafts in `mcp.sh`; `make ct-test`

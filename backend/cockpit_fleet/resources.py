@@ -503,7 +503,8 @@ def inventory_delete(ctx: Context, params: Values) -> dict:
     return {}
 
 
-def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | None) -> dict:
+def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | None,
+                    tree: Path | None = None) -> dict:
     """Make an inventory available to a job; returns the spec keys that point to it.
 
     A file inventory of the project the job copies is read there. One of
@@ -511,10 +512,13 @@ def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | 
     directory, or the directory its file is in (with the group_vars and
     host_vars beside it), at the same path; the whole project for a file at
     its top. PROJECT_ID None: the caller copied the inventory's own project.
+    TREE is where the files of a managed inventory are read, if not its own
+    (a draft of it).
     """
     if inventory["kind"] == "managed":
         # A copy of its tree, as a project is copied: runs share nothing they write.
-        jobs.snapshot(files.inventory_tree(ctx, inventory), directory / "inventory", "inventory")
+        jobs.snapshot(tree or files.inventory_tree(ctx, inventory), directory / "inventory",
+                      "inventory")
         return {"inventory": inventory["path"] or ".", "inventory_source": "managed"}
     if project_id is not None and inventory["project_id"] != project_id:
         other = store.fetch(ctx.conn, "projects", inventory["project_id"], "project")
@@ -541,10 +545,12 @@ def inventory_parse(ctx: Context, params: Values) -> dict:
 
 
 def queue_parse(ctx: Context, inventory, created_by: str | None = None,
-                start: bool = True, syntax: bool = False) -> str:
+                start: bool = True, syntax: bool = False, tree: Path | None = None,
+                draft: str = "", revision: str | None = None) -> str:
     """Queue the job that lists the hosts and groups of an inventory. With
     SYNTAX, a syntax check instead: the same reading, where any source that
-    cannot be read fails it, and the hosts listed are not kept."""
+    cannot be read fails it, and the hosts listed are not kept; of the files
+    in TREE, at REVISION, for a DRAFT of a managed inventory."""
     inventory_id = inventory["id"]
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
@@ -556,17 +562,20 @@ def queue_parse(ctx: Context, inventory, created_by: str | None = None,
         else:
             (directory / "project").mkdir(mode=0o700)
         spec = {"kind": "syntax" if syntax else "inventory",
-                **place_inventory(ctx, inventory, directory, None)}
+                **place_inventory(ctx, inventory, directory, None, tree)}
         jobs.add_secret(directory, inventory["vault_credential_id"],
                         "vault_password", "vault_password")
         jobs.write_known_hosts(ctx.conn, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
         raise
-    run = {"id": run_id, "kind": spec["kind"], "title": inventory["name"],
+    run = {"id": run_id, "kind": spec["kind"],
+           "title": inventory["name"] + (" (draft)" if draft else ""),
            "inventory_id": inventory_id, "project_id": inventory["project_id"]}
     if syntax:
-        run["revision"] = inventory["revision"]
+        run["revision"] = revision or inventory["revision"]
+    if draft:
+        run["options"] = json.dumps({"draft": draft})
     if created_by:
         run["created_by"] = created_by
     (jobs.enqueue if start else jobs.queue)(ctx, run, spec, directory)

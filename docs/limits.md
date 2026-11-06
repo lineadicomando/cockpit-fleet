@@ -32,7 +32,11 @@ in [security.md](security.md); the decisions behind these limits in
   307 of the tools; 5 November); in the profile diagnostic, `setup` with
   `fact_path` runs the `*.fact` programs of that directory on the node; the
   page lists every tool of the role, not only those of the session's
-  profile (phase 12 under way).
+  profile (phase 12 under way); a draft is taken file by file (a file
+  changed in main too is a conflict, settled by hand) and is not brought
+  up to date with main, nor exported; `inventory.create` and
+  `inventory.update` (class config) write the main file of a managed
+  inventory without a draft; drafts not yet in the page nor at a terminal.
 - Chat: plain text; conversations not deletable; model not choosable; one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,

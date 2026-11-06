@@ -48,6 +48,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
   without become); the list of runs waiting for approval shows the
   command. The agent cannot confirm it.
 
+- Drafts: what an agent writes in a project or inventory written in the
+  interface goes to a draft of its session, a git branch beside the files,
+  which no run reads; templates, schedules and checks keep using what a
+  person wrote. `draft.list` and `draft.diff` show the drafts, what each
+  changes and the syntax checks of it; `draft.merge` takes all or some of
+  its files in as one commit of the person, and `draft.discard` throws it
+  away. Agents can do neither. The file commands take `draft` to read or
+  edit one.
+
 ### Fixed
 
 - `run.result` gave a run waiting for approval as done: it is not, and the

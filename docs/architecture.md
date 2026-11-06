@@ -1712,6 +1712,43 @@ a new session: what a person with a shell could do by hand anyway. Rights
 are taken away from agents, so a run that needs approval waits for a
 person.
 
+**Drafts.** An agent never writes to `main` of a managed project or
+inventory: `file.write`, `file.change`, `file.delete`, `file.move` and
+`file.restore` called by an agent go to the branch `drafts/SESSION` of the
+same repository, made at its first write from where `main` is then
+(`files.place`). The branch is checked out in a work tree of its own,
+`drafts/SESSION/tree` beside the project's `tree`, with its own index
+(`GIT_INDEX_FILE`), and committed with `write-tree`, `commit-tree` and
+`update-ref`, so `main`, its index and `HEAD` are never touched; a write
+that fails before the first commit leaves no draft. No run reads a draft:
+templates, schedules, checks and the readings of inventories copy the
+project's own tree, which is `main`. What follows a write in a draft is a
+syntax check of the draft, a run whose `options` name it; collections and
+inventories wait for `main`. While its draft exists an agent reads it
+(`file.list`, `file.read`, `file.history`, `file.check`), so the digest it
+quotes is the draft's; another session's draft it may read by naming it
+(`draft`), never write. Without a session there is nothing to write to,
+and an agent's write is refused.
+
+`drafts.py` is the person's side: `draft.list` (every draft, or those of a
+project, with how many files each changes and how many main changed too),
+`draft.diff` (the changes path by path, the unified diff from where the
+draft started, the last syntax check of each file), `draft.merge` and
+`draft.discard`. The last two are `code` and not tools, so `_through`
+refuses them to an agent: a program does not approve its own code. A
+merge quotes the revision of the draft that was reviewed, and takes all
+or some of its paths into `main` through `change()`, as one commit of the
+person, with what any change of `main` brings (checks, collections,
+inventories read again); the draft goes once `main` has all of it. It is
+taken file by file, not line by line: a file goes in as the draft has it
+if `main` still has it as the draft found it (the merge base of the
+branch and `main`), and is skipped if `main` has it as the draft does; a
+file changed on both sides is a conflict, refused, which a person settles
+by editing the draft (`draft` on the file commands) or `main`. Directories
+a merge empties go, unless the draft keeps them. A line-by-line merge was
+left: a person reviews whole files anyway, and git's merge would write
+conflict markers into a playbook.
+
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
 runs and where, and its parameters are the questions of its survey, typed and

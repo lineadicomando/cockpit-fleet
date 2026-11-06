@@ -473,6 +473,7 @@ def load_commands() -> dict[str, Command]:
         chat,
         checks,
         cmdb,
+        drafts,
         files,
         health,
         metrics,
