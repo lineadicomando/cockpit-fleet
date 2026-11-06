@@ -9,9 +9,9 @@ docs/architecture.md` and read only the one needed).
 
 Phases 0–11 closed; 0.2.0 released on 2 November. Under `[Unreleased]`:
 runs in series on an inventory, and phase 12 up to the instructions in
-layers. Phase 12's 9 commits on `main` are not pushed (`git log
-origin/main..`); the page is committed, the terminal is in the work tree.
-**Next:** phase 12, the docs (below).
+layers. Phase 12's commits on `main` are not pushed (`git log
+origin/main..`).
+**Next:** phase 12, the integration (below).
 
 To resume: `git status`; `make check`. Each backend module says what it is
 in its docstring; `cli.py` is the registry, `db.py` the schema (25).
@@ -87,9 +87,7 @@ Steps, each tested before the next:
       which the page reads from `mcp.tools` too); `fleet draft diff` for a
       person. To try with Claude's CLI: that `--allowedTools` works beside
       `--permission-mode manual`.
-- [ ] Docs: `chat.md` (profiles, risks, drafts), `security.md`,
-      `architecture.md` ("The chat": permissions by class, acceptance),
-      `config.toml`; `CHANGELOG.md`.
+- [x] Docs.
 - [ ] Integration: `chat.sh` by profile, drafts in `mcp.sh`; `make ct-test`
       on the three; the page in a browser on a VM with the adapter and its
       model; then the acceptance of the phase in `architecture.md`, its

@@ -133,6 +133,9 @@
 #   autonomous     as assisted, without being asked, within the limits below
 #   administrator  everything the role allows: ad-hoc commands, changes to
 #                  templates and the rest, files, projects, credentials
+# Each user accepts the risks of diagnostic, autonomous and administrator
+# once, on the chat page or in fleet assistant, before a session in them;
+# the acceptance is in the audit log.
 # A profile only restricts, under the user's role and [mcp] max_role. It
 # holds for fleet-mcp started by hand too: an agent that names none gets
 # default_profile (by default assisted, or the first of profiles when assisted
@@ -154,5 +157,6 @@
 #label = "Claude"
 # What a user runs in a terminal on this machine to log in to the model.
 #login = "/opt/cockpit-fleet-agent/bin/claude /login"
-# What `fleet assistant` runs at a terminal (docs/chat.md says the whole line).
+# What `fleet assistant` runs at a terminal (docs/chat.md says the whole line):
+# {mcp_config}, {allowed_tools} and {instructions} are filled for the session.
 #terminal = ["/opt/cockpit-fleet-agent/bin/claude", "..."]

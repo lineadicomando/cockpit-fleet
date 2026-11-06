@@ -1697,6 +1697,17 @@ hand with the same role. `mcp.tools` lists only the tools of the profile,
 `become`. The audit has a `profile` column (schema 22), and the journal
 `FLEET_PROFILE`.
 
+**Questions by profile.** How a person is asked about a call is the
+backend's too: `profiles.question` gives, for a profile and a class, `none`
+(made unasked: reading; `run` in `autonomous`, which autonomy holds;
+`adhoc-diagnostic` in `diagnostic`), `every` (asked every time, never
+trusted for a conversation: `adhoc`, `config`, `code`, in any profile) or
+`ask` (asked, and "always" trusts the class for the conversation).
+`mcp.tools` gives it with each tool, for the page, and `chat.start` gives
+the names of the tools that are `none`, for the agent's program at a
+terminal. One table, so that the page and the terminal cannot drift apart;
+and a floor, not a control, since `_through` decides each call again.
+
 **Autonomy.** In a profile nobody confirms (`profiles.AUTONOMOUS`),
 `dispatch` hands the call, once the role allows it, to `autonomy.hold`:
 nothing that silences a problem (`state.ack`, `state.unack`,
@@ -1748,6 +1759,19 @@ by editing the draft (`draft` on the file commands) or `main`. Directories
 a merge empties go, unless the draft keeps them. A line-by-line merge was
 left: a person reviews whole files anyway, and git's merge would write
 conflict markers into a playbook.
+
+In the interface (`src/components/Drafts.tsx`) an administrator is told of
+the drafts waiting on the page of the assistant, looked at again after
+each answer, and on the files of their project or inventory. The review
+shows `draft.diff`, every change chosen but those in conflict, and merges
+what is chosen (all, or the paths) with the revision it showed. "Edit the
+draft" opens the page of the files at `projects/ID/drafts/SESSION`, where
+every file command carries `draft`: what a person saves goes to the draft,
+under their name, and its syntax checks check the draft. Importing an
+archive and downloading are left out there, since they read and write
+`main`. At a terminal `fleet draft diff` writes the same review as text,
+ending with the `fleet draft merge` line that quotes the revision shown;
+the draft commands take the name of a managed project or inventory.
 
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
@@ -1998,7 +2022,11 @@ provider with every conversation, so no secret belongs in them.
 which asks `chat.start` with `terminal` for the agent's program for a
 terminal (`terminal` in `[chat.agents.NAME]`), writes a private MCP
 configuration naming `fleet-mcp` alone, fills `{mcp_config}` and
-`{instructions}` in that command line, and runs it on the user's terminal,
+`{instructions}` in that command line, `{allowed_tools}` with the tools
+`chat.start` says the profile lets through unasked (as
+`mcp__cockpit-fleet__NAME`, comma-separated, for `--allowedTools`; the
+instructions are filled last, so that a placeholder in the administrator's
+text stays as it is), and runs it on the user's terminal,
 ignoring ^C, which is the agent's, in `~/.local/state/cockpit-fleet/assistant`
 (under `XDG_STATE_HOME` when set; mode 0700), the same directory each time:
 Claude asks whether to trust the directory it starts in and keeps no answer
@@ -2009,18 +2037,51 @@ what `_meta` does for a session of the page, and `--permission-mode manual`:
 without it the CLI may start in its "auto" mode, which calls tools without
 asking (seen on 20 October with an account on a Max plan). Tried with a
 stand-in program (`chat.sh`), and with the CLI of Claude on Debian 13: a
-launch asked for, refused, and audited as `mcp:claude-code`.
+launch asked for, refused, and audited as `mcp:claude-code`. `fleet assistant
+--profile` passes the profile on, the default one when none is given, after
+the acceptance of its risks when `chat.agents` lists it in `to_accept`;
+`--allowedTools` is the role's way to the same questions as the page, but
+the CLI's own "don't ask again" trusts one tool of any class (in
+`limits.md`). Tried with the stand-in on AlmaLinux 10 (6 November): reads
+unasked and launches asked in `assisted`, both unasked in `autonomous`, the
+risks told, refused, then accepted once and audited.
+
+The page of the phase was tried on Debian 13 with the stand-in agent
+(6 November): the profiles offered, the risks of `administrator` accepted
+once, an ad-hoc command asked about with the profile and the class and no
+"always", the instructions by layer, and a draft written through
+`fleet-mcp` reviewed, edited on the page of the files and merged, the
+draft gone and the audit holding `chat.accept`, `chat.start` and
+`draft.merge`.
+
+**The profile of a session.** The page offers the profiles `chat.agents`
+names as enabled, the default one first, each with what it may do. For one
+beyond `assisted` (`profiles.RISKY`) that the user has not accepted yet
+(`to_accept`), it lists its risks, the steering by the nodes among them,
+and starts only once a box is ticked: it calls `chat.accept`, which records
+the user and the profile in `profile_acceptances` (schema 25) and the audit
+log, then spawns `fleet-chat --profile`. `chat.start` refuses with
+`not_accepted` a profile in `RISKY` the caller has not accepted, so the
+terminal asks too (`fleet assistant` tells the risks and waits for `yes`),
+and a page that skipped the box would start nothing. It is held in the
+backend, though it is consent and not a control, because the record of who
+accepted what is the point of it. The profile `_fleet/ready` names is shown
+in the header of the session and in each question, and the page asks
+`mcp.tools` for the tools of that profile.
 
 **Permissions.** The agent asks before each call to a tool
-(`session/request_permission`). The page answers by itself for a tool of
-`fleet-mcp` that `mcp.tools` marks as read-only; for anything else it shows
-the description of the tool and its arguments and waits: once, always in
-this conversation, refuse. "Always" is kept by the page and answered as
-"once": the agent's own option of that kind writes a rule in the user's
-settings. A call that names something `mcp.tools` does not list is always
-asked about, with no "always". Stopping an answer cancels what was waiting.
-None of this is a control: the backend decides again, with the role of the
-user under the ceiling of `[mcp]`.
+(`session/request_permission`). The page answers as `question` of the tool
+in `mcp.tools` says (see "Questions by profile" under "Agents"): by itself
+for `none`; for `ask` and `every` it shows the description of the tool, its
+arguments, the profile and the class, and waits: once, always in this
+conversation (for `ask` only, and for the whole class: "always" on a launch
+trusts the other launches and cancels), refuse. "Always" is kept by the
+page and answered as "once": the agent's own option of that kind writes a
+rule in the user's settings. A call that names something `mcp.tools` does
+not list, after asking it again, is asked about every time. Stopping an
+answer cancels what was waiting. None of this is a control: the backend
+decides again, with the role of the user under the ceiling of `[mcp]` and
+the profile.
 
 **Conversations.** They are the agent's: the page lists them
 (`session/list`) and has the agent replay one (`session/load`) to go on

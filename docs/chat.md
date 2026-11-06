@@ -2,8 +2,9 @@
 
 A page of Fleet, "Assistant" in its tabs, where a user talks to an assistant that works on the
 controller through Fleet itself: it reads what that user may read, launches
-what that user may launch, and asks before every action that changes
-something. How it is built is in [architecture.md](architecture.md), "The
+what that user may launch, within the profile the user chose for the
+session, and asks before the actions that profile does not let through.
+How it is built is in [architecture.md](architecture.md), "The
 chat"; this page is for the administrator who turns it on.
 
 ## What leaves the controller
@@ -156,10 +157,34 @@ started stays as it is: once logged in, send the message again.
   rest, files, projects, credentials, deletes. Only `observer` and
   `assisted` are enabled as installed. The backend refuses what is outside
   the profile, and `fleet-mcp` started by hand gets the default one.
+- The user picks the profile when starting a session, among those enabled.
+  Before the first session in `diagnostic`, `autonomous` or `administrator`
+  the page tells what it may do and its risks (the nodes can steer an
+  assistant through what they write, and in these profiles it does more
+  with it), and the user accepts them, once: the acceptance is in the audit
+  log (`chat.accept`), and until then the backend refuses to start a
+  session in that profile. Enabling a profile in `config.toml` is the
+  administrator's decision; accepting its risks is each user's.
+- What the page asks about follows the profile: in `observer` nothing,
+  since nothing changes; in `assisted` every launch or cancel, with "always"
+  to trust launches for the rest of the conversation; in `diagnostic` the
+  same, and its ad-hoc commands go unasked; in `autonomous` nothing, the
+  backend holds it instead; in `administrator` every change, and ad-hoc
+  commands, changes to what is defined and files every time, never
+  "always". These questions are a convenience: the backend decides again,
+  whatever the answer.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
   adhoc_modules`, does not start until the user confirms it, in the list of
   runs waiting for approval or with `fleet approval approve`; the assistant
   cannot confirm it, and it expires as approvals do.
+- Files the assistant writes in a project or inventory written in Fleet
+  (profile `administrator`) go to a draft of its session, which no run
+  uses. The page of the assistant and the files of the project say when a
+  draft waits: an administrator reviews it (what changes, the syntax
+  checks), edits it on the page of the files if needed, and merges it,
+  whole or a file at a time, or discards it. At a terminal, `fleet draft
+  list`, `fleet draft diff`, `merge` and `discard` do the same. The
+  assistant can do neither.
 - Every start of a session is in the audit log (`chat.start`), and so is
   everything the assistant changes, as the user's own action with `mcp:` and
   the name of the agent in the "via" column and the profile beside it.
@@ -177,8 +202,8 @@ controller should know: the inventories not to touch, who to ask about what,
 the conventions of the projects. Plain text or Markdown, up to 8 kB, in
 UTF-8; it is read at the start of each session, so a change applies to the
 next one. A file larger than that, or not text, stops every session from
-starting, with a message that says so. The layers are given to the
-user's page as well.
+starting, with a message that says so. The layers are shown on the
+user's page as well, under "Instructions the assistant was given".
 
 Instructions guide the assistant, they do not hold it: what it may do is
 decided by the role, the profile and `[chat]`, whatever it was told. And
@@ -195,23 +220,30 @@ names in `config.toml` beside the one of the page:
 ```toml
 terminal = ["/opt/cockpit-fleet-agent/bin/claude", "--mcp-config", "{mcp_config}",
             "--strict-mcp-config", "--tools", "", "--setting-sources", "",
-            "--permission-mode", "manual", "--append-system-prompt", "{instructions}"]
+            "--permission-mode", "manual", "--allowedTools", "{allowed_tools}",
+            "--append-system-prompt", "{instructions}"]
 ```
 
 `{mcp_config}` becomes a file, private to the session and deleted at its
-end, that names `fleet-mcp` as the only server; `{instructions}` the
+end, that names `fleet-mcp` as the only server; `{allowed_tools}` the
+tools the profile of the session lets through with no question, as the
+page would (reading, for example), comma-separated; `{instructions}` the
 instructions of the session (see "What the assistant is told"). The options keep the agent to the tools of
 `fleet-mcp`, with none of its own and none of the user's settings, as in the
 page. What the user gets is the same: the role under `[mcp] max_role`, the
+profile, `--profile` or the default one, with its risks to accept at the
+first session (`fleet assistant` tells them and waits for `yes`), the
 start in the audit log (`chat.start`, with `terminal`), a session counted in
-`[chat] max_sessions`. The agent asks before every call, in its own way; the
-answers are not kept. It starts in a directory of its own,
+`[chat] max_sessions`. The agent asks about the other calls in its own way:
+its "don't ask again" trusts one tool for the session, whatever its class,
+which the page never does for ad-hoc commands, changes and files. A line
+without `{allowed_tools}` makes it ask about every call. It starts in a directory of its own,
 `~/.local/state/cockpit-fleet/assistant`, the same each time: Claude asks
 there, the first time, whether to trust it (answer yes: its own tools are
 off, whatever the question says), and the conversations held at a terminal
 are there, to be resumed with `/resume`. With more than one agent, `fleet assistant NAME`
-chooses; an agent without `terminal` is for the page only. When it is
+chooses, and `fleet assistant --profile diagnostic` the profile; an agent without `terminal` is for the page only. When it is
 installed by hand, add the line to its section; a controller set up before
-this line existed gets it by running the playbook again with
+this line existed, or before `{allowed_tools}`, gets it by running the playbook again with
 `chat_agent_configure=true`, which replaces the section it wrote (a section
 written by hand is to be removed first).

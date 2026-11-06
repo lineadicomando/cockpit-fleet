@@ -117,7 +117,15 @@ off as installed) launches a bounded number of runs in a session, nothing
 on an inventory in maintenance, and cannot silence a problem; a run that
 needs approval still waits for a person. An ad-hoc command an agent asks
 for, of a module that may change something, waits until the person it acts
-for confirms it, whatever the profile.
+for confirms it, whatever the profile. A user accepts the risks of a profile
+beyond `assisted` once before a session in it (`chat.accept`, audited), and
+`chat.start` refuses until then; that is consent, not a control. Neither
+are the questions of the page or of the agent's program at a terminal:
+what they let through without asking is decided by the backend for the
+profile (`profiles.question`), and the backend decides each call again
+whatever was answered. Files an agent writes in a project or inventory
+written in Fleet go to a draft of its session, which no run reads; only a
+person merges or discards it, after seeing what it changes.
 
 ## What it does not do
 
