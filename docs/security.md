@@ -115,7 +115,9 @@ or the page: one that names another, or none, gets no more than the
 default one. An agent that acts without asking (the profile `autonomous`,
 off as installed) launches a bounded number of runs in a session, nothing
 on an inventory in maintenance, and cannot silence a problem; a run that
-needs approval still waits for a person.
+needs approval still waits for a person. An ad-hoc command an agent asks
+for, of a module that may change something, waits until the person it acts
+for confirms it, whatever the profile.
 
 ## What it does not do
 

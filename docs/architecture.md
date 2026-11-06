@@ -895,8 +895,13 @@ approve it, and one in `confirm` waits as in `other` (`approvals.request`
 stores the mode it waits in); for that, only an administrator turns on a
 schedule of a template that needs an approval (an operator who did could
 approve what it launches, one person doing both). An operator still turns
-one off. An agent never approves nor confirms, not even a run it launched
-for its user: a call made for one has no right, and the commands refuse it
+one off. An ad-hoc command an agent asks for waits in `confirm` for the
+person it acts for (`run.adhoc`), unless it is diagnostic (a module of
+`[mcp] adhoc_modules`, without become), and expires as the others; nobody
+reads what an agent runs before it runs, and the agent may be steered by
+what a node wrote. `run.result` gives a run that waits as not done, with
+its mode, at once. An agent never approves nor confirms, not even a run it
+launched for its user: a call made for one has no right, and the commands refuse it
 whatever its role; `approval.list` is a tool, deciding is not. Through
 `fleet` at a terminal, a person does.
 

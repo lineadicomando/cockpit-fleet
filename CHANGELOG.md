@@ -43,6 +43,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
   approve their own run. Existing templates and steps that needed an
   approval wait for another person, as before.
 
+- An ad-hoc command an agent asks for waits until the person it acts for
+  confirms it, unless its module changes nothing (`[mcp] adhoc_modules`,
+  without become); the list of runs waiting for approval shows the
+  command. The agent cannot confirm it.
+
+### Fixed
+
+- `run.result` gave a run waiting for approval as done: it is not, and the
+  answer says in which mode it waits; `fleet result --wait` waits for it.
+
 ### Deprecated
 
 - `needs_approval` of `template.create`, `template.update` and the steps of

@@ -156,6 +156,10 @@ started stays as it is: once logged in, send the message again.
   rest, files, projects, credentials, deletes. Only `observer` and
   `assisted` are enabled as installed. The backend refuses what is outside
   the profile, and `fleet-mcp` started by hand gets the default one.
+- An ad-hoc command the assistant asks for, other than one of `[mcp]
+  adhoc_modules`, does not start until the user confirms it, in the list of
+  runs waiting for approval or with `fleet approval approve`; the assistant
+  cannot confirm it, and it expires as approvals do.
 - Every start of a session is in the audit log (`chat.start`), and so is
   everything the assistant changes, as the user's own action with `mcp:` and
   the name of the agent in the "via" column and the profile beside it.

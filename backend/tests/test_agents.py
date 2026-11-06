@@ -248,6 +248,29 @@ class ProfileTest(Base):
                                                          free_form="uptime"),
                                  "administrator")["ok"])
 
+    def test_an_agent_s_ad_hoc_command_waits_for_its_person_to_confirm_it(self):
+        shell = self.adhoc("ansible.builtin.shell", free_form="systemctl restart nginx")
+        run = self.via("run.adhoc", shell, "administrator")["data"]
+        self.assertEqual(run["status"], "pending_approval")
+        self.assertEqual(self.started, [])
+        approval = self.ok("run.get", {"id": run["id"]})["approval"]
+        self.assertEqual((approval["mode"], approval["requested_by"], approval["can_decide"]),
+                         ("confirm", "anna", True))
+        result = self.via("run.result", {"id": run["id"], "wait": 50}, "administrator")["data"]
+        self.assertEqual((result["done"], result["approval"]["mode"]), (False, "confirm"))
+        # The agent cannot confirm it; the person does, at the page or at a terminal.
+        self.assertEqual(self.via("approval.approve", {"id": run["id"]}, "administrator")
+                         ["error"]["code"], "forbidden")
+        self.assertEqual(self.ok("approval.approve", {"id": run["id"]})["status"], "running")
+        self.config = replace(self.config, max_concurrent_runs=10)
+        # One of a module that changes nothing starts, as one a person asks for.
+        self.assertEqual(self.via("run.adhoc", self.adhoc(), "administrator")["data"]["status"],
+                         "running")
+        self.assertEqual(self.ok("run.adhoc", shell)["status"], "running")
+        self.config = replace(self.config, mcp_adhoc_modules=())
+        self.assertEqual(self.via("run.adhoc", self.adhoc(), "administrator")["data"]["status"],
+                         "pending_approval")
+
     def test_the_role_still_bounds_a_profile(self):
         self.config = replace(self.config, mcp_max_role="operator")
         answer = self.via("credential.create", {"name": "x", "kind": "vault"}, "administrator")

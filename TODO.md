@@ -14,10 +14,10 @@ Phases 0–11 closed; 0.2.0 released on 2 November (sets of variables, the
 assistant's setup guide). Since then, under `[Unreleased]`: runs launched in
 series on an inventory (5 November). **Under way:** phase 12, below; the
 classes of commands, the profiles and the limits of autonomy in the
-backend, and the modes of approval, done (6 November); next an ad-hoc
-command asked by an agent waiting for a confirmation.
+backend, the modes of approval, an agent's ad-hoc command waiting for a
+confirmation, done (6 November); next the drafts of files.
 
-Last test runs: on 6 November the unit tests (555 backend, 130 frontend)
+Last test runs: on 6 November the unit tests (557 backend, 130 frontend)
 and `ct-test` of `negative mcp chat cli` on AlmaLinux and Debian;
 on 1 November `make ct-test` of every script on Debian and AlmaLinux, and
 on the three before that day's fixes (`cmdb` fails on Fedora only in a
@@ -143,8 +143,11 @@ Each step on its own, tested, before the next:
       `may_decide` holds the rest. `needs_approval` deprecated, still
       taken and given; `ct-test` of `workflows negative roles runs cli mcp`
       on AlmaLinux and Debian, the forms not yet seen in a browser
-- [ ] adhoc asked by an agent waits in the mode confirm, for the
-      person it acts for; expiry as the others
+- [x] adhoc asked by an agent waits in the mode confirm, for the
+      person it acts for; expiry as the others. A diagnostic one (a module
+      of `[mcp] adhoc_modules`, without become) starts, whatever the
+      profile; `run.result` gives a waiting run as not done (it said done); `ct-test`
+      of `mcp cli adhoc negative` on AlmaLinux and Debian
 - [ ] Drafts of files: an agent's `file.write`/`file.change` on a branch of
       the session; templates, schedules and checks from `main` only; a
       merge command refused to agents; the diff and the syntax check of a

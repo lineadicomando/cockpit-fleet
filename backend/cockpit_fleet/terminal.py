@@ -762,13 +762,10 @@ def _result(term: Terminal, args: list[str]) -> int:
     options = parser.parse_args(args)
     result = term("run.result", {"id": options.run, "wait": 50 if options.wait else 0})
     while options.wait and not result["done"]:
+        if result["status"] == "pending_approval":
+            # run.result does not hold a call while a person has to decide.
+            term.sleep(5)
         result = term("run.result", {"id": options.run, "wait": 50})
-    while options.wait and result["status"] == "pending_approval":
-        # run.result does not hold a call while a person has to decide.
-        term.sleep(5)
-        result = term("run.result", {"id": options.run, "wait": 50})
-        while not result["done"]:
-            result = term("run.result", {"id": options.run, "wait": 50})
     if term.as_json:
         term.show(result)
         return _status_code(result["status"])

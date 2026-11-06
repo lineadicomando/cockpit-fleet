@@ -11,7 +11,7 @@ import json
 import re
 import time
 
-from . import jobs, profiles, store
+from . import approvals, jobs, profiles, store
 from .auth import role_at_least
 from .cli import COMMANDS, Context, Id, Int, Str, Values, command
 from .errors import BadRequest
@@ -200,7 +200,10 @@ def run_result(ctx: Context, params: Values) -> dict:
     """How a run went: its status, the outcome per host and, task by task,
     how many hosts went each way and what was said where one failed. With
     wait it answers when the run ends or after that many seconds; "done"
-    tells which. This is the way to follow a run; its raw output is run.log."""
+    tells which. A run that waits for an approval is not done: it is
+    answered at once, with "approval" saying in which mode it waits (confirm:
+    the person who launched it confirms it, other: another person) and until
+    when. This is the way to follow a run; its raw output is run.log."""
     run_id = params["id"]
     deadline = time.monotonic() + params["wait"]
     while True:
@@ -215,5 +218,10 @@ def run_result(ctx: Context, params: Values) -> dict:
             tasks = summarize(events)
     except OSError:
         tasks = []
-    return {**run_row(row), "done": row["status"] not in jobs.ACTIVE, "tasks": tasks}
+    out = {**run_row(row), "done": row["status"] not in (*jobs.ACTIVE, jobs.WAITING),
+           "tasks": tasks}
+    approval = approvals.of_run(ctx, run_id)
+    if row["status"] == jobs.WAITING and approval:
+        out["approval"] = {key: approval[key] for key in ("mode", "requested_by", "expires_at")}
+    return out
 

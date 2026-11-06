@@ -3,9 +3,9 @@
 import json
 import shutil
 
-from . import approvals, jobs, store, survey
+from . import approvals, jobs, profiles, store, survey
 from . import variables as varsets
-from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command
+from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command, is_agent
 from .errors import BadRequest, Conflict, Forbidden
 from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
 from .validators import check_limit, check_module
@@ -159,6 +159,9 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
 
     The module must be among those config.toml allows. Its arguments are kept
     with the run and in the audit record, in clear: they are not for secrets.
+    One an agent asks for waits until the person it acts for confirms it,
+    unless it is of a module that changes nothing ([mcp] adhoc_modules,
+    without become); it expires as approvals do.
     """
     inventory_id = params["inventory_id"]
     project_id = params["project_id"]
@@ -219,10 +222,17 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
                "check": check, "diff": spec["diff"], "become": become}
     if params["serial"]:
         options["serial"] = True
-    jobs.enqueue(ctx, {"id": run_id, "kind": "adhoc", "title": f"{module} [{limit}]",
-                       "project_id": project_id, "inventory_id": inventory_id,
-                       "revision": project["revision"] if project else "",
-                       "options": json.dumps(options)}, spec, directory)
+    run = {"id": run_id, "kind": "adhoc", "title": f"{module} [{limit}]",
+           "project_id": project_id, "inventory_id": inventory_id,
+           "revision": project["revision"] if project else "", "options": json.dumps(options)}
+    if is_agent(ctx.via) and not profiles.is_diagnostic(
+            {"module": module, "become": become}, ctx.config.mcp_adhoc_modules):
+        # Nobody reads what an agent runs before it runs: the person it acts
+        # for does now. A program steered by what a node wrote cannot.
+        jobs.queue(ctx, run, spec, directory, jobs.WAITING)
+        approvals.request(ctx, run_id, "confirm")
+    else:
+        jobs.enqueue(ctx, run, spec, directory)
     return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
 
 

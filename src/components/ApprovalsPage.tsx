@@ -142,7 +142,16 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
                             {entry.inventory}
                             {entry.options.limit && <> <code>{entry.options.limit}</code></>}
                         </Td>
-                        <Td dataLabel={t("Answers")}><Answered answers={entry.options.answers ?? {}} secrets={entry.options.secret_answers} /></Td>
+                        <Td dataLabel={t("Answers")}>
+                            {entry.kind === "adhoc"
+                                ? <>
+                                    <code>{entry.options.module}</code>
+                                    {entry.options.become && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("become")}</Label>}
+                                    {entry.options.free_form && <code style={{ display: "block" }}>{entry.options.free_form}</code>}
+                                    {Object.keys(entry.options.args ?? {}).length > 0 && <code style={{ display: "block" }}>{JSON.stringify(entry.options.args)}</code>}
+                                </>
+                                : <Answered answers={entry.options.answers ?? {}} secrets={entry.options.secret_answers} />}
+                        </Td>
                         <Td dataLabel={t("Launched by")}>
                             {entry.created_by}
                             <Content component="small" style={{ display: "block" }}>{formatTime(entry.approval.requested_at, i18n.language)}</Content>

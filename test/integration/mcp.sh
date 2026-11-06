@@ -140,7 +140,14 @@ expect_eq "the profile is in the audit log" \
 PROFILE=administrator
 out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")")
 expect_eq "in the profile administrator, ad-hoc commands are a tool" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" True
-expect_run "and an agent runs one" "$(answer "$out" 2 'a["result"]["structuredContent"]["id"]')" 90 successful
+adhoc_run=$(answer "$out" 2 'a["result"]["structuredContent"]["id"]')
+expect_eq "an agent's ad-hoc command waits for its person to confirm it" \
+    "$(get "$(admin run.get "{\"id\": \"$adhoc_run\"}")" 'a["data"]["status"], a["data"]["approval"]["mode"]')" "pending_approval confirm"
+out=$(mcp itadmin "$(call 2 run_result "{\"id\": \"$adhoc_run\", \"wait\": 5}")" "$(call 3 approval_approve "{\"id\": \"$adhoc_run\"}")")
+expect_eq "the agent reads that it is not done" "$(answer "$out" 2 'a["result"]["structuredContent"]["done"]')" False
+expect_eq "and has no tool to confirm it" "$(answer "$out" 3 'a["error"]["code"] if "error" in a else a["result"]["isError"]')" -32602
+expect_eq "the person confirms it" "$(get "$(admin approval.approve "{\"id\": \"$adhoc_run\"}")" 'a["data"]["approval"]["decided_by"]')" itadmin
+expect_run "and it runs" "$adhoc_run" 90 successful
 out=$(mcp itoperator "$LIST")
 expect_eq "the user's own role still holds" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" False
 PROFILE=autonomous

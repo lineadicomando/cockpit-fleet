@@ -280,6 +280,16 @@ class LaunchTest(unittest.TestCase):
             terminal.run(t, COMMANDS, ["launch", "t1"])
             self.assertIn(said, t.err.getvalue())
 
+    def test_result_waits_while_a_person_decides(self):
+        fake = Fake({"run.result": [{**RESULT, "status": "pending_approval", "done": False},
+                                    {**RESULT, "status": "running", "done": False},
+                                    {**RESULT, "status": "successful"}]})
+        slept = []
+        t = term(fake)
+        t.sleep = slept.append
+        self.assertEqual(terminal.run(t, COMMANDS, ["result", "r1", "--wait"]), terminal.OK)
+        self.assertEqual((len(fake.calls), slept), (3, [5]))
+
     def test_result_waits_until_the_end(self):
         fake = Fake({"run.result": [{**RESULT, "status": "running", "done": False},
                                     {**RESULT, "status": "successful"}]})
