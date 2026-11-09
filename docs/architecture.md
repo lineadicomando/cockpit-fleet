@@ -895,6 +895,44 @@ At a terminal, `fleet store put --file FILE --path PATH [--resume]` and
 `fleet store read --path PATH [--output FILE|-]` do the same through
 `fleetctl`.
 
+**Downloads from URLs.** `store.fetch` (operators) queues a job of kind
+`download` (`fetch.py`), in the sandbox of a run like every job that
+handles what comes from elsewhere. Its spec holds the URL, the digest
+expected, the proxy of `[network]`, and the bytes the store has room for
+(what `[store] max_gb` and the disk leave, taken when it is queued). The
+job opens the URL with an opener that has handlers for http and https only
+(on redirects too) and no proxy from the environment, writes to
+`download/file` in the run's directory, on disk, digesting as it goes, and
+a `progress.json` that `store.downloads` reads through `open_run_file`. A
+connection that drops is taken up with a `Range` request, five times at
+most with a pause that grows; a server that ignores `Range` sends the file
+again. When the job has ended well, `_collect` moves the file into the
+store as an upload's is (same lock, same placing, refused if a file came
+to its path meanwhile and replacing was not asked), with the job's digest:
+fleetctl does not read gigabytes again in a call, and the tick takes the
+digest again only if the file changes.
+
+Downloads have a lane of their own in `dispatch` (`[store]
+max_downloads`, 2): a file of some gigabytes must not hold a place of the
+playbooks for its whole time. `run.cancel` stops one as it stops a run.
+
+An operator may now make the controller open a URL, which a playbook of an
+administrator could already do but an operator could not. The job refuses
+the controller's own addresses (loopback, and those of its interfaces, read
+from `/proc/net/fib_trie` and `/proc/net/if_inet6`: the run shares the
+machine's network, and Cockpit listens there) and link-local, multicast and
+unspecified ones, in the connection itself: before it, on every address the
+name resolves to, so that an address that does not answer is not waited on;
+after it, on the address the socket is connected to, should the name
+resolve otherwise the second time. Through a proxy, the proxy is what is
+connected to. Other addresses of the local network are allowed.
+
+Tried on 9 November: `store.sh` downloads 256 MB from a container node on
+Debian, and is refused `127.0.0.1`, the controller's address on podman's
+network and `169.254.169.254`; on `deb13`, 1 GiB queued from the page came
+from a container node in about 10 s, its digest checked, the list of the
+store brought up to date when it landed.
+
 ## Schedules
 
 A schedule launches a job template at the times of an OnCalendar expression,

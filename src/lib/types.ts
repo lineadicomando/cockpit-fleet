@@ -393,7 +393,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow";
+    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow" | "download";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -810,7 +810,7 @@ export interface HealthGroup {
 }
 
 export interface HealthLane {
-    lane: "runs" | "checks" | "slow";
+    lane: "runs" | "checks" | "slow" | "downloads";
     limit: number;
     running: number;
     queued: number;

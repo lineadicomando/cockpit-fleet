@@ -3479,3 +3479,36 @@ msgstr "Provenienza"
 
 msgid "Upload canceled"
 msgstr "Caricamento annullato"
+
+msgid "Done: {{size}}"
+msgstr "Completato: {{size}}"
+
+msgid "Download canceled"
+msgstr "Download annullato"
+
+msgid "Download failed"
+msgstr "Download non riuscito"
+
+msgid "Download from a URL"
+msgstr "Scarica da un URL"
+
+msgid "Download into the store"
+msgstr "Download nello store"
+
+msgid "Downloading"
+msgstr "In download"
+
+msgid "Downloads into the store"
+msgstr "Download nello store"
+
+msgid "http or https. Addresses of this server and link-local ones are refused."
+msgstr "http o https. Gli indirizzi di questo server e quelli link-local vengono rifiutati."
+
+msgid "Optional: the download fails when the file has another digest."
+msgstr "Facoltativo: il download non riesce se il file ha un altro digest."
+
+msgid "Path in the store"
+msgstr "Percorso nello store"
+
+msgid "Replace a file already there"
+msgstr "Sostituisci un file già presente"

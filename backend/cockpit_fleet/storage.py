@@ -45,7 +45,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import PurePosixPath
 
-from . import audit, journal, paths
+from . import audit, fetch, journal, paths, store
 from .auth import Caller
 from .cli import Bool, Context, Int, Str, Values, command
 from .errors import BadRequest, Conflict, NotFound
@@ -543,6 +543,129 @@ def store_delete(ctx: Context, params: Values) -> dict:
             if old == path or old.is_relative_to(path):
                 ctx.conn.execute("DELETE FROM store_files WHERE path = ?", (row["path"],))
     return {}
+
+
+# --- downloads from URLs -------------------------------------------------------
+
+# Downloads store.downloads lists: those under way, and the last ones done.
+_DOWNLOADS_LISTED = 50
+
+
+def _room_for(ctx: Context, replacing: int) -> int:
+    """Bytes a download may bring, at most: what the limit and the disk leave."""
+    _mkdirs()
+    room = shutil.disk_usage(paths.STORE_DIR).free - MIN_FREE
+    limit = ctx.config.store_max_gb * 1024 ** 3
+    if limit:
+        room = min(room, limit - _usage(ctx.conn) + replacing)
+    return max(room, 0)
+
+
+@command("store.fetch", role="operator", mutating=True, agent="code", tool=False, params={
+    "url": Str("An http or https URL, with no user or password in it", required=True),
+    "path": Str("Where the file goes in the store", required=True),
+    "sha256": Str("Its digest: the download fails when the file has another",
+                  default="", max_length=64),
+    "replace": Bool("Replace a file already there"),
+})
+def store_fetch(ctx: Context, params: Values) -> dict:
+    """Queue a download from a URL into the store. A job does it, in the
+    sandbox of a run, beside the playbooks rather than in their queue
+    ([store] max_downloads at once); store.downloads follows it, run.cancel
+    stops it. The controller's own addresses and link-local ones are refused."""
+    url = fetch.check_url(params["url"])
+    path = check_file_path(params["path"])
+    expected = params["sha256"].lower()
+    if expected and not (len(expected) == 64 and all(c in "0123456789abcdef" for c in expected)):
+        raise BadRequest("sha256 must be 64 hexadecimal digits")
+    row = ctx.conn.execute("SELECT size FROM store_files WHERE path = ?",
+                           (str(path),)).fetchone()
+    if row is not None and not params["replace"]:
+        raise Conflict(f"{path} is already in the store")
+    room = _room_for(ctx, row["size"] if row is not None else 0)
+    if room <= 0:
+        raise Conflict("the store has no room left")
+    from . import jobs  # it builds on this module
+    run_id = store.new_id("r")
+    directory = jobs.create_dir(run_id)
+    run = {"id": run_id, "kind": "download", "title": str(path),
+           "options": json.dumps({"url": url, "path": str(path), "sha256": expected,
+                                  "replace": params["replace"]})}
+    spec = {"kind": "download", "url": url, "sha256": expected, "proxy": ctx.config.proxy,
+            "max_bytes": room}
+    jobs.enqueue(ctx, run, spec, directory)
+    return {"run_id": run_id}
+
+
+def _download(row) -> dict:
+    options = store.loads(row["options"], {})
+    progress: dict = {}
+    if row["status"] == "running":
+        from . import jobs  # it builds on this module
+        try:
+            progress = json.loads(jobs.read_run_file(jobs.run_dir(row["id"]), fetch.PROGRESS,
+                                                     4096))
+        except (OSError, ValueError):
+            progress = {}
+    received = progress.get("received") if isinstance(progress, dict) else None
+    total = progress.get("total") if isinstance(progress, dict) else None
+    return {"run_id": row["id"], "status": row["status"], "url": options.get("url", ""),
+            "path": options.get("path", ""), "sha256": options.get("sha256", ""),
+            "replace": bool(options.get("replace")),
+            "received": received if isinstance(received, int) else None,
+            "total": total if isinstance(total, int) else None,
+            "size": options.get("size"), "error": row["error"],
+            "created_by": row["created_by"], "created_at": row["created_at"],
+            "finished_at": row["finished_at"]}
+
+
+@command("store.downloads", role="operator")
+def store_downloads(ctx: Context, params: Values) -> dict:
+    """Downloads into the store: those queued or running, with what has
+    arrived of each, and the last ones that ended."""
+    from . import jobs  # it builds on this module
+    jobs.reconcile(ctx)
+    rows = ctx.conn.execute(
+        "SELECT * FROM runs WHERE kind = 'download' ORDER BY"
+        " status IN ('queued', 'running') DESC, created_at DESC LIMIT ?",
+        (_DOWNLOADS_LISTED,)).fetchall()
+    return {"downloads": [_download(row) for row in rows]}
+
+
+def take_download(ctx: Context, run, directory, result: dict) -> None:
+    """When a download has ended well: its file into the store. The digest
+    is the job's, which took it as the bytes came (and checked the one it
+    was given); the tick takes it again only if the file changes."""
+    options = store.loads(run["options"], {})
+    path = check_file_path(options.get("path"))
+    parent = os.open(directory / fetch.TARGET.parent, _DIR_FLAGS)
+    try:
+        status = os.stat(fetch.TARGET.name, dir_fd=parent, follow_symlinks=False)
+        if not stat.S_ISREG(status.st_mode) or status.st_nlink != 1:
+            raise Conflict("the download left no file")
+        row = ctx.conn.execute("SELECT size FROM store_files WHERE path = ?",
+                               (str(path),)).fetchone()
+        _room(ctx, status.st_size, row["size"] if row is not None else 0)
+        fd = os.open(fetch.TARGET.name, _FILE_FLAGS, dir_fd=parent)
+        try:
+            os.fchmod(fd, 0o640)
+        finally:
+            os.close(fd)
+        with _locked():
+            target = _place(parent, fetch.TARGET.name, path, bool(options.get("replace")))
+            try:
+                placed = os.stat(path.name, dir_fd=target, follow_symlinks=False)
+            finally:
+                os.close(target)
+            digest = result.get("sha256")
+            valid = isinstance(digest, str) and len(digest) == 64 \
+                and placed.st_size == status.st_size
+            _record(ctx.conn, str(path), placed, "url", str(options.get("url", "")),
+                    run["created_by"], digest if valid else None)
+    finally:
+        os.close(parent)
+    options["size"] = status.st_size
+    store.update(ctx.conn, "runs", run["id"], {"options": json.dumps(options)}, "run")
 
 
 # --- the farm of a run ------------------------------------------------------

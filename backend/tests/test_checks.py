@@ -903,7 +903,7 @@ class HealthTest(CheckBase):
         fast = groups[("checks", "")]
         self.assertEqual((fast["interval"], fast["checks"], fast["cycles"], fast["last"],
                           fast["sizing"]["basis"]), (120, 2, 0, None, "configured"))
-        self.assertEqual([lane["lane"] for lane in report["queue"]], ["runs", "checks", "slow"])
+        self.assertEqual([lane["lane"] for lane in report["queue"]], ["runs", "downloads", "checks", "slow"])
         self.assertTrue(report["database"]["bytes"] > 0)
         self.assertTrue(report["database"]["incremental"])
         queued = self.tick()["queued"]

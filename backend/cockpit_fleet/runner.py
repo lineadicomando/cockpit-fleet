@@ -33,7 +33,8 @@ from .validators import (
     resolve_inside,
 )
 
-KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy", "check")
+KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy", "check",
+         "download")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"

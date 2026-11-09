@@ -209,6 +209,7 @@ fleet log \-f r3c9d2e1f0a4b
 fleet check run disk \-\-host\-id web01
 fleet project upload shipped \-\-archive site.tar.gz
 fleet store put \-\-file Win11.iso \-\-path win_iso/Win11.iso
+fleet store fetch \-\-url https://example.org/setup.msi \-\-path apps/setup.msi
 fleet file write p1a2b3c4d5e6 \-\-path site.yml \-\-content @site.yml \e
     \-\-expected SHA256_OF_THE_VERSION_READ
 printf '%s' "$TOKEN" | fleet secret git\-token token

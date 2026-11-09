@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/cockpit-fleet")
 
-from cockpit_fleet import archive, runner  # noqa: E402
+from cockpit_fleet import archive, fetch, runner  # noqa: E402
 from cockpit_fleet.errors import FleetError  # noqa: E402
 from cockpit_fleet.names import check_id  # noqa: E402
 from cockpit_fleet.paths import RUNS_DIR  # noqa: E402
@@ -100,6 +100,15 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
         log.write(text)
         sys.stdout.buffer.write(text)
         return {"rc": 0, **done}
+
+    if kind == "download":
+        def say(text: str) -> None:
+            line = f"{text}\n".encode(errors="replace")
+            log.write(line)
+            log.flush()
+            sys.stdout.buffer.write(line)
+            sys.stdout.buffer.flush()
+        return fetch.download(spec, run_dir, say, lambda: terminated)
 
     if kind == "galaxy":
         command, env = runner.build_galaxy(spec, run_dir, runtime_dir)

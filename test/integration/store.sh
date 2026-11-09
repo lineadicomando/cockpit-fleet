@@ -5,18 +5,21 @@
 # that finds a file, replaces one, adds one; copy and fetch; a delete and a
 # write in place; what it wrote taken in when it ends; Ansible's temporary
 # files of the controller on disk; a file of root's left out; the digest of
-# a file put there by hand taken by the tick.
+# a file put there by hand taken by the tick; downloads from URLs, from a
+# container node, and those to the controller's own addresses refused.
 # It DELETES the database, the runs and the store: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
 require_root
 require_wipe
 
+HERE=$(dirname "$0")
 WORK=/tmp/fleet-it-store
 STORE=/var/lib/cockpit-fleet/store
 WWW_PORT=8099
 cleanup() {
     [ -n "${www:-}" ] && kill "$www" 2>/dev/null
+    sh "$HERE/nodes.sh" down 2>/dev/null
     wipe
     userdel -r itviewer 2>/dev/null
     rm -rf "$WORK"
@@ -143,5 +146,42 @@ chown cockpit-fleet: "$STORE/hand.txt"
 expect_eq "a file put there by hand has no digest yet" "$(listed "f['hand.txt']['sha256']")" None
 admin scheduler.tick > /dev/null
 expect_eq "the tick takes it" "$(listed "f['hand.txt']['sha256']")" "$(sha256sum "$STORE/hand.txt" | cut -d' ' -f1)"
+
+# --- downloads from URLs ------------------------------------------------------------------
+: > "$WORK/keys"
+sh "$HERE/nodes.sh" up 1 "$WORK/keys"
+node=$(sh "$HERE/nodes.sh" address 1)
+podman exec fleet-node-1 sh -c 'mkdir -p /srv/www && head -c 268435456 /dev/urandom > /srv/www/big.iso'
+big_sha=$(podman exec fleet-node-1 sha256sum /srv/www/big.iso | cut -d' ' -f1)
+podman exec -d fleet-node-1 python3 -m http.server -d /srv/www 8099
+python3 - "$node" <<'PY'
+import sys, time, urllib.request
+for _ in range(60):
+    try:
+        urllib.request.urlopen(f"http://{sys.argv[1]}:8099/", timeout=2).close()
+        break
+    except OSError:
+        time.sleep(1)
+PY
+fetch() {  # fetch USER URL PATH [SHA256]: the answer of store.fetch
+    ctl "$1" store.fetch "{\"url\": \"$2\", \"path\": \"$3\", \"sha256\": \"${4:-}\"}"
+}
+expect_eq "a viewer may not queue a download" "$(get "$(fetch itviewer "http://$node:8099/big.iso" x)" 'a["error"]["code"]')" forbidden
+expect_eq "nor anyone from file:" "$(get "$(fetch itoperator file:///etc/shadow x)" 'a["error"]["code"]')" bad_request
+run=$(get "$(fetch itoperator "http://$node:8099/big.iso" iso/big.iso "$big_sha")" 'a["data"]["run_id"]')
+expect_run "an operator downloads 256 MB from a node into the store" "$run" 300 successful
+expect_eq "it is there, whole" "$(sha256sum "$STORE/iso/big.iso" 2>/dev/null | cut -d' ' -f1)" "$big_sha"
+expect_eq "it came from the URL" "$(listed "f['iso/big.iso']['origin'] + ' ' + str(f['iso/big.iso']['sha256'])")" "url $big_sha"
+expect_eq "the list of downloads says so" "$(get "$(ctl itoperator store.downloads)" 'a["data"]["downloads"][0]["status"], a["data"]["downloads"][0]["size"]')" "successful 268435456"
+run=$(get "$(fetch itoperator "http://$node:8099/big.iso" iso/wrong.iso "$(printf '0%.0s' $(seq 64))")" 'a["data"]["run_id"]')
+expect_run "a file with another digest fails" "$run" 300 failed
+expect_eq "and is not kept" "$(test -e "$STORE/iso/wrong.iso" && echo kept || echo gone)" gone
+own=$(python3 -c 'import socket,sys; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect((sys.argv[1], 9)); print(s.getsockname()[0])' "$node")
+for url in "http://127.0.0.1:9090/" "http://$own:9090/" "http://169.254.169.254/latest/meta-data/"; do
+    run=$(get "$(fetch itoperator "$url" refused.html)" 'a["data"]["run_id"]')
+    expect_run "a download from $url is refused" "$run" 120 failed
+    expect_eq "  where it connects" "$(grep -c 'may not connect' "/var/lib/cockpit-fleet/runs/$run/stdout.log")" 1
+done
+expect_eq "the downloads have a queue of their own" "$(get "$(admin system.health)" '[q["lane"] for q in a["data"]["queue"]]')" "['runs', 'downloads', 'checks', 'slow']"
 
 finish

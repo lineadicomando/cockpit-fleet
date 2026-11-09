@@ -40,6 +40,35 @@ export interface PendingUpload {
     started_at: number;
 }
 
+// A download from a URL into the store, as store.downloads gives it.
+export interface StoreDownload {
+    run_id: string;
+    status: "queued" | "running" | "successful" | "failed" | "canceled" | "error";
+    url: string;
+    path: string;
+    sha256: string;
+    replace: boolean;
+    // What has arrived, and the whole size when the server said it: while it runs.
+    received: number | null;
+    total: number | null;
+    // The size of the file once it is in the store.
+    size: number | null;
+    error: string;
+    created_by: string;
+    created_at: number;
+    finished_at: number | null;
+}
+
+// The name a file downloaded from URL would have: the last part of its path.
+export function nameFromUrl(url: string): string {
+    try {
+        const last = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
+        return decodeURIComponent(last).replace(/[\\/\x00-\x1f]/g, "");
+    } catch {
+        return "";
+    }
+}
+
 export interface Stored {
     path: string;
     size: number;

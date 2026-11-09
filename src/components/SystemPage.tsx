@@ -50,6 +50,7 @@ function HealthSection() {
         runs: t("Runs"),
         checks: t("Check cycles"),
         slow: t("Cycles of the slow kinds"),
+        downloads: t("Downloads into the store"),
     };
     const what = (group: HealthGroup) => group.runs === "checks" ? t("The other checks")
         : group.runs === "slow" ? kindNames[group.name] ?? group.name : group.name;

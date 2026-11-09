@@ -21,6 +21,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   store: it is not for secrets. A limit in `[store] max_gb`; files put in
   `/var/lib/cockpit-fleet/store` by hand appear too, and the digest of each
   file is taken in the background.
+- Downloads from URLs into the store, queued from the Store page or with
+  `fleet store fetch`: a job in the sandbox of a run fetches the file (http
+  or https, through `[network] proxy`), takes up a dropped connection where
+  it stopped, checks the digest when one is given, and the page shows its
+  progress; downloads have a queue of their own, `[store] max_downloads`
+  at once, beside the playbooks. The controller's own addresses and
+  link-local ones are refused.
 
 - What Ansible writes for a task on the controller (the whole download of a
   `get_url` delegated to it, say) is kept on the disk of the run, not in

@@ -126,7 +126,12 @@ showed goes to `architecture.md` with the store):
    [x] Full `ct-test` on AlmaLinux and Fedora (9 November): all passed but
    `cmdb` on Fedora, the netavark error of a container seen since 1
    November.
-3. [ ] Download queue: job `download`, lane, progress, resume, cancel.
+3. [x] Download queue: job `download` (`fetch.py`), lane of its own,
+   progress, `Range` within a job, cancel, the controller's addresses
+   refused; `store.sh` downloads from a container node; on `deb13` 1 GiB
+   from the page in about 10 s.
+   [x] `store.sh`, `negative.sh` and `sandbox.sh` on AlmaLinux and Fedora
+   (9 November), all passed.
 4. [ ] Sources (URL and checksum kept, refreshed by a conditional GET,
    from a schedule too); acceptance with `ansible-win_edulab`.
 

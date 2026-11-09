@@ -110,6 +110,8 @@ class Config:
     approvals_admins_exempt: bool = True
     # Gigabytes the files of the store may take together; 0: what the disk has.
     store_max_gb: int = 0
+    # Downloads into the store running at the same time, apart from runs.
+    store_max_downloads: int = 2
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -284,7 +286,7 @@ def parse(text: str) -> Config:
     if not isinstance(admins_exempt, bool):
         raise ConfigError("approvals.admins_exempt must be true or false")
 
-    store = _section(data, "store", {"max_gb"})
+    store = _section(data, "store", {"max_gb", "max_downloads"})
 
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
@@ -327,6 +329,8 @@ def parse(text: str) -> Config:
                                     Config.approvals_expire_hours, 1, 24 * 30),
         approvals_admins_exempt=admins_exempt,
         store_max_gb=_int(store, "store", "max_gb", Config.store_max_gb, 0, 1024 * 1024),
+        store_max_downloads=_int(store, "store", "max_downloads", Config.store_max_downloads,
+                                 1, 16),
     )
 
 

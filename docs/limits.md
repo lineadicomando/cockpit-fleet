@@ -27,8 +27,10 @@ in [security.md](security.md); the decisions behind these limits in
   help know only the controller's modules, no sub-parameters.
 - Store: read by every run, no part of it kept for some projects; a write in
   place through a link reaches the store during the run, not at its end;
-  no versions of a file (a replaced one is gone); downloads from URLs into
-  it not yet (phase 13); the listing stops at 20 000 entries; a download
+  no versions of a file (a replaced one is gone); a download from a URL
+  starts again from nothing when retried (a dropped connection within one
+  is taken up), no credentials for a URL, no source kept to refresh a file
+  from (phase 13); the listing stops at 20 000 entries; a download
   that fails half way leaves a short file in the browser (compare the
   digest shown); a file of root put there by hand is not given to runs.
 - Ad-hoc: arguments as one line in the page, stored in clear.

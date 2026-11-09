@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { channels } from "./mocks/cockpit.ts";
-import { describe, downloadUrl, entriesOf, putHeader, uploadToStore, type StoreList } from "../src/lib/store.ts";
+import { describe, downloadUrl, entriesOf, nameFromUrl, putHeader, uploadToStore, type StoreList } from "../src/lib/store.ts";
 import { FleetError } from "../src/lib/fleet.ts";
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -87,4 +87,12 @@ test("what was thrown is said as text, whatever it is", () => {
     assert.equal(describe({ problem: "not-found" }), "not-found");
     assert.equal(describe({ code: 3 }), '{"code":3}');
     assert.equal(describe("plain"), "plain");
+});
+
+test("the name of a download is the last part of the URL's path", () => {
+    assert.equal(nameFromUrl("https://example.org/dl/LibreOffice%207.6.msi?x=1"), "LibreOffice 7.6.msi");
+    assert.equal(nameFromUrl("https://example.org/a/b/"), "b");
+    assert.equal(nameFromUrl("https://example.org"), "");
+    assert.equal(nameFromUrl("not a url"), "");
+    assert.equal(nameFromUrl("https://example.org/a%2Fb%5Cc"), "abc");
 });

@@ -12,6 +12,7 @@ import {
     HelperText,
     HelperTextItem,
     Label,
+    Checkbox,
     ModalVariant,
     Progress,
     ProgressMeasureLocation,
@@ -24,9 +25,9 @@ import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatBytes } from "../lib/checks.ts";
 import { formatTime } from "../lib/format.ts";
-import { useLoad } from "../lib/hooks.ts";
+import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import { describe, downloadFromStore, entriesOf, joinPath, uploadToStore, type PendingUpload, type StoreEntry, type StoreFile, type StoreList, type Upload } from "../lib/store.ts";
+import { describe, downloadFromStore, entriesOf, joinPath, nameFromUrl, uploadToStore, type PendingUpload, type StoreDownload, type StoreEntry, type StoreFile, type StoreList, type Upload } from "../lib/store.ts";
 import { shellLine } from "../lib/terminal.ts";
 import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { ActionsColumn, Alert } from "./pf.tsx";
@@ -60,6 +61,59 @@ function Digest({ file }: { file: StoreFile }) {
         <Tooltip content={<span style={{ wordBreak: "break-all" }}>{file.sha256}</span>}>
             <code tabIndex={0}>{file.sha256.slice(0, 12)}</code>
         </Tooltip>
+    );
+}
+
+const ACTIVE = ["queued", "running"];
+
+// A download from a URL, queued for a job that runs beside the playbooks.
+function FetchModal({ directory, again, onClose, onQueued }: {
+    directory: string;
+    again: StoreDownload | null;
+    onClose: () => void;
+    onQueued: () => void;
+}) {
+    const { t } = useTranslation();
+    const [url, setUrl] = useState(again?.url ?? "");
+    const [path, setPath] = useState(again?.path ?? "");
+    const [named, setNamed] = useState(!!again);
+    const [sha256, setSha256] = useState(again?.sha256 ?? "");
+    const [replace, setReplace] = useState(again?.replace ?? false);
+    const digestValid = !sha256.trim() || /^[0-9a-fA-F]{64}$/.test(sha256.trim());
+
+    function changeUrl(value: string) {
+        setUrl(value);
+        // The name follows the URL until it is written by hand.
+        if (!named) setPath(joinPath(directory, nameFromUrl(value.trim())));
+    }
+
+    return (
+        <FormModal title={t("Download from a URL")} submitLabel={t("Download")} onClose={onClose}
+            isDisabled={!url.trim() || !path.trim() || !digestValid}
+            onSubmit={async () => {
+                await call("store.fetch", { url: url.trim(), path: path.trim().replace(/^\/+|\/+$/g, ""), sha256: sha256.trim(), replace });
+                onQueued();
+                onClose();
+            }}>
+            <FormGroup label={t("URL")} isRequired fieldId="fetch-url">
+                <TextInput id="fetch-url" value={url} onChange={(_e, value) => changeUrl(value)} placeholder="https://example.org/setup.msi" isRequired />
+                <FormHelperText><HelperText><HelperTextItem>{t("http or https. Addresses of this server and link-local ones are refused.")}</HelperTextItem></HelperText></FormHelperText>
+            </FormGroup>
+            <FormGroup label={t("Path in the store")} isRequired fieldId="fetch-path">
+                <TextInput id="fetch-path" value={path} onChange={(_e, value) => { setPath(value); setNamed(true); }} isRequired />
+            </FormGroup>
+            <FormGroup label={t("SHA-256")} fieldId="fetch-sha">
+                <TextInput id="fetch-sha" value={sha256} onChange={(_e, value) => setSha256(value)} validated={digestValid ? "default" : "error"} />
+                <FormHelperText>
+                    <HelperText>
+                        <HelperTextItem variant={digestValid ? "default" : "error"}>
+                            {t("Optional: the download fails when the file has another digest.")}
+                        </HelperTextItem>
+                    </HelperText>
+                </FormHelperText>
+            </FormGroup>
+            <Checkbox id="fetch-replace" label={t("Replace a file already there")} isChecked={replace} onChange={(_e, value) => setReplace(value)} />
+        </FormModal>
     );
 }
 
@@ -98,6 +152,19 @@ export function StorePage({ directory }: { directory: string }) {
     const [deleting, setDeleting] = useState<StoreEntry | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [dragging, setDragging] = useState(false);
+    const [fetching, setFetching] = useState<{ again: StoreDownload | null } | null>(null);
+    const downloads = useLoad(() => can("store.downloads") ? call<{ downloads: StoreDownload[] }>("store.downloads") : Promise.resolve({ downloads: [] }));
+    const busy = (downloads.data?.downloads ?? []).some(item => ACTIVE.includes(item.status));
+    // While something downloads: its progress, and the list once it lands.
+    const wasBusy = useRef(false);
+    usePolling(async () => {
+        downloads.reload();
+    }, 2000, busy);
+    useEffect(() => {
+        if (wasBusy.current && !busy) list.reload();
+        wasBusy.current = busy;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [busy]);
     const chooser = useRef<HTMLInputElement>(null);
     const current = useRef<Upload | null>(null);
     const nextKey = useRef(1);
@@ -193,6 +260,7 @@ export function StorePage({ directory }: { directory: string }) {
         <>
             <SectionHeader title={t("Store")}>
                 {canUpload && <Button variant="secondary" onClick={() => setMaking(true)}>{t("New folder")}</Button>}
+                {can("store.fetch") && <Button variant="secondary" onClick={() => setFetching({ again: null })}>{t("Download from a URL")}</Button>}
                 {canUpload && <Button variant="primary" onClick={() => chooser.current?.click()}>{t("Upload files")}</Button>}
             </SectionHeader>
             <input ref={chooser} type="file" multiple hidden aria-hidden
@@ -230,6 +298,41 @@ export function StorePage({ directory }: { directory: string }) {
                                     {(item.state === "waiting" || item.state === "sending") && <Button variant="link" onClick={() => cancel(item)}>{t("Cancel")}</Button>}
                                     {(item.state === "failed" || item.state === "cancelled") && (
                                         <Button variant="link" onClick={() => update(item.key, { state: "waiting", error: undefined })}>{t("Resume")}</Button>
+                                    )}
+                                </Td>
+                            </Tr>
+                        ))}
+                    </Tbody>
+                </Table>
+            )}
+            {(downloads.data?.downloads ?? []).length > 0 && (
+                <Table variant="compact" aria-label={t("Downloads into the store")} style={{ marginBottom: "1rem" }}>
+                    <Thead><Tr><Th>{t("Downloading")}</Th><Th>{t("URL")}</Th><Th width={30}>{t("Progress")}</Th><Th screenReaderText={t("Actions")} /></Tr></Thead>
+                    <Tbody>
+                        {(downloads.data?.downloads ?? []).slice(0, 10).map(item => (
+                            <Tr key={item.run_id}>
+                                <Td dataLabel={t("Downloading")}>
+                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", item.run_id])}>{item.path}</Button>
+                                </Td>
+                                <Td dataLabel={t("URL")} modifier="truncate"><span title={item.url}>{item.url}</span></Td>
+                                <Td dataLabel={t("Progress")}>
+                                    {item.status === "running" || item.status === "queued"
+                                        ? <Progress value={item.total ? (item.received ?? 0) * 100 / item.total : 0} size="sm"
+                                            measureLocation={ProgressMeasureLocation.outside}
+                                            aria-label={t("Progress of {{name}}", { name: item.path })}
+                                            label={item.status === "queued" ? t("Waiting")
+                                                : item.total ? `${formatBytes(item.received ?? 0)} / ${formatBytes(item.total)}`
+                                                : formatBytes(item.received ?? 0)} />
+                                        : item.status === "successful"
+                                            ? <Label isCompact color="green">{t("Done: {{size}}", { size: formatBytes(item.size ?? 0) })}</Label>
+                                            : <span>{item.status === "canceled" ? t("Download canceled") : item.error || t("Download failed")}</span>}
+                                </Td>
+                                <Td isActionCell>
+                                    {ACTIVE.includes(item.status) && can("run.cancel") && (
+                                        <Button variant="link" onClick={() => act(() => call("run.cancel", { id: item.run_id }).then(downloads.reload))}>{t("Cancel")}</Button>
+                                    )}
+                                    {!ACTIVE.includes(item.status) && item.status !== "successful" && can("store.fetch") && (
+                                        <Button variant="link" onClick={() => setFetching({ again: item })}>{t("Try again")}</Button>
                                     )}
                                 </Td>
                             </Tr>
@@ -324,6 +427,9 @@ export function StorePage({ directory }: { directory: string }) {
                             .map(file => <Content component="li" key={file.name}>{file.name}</Content>)}
                     </Content>
                 </FormModal>
+            )}
+            {fetching && (
+                <FetchModal directory={directory} again={fetching.again} onClose={() => setFetching(null)} onQueued={downloads.reload} />
             )}
             {making && (
                 <NameModal title={t("New folder")} label={t("Name")} initial="" submitLabel={t("Create")}

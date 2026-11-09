@@ -57,7 +57,16 @@ else. An administrator of the machine can, of course, do anything.
    or a playbook may replace an installer that other templates run as
    administrator on the nodes, give the operator role to people you would
    trust with that, and check digests in playbooks (`checksum:` of
-   `get_url`, `copy`) where it matters.
+   `get_url`, `copy`) where it matters. An operator may also have the
+   controller download a URL into the store: the job runs in the sandbox
+   of a run, and refuses to connect to the controller's own addresses
+   (loopback and those of its interfaces, where Cockpit listens) and to
+   link-local ones (cloud metadata), checked where the connection is made.
+   Other machines of the networks the controller reaches are not refused:
+   mirrors live there, and so may internal services, which an operator
+   could then read through the store. Where that matters, give the
+   controller a proxy (`[network] proxy`) that allows only what downloads
+   need.
    Each run has its own process and IPC namespaces, so that one run cannot
    reach the secrets of another through its processes, though all run as
    the same account. sudo and setuid programs do nothing inside it.

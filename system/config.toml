@@ -168,3 +168,6 @@
 # its files as hard links. For a disk of its own, mount it on
 # /var/lib/cockpit-fleet as a whole.
 #max_gb = 0
+# Downloads from URLs into the store running at the same time, in a queue
+# of their own beside the runs.
+#max_downloads = 2

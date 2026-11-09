@@ -1173,5 +1173,16 @@
   "Uploads": "Caricamenti",
   "Uploads that stopped before their end": "Caricamenti interrotti prima della fine",
   "Origin": "Provenienza",
-  "Upload canceled": "Caricamento annullato"
+  "Upload canceled": "Caricamento annullato",
+  "Done: {{size}}": "Completato: {{size}}",
+  "Download canceled": "Download annullato",
+  "Download failed": "Download non riuscito",
+  "Download from a URL": "Scarica da un URL",
+  "Download into the store": "Download nello store",
+  "Downloading": "In download",
+  "Downloads into the store": "Download nello store",
+  "http or https. Addresses of this server and link-local ones are refused.": "http o https. Gli indirizzi di questo server e quelli link-local vengono rifiutati.",
+  "Optional: the download fails when the file has another digest.": "Facoltativo: il download non riesce se il file ha un altro digest.",
+  "Path in the store": "Percorso nello store",
+  "Replace a file already there": "Sostituisci un file già presente"
 }
