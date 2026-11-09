@@ -32,7 +32,9 @@ in [security.md](security.md); the decisions behind these limits in
   is taken up), no credentials for a URL, no source kept to refresh a file
   from (phase 13); the listing stops at 20 000 entries; a download
   that fails half way leaves a short file in the browser (compare the
-  digest shown); a file of root put there by hand is not given to runs.
+  digest shown); a file of root put there by hand is not given to runs;
+  one upload of 1.5 GiB dropped on the page failed at once, before reaching
+  the backend, and was not seen again (9 November; the page now says why).
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Masking: other encodings, and secrets a run decrypts itself, not masked.
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a
