@@ -2,6 +2,11 @@ d /var/lib/cockpit-fleet          0750 cockpit-fleet cockpit-fleet -
 d /var/lib/cockpit-fleet/runs     0750 cockpit-fleet cockpit-fleet -
 d /var/lib/cockpit-fleet/projects 0750 cockpit-fleet cockpit-fleet -
 d /var/lib/cockpit-fleet/inventories 0750 cockpit-fleet cockpit-fleet -
+# The store, and beside it on the same file system (runs get hard links to
+# its files) uploads on their way in and what each run was given.
+d /var/lib/cockpit-fleet/store    0750 cockpit-fleet cockpit-fleet -
+d /var/lib/cockpit-fleet/store-uploads 0700 cockpit-fleet cockpit-fleet -
+d /var/lib/cockpit-fleet/store-farms 0700 cockpit-fleet cockpit-fleet -
 
 # Encrypted credentials. Root writes them; the service user only reads the
 # ciphertext, which nothing but PID 1 can decrypt.

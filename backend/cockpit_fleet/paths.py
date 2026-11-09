@@ -7,6 +7,12 @@ RUNS_DIR = STATE_DIR / "runs"
 PROJECTS_DIR = STATE_DIR / "projects"
 # The trees of the inventories written in the interface, each with its repository.
 INVENTORIES_DIR = STATE_DIR / "inventories"
+# The store: files that playbooks copy to nodes (storage.py). Beside it, on
+# the same file system: uploads on their way in, and what each run was given.
+STORE_DIR = STATE_DIR / "store"
+STORE_UPLOADS = STATE_DIR / "store-uploads"
+STORE_FARMS = STATE_DIR / "store-farms"
+STORE_LOCK = STATE_DIR / "store.lock"
 # What can be computed again: the list of the installed modules.
 CACHE_DIR = STATE_DIR / "cache"
 

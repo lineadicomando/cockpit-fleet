@@ -44,6 +44,14 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaises(ConfigError, msg=bad):
                 parse("[chat]\n" + bad)
 
+    def test_the_limit_of_the_store(self):
+        self.assertEqual(parse("").store_max_gb, 0)
+        self.assertEqual(parse("[store]\nmax_gb = 500\n").store_max_gb, 500)
+        for text in ("[store]\nmax_gb = -1\n", "[store]\nmax_gb = \"1\"\n",
+                     "[store]\npath = \"/srv\"\n"):
+            with self.assertRaises(ConfigError, msg=text):
+                parse(text)
+
     def test_administrators_may_approve_their_own_unless_told_otherwise(self):
         self.assertTrue(parse("").approvals_admins_exempt)
         self.assertFalse(parse("[approvals]\nadmins_exempt = false").approvals_admins_exempt)

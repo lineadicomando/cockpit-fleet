@@ -3,6 +3,7 @@ person, the shortcuts, and that it reaches the backend as the interface does."""
 
 import io
 import json
+import os
 import tempfile
 import unittest
 
@@ -494,6 +495,62 @@ class BackendTest(Base):
         with self.assertRaises(Failure) as caught:
             terminal.run(t, COMMANDS, ["template", "delete", "nothing"])
         self.assertIn("no template 'nothing'", str(caught.exception))
+
+    def streaming(self, role, sent=None):
+        """A terminal whose fleetctl moves files as main() does."""
+        def stream(name, params, source, sink):
+            ctx = self.ctx(role)
+            if source is not None:
+                data = source.read()
+                ctx.stdin = io.BytesIO(data if sent is None else sent(data))
+            answer = cli.dispatch(name, json.dumps(params).encode(), ctx)
+            if sink is not None and answer["ok"]:
+                with ctx.output as output:
+                    sink.write(output.read())
+                return {"ok": True, "data": {}}
+            if sink is not None:
+                return {"ok": False, "error": {"code": "failed",
+                                               "message": answer["error"]["message"]}}
+            return answer
+        t = self.terminal(role)
+        t.stream = stream
+        return t
+
+    def test_a_file_goes_into_the_store_and_comes_back(self):
+        from cockpit_fleet import paths
+        with tempfile.TemporaryDirectory() as here:
+            local = f"{here}/setup.msi"
+            with open(local, "wb") as source:
+                source.write(b"installer " * 1000)
+            t = self.streaming("operator", sent=lambda data: data[:4000])
+            with self.assertRaises(Failure) as caught:
+                terminal.run(t, COMMANDS, ["store", "put", "--file", local, "--path",
+                                           "apps/setup.msi"])
+            self.assertIn("can be resumed", str(caught.exception))
+            t = self.streaming("operator")
+            terminal.run(t, COMMANDS, ["store", "put", "--file", local, "--path",
+                                       "apps/setup.msi", "--resume"])
+            self.assertEqual((paths.STORE_DIR / "apps/setup.msi").read_bytes(),
+                             b"installer " * 1000)
+            row = self.ctx().conn.execute("SELECT via FROM audit WHERE command = 'store.put'"
+                                          " ORDER BY id DESC").fetchone()
+            self.assertEqual(row["via"], "cli")
+            with self.assertRaises(Usage):
+                terminal.run(t, COMMANDS, ["store", "put", "--path", "x"])
+
+            back = f"{here}/back.msi"
+            t = self.streaming("viewer")
+            terminal.run(t, COMMANDS, ["store", "read", "--path", "apps/setup.msi",
+                                       "--output", back])
+            with open(back, "rb") as copy:
+                self.assertEqual(copy.read(), b"installer " * 1000)
+            with self.assertRaises(Failure):
+                terminal.run(t, COMMANDS, ["store", "read", "--path", "apps/setup.msi",
+                                           "--output", back])
+            with self.assertRaises(Failure):
+                terminal.run(t, COMMANDS, ["store", "read", "--path", "none",
+                                           "--output", f"{here}/none"])
+            self.assertFalse(os.path.exists(f"{here}/none"))
 
     def test_an_archive_is_read_from_a_file(self):
         with tempfile.NamedTemporaryFile(suffix=".tar.gz") as archive:

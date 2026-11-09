@@ -16,8 +16,8 @@ they can reach.
 |---|---|---|
 | An administrator of Fleet (`cockpit-fleet-admin`) | decide what runs where: projects, inventories, credentials, templates, checks, ad-hoc commands | become root on the controller, read a secret back, or reach the database outside the backend's commands |
 | Whoever writes a project | write code that runs, in the sandbox of a run, with the credentials of the templates that use it | reach other projects (but see the note on local directories below), other runs, their secrets, or the controller beyond the sandbox |
-| An operator | launch what administrators defined, on fewer hosts than the template says, with answers to its survey | widen a template's hosts, change what it runs, or have an answer read as code |
-| A viewer | see what exists and how runs ended | read the output of runs, which may hold data of the nodes |
+| An operator | launch what administrators defined, on fewer hosts than the template says, with answers to its survey; put files in the store, which playbooks may install on nodes | widen a template's hosts, change what it runs, or have an answer read as code |
+| A viewer | see what exists and how runs ended, and download the files of the store | read the output of runs, which may hold data of the nodes |
 | An approver | let a run that waits for approval start, or refuse it | approve their own launch where another person is asked for (an administrator may, unless `[approvals] admins_exempt = false`) |
 | A node | answer what it is asked | report for another host or another check, or have its answers read as code |
 
@@ -49,6 +49,15 @@ else. An administrator of the machine can, of course, do anything.
    machine outside `/home`, so a playbook of any project can read every
    local project. Where that matters, hide them from runs with a drop-in
    (`docs/install.md` says how).
+   The store is given to every run of a playbook or an ad-hoc command, as
+   hard links in its own directory: any playbook reads any file of it, and
+   what it adds or replaces there is kept in the store when it ends. It is
+   for installers and the like, never for secrets (keys, licences that must
+   not travel): keep those in credentials or vault files. Since an operator
+   or a playbook may replace an installer that other templates run as
+   administrator on the nodes, give the operator role to people you would
+   trust with that, and check digests in playbooks (`checksum:` of
+   `get_url`, `copy`) where it matters.
    Each run has its own process and IPC namespaces, so that one run cannot
    reach the secrets of another through its processes, though all run as
    the same account. sudo and setuid programs do nothing inside it.

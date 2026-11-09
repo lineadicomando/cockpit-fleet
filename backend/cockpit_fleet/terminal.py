@@ -13,6 +13,8 @@ its stdin: never on a command line.
     fleet result RUN [--wait]
     fleet secret CREDENTIAL FIELD | --channel CHANNEL
     fleet assistant [--profile PROFILE] [AGENT]
+    fleet store put --file FILE --path PATH [--replace] [--resume]
+    fleet store read --path PATH [--output FILE | -]
     fleet project clone PROJECT [DIR] | pull [DIR] | push [DIR]
     fleet inventory clone INVENTORY [DIR] | pull [DIR] | push [DIR]
     fleet help [AREA [VERB]]
@@ -27,6 +29,7 @@ import argparse
 import base64
 import getpass
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -36,12 +39,12 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import TextIO
+from pathlib import Path, PurePosixPath
+from typing import BinaryIO, TextIO
 
 from .cli import Command, Field, load_commands
 from .mcp import Unreachable, fleetctl
-from .paths import LIBEXEC_DIR
+from .paths import LIBEXEC_DIR, SERVICE_USER
 
 VIA = "cli"
 ACTIVE = ("pending_approval", "queued", "running")
@@ -133,6 +136,46 @@ def _fleet_secret(args: list[str], value: str) -> str:
     return result.stdout
 
 
+def _fleetctl_stream(name: str, params: dict, source: BinaryIO | None,
+                     sink: BinaryIO | None) -> dict:
+    """A command of fleetctl that moves a file: the bytes of SOURCE after the
+    parameters, or what it writes out into SINK."""
+    argv = ["/usr/bin/sudo", "-n", "-u", SERVICE_USER, str(LIBEXEC_DIR / "fleetctl"), name]
+    try:
+        if sink is not None:
+            done = subprocess.run(argv, input=json.dumps(params).encode(), stdout=sink,
+                                  stderr=subprocess.PIPE, check=False)
+            if done.returncode != 0:
+                text = done.stderr.decode(errors="replace").strip()
+                try:
+                    answer = json.loads(text)
+                except ValueError:
+                    answer = None
+                if isinstance(answer, dict) and "error" in answer:
+                    return answer
+                raise Unreachable(text[-300:] or "fleetctl gave no answer")
+            return {"ok": True, "data": {}}
+        process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+    except OSError as error:
+        raise Unreachable(f"cannot run fleetctl: {error}") from error
+    try:
+        process.stdin.write(json.dumps(params).encode() + b"\n")
+        if source is not None:
+            shutil.copyfileobj(source, process.stdin, 1024 * 1024)
+        process.stdin.close()
+    except BrokenPipeError:
+        pass  # refused before the end: the answer says why
+    out, err = process.communicate()
+    try:
+        answer = json.loads(out)
+    except ValueError:
+        answer = None
+    if not isinstance(answer, dict) or "ok" not in answer:
+        raise Unreachable(err.decode(errors="replace").strip()[-300:] or "fleetctl gave no answer")
+    return answer
+
+
 def _ask(text: str, secret: bool) -> str:
     if secret:
         return getpass.getpass(f"{text}: ")
@@ -147,6 +190,7 @@ class Terminal:
     secret: Callable[[list[str], str], str] = _fleet_secret
     ask: Callable[[str, bool], str] = _ask
     git: Callable[[list[str], str | None], tuple[int, str, str]] = _run_git
+    stream: Callable[[str, dict, BinaryIO | None, BinaryIO | None], dict] = _fleetctl_stream
     # Runs a program on this terminal and gives its exit status.
     execute: Callable[[list[str]], int] = lambda argv: subprocess.run(argv, check=False).returncode
     sleep: Callable[[float], None] = time.sleep
@@ -158,9 +202,14 @@ class Terminal:
     width: int = 0
     as_json: bool = False
 
-    def __call__(self, name: str, params: dict | None = None) -> dict:
+    def __call__(self, name: str, params: dict | None = None,
+                 source: BinaryIO | None = None, sink: BinaryIO | None = None) -> dict:
+        """One command; one that moves a file reads SOURCE or writes SINK."""
         try:
-            answer = self.call(name, {**(params or {}), "via": VIA})
+            if source is not None or sink is not None:
+                answer = self.stream(name, {**(params or {}), "via": VIA}, source, sink)
+            else:
+                answer = self.call(name, {**(params or {}), "via": VIA})
         except Unreachable as error:
             raise Failure(f"{error}\nfleet works for the members of the groups"
                           " cockpit-fleet-viewer, -operator, -admin and -approver") from error
@@ -587,6 +636,7 @@ def complete(commands: dict[str, Command], words: list[str],
                 candidates = [f"--{name.replace('_', '-')}" for name in command.params]
                 if command.name == "project.upload":
                     candidates.append("--archive")
+                candidates += _STREAM_OPTIONS.get(command.stream, [])
             else:
                 candidates = _names(lookup, id_area(command, "id"))
     if before:
@@ -1102,6 +1152,8 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
     if "-h" in rest or "--help" in rest:
         term.out.write(describe(command))
         return OK
+    if command.stream:
+        return _stream_command(term, command, rest)
     extra: dict = {}
     if command.name == "project.upload":
         rest, extra = archive_params(rest, term.stdin)
@@ -1112,6 +1164,77 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
         term.out.write(draft_text(params["id"], data))
     else:
         term.show(data)
+    return OK
+
+
+# What fleet adds to the options of the commands that move a file.
+_STREAM_OPTIONS = {"in": ["--file", "--resume"], "out": ["--output"]}
+
+
+def _option(args: list[str], name: str) -> tuple[str | None, list[str]]:
+    """The value of one option of fleet's own, and the arguments without it."""
+    rest, value = [], None
+    words = iter(args)
+    for word in words:
+        if word == name:
+            value = next(words, None)
+            if value is None:
+                raise Usage(f"{name} needs a value")
+        elif word.startswith(f"{name}="):
+            value = word.split("=", 1)[1]
+        else:
+            rest.append(word)
+    return value, rest
+
+
+def _stream_command(term: Terminal, command: Command, args: list[str]) -> int:
+    """store.put from a file (--file), resumed with --resume from what the
+    backend received of it; store.read into a file (--output, by default the
+    name of the file of the store here, - for stdout)."""
+    if command.stream == "in":
+        local, args = _option(args, "--file")
+        resume = "--resume" in args
+        args = [word for word in args if word != "--resume"]
+        if local is None:
+            raise Usage(f"fleet {command.name.replace('.', ' ')} --file FILE --path PATH")
+        params = parse_params(command, args, term.stdin)
+        try:
+            source = open(local, "rb")  # noqa: SIM115  (closed below)
+        except OSError as error:
+            raise Failure(f"cannot read {local}: {error.strerror}") from None
+        with source:
+            size = os.fstat(source.fileno()).st_size
+            params.setdefault("path", Path(local).name)
+            params["size"] = size
+            if resume:
+                pending = {item["path"]: item for item in term("store.uploads")["uploads"]}
+                done = pending.get(params["path"])
+                if done is None or done["size"] != size:
+                    raise Failure(f"no upload of {params['path']} of this size to resume")
+                params["offset"] = done["received"]
+            source.seek(params.get("offset", 0))
+            term.show(term(command.name, params, source=source))
+        return OK
+    output, args = _option(args, "--output")
+    params = parse_params(command, args, term.stdin)
+    if "path" not in params:
+        raise Usage(f"fleet {command.name.replace('.', ' ')} --path PATH [--output FILE]")
+    if output == "-":
+        term(command.name, params, sink=sys.stdout.buffer)
+        return OK
+    target = Path(output or PurePosixPath(params["path"]).name)
+    try:
+        sink = open(target, "xb")  # noqa: SIM115  (closed below)
+    except OSError as error:
+        raise Failure(f"cannot write {target}: {error.strerror}") from None
+    with sink:
+        try:
+            term(command.name, params, sink=sink)
+        except BaseException:
+            target.unlink(missing_ok=True)
+            raise
+    if not term.as_json:
+        term.say(f"{target}: {target.stat().st_size} bytes")
     return OK
 
 

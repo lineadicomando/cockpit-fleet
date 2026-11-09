@@ -89,6 +89,10 @@ def create_dir(run_id: str) -> Path:
     directory = run_dir(run_id)
     directory.mkdir(mode=0o700)
     (directory / "creds").mkdir(mode=0o700)
+    # Bound by the unit over the account's ~/.ansible, where Ansible keeps the
+    # temporary files of what runs on the controller (a get_url delegated to
+    # it, say): on disk, not in the memory of a tmpfs.
+    (directory / "scratch" / "remote_tmp").mkdir(mode=0o700, parents=True)
     return directory
 
 
@@ -487,7 +491,7 @@ def dispatch(ctx) -> None:
             if free <= 0:
                 continue
             for row in conn.execute(
-                    f"SELECT rowid, id, inventory_id, options FROM runs"  # noqa: S608
+                    f"SELECT rowid, id, kind, inventory_id, options FROM runs"  # noqa: S608
                     f" WHERE status = 'queued' AND {lane}"
                     " ORDER BY priority DESC, created_at").fetchall():
                 inventory = row["inventory_id"]
@@ -496,18 +500,25 @@ def dispatch(ctx) -> None:
                     continue
                 if name == "runs":
                     claimed.add(inventory)
-                chosen.append(row["id"])
+                chosen.append((row["id"], row["kind"]))
                 free -= 1
                 if free == 0:
                     break
-        for run_id in chosen:
+        for run_id, _kind in chosen:
             conn.execute("UPDATE runs SET status = 'running', started_at = ? WHERE id = ?",
                          (store.now(), run_id))
         conn.execute("COMMIT")
     except BaseException:
         conn.execute("ROLLBACK")
         raise
-    for run_id in chosen:
+    from . import storage  # it builds on this module
+    for run_id, kind in chosen:
+        if kind in storage.FARM_KINDS:
+            try:
+                storage.make_farm(run_dir(run_id), run_id)
+            except Exception:  # noqa: BLE001  (the run goes on without the store)
+                journal.send(f"run {run_id}: cannot give it the store", 3, FLEET_RUN=run_id,
+                             FLEET_TRACEBACK=traceback.format_exc())
         try:
             _fleet_unit("start", run_id)
         except FleetError as error:
@@ -652,6 +663,12 @@ def _collect(ctx, run) -> None:
         if run["kind"] == "check":
             from . import checks  # it builds on this module
             checks.ingest(ctx, run, directory, error)
+        if run["kind"] in ("playbook", "adhoc"):
+            from . import storage  # it builds on this module
+            taken = storage.take_farm(ctx, run, directory)
+            if taken is not None:
+                extra["options"] = json.dumps({**store.loads(run["options"], {}),
+                                               "store": taken})
         if status == "successful" and run["kind"] == "galaxy":
             _store_collections(ctx, run, directory)
         elif run["kind"] == "galaxy" and run["project_id"]:
@@ -669,7 +686,7 @@ def _collect(ctx, run) -> None:
         checks.record_cycle(ctx, run, result, status)
     # The copy of the project and the ciphertext are only needed while it runs.
     for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
-                     "collections", "galaxy", "scratch"):
+                     "collections", "galaxy", "scratch", "store"):
         shutil.rmtree(directory / leftover, ignore_errors=True)
     (directory / "archive").unlink(missing_ok=True)
 
@@ -823,6 +840,8 @@ def end_unstarted(ctx, run_id: str, status: str, error: str = "") -> None:
     prepared for it: the ciphertext of its secrets above all."""
     _finish(ctx, run_id, status, None, error)
     shutil.rmtree(run_dir(run_id), ignore_errors=True)
+    from . import storage  # it builds on this module
+    storage.drop_farm(run_id)
 
 
 def cancel(ctx, run_id: str) -> str:

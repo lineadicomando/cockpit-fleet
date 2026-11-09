@@ -81,6 +81,9 @@ workflow.progress viewer -    workflow.resume operator M    workflow.update admi
 varset.create admin M         varset.delete admin M         varset.list viewer -
 varset.update admin M         draft.diff admin -            draft.discard admin M
 draft.list admin -            draft.merge admin M
+store.list viewer -           store.get viewer -            store.read viewer M
+store.uploads operator -      store.discard operator M      store.put operator M
+store.mkdir operator M        store.move operator M         store.delete operator M
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()

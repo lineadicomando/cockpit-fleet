@@ -160,3 +160,11 @@
 # What `fleet assistant` runs at a terminal (docs/chat.md says the whole line):
 # {mcp_config}, {allowed_tools} and {instructions} are filled for the session.
 #terminal = ["/opt/cockpit-fleet-agent/bin/claude", "..."]
+
+[store]
+# Gigabytes the files of the store may take together; 0 is what the disk
+# has. A file is refused anyway when it would leave the disk with less than
+# 1 GB free. The store must be on the file system of the runs: a run gets
+# its files as hard links. For a disk of its own, mount it on
+# /var/lib/cockpit-fleet as a whole.
+#max_gb = 0

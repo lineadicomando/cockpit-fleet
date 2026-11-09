@@ -108,6 +108,8 @@ class Config:
     # Whether an administrator may approve their own run that waits for
     # another person.
     approvals_admins_exempt: bool = True
+    # Gigabytes the files of the store may take together; 0: what the disk has.
+    store_max_gb: int = 0
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -191,7 +193,7 @@ def parse(text: str) -> Config:
         raise ConfigError(f"not valid TOML: {error}") from error
     unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
                                      "chat", "notifications", "checks", "metrics",
-                                     "approvals"})
+                                     "approvals", "store"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -282,6 +284,8 @@ def parse(text: str) -> Config:
     if not isinstance(admins_exempt, bool):
         raise ConfigError("approvals.admins_exempt must be true or false")
 
+    store = _section(data, "store", {"max_gb"})
+
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
         default_forks=default_forks,
@@ -322,6 +326,7 @@ def parse(text: str) -> Config:
         approvals_expire_hours=_int(approvals, "approvals", "expire_hours",
                                     Config.approvals_expire_hours, 1, 24 * 30),
         approvals_admins_exempt=admins_exempt,
+        store_max_gb=_int(store, "store", "max_gb", Config.store_max_gb, 0, 1024 * 1024),
     )
 
 

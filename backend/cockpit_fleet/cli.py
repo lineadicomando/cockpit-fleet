@@ -18,6 +18,7 @@ import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import BinaryIO
 
 from . import audit, autonomy, db, journal, paths, profiles
 from .auth import ROLES, Caller, allowed, resolve_caller
@@ -167,6 +168,10 @@ class Command:
     right: str = ""
     # Which of AGENT_CLASSES the command is in.
     agent: str = "read"
+    # A command that moves a file of any size (the store's): "in" takes its
+    # parameters on the first line of its input and the bytes after them,
+    # "out" writes the bytes, not an answer (see main()).
+    stream: str = ""
 
     def read(self, data: dict) -> Values:
         """Check the parameters of a call against the declaration."""
@@ -193,7 +198,7 @@ COMMANDS: dict[str, Command] = {}
 
 def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...] = (),
             max_input: int = MAX_INPUT, params: Mapping[str, Field] | None = None,
-            tool: bool = True, right: str = "", agent: str = ""):
+            tool: bool = True, right: str = "", agent: str = "", stream: str = ""):
     """Register a handler. Every command states the least role that may call
     it and the parameters it takes; the handler gets them checked, as Values.
     A command that names a right may also be called by whoever has it.
@@ -204,15 +209,19 @@ def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...
 
     max_input is for the commands that take a file: the others never need
     more than the default.
+
+    stream is for the commands that move a file of any size: see main().
     """
 
     kind = agent or ("read" if not mutating else "config" if role == "admin" else "run")
     if kind not in AGENT_CLASSES:
         raise ValueError(f"{name}: unknown class {kind}")
+    if stream not in ("", "in", "out") or (stream and tool):
+        raise ValueError(f"{name}: a command that streams is not a tool")
 
     def register(handler: Callable) -> Callable:
         COMMANDS[name] = Command(name, role, handler, mutating, redact, max_input, params or {},
-                                 tool, right, kind)
+                                 tool, right, kind, stream)
         return handler
 
     return register
@@ -229,6 +238,10 @@ class Context:
     profile: str = ""
     # The fleet-mcp an agent's call came through, when it says.
     session: str = ""
+    # The bytes after the parameters, for a command that streams in.
+    stdin: BinaryIO | None = field(default=None, repr=False)
+    # What a command that streams out opened for main() to copy to stdout.
+    output: BinaryIO | None = field(default=None, repr=False)
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _config: Config | None = field(default=None, repr=False)
 
@@ -482,6 +495,7 @@ def load_commands() -> dict[str, Command]:
         resources,
         runs,
         schedules,
+        storage,
         system,
         transfer,
         variables,
@@ -491,9 +505,43 @@ def load_commands() -> dict[str, Command]:
     return COMMANDS
 
 
+def _stream_out(answer: dict, ctx: Context) -> int:
+    """The bytes a command that streams out opened; or why there are none,
+    as the answer would have said it, on stderr, and a failed exit."""
+    if not answer["ok"] or ctx.output is None:
+        if answer["ok"]:
+            answer = {"ok": False, "error": {"code": "internal", "message": "nothing to send"}}
+        json.dump(answer, sys.stderr, ensure_ascii=False)
+        sys.stderr.write("\n")
+        return 1
+    with ctx.output as source:
+        try:
+            while chunk := source.read(1024 * 1024):
+                sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+        except BrokenPipeError:
+            return 1
+    return 0
+
+
 def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
+    """fleetctl COMMAND < params.json, and two forms for files of any size:
+
+    fleetctl COMMAND < params-line + bytes   a command that streams in: the
+                                             parameters on one line, then
+                                             the bytes, any number of them
+    fleetctl COMMAND [PATH]                  a command that streams out writes
+                                             the bytes, not an answer, and the
+                                             answer to stderr when it fails
+                                             (exit status 1); PATH, its only
+                                             parameter, may be given here,
+                                             where a Cockpit channel opened
+                                             by a link has no input
+    """
     load_commands()
-    if len(argv) != 2:
+    spec = COMMANDS.get(argv[1]) if len(argv) > 1 else None
+    out = spec is not None and spec.stream == "out"
+    if not (len(argv) == 2 or len(argv) == 3 and out):
         print("usage: fleetctl COMMAND < params.json", file=sys.stderr)
         return 2
     try:
@@ -506,8 +554,17 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
 
     os.umask(0o077)
     ctx = Context(resolve_caller(env, service_uid))
-    limit = COMMANDS[argv[1]].max_input if argv[1] in COMMANDS else MAX_INPUT
-    answer = dispatch(argv[1], sys.stdin.buffer.read(limit + 1), ctx)
+    limit = spec.max_input if spec is not None else MAX_INPUT
+    if len(argv) == 3:
+        raw = json.dumps({"path": argv[2]}).encode()
+    elif spec is not None and spec.stream == "in":
+        raw = sys.stdin.buffer.readline(limit + 1)
+        ctx.stdin = sys.stdin.buffer
+    else:
+        raw = sys.stdin.buffer.read(limit + 1)
+    answer = dispatch(argv[1], raw, ctx)
+    if out:
+        return _stream_out(answer, ctx)
     json.dump(answer, sys.stdout, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0

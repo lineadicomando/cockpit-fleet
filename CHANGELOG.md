@@ -10,6 +10,21 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- The store: files on the controller that playbooks copy to nodes, on a
+  page of their own (Store) and with `fleet store put` and `fleet store
+  read`. Files of any size are uploaded from the browser, resumed when an
+  upload stops, and downloaded straight to the browser's downloads; a
+  playbook finds the store in the directory named by `fleet_store`, and
+  what it adds or replaces there (a `get_url`, a `fetch`) is kept in the
+  store when the run ends, put down to the run. Viewers download, operators
+  and administrators also upload, move and delete. Every run can read the
+  store: it is not for secrets. A limit in `[store] max_gb`; files put in
+  `/var/lib/cockpit-fleet/store` by hand appear too, and the digest of each
+  file is taken in the background.
+
+- What Ansible writes for a task on the controller (the whole download of a
+  `get_url` delegated to it, say) is kept on the disk of the run, not in
+  memory: a download larger than half the memory no longer fails.
 - Runs launched in series: a job template or an ad-hoc command launched
   with "Start after the runs already launched on this inventory" waits in
   the queue while another run is running on its inventory, or one launched

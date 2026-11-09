@@ -1,6 +1,6 @@
 import cockpit from "cockpit";
 
-const FLEETCTL = "/usr/libexec/cockpit-fleet/fleetctl";
+export const FLEETCTL = "/usr/libexec/cockpit-fleet/fleetctl";
 const FLEET_SECRET = "/usr/libexec/cockpit-fleet/fleet-secret";
 
 // The backend answered, and the answer is an error.
@@ -113,6 +113,17 @@ export async function answerSecret(value: string): Promise<string> {
 
 export async function deleteSecret(name: string): Promise<void> {
     await run([FLEET_SECRET, "delete", name], "");
+}
+
+// Whether calls go through as root, with Cockpit's administrative access:
+// what opens a channel of its own must ask for the same.
+export function isElevated(): boolean {
+    return elevated;
+}
+
+// What the bridge says when a process could not be started or was refused.
+export function accessFailure(problem: string, message: string): AccessError {
+    return classify({ problem, message });
 }
 
 // For tests: forget that a previous call needed administrative access.

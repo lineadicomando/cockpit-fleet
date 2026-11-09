@@ -759,6 +759,24 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The files of the store, by their path in it; the tree itself is on
+        # disk. inode, size and mtime_ns tell a file changed since it was
+        # seen, whose digest is then taken again (NULL until it is).
+        """
+        CREATE TABLE store_files (
+            path        TEXT PRIMARY KEY,
+            size        INTEGER NOT NULL,
+            mtime_ns    INTEGER NOT NULL,
+            inode       INTEGER NOT NULL,
+            sha256      TEXT,
+            origin      TEXT NOT NULL,
+            source      TEXT NOT NULL DEFAULT '',
+            updated_by  TEXT,
+            updated_at  REAL NOT NULL
+        )
+        """,
+    ],
 ]
 
 

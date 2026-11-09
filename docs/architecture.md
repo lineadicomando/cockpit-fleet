@@ -120,7 +120,11 @@ tries exactly that path.
 Three settings are less strict than they could be, each for a measured reason:
 
 - **Home is a writable tmpfs**, not read-only: with the local connection,
-  Ansible creates its temporary directory under the account's home.
+  Ansible creates its temporary directory under the account's home. That
+  directory, `~/.ansible`, is the run's `scratch/remote_tmp` on disk, bound
+  there: a module run on the controller keeps its temporary files in it,
+  and `get_url` the whole download, which in the tmpfs failed with ENOSPC
+  beyond about half the memory (a 3 GB file on a VM of 2 GB, 9 November).
 - **`SystemCallErrorNumber=EPERM`**, without a deny list on top of
   `@system-service`: modules executed on the controller call `chown()` even when
   nothing changes, and a seccomp kill made `copy` fail with "Bad system call".
@@ -152,7 +156,11 @@ on stdin; the answer is one JSON object, `{"ok": true, "data": …}` or
 `{"ok": false, "error": {"code", "message"}}`. The exit status is 0 whenever an
 answer was written, so a failed exit always means the backend was not reached.
 The input is at most 1 MB, for every command but two, which declare their
-own limit: `project.upload` and `config.import`.
+own limit: `project.upload` and `config.import`. Two commands of the store
+move files of any size and take other forms (see "The store"): `store.put`
+reads its parameters on the first line and the bytes after them;
+`store.read` writes the bytes instead of an answer, and may take its one
+parameter, the path, in argv.
 
 - **Who is calling.** fleetctl refuses to run as anything but the service
   account, so it is always reached through sudo, which sets `SUDO_UID` and does
@@ -789,6 +797,103 @@ value cut over two lines are not recognised. Secrets shorter than four bytes
 are left alone, since masking them would mostly hide ordinary output. And only
 the secrets cockpit-fleet handed to the run are known: a password an inventory
 takes from a vaulted variable is one the run decrypts itself.
+
+## The store
+
+Files on the controller that playbooks copy to nodes (`storage.py`):
+installers, images, what runs fetched from nodes. The model is the store
+of `ansible-win_edulab`, a directory its roles fill with `get_url`
+delegated to the controller, that ISOs are put in by hand, and that
+`win_copy` reads: 61 GB, files of 5 or 6 GB.
+
+```
+/var/lib/cockpit-fleet/store/            the tree, files by their own names
+/var/lib/cockpit-fleet/store-uploads/    uploads on their way, per user and path
+/var/lib/cockpit-fleet/store-farms/      what each running run was given
+store_files (database)                   path, size, mtime, inode, sha256, origin, who
+```
+
+One store for the controller, read by every run, not for secrets (decided
+on 9 November). Viewers list and download; operators and administrators
+also upload, move and delete. The tree is on disk; the database keeps what
+the disk cannot say: the digest, where a file came from (`upload`, `run`,
+`found` when put there by hand) and who put it there. `sync()` brings the
+rows up to date with the tree at each listing (no digest there: a listing
+must answer at once); a file whose inode, size or mtime changed, or that
+appeared, gets its digest from the tick of the scheduler, 40 s of it at
+most per tick, a file begun being finished.
+
+**A run gets the store as hard links.** When a run of a playbook or an
+ad-hoc command starts (in `dispatch`, not when it is queued: a run waiting
+a day for approval would keep alive files deleted meanwhile), `fleetctl`
+makes `runs/<id>/store/`, the tree again with a hard link to every file,
+and notes the inode, size and mtime of each in `store-farms/<id>.json`,
+out of the run's reach. The playbook gets the directory as `fleet_store`
+(the first `--extra-vars`, so a template may set its own). A link costs
+nothing whatever the size of the file, and the store itself stays out of
+the sandbox. When the run ends, `_collect` takes in what it left:
+
+| In the farm | What happens |
+|---|---|
+| a link as it was given | nothing |
+| a file with another inode at a path that was given (Ansible writes to a temporary name and renames it over the old one) | moved into the store, replacing the file: `rename`, same file system |
+| a file at a new path, a new directory | moved in, made |
+| a link with another size or mtime (written in place) | the store has it already, through the link: its digest is taken again, the change put down to the run |
+| a path that was given and is gone | nothing: a run does not delete from the store |
+| a file with other links, a symbolic link, a device, a name the store does not take, a file beyond the limit | left out, counted |
+
+A file replaced in the store during the run is not taken back from the
+farm (its inode is not the one noted); among two runs that replace the same
+file, the last to end wins. What was taken is in the run's options
+(`store`: the paths, by kind, and their counts) and in the audit trail as
+`store.intake`, by who launched the run. The farm and its note go when the
+job ends, not after `[runs] keep_days`, so that it pins no file.
+
+Symbolic links were tried first (a read-only bind of the store, a farm of
+links to it): `get_url` checks `os.access(dest, W_OK)` through the link
+and refused to replace a file. Hard links need the store and the runs on
+one file system (a volume is mounted on `/var/lib/cockpit-fleet` whole):
+across two, the run gets no store and its output says so. They are only
+made to the account's own files (`fs.protected_hardlinks`): a file of root
+put there by hand is left out of runs, said at the head of the output, and
+marked on the page.
+
+Tried with a playbook in the run sandbox on Debian 13 (ansible-core 2.19)
+and AlmaLinux 10 (2.16, SELinux enforcing, no denial), the same results
+(9 November): `get_url` of a file present with the right checksum changes
+nothing; a stale or absent one gives a new inode; `copy` of a file and of a
+directory of links copies the files under the names of the links; `fetch`
+into the farm works; a write in place reaches the store.
+
+**Uploads.** A file of any size cannot be a parameter (that is how archives
+travel, held whole in memory, 50 MB at most). The page opens a channel of
+Cockpit's bridge that spawns `sudo -n -u cockpit-fleet fleetctl store.put`
+with binary input, sends the parameters on one line and the file after
+them, a megabyte at a time read from the `File`, and keeps at most 16 MB
+not acknowledged (`send-acks: bytes`). `fleetctl` writes to a `.part` in
+`store-uploads/`, digests as it receives, refuses more bytes than declared,
+checks the digest it was given, and renames the file into the store under
+the lock of the store. An upload that stops keeps its `.part`, named after
+the user and the path: `store.uploads` lists them, and the page resumes one
+by itself when the same file is uploaded to the same path (`offset`). The
+tick drops those not resumed for a week. Measured on Debian 13 from the
+browser through Cockpit: 1 GiB in 12 s (85 MB/s), the memory of the page
+flat; a file of 1.5 GiB dropped on the Store page arrived at about the
+same rate, its digest right.
+
+**Downloads.** The page asks `store.get` (role, existence, size), then has
+the browser open a link to an external channel of Cockpit,
+`/cockpit/channel/<csrf token>?<base64 of the options>`, which spawns
+`fleetctl store.read PATH` and serves its output with the
+`content-disposition` the page put in the options: the browser saves it as
+it comes, with nothing in the page's memory. Such a channel has no input,
+hence the path in argv. A command that fails there still answers 200 with
+no bytes, which is why the page asks first. Measured: 2 GiB in 7 s. A
+wrong CSRF token is refused (404).
+
+At a terminal, `fleet store put --file FILE --path PATH [--resume]` and
+`fleet store read --path PATH [--output FILE|-]` do the same through
+`fleetctl`.
 
 ## Schedules
 

@@ -48,6 +48,9 @@ install -d %{buildroot}%{_sysconfdir}/cockpit-fleet/secrets/notify \
     %{buildroot}%{_sharedstatedir}/cockpit-fleet/runs \
     %{buildroot}%{_sharedstatedir}/cockpit-fleet/projects \
     %{buildroot}%{_sharedstatedir}/cockpit-fleet/inventories \
+    %{buildroot}%{_sharedstatedir}/cockpit-fleet/store \
+    %{buildroot}%{_sharedstatedir}/cockpit-fleet/store-uploads \
+    %{buildroot}%{_sharedstatedir}/cockpit-fleet/store-farms \
     %{buildroot}/run/cockpit-fleet/answers \
     %{buildroot}/run/cockpit-fleet/creds
 install -D -m 0644 system/cockpit-fleet.preset %{buildroot}%{_presetdir}/80-cockpit-fleet.preset
@@ -110,6 +113,9 @@ fi
 %dir %attr(0750,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/runs
 %dir %attr(0750,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/projects
 %dir %attr(0750,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/inventories
+%dir %attr(0750,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/store
+%dir %attr(0700,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/store-uploads
+%dir %attr(0700,cockpit-fleet,cockpit-fleet) %{_sharedstatedir}/cockpit-fleet/store-farms
 %ghost %dir %attr(0755,root,root) /run/cockpit-fleet
 %ghost %dir %attr(0770,root,cockpit-fleet) /run/cockpit-fleet/answers
 %ghost %dir %attr(0700,root,root) /run/cockpit-fleet/creds

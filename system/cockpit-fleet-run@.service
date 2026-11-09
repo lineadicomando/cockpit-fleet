@@ -34,6 +34,10 @@ RuntimeDirectoryMode=0700
 # files under ~ when it targets the controller itself.
 TemporaryFileSystem=/var/lib/cockpit-fleet:mode=1777
 BindPaths=/var/lib/cockpit-fleet/runs/%i
+# Where Ansible keeps the temporary files of what runs on the controller
+# (~/.ansible/tmp: a get_url delegated to it writes the whole download
+# there): on the run's disk, not in the memory of that tmpfs.
+BindPaths=-/var/lib/cockpit-fleet/runs/%i/scratch/remote_tmp:/var/lib/cockpit-fleet/.ansible
 InaccessiblePaths=/etc/cockpit-fleet
 
 # No D-Bus and no systemd sockets. Together with NoNewPrivileges (which

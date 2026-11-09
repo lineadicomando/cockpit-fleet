@@ -11,7 +11,7 @@ import os
 import shutil
 import traceback
 
-from . import checks, cmdb, jobs, journal, metrics, paths, store
+from . import checks, cmdb, jobs, journal, metrics, paths, storage, store
 from .cli import Context
 
 DAY = 86400
@@ -96,7 +96,7 @@ def tidy(ctx: Context) -> dict:
     out: dict = {}
     for name, step in (("cycles", checks.prune_cycles), ("runs", prune_runs),
                        ("orphans", sweep), ("cmdb", cmdb.prune), ("metrics", metrics.prune),
-                       ("vacuum", vacuum)):
+                       ("vacuum", vacuum), ("store", storage.digest_pending)):
         try:
             out[name] = step(ctx, now)
         except Exception:  # noqa: BLE001  (one step must not keep the others from running)

@@ -90,6 +90,21 @@ takes the archive from a file with
 .BI \-\-archive " path"\fR,
 or from the standard input with
 .BR "\-\-archive \-" .
+.B store put
+takes the file to upload with
+.BI \-\-file " path"\fR,
+and goes on from what an earlier upload of the same file to the same
+.B \-\-path
+left with
+.BR \-\-resume .
+.B store read
+writes the file of the store named by
+.B \-\-path
+to
+.BI \-\-output " path"\fR,
+by default to its name in the current directory, or to the standard output
+with
+.BR "\-\-output \-" .
 The completion for bash offers commands and options, the choices of an
 option, and the names of what the backend lists for the caller's role.
 .SH PROJECTS AT A TERMINAL
@@ -193,6 +208,7 @@ fleet launch "Say hello" \-a greeting=ciao \-\-limit web01 \-\-check
 fleet log \-f r3c9d2e1f0a4b
 fleet check run disk \-\-host\-id web01
 fleet project upload shipped \-\-archive site.tar.gz
+fleet store put \-\-file Win11.iso \-\-path win_iso/Win11.iso
 fleet file write p1a2b3c4d5e6 \-\-path site.yml \-\-content @site.yml \e
     \-\-expected SHA256_OF_THE_VERSION_READ
 printf '%s' "$TOKEN" | fleet secret git\-token token

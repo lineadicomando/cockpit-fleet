@@ -49,11 +49,19 @@ def call(user: str, name: str, raw: bytes) -> dict:
     argv = ["/usr/bin/sudo", "-u", user, "/usr/bin/sudo", "-n", "-u", "cockpit-fleet",
             FLEETCTL, name]
     done = subprocess.run(argv, input=raw, capture_output=True, timeout=180, check=False)
+    # A command that streams out (store.read) writes bytes, not an answer, and
+    # its answer to stderr when it fails.
+    streams = cli.COMMANDS[name].stream == "out" if name in cli.COMMANDS else False
     try:
-        return json.loads(done.stdout)
+        answer = json.loads(done.stderr if streams and done.returncode == 1 else done.stdout)
+        if isinstance(answer, dict) and "ok" in answer:
+            return answer
     except ValueError:
-        message = done.stderr.decode(errors="replace").strip()[:200]
-        return {"ok": False, "error": {"code": "no answer", "message": message}}
+        pass
+    if streams and done.returncode == 0:
+        return {"ok": True, "data": None}
+    message = done.stderr.decode(errors="replace").strip()[:200]
+    return {"ok": False, "error": {"code": "no answer", "message": message}}
 
 
 def broken(answer: dict) -> bool:

@@ -382,6 +382,12 @@ def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
     if verbosity:
         argv.append("-" + "v" * verbosity)
 
+    farm = run_dir / "store"
+    if farm.is_dir() and not farm.is_symlink():
+        # First: a template that sets fleet_store itself wins.
+        store_file = runtime_dir / "fleet_store.json"
+        store_file.write_text(json.dumps({"fleet_store": str(farm)}))
+        argv += ["--extra-vars", f"@{store_file}"]
     extra_vars = spec.get("extra_vars")
     if extra_vars:
         if not isinstance(extra_vars, dict):

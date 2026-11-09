@@ -120,6 +120,15 @@ commented out. An unknown key is an error, which the System tab and
 - `[adhoc] modules`: the modules an administrator may run as an ad-hoc
   command; an empty list turns them off.
 - `[mcp]` and `[chat]`: agents, off as installed; see [chat.md](chat.md).
+- `[store] max_gb`: how much the store may take. The store is in
+  `/var/lib/cockpit-fleet/store`, and must be on the same file system as
+  the runs (`/var/lib/cockpit-fleet/runs`): a run gets its files as hard
+  links. To give it a disk of its own, mount that disk on
+  `/var/lib/cockpit-fleet` as a whole, with the package's services stopped
+  and the directory's content moved onto it. Files copied there by hand
+  appear on the Store page; give them to the service account (`chown -R
+  cockpit-fleet: /var/lib/cockpit-fleet/store`), or runs are not given
+  them.
 
 The backend reads the file at each call: nothing needs restarting.
 

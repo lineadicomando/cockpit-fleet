@@ -25,6 +25,12 @@ in [security.md](security.md); the decisions behind these limits in
   check of a playbook without vault password, of an inventory on save or
   on request only (a file of its tree that is no source is not checked), listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
+- Store: read by every run, no part of it kept for some projects; a write in
+  place through a link reaches the store during the run, not at its end;
+  no versions of a file (a replaced one is gone); downloads from URLs into
+  it not yet (phase 13); the listing stops at 20 000 entries; a download
+  that fails half way leaves a short file in the browser (compare the
+  digest shown); a file of root put there by hand is not given to runs.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Masking: other encodings, and secrets a run decrypts itself, not masked.
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a
