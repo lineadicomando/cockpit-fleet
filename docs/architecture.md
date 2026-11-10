@@ -869,8 +869,11 @@ into the farm works; a write in place reaches the store.
 travel, held whole in memory, 50 MB at most). The page opens a channel of
 Cockpit's bridge that spawns `sudo -n -u cockpit-fleet fleetctl store.put`
 with binary input, sends the parameters on one line and the file after
-them, a megabyte at a time read from the `File`, and keeps at most 16 MB
-not acknowledged (`send-acks: bytes`). `fleetctl` writes to a `.part` in
+them, 64 KiB at a time read from the `File`, and keeps at most 16 MB
+not acknowledged (`send-acks: bytes`). No message of the page is larger
+than 64 KiB (`FRAME`, `frames()` in `fleet.ts` for input on stdin):
+cockpit-ws 370 closes the whole session on a message from the browser over
+128 KiB, where 337 took a megabyte. `fleetctl` writes to a `.part` in
 `store-uploads/`, digests as it receives, refuses more bytes than declared,
 checks the digest it was given, and renames the file into the store under
 the lock of the store. An upload that stops keeps its `.part`, named after

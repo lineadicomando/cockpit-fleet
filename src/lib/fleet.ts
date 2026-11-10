@@ -48,6 +48,27 @@ let elevated = false;
 // An input in pieces is one too large to be sent, or even built, as a whole.
 type Input = string | string[];
 
+// The most the page sends in one message. cockpit-ws (370 at least) closes
+// the whole session when the browser sends a WebSocket message over 128 KiB.
+export const FRAME = 64 * 1024;
+
+// A text cut into pieces that each fit in a frame once encoded as UTF-8 (at
+// most three bytes per UTF-16 unit), never between the halves of a pair.
+export function frames(text: string): string[] {
+    const units = Math.floor(FRAME / 3);
+    const pieces: string[] = [];
+    let at = 0;
+    while (text.length - at > units) {
+        let end = at + units;
+        const last = text.charCodeAt(end - 1);
+        if (last >= 0xd800 && last <= 0xdbff) end--;
+        pieces.push(text.slice(at, end));
+        at = end;
+    }
+    pieces.push(text.slice(at));
+    return pieces;
+}
+
 function spawn(argv: string[], input: Input, superuser: boolean): Promise<string> {
     const process = cockpit.spawn(["sudo", "-n", ...argv], {
         err: "message",
@@ -55,9 +76,9 @@ function spawn(argv: string[], input: Input, superuser: boolean): Promise<string
         environ: ["LC_ALL=C"],
         ...(superuser ? { superuser: "try" as const } : {}),
     });
-    if (typeof input === "string") return process.input(input);
-    for (const piece of input.slice(0, -1)) process.input(piece, true);
-    return process.input(input[input.length - 1] ?? "");
+    const pieces = (typeof input === "string" ? [input] : input).flatMap(frames);
+    for (const piece of pieces.slice(0, -1)) process.input(piece, true);
+    return process.input(pieces[pieces.length - 1] ?? "");
 }
 
 // Runs one of the helpers through sudo, with its input on stdin.

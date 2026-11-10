@@ -1,7 +1,7 @@
 // The one chat session of the page, with the agent on a Cockpit channel.
 
 import cockpit from "cockpit";
-import { call } from "./fleet.ts";
+import { call, frames } from "./fleet.ts";
 import { Chat, type ToolInfo, type Transport } from "./chat.ts";
 
 const FLEET_CHAT = "/usr/libexec/cockpit-fleet/fleet-chat";
@@ -27,7 +27,7 @@ function spawnAgent(agent: string, profile: string, onData: (text: string) => vo
         },
     );
     return {
-        send: text => { process.input(text, true); },
+        send: text => { for (const piece of frames(text)) process.input(piece, true); },
         close: () => process.close(),
     };
 }

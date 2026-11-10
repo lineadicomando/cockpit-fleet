@@ -30,6 +30,8 @@ test("an upload sends its parameters on one line, then the bytes, never in argv"
     assert.deepEqual(JSON.parse(new TextDecoder().decode(sent.subarray(0, line))),
                      { path: "apps/my setup.msi", size: data.length, offset: 0, replace: false });
     assert.deepEqual(sent.subarray(line + 1), data);
+    // cockpit-ws closes the session on a message over 128 KiB.
+    assert.ok(channel.sent.every(piece => piece.length <= 64 * 1024));
     assert.ok(progress.length > 0 && progress.every(value => value <= data.length));
     answer(channel, { ok: true, data: { path: "apps/my setup.msi", size: data.length, sha256: "ab" } });
     assert.equal((await upload.done).sha256, "ab");

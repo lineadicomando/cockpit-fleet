@@ -12,6 +12,8 @@ export interface SpawnCall {
     args: string[];
     options: SpawnOptions;
     input?: string;
+    // Each piece as sent, one message of the WebSocket each.
+    pieces?: string[];
 }
 
 type SpawnHandler = (call: SpawnCall) => string | Promise<string>;
@@ -92,7 +94,11 @@ const cockpit = {
         // Deferred by a microtask so a chained .input() is recorded first.
         const p = Promise.resolve().then(() => handler(call)) as SpawnProcess;
         // Sent in pieces, with stream set on all but the last: joined here.
-        p.input = (data: string) => { call.input = (call.input ?? "") + data; return p; };
+        p.input = (data: string) => {
+            call.input = (call.input ?? "") + data;
+            (call.pieces ??= []).push(data);
+            return p;
+        };
         return p;
     },
     location: { path: [] as string[], options: {}, go() { /* no-op */ } },

@@ -1,7 +1,7 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { calls, setSpawnHandler } from "./mocks/cockpit.ts";
-import { AccessError, FleetError, answerSecret, call, deleteSecret, resetAccess, setSecret } from "../src/lib/fleet.ts";
+import { AccessError, FRAME, FleetError, answerSecret, call, deleteSecret, frames, resetAccess, setSecret } from "../src/lib/fleet.ts";
 
 const ok = (data: unknown) => JSON.stringify({ ok: true, data });
 const refused = { problem: null, exit_status: 1, message: "sudo: a password is required" };
@@ -89,4 +89,24 @@ test("a secret answer goes to the helper on stdin and comes back as a ticket", a
     assert.equal(await answerSecret("hunter2"), "a-0123456789abcdef0123456789abcdef");
     assert.deepEqual(calls[0].args, ["sudo", "-n", "/usr/libexec/cockpit-fleet/fleet-secret", "answer"]);
     assert.equal(calls[0].input, "hunter2");
+});
+
+test("frames cut a text into pieces that fit a message, not between the halves of a pair", () => {
+    for (const text of ["", "abc", "è".repeat(100000), "😀".repeat(50000), "a" + "😀".repeat(50000)]) {
+        const pieces = frames(text);
+        assert.equal(pieces.join(""), text);
+        for (const piece of pieces) {
+            assert.ok(Buffer.byteLength(piece) <= FRAME, String(Buffer.byteLength(piece)));
+            assert.ok(!/^[\udc00-\udfff]/.test(piece));
+        }
+    }
+});
+
+test("a large input goes to the process in messages of a frame at most", async () => {
+    setSpawnHandler(() => ok(null));
+    const text = "x".repeat(1024 * 1024);
+    await call("file.write", { text });
+    assert.equal(JSON.parse(calls[0].input ?? "").text, text);
+    assert.ok((calls[0].pieces ?? []).length > 1);
+    assert.ok((calls[0].pieces ?? []).every(piece => Buffer.byteLength(piece) <= FRAME));
 });

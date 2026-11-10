@@ -104,6 +104,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- With Cockpit 370 or later, uploading a project archive, or any large
+  input from the page (a long file saved in the editor, a long message to
+  the chat), no longer closes the Cockpit session ("Disconnected"): the
+  page sends it in pieces of 64 KiB, under the limit cockpit-ws now has on
+  a message from the browser.
 - `run.result` gave a run waiting for approval as done: it is not, and the
   answer says in which mode it waits; `fleet result --wait` waits for it.
 

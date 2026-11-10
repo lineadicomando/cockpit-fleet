@@ -1,5 +1,5 @@
 import cockpit from "cockpit";
-import { AccessError, FLEETCTL, FleetError, accessFailure, call, isElevated } from "./fleet.ts";
+import { AccessError, FLEETCTL, FRAME, FleetError, accessFailure, call, isElevated } from "./fleet.ts";
 
 // The store: files on the controller that playbooks copy to nodes. Its files
 // are of any size, so they do not travel as the parameters of a call: an
@@ -75,10 +75,10 @@ export interface Stored {
     sha256: string;
 }
 
-// Bytes read from the file at a time, and sent without an acknowledgement at
-// most: the page holds no more than that of a file of any size.
-const CHUNK = 1024 * 1024;
-const WINDOW = 16 * CHUNK;
+// Bytes read from the file at a time, one message each, and sent without an
+// acknowledgement at most: the page holds no more than that of a file of any size.
+const CHUNK = FRAME;
+const WINDOW = 16 * 1024 * 1024;
 
 function fleetctl(command: string): string[] {
     return ["sudo", "-n", "-u", "cockpit-fleet", FLEETCTL, command];
