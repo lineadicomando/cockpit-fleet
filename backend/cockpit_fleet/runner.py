@@ -34,7 +34,7 @@ from .validators import (
 )
 
 KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy", "check",
-         "download")
+         "download", "copy")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"

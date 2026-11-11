@@ -6,7 +6,9 @@
 # write in place; what it wrote taken in when it ends; Ansible's temporary
 # files of the controller on disk; a file of root's left out; the digest of
 # a file put there by hand taken by the tick; downloads from URLs, from a
-# container node, and those to the controller's own addresses refused.
+# container node, and those to the controller's own addresses refused;
+# many entries moved and deleted in one call, copies, one of them a job;
+# a folder and a file downloaded as one tar.
 # It DELETES the database, the runs and the store: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -146,6 +148,46 @@ chown cockpit-fleet: "$STORE/hand.txt"
 expect_eq "a file put there by hand has no digest yet" "$(listed "f['hand.txt']['sha256']")" None
 admin scheduler.tick > /dev/null
 expect_eq "the tick takes it" "$(listed "f['hand.txt']['sha256']")" "$(sha256sum "$STORE/hand.txt" | cut -d' ' -f1)"
+
+# --- many at once, and copies ----------------------------------------------------------------
+same() {  # same FILE FILE: "same" when their bytes are
+    [ "$(sha256sum < "$1")" = "$(sha256sum < "$2")" ] && echo same
+}
+mkdir -p "$STORE/many/a" "$STORE/many/b"
+echo one > "$STORE/many/a/one.txt"
+echo two > "$STORE/many/b/two.txt"
+chown -R cockpit-fleet: "$STORE/many"
+moves='{"moves": [{"path": "many/a", "to": "many/c"}, {"path": "many/b/two.txt", "to": "many/two.txt"}]}'
+expect_eq "a viewer may not move" "$(get "$(ctl itviewer store.move "$moves")" 'a["error"]["code"]')" forbidden
+expect_eq "an operator moves two entries in one call" "$(get "$(ctl itoperator store.move "$moves")" 'len(a["data"]["moved"])')" 2
+expect_eq "  they are there" "$(cat "$STORE/many/c/one.txt" "$STORE/many/two.txt" | tr '\n' ' ')" "one two "
+expect_eq "  one record in the audit log" "$(get "$(admin audit.list)" 'sum(e["command"] == "store.move" and e["user"] == "itoperator" for e in a["data"]["entries"])')" 1
+bad='{"moves": [{"path": "many/c", "to": "many/d"}, {"path": "many/two.txt", "to": "apps/setup.msi"}]}'
+expect_eq "nothing moves when one cannot" "$(get "$(ctl itoperator store.move "$bad")" 'a["error"]["code"]')" conflict
+expect_eq "  the first stays where it was" "$(test -d "$STORE/many/c" && echo kept)" kept
+copies='{"copies": [{"path": "many/c", "to": "many/c2"}, {"path": "apps/setup.msi", "to": "many/setup.msi"}]}'
+expect_eq "a small copy is made at once" "$(get "$(ctl itoperator store.copy "$copies")" 'a["data"]["copied"]')" "['many/c2', 'many/setup.msi']"
+expect_eq "  a file of its own, the same bytes" "$(same "$STORE/many/setup.msi" "$STORE/apps/setup.msi"):$(test "$(stat -c %i "$STORE/many/setup.msi")" != "$(stat -c %i "$STORE/apps/setup.msi")" && echo own)" "same:own"
+expect_eq "  its origin and digest" "$(listed "f['many/setup.msi']['origin'] + ' ' + str(f['many/setup.msi']['sha256'])")" "copy $digest"
+head -c 1100000000 /dev/zero > "$STORE/many/large.img"
+chown cockpit-fleet: "$STORE/many/large.img"
+answer=$(ctl itoperator store.copy '{"copies": [{"path": "many/large.img", "to": "many/large-copy.img"}]}')
+run=$(get "$answer" 'a["data"]["run_id"]')
+expect_run "a copy over 1 GiB is a job, in the sandbox of a run" "$run" 300 successful
+expect_eq "  the copy is there, whole" "$(same "$STORE/many/large.img" "$STORE/many/large-copy.img")" same
+expect_eq "  in the list of downloads and copies" "$(get "$(ctl itoperator store.downloads)" 'a["data"]["downloads"][0]["kind"], a["data"]["downloads"][0]["status"]')" "copy successful"
+expect_eq "  its links are gone with the job" "$(test -e "/var/lib/cockpit-fleet/runs/$run/copy" && echo left || echo gone)" gone
+token=$(get "$(ctl itviewer store.list)" 'a["data"]["token"]')
+expect_eq "a listing answers unchanged to its token" "$(get "$(ctl itviewer store.list "{\"since\": \"$token\"}")" 'a["data"].get("unchanged")')" True
+sudo -u itviewer sudo -n -u cockpit-fleet "$FLEETCTL" store.archive many/c2 many/setup.msi > "$WORK/out/a.tar"
+expect_eq "a viewer downloads a folder and a file as one tar, the paths in argv" "$(python3 -c 'import sys, tarfile; print(" ".join(sorted(m.name for m in tarfile.open(sys.argv[1]))))' "$WORK/out/a.tar")" "c2 c2/one.txt setup.msi"
+if sudo -u itviewer sudo -n -u cockpit-fleet "$FLEETCTL" store.archive many/c2 nothing > "$WORK/out/none.tar" 2>/dev/null; then
+    fail "an archive of something missing is an error"
+else
+    expect_eq "an archive of something missing is an error, with nothing written" "$(stat -c %s "$WORK/out/none.tar")" 0
+fi
+expect_eq "many deleted in one call" "$(get "$(ctl itoperator store.delete '{"paths": ["many", "many/c2"]}')" 'a["data"]["deleted"]')" "['many']"
+expect_eq "  then the token is another" "$(get "$(ctl itviewer store.list "{\"since\": \"$token\"}")" 'a["data"].get("unchanged")')" None
 
 # --- downloads from URLs ------------------------------------------------------------------
 : > "$WORK/keys"

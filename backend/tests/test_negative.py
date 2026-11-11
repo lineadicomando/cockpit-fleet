@@ -84,7 +84,8 @@ draft.list admin -            draft.merge admin M
 store.list viewer -           store.get viewer -            store.read viewer M
 store.uploads operator -      store.discard operator M      store.put operator M
 store.mkdir operator M        store.move operator M         store.delete operator M
-store.fetch operator M        store.downloads operator -
+store.fetch operator M        store.downloads operator -     store.copy operator M
+store.archive viewer M
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()

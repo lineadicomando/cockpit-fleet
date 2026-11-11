@@ -438,10 +438,11 @@ def lanes(config) -> list[tuple[str, str, int]]:
     them may run at once."""
     slow = "coalesce(json_extract(options, '$.slow'), 0)"
     # A workflow run has no unit of its own: only its steps count.
-    return [("runs", "kind NOT IN ('check', 'workflow', 'download')", config.max_concurrent_runs),
-            # Downloads into the store: a file of some GB must not hold a lane of
-            # playbooks for its whole time.
-            ("downloads", "kind = 'download'", config.store_max_downloads),
+    return [("runs", "kind NOT IN ('check', 'workflow', 'download', 'copy')",
+             config.max_concurrent_runs),
+            # Downloads into the store, and large copies within it: a file of some
+            # GB must not hold a lane of playbooks for its whole time.
+            ("downloads", "kind IN ('download', 'copy')", config.store_max_downloads),
             ("checks", f"kind = 'check' AND {slow} = 0", config.checks_max_concurrent),
             ("slow", f"kind = 'check' AND {slow} != 0", config.checks_max_concurrent)]
 
@@ -675,6 +676,9 @@ def _collect(ctx, run) -> None:
         if status == "successful" and run["kind"] == "download":
             from . import storage  # it builds on this module
             storage.take_download(ctx, run, directory, result)
+        if status == "successful" and run["kind"] == "copy":
+            from . import storage  # it builds on this module
+            storage.take_copy(ctx, run, directory)
         if status == "successful" and run["kind"] == "galaxy":
             _store_collections(ctx, run, directory)
         elif run["kind"] == "galaxy" and run["project_id"]:
@@ -692,7 +696,7 @@ def _collect(ctx, run) -> None:
         checks.record_cycle(ctx, run, result, status)
     # The copy of the project and the ciphertext are only needed while it runs.
     for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
-                     "collections", "galaxy", "scratch", "store", "download"):
+                     "collections", "galaxy", "scratch", "store", "download", "copy"):
         shutil.rmtree(directory / leftover, ignore_errors=True)
     (directory / "archive").unlink(missing_ok=True)
 

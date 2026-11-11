@@ -530,18 +530,20 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     fleetctl COMMAND < params-line + bytes   a command that streams in: the
                                              parameters on one line, then
                                              the bytes, any number of them
-    fleetctl COMMAND [PATH]                  a command that streams out writes
+    fleetctl COMMAND [PATH...]               a command that streams out writes
                                              the bytes, not an answer, and the
                                              answer to stderr when it fails
                                              (exit status 1); PATH, its only
                                              parameter, may be given here,
                                              where a Cockpit channel opened
-                                             by a link has no input
+                                             by a link has no input; several,
+                                             to one that takes paths
     """
     load_commands()
     spec = COMMANDS.get(argv[1]) if len(argv) > 1 else None
     out = spec is not None and spec.stream == "out"
-    if not (len(argv) == 2 or len(argv) == 3 and out):
+    many = out and "paths" in spec.params
+    if not (len(argv) == 2 or len(argv) == 3 and out or len(argv) > 3 and many):
         print("usage: fleetctl COMMAND < params.json", file=sys.stderr)
         return 2
     try:
@@ -555,8 +557,8 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     os.umask(0o077)
     ctx = Context(resolve_caller(env, service_uid))
     limit = spec.max_input if spec is not None else MAX_INPUT
-    if len(argv) == 3:
-        raw = json.dumps({"path": argv[2]}).encode()
+    if len(argv) > 2:
+        raw = json.dumps({"paths": argv[2:]} if many else {"path": argv[2]}).encode()
     elif spec is not None and spec.stream == "in":
         raw = sys.stdin.buffer.readline(limit + 1)
         ctx.stdin = sys.stdin.buffer

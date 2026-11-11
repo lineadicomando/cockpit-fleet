@@ -28,6 +28,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   progress; downloads have a queue of their own, `[store] max_downloads`
   at once, beside the playbooks. The controller's own addresses and
   link-local ones are refused.
+- `store.copy`: copies within the store, made at once up to 1 GiB in all
+  (on XFS and Btrfs sharing the blocks of the file), by a job beside the
+  downloads above that. `store.move` and `store.delete` take many paths in
+  one call, all or nothing, with one record in the audit trail;
+  `store.list` answers "unchanged" to the token of an earlier listing;
+  `store.archive` writes files and directories of the store out as one
+  tar, streamed: nothing of it is held whole.
 
 - What Ansible writes for a task on the controller (the whole download of a
   `get_url` delegated to it, say) is kept on the disk of the run, not in

@@ -40,14 +40,16 @@ import json
 import os
 import shutil
 import stat
+import tarfile
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import PurePosixPath
 
-from . import audit, fetch, journal, paths, store
+from . import audit, copier, fetch, journal, paths, store
 from .auth import Caller
-from .cli import Bool, Context, Int, Str, Values, command
+from .cli import Bool, Context, Int, Objs, Str, Strs, Values, command
 from .errors import BadRequest, Conflict, NotFound
 from .names import check_id
 from .validators import check_file_path
@@ -238,12 +240,17 @@ def _digest_fd(fd: int) -> str:
 
 # --- commands ---------------------------------------------------------------
 
-@command("store.list", role="viewer")
+@command("store.list", role="viewer", params={
+    "since": Str("The token of an earlier listing: when nothing has changed since,"
+                 " the answer is only unchanged, the token and the free space",
+                 default="", max_length=64),
+})
 def store_list(ctx: Context, params: Values) -> dict:
     """The files and directories of the store, with what is known of each
     file: its size, its digest (null until the tick has taken it), where it
-    came from (upload, run, found when put there by hand), who put it there
-    and when; and how much of the disk the store takes and has left."""
+    came from (upload, run, url, copy, found when put there by hand), who
+    put it there and when; how much of the disk the store takes and has
+    left; and a token that changes with any of it but the free space."""
     files, directories, whole = sync(ctx.conn)
     rows = ctx.conn.execute("SELECT * FROM store_files ORDER BY path").fetchall()
     own = os.geteuid()
@@ -256,9 +263,16 @@ def store_list(ctx: Context, params: Values) -> dict:
         # account's own files (fs.protected_hardlinks).
         listed.append({**_row(row), "usable": status.st_uid == own})
     disk = shutil.disk_usage(paths.STORE_DIR)
+    limit = ctx.config.store_max_gb * 1024 ** 3
+    # The walk of the tree is done either way: what is saved is the answer,
+    # and the page drawing it again.
+    token = hashlib.sha256(json.dumps([listed, directories, whole, limit],
+                                      sort_keys=True).encode()).hexdigest()[:32]
+    if params["since"] == token:
+        return {"unchanged": True, "token": token, "free": disk.free}
     return {"files": listed, "directories": directories, "complete": whole,
             "used": sum(file["size"] for file in listed), "free": disk.free,
-            "limit": ctx.config.store_max_gb * 1024 ** 3}
+            "limit": limit, "token": token}
 
 
 @command("store.get", role="viewer", params={
@@ -306,6 +320,127 @@ def store_read(ctx: Context, params: Values) -> dict:
     os.set_blocking(fd, True)
     ctx.output = os.fdopen(fd, "rb")
     return {"path": str(path), "size": status.st_size}
+
+
+class _Archive:
+    """A tar of entries of the store, made as it is read: a thread writes it
+    into a pipe, whose end main() copies out. Nothing of it is held whole."""
+
+    def __init__(self, entries: list[tuple[str, int | None, os.stat_result]]):
+        reader, writer = os.pipe()
+        self._reader = os.fdopen(reader, "rb")
+        self._writer = os.fdopen(writer, "wb")
+        self._entries = entries
+        # The files not yet handed to the tar, which closes those it has read.
+        self._open = {fd for _name, fd, _status in entries if fd is not None}
+        self._thread = threading.Thread(target=self._write, daemon=True)
+        self._thread.start()
+
+    def _write(self) -> None:
+        try:
+            with tarfile.open(fileobj=self._writer, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+                for name, fd, status in self._entries:
+                    info = tarfile.TarInfo(name)
+                    info.mtime = int(status.st_mtime)
+                    if fd is None:
+                        info.type, info.mode = tarfile.DIRTYPE, 0o755
+                        tar.addfile(info)
+                        continue
+                    info.size, info.mode = status.st_size, 0o644
+                    self._open.discard(fd)
+                    with os.fdopen(fd, "rb") as source:
+                        tar.addfile(info, source)
+        except (OSError, tarfile.TarError):
+            pass  # the reader sees the tar end short: the browser's file is broken
+        finally:
+            for fd in self._open:
+                os.close(fd)
+            self._open.clear()
+            try:
+                self._writer.close()
+            except OSError:
+                pass
+
+    def read(self, size: int = -1) -> bytes:
+        return self._reader.read(size)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._reader.close()
+
+
+@command("store.archive", role="viewer", mutating=True, tool=False, stream="out", params={
+    "paths": Strs("Files and directories of the store, each with what it holds",
+                  max_items=1000),
+})
+def store_archive(ctx: Context, params: Values) -> dict:
+    """Files and directories of the store as one tar, not compressed, written
+    out as it is made; in the audit trail, as a copy of them. Each is named
+    in it from its own name down: a folder win/office is office/ there."""
+    given = [check_file_path(path) for path in params["paths"]]
+    if not given:
+        raise BadRequest("nothing to archive: give paths")
+    chosen = [path for path in dict.fromkeys(given)
+              if not any(path != other and path.is_relative_to(other) for other in given)]
+    names = [path.name for path in chosen]
+    if len(set(names)) != len(names):
+        raise BadRequest("two of them have the same name: archive their folder instead")
+    # Every file opened now: what fails, fails before the first byte.
+    entries: list[tuple[str, int | None, os.stat_result]] = []
+    try:
+        for path in chosen:
+            status = _kind(path)
+            if stat.S_ISREG(status.st_mode):
+                entries.append((path.name, _open_file(path), status))
+                continue
+            fd = _open_dir(path.parts)
+            files: dict[str, os.stat_result] = {}
+            directories: list[str] = []
+            try:
+                if not _walk(fd, "", files, directories):
+                    raise BadRequest(f"{path} holds too many entries to archive")
+            finally:
+                os.close(fd)
+            entries.append((path.name, None, status))
+            inside = sorted([(name, None) for name in directories]
+                            + [(name, files[name]) for name in files])
+            for name, file_status in inside:
+                if file_status is None:
+                    entries.append((f"{path.name}/{name}", None, status))
+                else:
+                    entries.append((f"{path.name}/{name}", _open_file(path / name),
+                                    file_status))
+    except BaseException:
+        for _name, fd, _status in entries:
+            if fd is not None:
+                os.close(fd)
+        raise
+    # What was opened is what is sent: its size as it was opened.
+    entries = [(name, fd, os.fstat(fd) if fd is not None else status)
+               for name, fd, status in entries]
+    ctx.output = _Archive(entries)
+    return {"paths": [str(path) for path in chosen],
+            "size": sum(status.st_size for _name, fd, status in entries if fd is not None)}
+
+
+def _open_file(path: PurePosixPath) -> int:
+    """A file of the store, opened for reading, never through a link."""
+    directory = _open_dir(path.parts[:-1])
+    try:
+        fd = os.open(path.name, _FILE_FLAGS, dir_fd=directory)
+    except FileNotFoundError:
+        raise NotFound(f"no such file in the store: {path}") from None
+    except OSError as error:
+        raise Conflict(f"cannot read {path}: {error.strerror}") from None
+    finally:
+        os.close(directory)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise Conflict(f"{path} is not a file")
+    os.set_blocking(fd, True)
+    return fd
 
 
 def _upload_key(user: str, path: str) -> str:
@@ -478,71 +613,390 @@ def store_mkdir(ctx: Context, params: Values) -> dict:
     return {"path": str(path)}
 
 
+def _pairs(items: list[dict]) -> list[tuple[PurePosixPath, PurePosixPath]]:
+    """The (path, to) pairs of objects with both, checked against each other."""
+    pairs = []
+    for item in items:
+        path = check_file_path(item.get("path"))
+        to = check_file_path(item.get("to"), "to")
+        if to == path or to.is_relative_to(path):
+            raise BadRequest(f"{path} cannot go into itself")
+        pairs.append((path, to))
+    targets = [to for _path, to in pairs]
+    for index, to in enumerate(targets):
+        if any(to == other or to.is_relative_to(other) or other.is_relative_to(to)
+               for other in targets[:index]):
+            raise BadRequest(f"two of them would go to {to}")
+    return pairs
+
+
+def _kind(path: PurePosixPath) -> os.stat_result:
+    """The status of a file or a directory of the store, or NotFound."""
+    parent = _open_dir(path.parts[:-1])
+    try:
+        status = _lstat(parent, path.name)
+    finally:
+        os.close(parent)
+    if status is None or not (stat.S_ISREG(status.st_mode) or stat.S_ISDIR(status.st_mode)):
+        raise NotFound(f"no such file or directory in the store: {path}")
+    return status
+
+
+def _absent(path: PurePosixPath) -> None:
+    """Conflict when PATH is in the store already."""
+    try:
+        parent = _open_dir(path.parts[:-1])
+    except NotFound:
+        return
+    try:
+        if _lstat(parent, path.name) is not None:
+            raise Conflict(f"{path} is already in the store")
+    finally:
+        os.close(parent)
+
+
+def _rename(path: PurePosixPath, to: PurePosixPath) -> None:
+    source = _open_dir(path.parts[:-1])
+    try:
+        target = _open_dir(to.parts[:-1], create=True)
+        try:
+            os.rename(path.name, to.name, src_dir_fd=source, dst_dir_fd=target)
+        finally:
+            os.close(target)
+    finally:
+        os.close(source)
+
+
 @command("store.move", role="operator", mutating=True, agent="code", tool=False, params={
-    "path": Str("A file or a directory of the store", required=True),
-    "to": Str("Its new path, which must not exist", required=True),
+    "path": Str("A file or a directory of the store", default=""),
+    "to": Str("Its new path, which must not exist", default=""),
+    "moves": Objs("Many at once instead: objects with path and to. All are checked"
+                  " before any is made", max_items=1000),
 })
 def store_move(ctx: Context, params: Values) -> dict:
-    """Rename a file or a directory of the store, or move it elsewhere in it."""
-    path, to = check_file_path(params["path"]), check_file_path(params["to"], "to")
-    if to == path or to.is_relative_to(path):
-        raise BadRequest("a directory cannot be moved into itself")
+    """Rename files or directories of the store, or move them elsewhere in
+    it: one, or many at once with one record in the audit trail. Nothing is
+    moved when one of them cannot be: a path that is not there, a new path
+    that is taken, a directory moved into itself."""
+    items = params["moves"] or ([{"path": params["path"], "to": params["to"]}]
+                                if params["path"] or params["to"] else [])
+    if not items:
+        raise BadRequest("nothing to move: give path and to, or moves")
+    pairs = _pairs(items)
+    sources = [path for path, _to in pairs]
+    for index, path in enumerate(sources):
+        if any(path == other or path.is_relative_to(other) or other.is_relative_to(path)
+               for other in sources[:index]):
+            raise BadRequest(f"{path} is given twice, or with a directory that holds it")
+    for _path, to in pairs:
+        if any(to.is_relative_to(source) for source in sources):
+            raise BadRequest(f"{to} would be inside something that is moved")
     with _locked():
-        source = _open_dir(path.parts[:-1])
+        for path, to in pairs:
+            _kind(path)
+            _absent(to)
+        done: list[tuple[PurePosixPath, PurePosixPath]] = []
         try:
-            status = _lstat(source, path.name)
-            if status is None or not (stat.S_ISREG(status.st_mode)
-                                      or stat.S_ISDIR(status.st_mode)):
-                raise NotFound(f"no such file or directory in the store: {path}")
-            target = _open_dir(to.parts[:-1], create=True)
-            try:
-                if _lstat(target, to.name) is not None:
-                    raise Conflict(f"{to} is already in the store")
-                os.rename(path.name, to.name, src_dir_fd=source, dst_dir_fd=target)
-            finally:
-                os.close(target)
-        finally:
-            os.close(source)
+            for path, to in pairs:
+                _rename(path, to)
+                done.append((path, to))
+        except BaseException:
+            # What was moved goes back, so that the call did nothing.
+            for path, to in reversed(done):
+                try:
+                    _rename(to, path)
+                except OSError:
+                    journal.send(f"store: {to} could not be moved back to {path}", 3)
+            raise
         conn = ctx.conn
         conn.execute("BEGIN IMMEDIATE")
         try:
             for row in conn.execute("SELECT path FROM store_files").fetchall():
                 old = PurePosixPath(row["path"])
-                if old == path or old.is_relative_to(path):
-                    new = to / old.relative_to(path) if old != path else to
-                    conn.execute("UPDATE store_files SET path = ? WHERE path = ?",
-                                 (str(new), row["path"]))
+                for path, to in pairs:
+                    if old == path or old.is_relative_to(path):
+                        new = to / old.relative_to(path) if old != path else to
+                        conn.execute("UPDATE store_files SET path = ? WHERE path = ?",
+                                     (str(new), row["path"]))
+                        break
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")
             raise
-    return {"path": str(to)}
+    return {"path": str(pairs[0][1]), "moved": [{"path": str(path), "to": str(to)}
+                                                for path, to in pairs]}
 
 
 @command("store.delete", role="operator", mutating=True, agent="code", tool=False, params={
-    "path": Str("A file, or a directory with all it holds", required=True),
+    "path": Str("A file, or a directory with all it holds", default=""),
+    "paths": Strs("Many at once instead. All must be there for any to go", max_items=1000),
 })
 def store_delete(ctx: Context, params: Values) -> dict:
-    """Delete a file or a directory of the store. Runs under way keep what
-    they were given until they end."""
-    path = check_file_path(params["path"])
+    """Delete files or directories of the store: one, or many at once with
+    one record in the audit trail. Runs under way keep what they were given
+    until they end."""
+    given = params["paths"] or ([params["path"]] if params["path"] else [])
+    if not given:
+        raise BadRequest("nothing to delete: give path or paths")
+    checked = [check_file_path(path) for path in given]
+    # A directory takes what is in it along.
+    gone = [path for path in dict.fromkeys(checked)
+            if not any(path != other and path.is_relative_to(other) for other in checked)]
     with _locked():
-        parent = _open_dir(path.parts[:-1])
-        try:
-            status = _lstat(parent, path.name)
-            if status is None:
-                raise NotFound(f"no such file or directory in the store: {path}")
-            if stat.S_ISDIR(status.st_mode):
-                shutil.rmtree(path.name, dir_fd=parent)
-            else:
-                os.unlink(path.name, dir_fd=parent)
-        finally:
-            os.close(parent)
+        kinds = [_kind(path) for path in gone]
+        for path, status in zip(gone, kinds, strict=True):
+            parent = _open_dir(path.parts[:-1])
+            try:
+                if stat.S_ISDIR(status.st_mode):
+                    shutil.rmtree(path.name, dir_fd=parent)
+                else:
+                    os.unlink(path.name, dir_fd=parent)
+            finally:
+                os.close(parent)
         for row in ctx.conn.execute("SELECT path FROM store_files").fetchall():
             old = PurePosixPath(row["path"])
-            if old == path or old.is_relative_to(path):
+            if any(old == path or old.is_relative_to(path) for path in gone):
                 ctx.conn.execute("DELETE FROM store_files WHERE path = ?", (row["path"],))
-    return {}
+    return {"deleted": [str(path) for path in gone]}
+
+
+# --- copies -------------------------------------------------------------------
+
+class _Copy:
+    """One copy asked for: a file, or a directory with its tree."""
+
+    def __init__(self, path: PurePosixPath, to: PurePosixPath):
+        self.path, self.to = path, to
+        status = _kind(path)
+        self.directory = stat.S_ISDIR(status.st_mode)
+        self.files: dict[str, os.stat_result] = {}
+        self.directories: list[str] = []
+        if self.directory:
+            fd = _open_dir(path.parts)
+            try:
+                if not _walk(fd, "", self.files, self.directories):
+                    raise BadRequest(f"{path} holds too many entries to copy")
+            finally:
+                os.close(fd)
+        else:
+            self.files[""] = status
+
+    @property
+    def size(self) -> int:
+        return sum(status.st_size for status in self.files.values())
+
+
+def _copy_now(ctx: Context, copies: list[_Copy]) -> None:
+    """Each file copied beside the uploads, then put in its place under the
+    lock, as an upload is. One that fails undoes what this call made."""
+    _mkdirs()
+    uploads = os.open(paths.STORE_UPLOADS, _DIR_FLAGS)
+    placed: list[PurePosixPath] = []
+    made: list[PurePosixPath] = []
+    temporary = f"copy-{os.getpid()}"
+    try:
+        for copy in copies:
+            if copy.directory:
+                with _locked():
+                    _absent(copy.to)
+                    for directory in [copy.to, *(copy.to / name for name in copy.directories)]:
+                        os.close(_open_dir(directory.parts, create=True))
+                        made.append(directory)
+            for relative, given in copy.files.items():
+                source = copy.path / relative if relative else copy.path
+                target = copy.to / relative if relative else copy.to
+                parent = _open_dir(source.parts[:-1])
+                try:
+                    fd = os.open(source.name, _FILE_FLAGS, dir_fd=parent)
+                except OSError as error:
+                    raise Conflict(f"cannot read {source}: {error.strerror}") from None
+                finally:
+                    os.close(parent)
+                try:
+                    os.set_blocking(fd, True)
+                    before = os.fstat(fd)
+                    if not stat.S_ISREG(before.st_mode) or before.st_ino != given.st_ino:
+                        raise Conflict(f"{source} changed while it was being copied")
+                    out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                                  | os.O_CLOEXEC, 0o640, dir_fd=uploads)
+                    try:
+                        copier.copy_fd(fd, out, before.st_size)
+                        os.fsync(out)
+                    finally:
+                        os.close(out)
+                    after = os.fstat(fd)
+                finally:
+                    os.close(fd)
+                # The digest of the source, when it is known and the file did not move.
+                row = ctx.conn.execute("SELECT * FROM store_files WHERE path = ?",
+                                       (str(source),)).fetchone()
+                digest = row["sha256"] if row is not None and _seen(before) == _seen(after) \
+                    and (row["inode"], row["size"], row["mtime_ns"]) == _seen(before) else None
+                with _locked():
+                    directory = _place(uploads, temporary, target, False)
+                    try:
+                        status = os.stat(target.name, dir_fd=directory, follow_symlinks=False)
+                    finally:
+                        os.close(directory)
+                    _record(ctx.conn, str(target), status, "copy", str(source),
+                            ctx.caller.user, digest)
+                placed.append(target)
+    except BaseException:
+        try:
+            os.unlink(temporary, dir_fd=uploads)
+        except FileNotFoundError:
+            pass
+        with _locked():
+            for target in placed:
+                parent = _open_dir(target.parts[:-1])
+                try:
+                    os.unlink(target.name, dir_fd=parent)
+                except FileNotFoundError:
+                    pass
+                finally:
+                    os.close(parent)
+                ctx.conn.execute("DELETE FROM store_files WHERE path = ?", (str(target),))
+            for directory in reversed(made):
+                parent = _open_dir(directory.parts[:-1])
+                try:
+                    os.rmdir(directory.name, dir_fd=parent)
+                except OSError:
+                    pass
+                finally:
+                    os.close(parent)
+        raise
+    finally:
+        os.close(uploads)
+
+
+def _copy_later(ctx: Context, copies: list[_Copy], total: int) -> str:
+    """A job for copies too large to make in a call: it is given the files
+    as hard links in its run directory, copy/in/N."""
+    from . import jobs  # it builds on this module
+    run_id = store.new_id("r")
+    directory = jobs.create_dir(run_id)
+    inbox = directory / copier.IN
+    try:
+        inbox.mkdir(mode=0o700, parents=True)
+        target = os.open(inbox, _DIR_FLAGS)
+        try:
+            with _locked():
+                for index, copy in enumerate(copies):
+                    name = str(index)
+                    if copy.directory:
+                        source = _open_dir(copy.path.parts)
+                        try:
+                            os.mkdir(name, 0o700, dir_fd=target)
+                            made = os.open(name, _DIR_FLAGS, dir_fd=target)
+                            refused: list[str] = []
+                            try:
+                                _link_tree(source, made, "", {}, refused)
+                            finally:
+                                os.close(made)
+                        finally:
+                            os.close(source)
+                        if refused:
+                            raise Conflict(f"{copy.path}/{refused[0]} cannot be copied: it is not"
+                                           " the service account's own")
+                    else:
+                        parent = _open_dir(copy.path.parts[:-1])
+                        try:
+                            os.link(copy.path.name, name, src_dir_fd=parent, dst_dir_fd=target,
+                                    follow_symlinks=False)
+                        except OSError as error:
+                            if error.errno == errno.EXDEV:
+                                raise
+                            raise Conflict(f"{copy.path} cannot be copied: it is not the service"
+                                           " account's own") from None
+                        finally:
+                            os.close(parent)
+        finally:
+            os.close(target)
+    except OSError as error:
+        shutil.rmtree(directory, ignore_errors=True)
+        if error.errno == errno.EXDEV:
+            raise Conflict("the store is not on the file system of the runs: copies larger than"
+                           f" {copier.COPY_AT_ONCE // 1024 ** 3} GiB cannot be made") from None
+        raise
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+    asked = [{"path": str(copy.path), "to": str(copy.to)} for copy in copies]
+    title = asked[0]["to"] if len(asked) == 1 else f"{asked[0]['to']} and {len(asked) - 1} more"
+    run = {"id": run_id, "kind": "copy", "title": title,
+           "options": json.dumps({"copies": asked, "total": total})}
+    spec = {"kind": "copy", "items": [{"path": item["path"]} for item in asked], "total": total}
+    jobs.enqueue(ctx, run, spec, directory)
+    return run_id
+
+
+@command("store.copy", role="operator", mutating=True, agent="code", tool=False, params={
+    "copies": Objs("Objects with path (a file or a directory of the store) and to (its"
+                   " copy, which must not exist)", max_items=1000),
+})
+def store_copy(ctx: Context, params: Values) -> dict:
+    """Copy files or directories within the store. Up to 1 GiB in all the
+    copies are made at once, and nothing is made when one fails; larger ones
+    are a job beside the downloads (store.downloads follows it, run.cancel
+    stops it), which copies the files as they were when it was asked. On
+    XFS and Btrfs a copy shares the blocks of its file and takes no time."""
+    if not params["copies"]:
+        raise BadRequest("nothing to copy: give copies")
+    pairs = _pairs(params["copies"])
+    with _locked():
+        copies = [_Copy(path, to) for path, to in pairs]
+        for copy in copies:
+            _absent(copy.to)
+    total = sum(copy.size for copy in copies)
+    _room(ctx, total)
+    if total <= copier.COPY_AT_ONCE:
+        _copy_now(ctx, copies)
+        return {"copied": [str(copy.to) for copy in copies], "size": total}
+    return {"run_id": _copy_later(ctx, copies, total), "size": total}
+
+
+def take_copy(ctx: Context, run, directory) -> None:
+    """When a copy job has ended well: what it made into the store, each
+    where it was asked to go, if that is still free."""
+    options = store.loads(run["options"], {})
+    asked = options.get("copies") or []
+    out = os.open(directory / copier.OUT, _DIR_FLAGS)
+    try:
+        with _locked():
+            pairs = [(check_file_path(item.get("path")), check_file_path(item.get("to"), "to"))
+                     for item in asked]
+            for _path, to in pairs:
+                _absent(to)
+            for index, (path, to) in enumerate(pairs):
+                status = _lstat(out, str(index))
+                if status is None:
+                    raise Conflict(f"the copy of {path} left nothing")
+                if stat.S_ISREG(status.st_mode):
+                    target = _place(out, str(index), to, False)
+                    try:
+                        placed = {str(to): os.stat(to.name, dir_fd=target, follow_symlinks=False)}
+                    finally:
+                        os.close(target)
+                else:
+                    parent = _open_dir(to.parts[:-1], create=True)
+                    try:
+                        os.rename(str(index), to.name, src_dir_fd=out, dst_dir_fd=parent)
+                    finally:
+                        os.close(parent)
+                    fd = _open_dir(to.parts)
+                    placed = {}
+                    try:
+                        _walk(fd, str(to), placed, [])
+                    finally:
+                        os.close(fd)
+                for where, entry in placed.items():
+                    source = path / PurePosixPath(where).relative_to(to) if where != str(to) \
+                        else path
+                    _record(ctx.conn, where, entry, "copy", str(source), run["created_by"])
+    finally:
+        os.close(out)
+    options["size"] = options.get("total")
+    store.update(ctx.conn, "runs", run["id"], {"options": json.dumps(options)}, "run")
 
 
 # --- downloads from URLs -------------------------------------------------------
@@ -599,6 +1053,7 @@ def store_fetch(ctx: Context, params: Values) -> dict:
 
 def _download(row) -> dict:
     options = store.loads(row["options"], {})
+    copies = options.get("copies") if row["kind"] == "copy" else None
     progress: dict = {}
     if row["status"] == "running":
         from . import jobs  # it builds on this module
@@ -609,7 +1064,16 @@ def _download(row) -> dict:
             progress = {}
     received = progress.get("received") if isinstance(progress, dict) else None
     total = progress.get("total") if isinstance(progress, dict) else None
-    return {"run_id": row["id"], "status": row["status"], "url": options.get("url", ""),
+    if copies:
+        received = received if isinstance(received, int) else None
+        return {"run_id": row["id"], "kind": "copy", "status": row["status"], "url": "",
+                "path": row["title"], "source": copies[0].get("path", ""),
+                "count": len(copies), "sha256": "", "replace": False, "received": received,
+                "total": options.get("total"), "size": options.get("size"),
+                "error": row["error"], "created_by": row["created_by"],
+                "created_at": row["created_at"], "finished_at": row["finished_at"]}
+    return {"run_id": row["id"], "kind": "download", "status": row["status"],
+            "url": options.get("url", ""),
             "path": options.get("path", ""), "sha256": options.get("sha256", ""),
             "replace": bool(options.get("replace")),
             "received": received if isinstance(received, int) else None,
@@ -621,12 +1085,12 @@ def _download(row) -> dict:
 
 @command("store.downloads", role="operator")
 def store_downloads(ctx: Context, params: Values) -> dict:
-    """Downloads into the store: those queued or running, with what has
-    arrived of each, and the last ones that ended."""
+    """Downloads into the store, and copies made by a job: those queued or
+    running, with what has arrived of each, and the last ones that ended."""
     from . import jobs  # it builds on this module
     jobs.reconcile(ctx)
     rows = ctx.conn.execute(
-        "SELECT * FROM runs WHERE kind = 'download' ORDER BY"
+        "SELECT * FROM runs WHERE kind IN ('download', 'copy') ORDER BY"
         " status IN ('queued', 'running') DESC, created_at DESC LIMIT ?",
         (_DOWNLOADS_LISTED,)).fetchall()
     return {"downloads": [_download(row) for row in rows]}
