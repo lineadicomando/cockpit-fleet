@@ -23,7 +23,7 @@ import type { IAction } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { ansibleSource } from "../lib/ansible-source.ts";
 import {
-    ancestors, basename, dirname, filterFiles, isInside, isUsablePath, isYaml, relocate, renamed, topmost, type FileNode, type PathChoice,
+    ancestors, basename, dirname, filterFiles, isInside, isUsablePath, isYaml, relocate, renamed, topmost, type FileNode,
 } from "../lib/files.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
@@ -35,7 +35,7 @@ import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { FileTree } from "./FileTree.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
-import { PathInput } from "./PathInput.tsx";
+import { RelocateModal } from "./RelocateModal.tsx";
 import { DraftReview, PendingDrafts } from "./Drafts.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
 import { Alert, FileUpload, Modal, SearchInput, Spinner, TabPanel, Tabs } from "./pf.tsx";
@@ -238,33 +238,6 @@ function PathModal({ title, submitLabel, initial, help, onSubmit, onClose }: {
             <FormGroup label={t("Path")} isRequired fieldId="file-path">
                 <TextInput id="file-path" value={value} onChange={(_e, next) => setValue(next)} spellCheck={false} autoFocus />
                 <FormHelperText><HelperText><HelperTextItem>{help}</HelperTextItem></HelperText></FormHelperText>
-            </FormGroup>
-        </FormModal>
-    );
-}
-
-// Moves or copies files and folders into a folder chosen, or typed.
-function RelocateModal({ paths, copy, directories, onSubmit, onClose }: {
-    paths: string[];
-    copy: boolean;
-    directories: string[];
-    onSubmit: (into: string) => Promise<void>;
-    onClose: () => void;
-}) {
-    const { t } = useTranslation();
-    const [into, setInto] = useState("");
-    const target = into.trim().replace(/\/+$/, "");
-    const moves = target === "" || isUsablePath(target) ? relocate(paths, target) : null;
-    const choices: PathChoice[] = directories.filter(path => !paths.some(moved => isInside(path, moved))).map(path => ({ path, directory: true }));
-    const what = paths.length === 1 ? paths[0] : t("files_count", { count: paths.length });
-    return (
-        <FormModal title={copy ? t("Copy {{what}}", { what }) : t("Move {{what}}", { what })} submitLabel={copy ? t("Copy") : t("Move")}
-            onSubmit={() => onSubmit(target)} onClose={onClose} isDisabled={!moves || moves.length === 0} variant={ModalVariant.small}>
-            <FormGroup label={t("To the folder")} fieldId="relocate-into">
-                <PathInput id="relocate-into" label={t("To the folder")} value={into} onChange={setInto} choices={choices} placeholder={t("The top")} />
-                <FormHelperText><HelperText><HelperTextItem variant={moves === null ? "error" : "default"}>
-                    {moves === null ? t("A folder cannot go into itself.") : t("Empty for the top. A folder that does not exist is created.")}
-                </HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
         </FormModal>
     );

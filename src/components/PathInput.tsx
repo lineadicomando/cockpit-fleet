@@ -9,7 +9,7 @@ const SHOWN = 50;
 
 // A path inside a project, typed freely or picked from the project's own:
 // the list narrows down as one types, and a path not in it is still accepted.
-export function PathInput({ id, label, value, onChange, choices, placeholder }: {
+export function PathInput({ id, label, value, onChange, choices, placeholder, emptyText, toggleLabel }: {
     id: string;
     // What a screen reader says of the field: PatternFly's own is in English.
     label: string;
@@ -17,6 +17,10 @@ export function PathInput({ id, label, value, onChange, choices, placeholder }: 
     onChange: (value: string) => void;
     choices: PathChoice[];
     placeholder?: string;
+    // What the list says with nothing to offer, and what its button is called:
+    // by default, of a project.
+    emptyText?: string;
+    toggleLabel?: string;
 }) {
     const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
@@ -66,7 +70,7 @@ export function PathInput({ id, label, value, onChange, choices, placeholder }: 
     }
 
     const toggle = (toggleRef: React.Ref<HTMLDivElement>) => (
-        <MenuToggle ref={toggleRef} variant="typeahead" aria-label={t("Show the project's paths")} isFullWidth
+        <MenuToggle ref={toggleRef} variant="typeahead" aria-label={toggleLabel ?? t("Show the project's paths")} isFullWidth
             isExpanded={listShown} onClick={() => { setIsOpen(!listShown); input.current?.focus(); }}>
             <TextInputGroup isPlain>
                 <TextInputGroupMain inputId={id} aria-label={label} value={value} placeholder={placeholder} innerRef={input}
@@ -90,7 +94,7 @@ export function PathInput({ id, label, value, onChange, choices, placeholder }: 
             onOpenChange={open => { setIsOpen(open); if (!open) setFocused(null); }}
             toggle={toggle} shouldFocusFirstItemOnOpen={false} isScrollable>
             <SelectList id={listId}>
-                {choices.length === 0 && <SelectOption isDisabled>{t("No file of this project to suggest")}</SelectOption>}
+                {choices.length === 0 && <SelectOption isDisabled>{emptyText ?? t("No file of this project to suggest")}</SelectOption>}
                 {shown.map((choice, index) => (
                     <SelectOption key={choice.path} id={optionId(index)} value={choice.path} isFocused={focused === index}
                         icon={choice.directory ? <FolderIcon /> : <FileIcon />}>

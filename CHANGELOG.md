@@ -28,6 +28,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
   progress; downloads have a queue of their own, `[store] max_downloads`
   at once, beside the playbooks. The controller's own addresses and
   link-local ones are refused.
+- The Store page works as a file manager: search in a folder or in the
+  whole store, columns to sort by, many entries selected and moved or
+  deleted together, drag and drop onto folders and onto the path above,
+  cut and paste (Ctrl+X, Ctrl+V), rename (F2), a menu on the right click
+  and the menu key, a panel of details with the path to use in a playbook,
+  folders uploaded from the desktop, one question for names already there
+  (replace, keep both, skip), and a move undone from its notice. The
+  folder of a download from a URL is chosen from those of the store.
+  Entries are also copied (Ctrl+C, "Copy to…", a drag with Ctrl), and the
+  page shows by itself what runs or hands put in the store.
 - `store.copy`: copies within the store, made at once up to 1 GiB in all
   (on XFS and Btrfs sharing the blocks of the file), by a job beside the
   downloads above that. `store.move` and `store.delete` take many paths in
@@ -35,6 +45,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   `store.list` answers "unchanged" to the token of an earlier listing;
   `store.archive` writes files and directories of the store out as one
   tar, streamed: nothing of it is held whole.
+- Folders of the store, or many files, downloaded as one tar from the Store
+  page; the editor of a playbook completes the paths of the store after
+  `{{ fleet_store }}/`.
 
 - What Ansible writes for a task on the controller (the whole download of a
   `get_url` delegated to it, say) is kept on the disk of the run, not in

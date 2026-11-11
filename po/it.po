@@ -3393,8 +3393,6 @@ msgstr "Cartelle"
 msgid "In {{path}}. A / makes folders within folders."
 msgstr "In {{path}}. Una / crea cartelle dentro cartelle."
 
-msgid "New path in the store"
-msgstr "Nuovo percorso nello store"
 
 msgid "Not for runs"
 msgstr "Non per le esecuzioni"
@@ -3411,11 +3409,7 @@ msgstr "Avanzamento di {{name}}"
 msgid "Put there by hand"
 msgstr "Messo a mano"
 
-msgid "Rename or move"
-msgstr "Rinomina o sposta"
 
-msgid "Rename or move {{name}}"
-msgstr "Rinomina o sposta {{name}}"
 
 msgid "Resume"
 msgstr "Riprendi"
@@ -3444,14 +3438,10 @@ msgstr "Lo store contiene più di quanto si possa elencare qui: ne è mostrata s
 msgid "The store is empty"
 msgstr "Lo store è vuoto"
 
-msgid "The whole path from the top of the store: a/b/name."
-msgstr "Il percorso completo dalla radice dello store: a/b/nome."
 
 msgid "There is no folder {{path}} in the store."
 msgstr "Nello store non c'è la cartella {{path}}."
 
-msgid "These files are already in this folder, and would be replaced:"
-msgstr "Questi file sono già in questa cartella e verrebbero sostituiti:"
 
 msgid "This folder is empty"
 msgstr "Questa cartella è vuota"
@@ -3495,8 +3485,6 @@ msgstr "Scarica da un URL"
 msgid "Download into the store"
 msgstr "Download nello store"
 
-msgid "Downloading"
-msgstr "In download"
 
 msgid "Downloads into the store"
 msgstr "Download nello store"
@@ -3507,8 +3495,187 @@ msgstr "http o https. Gli indirizzi di questo server e quelli link-local vengono
 msgid "Optional: the download fails when the file has another digest."
 msgstr "Facoltativo: il download non riesce se il file ha un altro digest."
 
-msgid "Path in the store"
-msgstr "Percorso nello store"
 
 msgid "Replace a file already there"
 msgstr "Sostituisci un file già presente"
+
+msgid "{{what}} are deleted from the store, {{size}} in all, with everything in the folders among them. Runs under way keep what they were given until they end."
+msgstr "{{what}} vengono eliminati dallo store, {{size}} in tutto, con tutto il contenuto delle cartelle tra di essi. I run in corso tengono ciò che hanno ricevuto fino alla loro fine."
+
+msgid "{{what}} moved to {{folder}}."
+msgstr "Spostato in {{folder}}: {{what}}."
+
+msgid "{{what}} renamed to {{name}}."
+msgstr "{{what}} rinominato in {{name}}."
+
+msgid "{{what}}, {{size}}"
+msgstr "{{what}}, {{size}}"
+
+msgid "A name, without /: the folder is chosen above."
+msgstr "Un nome, senza /: la cartella si sceglie sopra."
+
+msgid "A name, without /: to put it elsewhere, use Move to…"
+msgstr "Un nome, senza /: per metterlo altrove usa Sposta in…"
+
+msgid "Actions of {{name}}"
+msgstr "Azioni di {{name}}"
+
+msgid "Actions of the folder"
+msgstr "Azioni della cartella"
+
+msgid "Close the details"
+msgstr "Chiudi i dettagli"
+
+msgid "Continue"
+msgstr "Continua"
+
+msgid "Copied: {{text}}"
+msgstr "Copiato: {{text}}"
+
+msgid "Copy the path for a playbook"
+msgstr "Copia il percorso per un playbook"
+
+msgid "Cut"
+msgstr "Taglia"
+
+
+msgid "Filter this folder"
+msgstr "Filtra questa cartella"
+
+msgid "Folder"
+msgstr "Cartella"
+
+msgid "Holds"
+msgstr "Contiene"
+
+msgid "In a playbook"
+msgstr "In un playbook"
+
+msgid "In the whole store"
+msgstr "In tutto lo store"
+
+msgid "Keep both"
+msgstr "Mantieni entrambi"
+
+msgid "Move undone."
+msgstr "Spostamento annullato."
+
+msgid "Names already in the store"
+msgstr "Nomi già presenti nello store"
+
+msgid "No folder to suggest"
+msgstr "Nessuna cartella da suggerire"
+
+msgid "No other folder to suggest"
+msgstr "Nessun'altra cartella da suggerire"
+
+msgid "Nothing matches {{query}}."
+msgstr "Nessun risultato per {{query}}."
+
+msgid "Only the others go ahead."
+msgstr "Procedono solo gli altri."
+
+msgid "Paste here"
+msgstr "Incolla qui"
+
+msgid "Paste here: {{what}}"
+msgstr "Incolla qui: {{what}}"
+
+msgid "Paste into this folder"
+msgstr "Incolla in questa cartella"
+
+msgid "Rename {{name}}"
+msgstr "Rinomina {{name}}"
+
+msgid "Replace them"
+msgstr "Sostituiscili"
+
+msgid "Search the whole store"
+msgstr "Cerca in tutto lo store"
+
+msgid "Select {{name}}"
+msgstr "Seleziona {{name}}"
+
+msgid "Select all"
+msgstr "Seleziona tutto"
+
+msgid "Selected"
+msgstr "Selezionati"
+
+msgid "Show the folders"
+msgstr "Mostra le cartelle"
+
+msgid "Skip them"
+msgstr "Saltali"
+
+msgid "The browser did not let the page copy. The path is in the details of the file."
+msgstr "Il browser non ha permesso alla pagina di copiare. Il percorso è nei dettagli del file."
+
+msgid "The files there now are gone. A folder is never replaced."
+msgstr "I file presenti vengono persi. Una cartella non viene mai sostituita."
+
+msgid "There is a file with this name in the folder already."
+msgstr "Nella cartella c'è già un file con questo nome."
+
+msgid "There is already something with this name in the folder."
+msgstr "Nella cartella c'è già qualcosa con questo nome."
+
+msgid "These are already in the store:"
+msgstr "Questi sono già nello store:"
+
+msgid "Undo"
+msgstr "Annulla"
+
+msgid "Upload a folder"
+msgstr "Carica una cartella"
+
+msgid "Upload a folder here"
+msgstr "Carica una cartella qui"
+
+msgid "What comes in gets a number after its name: setup (1).msi."
+msgstr "Ciò che arriva riceve un numero dopo il nome: setup (1).msi."
+
+msgid "the top of the store"
+msgstr "la radice dello store"
+
+msgid "{{what}} are deleted from the store, {{size}} in all. Runs under way keep them until they end."
+msgstr "{{what}} vengono eliminati dallo store, {{size}} in tutto. I run in corso li tengono fino alla loro fine."
+
+msgid "{{size}} to copy: the copy goes on beside the downloads, above."
+msgstr "{{size}} da copiare: la copia prosegue accanto ai download, qui sopra."
+
+msgid "{{what}} copied to {{folder}}."
+msgstr "Copiato in {{folder}}: {{what}}."
+
+msgid "A copy of {{path}}"
+msgstr "Copia di {{path}}"
+
+msgid "A copy of {{path}} and others"
+msgstr "Copia di {{path}} e altri"
+
+msgid "Copy canceled"
+msgstr "Copia annullata"
+
+msgid "Copy failed"
+msgstr "Copia non riuscita"
+
+msgid "Copy undone."
+msgstr "Copia annullata."
+
+msgid "Copy within the store"
+msgstr "Copia nello store"
+
+msgid "Downloads and copies into the store"
+msgstr "Download e copie nello store"
+
+msgid "Drop files or folders from your computer here or onto a folder; drag entries onto a folder, or onto the path above, to move them, holding Ctrl to copy them. Keys: Ctrl+A, Ctrl+X or Ctrl+C and Ctrl+V, Delete, F2, / to search; the menu key or Shift+F10 for an entry's menu."
+msgstr "Rilascia qui o su una cartella file e cartelle dal tuo computer; trascina gli elementi su una cartella, o sul percorso in alto, per spostarli, tenendo premuto Ctrl per copiarli. Tasti: Ctrl+A, Ctrl+X o Ctrl+C e Ctrl+V, Canc, F2, / per cercare; il tasto Menu o Maiusc+F10 per il menu di un elemento."
+
+msgid "Into the store"
+msgstr "Nello store"
+
+msgid "Paste a copy here: {{what}}"
+msgstr "Incolla una copia qui: {{what}}"
+
+msgid "Too many entries for one archive: download the folder they are in."
+msgstr "Troppi elementi per un solo archivio: scarica la cartella che li contiene."

@@ -41,7 +41,7 @@ const MAX_SHOWN = 400_000;
 
 function useKinds() {
     const { t } = useTranslation();
-    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation"), check: t("Check cycle"), workflow: t("Workflow"), download: t("Download into the store") } as Record<Run["kind"], string>;
+    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation"), check: t("Check cycle"), workflow: t("Workflow"), download: t("Download into the store"), copy: t("Copy within the store") } as Record<Run["kind"], string>;
 }
 
 export function RunsPage() {

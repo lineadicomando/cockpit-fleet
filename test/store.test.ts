@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { channels } from "./mocks/cockpit.ts";
-import { describe, downloadUrl, entriesOf, nameFromUrl, putHeader, uploadToStore, type StoreList } from "../src/lib/store.ts";
+import {
+    chosenFolder, describe, downloadUrl, entriesOf, filterEntries, freeName, indexStore, moveInList, nameFromUrl, playbookPath, putHeader,
+    rangeBetween, readDropped, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, type StoreFile, type StoreList,
+    archiveName, archiveUrl, storeChoices, storePathAt,
+} from "../src/lib/store.ts";
 import { FleetError } from "../src/lib/fleet.ts";
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -97,4 +101,123 @@ test("the name of a download is the last part of the URL's path", () => {
     assert.equal(nameFromUrl("https://example.org"), "");
     assert.equal(nameFromUrl("not a url"), "");
     assert.equal(nameFromUrl("https://example.org/a%2Fb%5Cc"), "abc");
+});
+
+function stored(path: string, size = 1, updated_at = 0): StoreFile {
+    return { path, size, sha256: null, origin: "upload", source: "", updated_by: null, updated_at, usable: true };
+}
+
+const STORE: StoreList = {
+    files: [stored("win/setup.msi", 30, 3), stored("win/office/office.iso", 500, 1), stored("readme.txt", 2, 9), stored("win/agent.exe", 10, 5)],
+    directories: ["empty", "win", "win/office"],
+    complete: true, used: 542, free: 1000, limit: 0,
+};
+
+test("indexStore gives each folder its entries, as entriesOf does", () => {
+    const index = indexStore(STORE);
+    for (const directory of ["", "win", "win/office", "empty"]) assert.deepEqual(index.get(directory), entriesOf(STORE, directory).sort((a, b) => a.name.localeCompare(b.name)), directory);
+    assert.deepEqual(index.get("empty"), []);
+});
+
+test("sortEntries keeps folders first and sorts files by the key asked", () => {
+    const entries = indexStore(STORE).get("win")!;
+    assert.deepEqual(sortEntries(entries, { by: "name", ascending: true }).map(entry => entry.name), ["office", "agent.exe", "setup.msi"]);
+    assert.deepEqual(sortEntries(entries, { by: "size", ascending: false }).map(entry => entry.name), ["office", "setup.msi", "agent.exe"]);
+    assert.deepEqual(sortEntries(entries, { by: "updated", ascending: true }).map(entry => entry.name), ["office", "setup.msi", "agent.exe"]);
+    assert.deepEqual(readStoreSort(null), { by: "name", ascending: true });
+    assert.deepEqual(readStoreSort('{"by":"size","ascending":false}'), { by: "size", ascending: false });
+    assert.deepEqual(readStoreSort('{"by":"x"}'), { by: "name", ascending: true });
+});
+
+test("filterEntries and searchStore find by name, the best matches first", () => {
+    assert.deepEqual(filterEntries(indexStore(STORE).get("win")!, "SET").map(entry => entry.name), ["setup.msi"]);
+    const found = searchStore(STORE, "off", 10);
+    assert.deepEqual(found.entries.map(entry => entry.path), ["win/office", "win/office/office.iso"]);
+    assert.deepEqual(searchStore(STORE, "win", 1), { entries: [{ name: "win", path: "win", file: null }], more: 4 });
+    assert.deepEqual(searchStore(STORE, " ", 10).entries, []);
+});
+
+test("sizeOf counts the files inside folders", () => {
+    assert.deepEqual(sizeOf(STORE, ["win/office", "readme.txt"]), { files: 2, bytes: 502 });
+    assert.deepEqual(sizeOf(STORE, ["empty"]), { files: 0, bytes: 0 });
+});
+
+test("freeName adds a number before the extension", () => {
+    assert.equal(freeName("a.iso", new Set()), "a.iso");
+    assert.equal(freeName("a.iso", new Set(["a.iso"])), "a (1).iso");
+    assert.equal(freeName("a.iso", new Set(["a.iso", "a (1).iso"])), "a (2).iso");
+    assert.equal(freeName("x.tar.gz", new Set(["x.tar.gz"])), "x (1).tar.gz");
+    assert.equal(freeName("a.b.c", new Set(["a.b.c"])), "a.b (1).c");
+    assert.equal(freeName(".bashrc", new Set([".bashrc"])), ".bashrc (1)");
+    assert.equal(freeName("folder", new Set(["folder"])), "folder (1)");
+});
+
+test("settle replaces, renames or leaves out what clashes", () => {
+    const taken = new Set(["win/setup.msi", "win"]);
+    const items = [{ path: "win/setup.msi" }, { path: "win/new.msi" }];
+    assert.deepEqual(settle(items, taken, "replace"), [{ path: "win/setup.msi", replace: true }, { path: "win/new.msi", replace: false }]);
+    assert.deepEqual(settle(items, taken, "skip"), [{ path: "win/new.msi", replace: false }]);
+    assert.deepEqual(settle([...items, { path: "win/setup.msi" }], taken, "keep").map(item => item.path),
+        ["win/setup (1).msi", "win/new.msi", "win/setup (2).msi"]);
+});
+
+test("moveInList and removeFromList show a change before the backend answers", () => {
+    const moved = moveInList(STORE, [{ path: "win/office", to: "iso/office" }, { path: "readme.txt", to: "doc/readme.txt" }]);
+    assert.deepEqual(moved.files.map(file => file.path).sort(), ["doc/readme.txt", "iso/office/office.iso", "win/agent.exe", "win/setup.msi"]);
+    assert.deepEqual(moved.directories, ["doc", "empty", "iso", "iso/office", "win"]);
+    const removed = removeFromList(STORE, ["win/office", "readme.txt"]);
+    assert.deepEqual(removed.files.map(file => file.path), ["win/setup.msi", "win/agent.exe"]);
+    assert.deepEqual(removed.directories, ["empty", "win"]);
+});
+
+test("rangeBetween selects what is between two entries, both ways", () => {
+    assert.deepEqual(rangeBetween(["a", "b", "c", "d"], "c", "a"), ["a", "b", "c"]);
+    assert.deepEqual(rangeBetween(["a", "b"], "x", "b"), ["b"]);
+});
+
+test("readDropped reads folders whole, a hundred entries at a time", async () => {
+    const file = (name: string) => ({ isFile: true, isDirectory: false, name, file: (ok: (file: File) => void) => ok(new File(["x"], name)) });
+    const folder = (name: string, children: object[]) => ({
+        isFile: false, isDirectory: true, name,
+        createReader: () => {
+            let given = false;
+            return { readEntries: (ok: (entries: object[]) => void) => { ok(given ? [] : children); given = true; } };
+        },
+    });
+    const dropped = await readDropped([file("a.txt"), folder("iso", [file("b.iso"), folder("empty", []), folder("deep", [file("c")])])] as never);
+    assert.deepEqual(dropped.files.map(item => item.path), ["a.txt", "iso/b.iso", "iso/deep/c"]);
+    assert.deepEqual(dropped.directories, ["iso/empty"]);
+    const chosen = chosenFolder([Object.assign(new File(["x"], "b.iso"), {}), new File(["y"], "c")]);
+    assert.deepEqual(chosen.files.map(item => item.path), ["b.iso", "c"]);
+});
+
+test("playbookPath names a file as a playbook does", () => {
+    assert.equal(playbookPath("win/setup.msi"), "{{ fleet_store }}/win/setup.msi");
+});
+
+test("storePathAt finds a path being typed after {{ fleet_store }}/", () => {
+    assert.deepEqual(storePathAt('    src: "{{ fleet_store }}/'), { folder: "", partial: "" });
+    assert.deepEqual(storePathAt("    src: '{{fleet_store}}/win/office/off"), { folder: "win/office", partial: "off" });
+    assert.deepEqual(storePathAt("src: {{- fleet_store -}}/win/"), { folder: "win", partial: "" });
+    assert.equal(storePathAt('src: "{{ fleet_store }}/win/a.msi" '), null);
+    assert.equal(storePathAt("src: {{ other }}/win"), null);
+    assert.equal(storePathAt("src: {{ fleet_store }}"), null);
+});
+
+test("storeChoices offers a folder's entries, folders first with a slash", () => {
+    assert.deepEqual(storeChoices(STORE, "", ""), [
+        { label: "empty/", folder: true }, { label: "win/", folder: true }, { label: "readme.txt", folder: false, size: 2 },
+    ]);
+    assert.deepEqual(storeChoices(STORE, "win", "S").map(choice => choice.label), ["setup.msi"]);
+    assert.deepEqual(storeChoices(STORE, "nowhere", ""), []);
+});
+
+test("an archive is streamed by store.archive, the paths in argv, under a name that says what it holds", () => {
+    const url = archiveUrl(["win", "readme.txt"], "store.tar");
+    const options = JSON.parse(Buffer.from(url.split("?")[1], "base64").toString());
+    assert.deepEqual(options.spawn.slice(-3), ["store.archive", "win", "readme.txt"]);
+    assert.equal(options.external["content-type"], "application/x-tar");
+    assert.equal(archiveName(["win/office"], "win"), "office.tar");
+    assert.equal(archiveName(["a", "b"], "win/office"), "office.tar");
+    assert.equal(archiveName(["a", "b"], ""), "store.tar");
 });

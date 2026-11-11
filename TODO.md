@@ -74,6 +74,21 @@ the browser, downloads from URLs and the addresses refused). Code:
    an installer downloaded by a run and kept, an ISO uploaded from the page,
    a file fetched from a node, then the phase's acceptance in
    `architecture.md`.
+6. [x] **The Store page as a file manager** (proposal of 11 November).
+   A, the page alone: search in the folder and in the whole store, columns
+   to sort by, many entries selected, "Move to…" and the folder of a
+   download with completion, drag and drop within the store and onto
+   folders, folders uploaded from the desktop, cut and paste, one dialog
+   for names already there, a panel of details with the path for a
+   playbook, a context menu, a move undone.
+7. [x] B, the backend: `store.move` and `store.delete` on many paths in one
+   call (one lock, one audit record); `store.copy` with
+   `os.copy_file_range` (never a hard link: the intake leaves out files
+   with other links), done at once under 1 GiB in all, a job in the lane
+   of downloads above (decided on 11 November); `store.list` answering
+   "unchanged" to a token, the page asking while it is shown.
+8. [x] C: completion of `{{ fleet_store }}/` in the editor of playbooks; a
+   folder or many files downloaded as one tar, streamed.
 
 Open questions for the user: should `inventory.create`/`inventory.update`
 (class config) write a managed inventory through a draft too (today
@@ -89,4 +104,9 @@ webhooks, auto-remediation); `ansible-pull` for very large fleets; secrets
 on OpenBao or Bitwarden; export to Prometheus or InfluxDB; execution
 environments in containers; other controller distributions. A limit on the
 rows of state changes (off by default). Credentials for downloads into the
-store; parts of the store kept for some projects.
+store; parts of the store kept for some projects. Transfers of the store
+over SSH, through `fleet` (SFTP and FTP ruled out on 11 November: a daemon
+or a root chroot, files owned by whoever connects, half-written files
+given to runs, no audit): `fleet store put --file -` from stdin, `fleet
+store ls`, a folder kept in step by digests, so that `ssh controller fleet
+store put …` from another machine keeps roles, audit and resume.

@@ -936,6 +936,80 @@ network and `169.254.169.254`; on `deb13`, 1 GiB queued from the page came
 from a container node in about 10 s, its digest checked, the list of the
 store brought up to date when it landed.
 
+**The page.** The Store page works as a file manager does, on what
+`store.list` gives (one listing of the whole tree, indexed by folder in the
+page): a filter of the folder or a search of the whole store by name,
+columns to sort by (kept in the browser), many entries selected (checkboxes,
+Ctrl or Shift and a click, Ctrl+A), moved by a drag onto a folder or onto
+the path above, by cut and paste (Ctrl+X, Ctrl+V: a clipboard of the page,
+not the system's, which cannot hold a file of the server) or by "Move to…"
+with the folders offered as one types; renamed in place (F2), deleted
+(Delete); files and whole folders dropped from the desktop onto the list or
+onto a folder (the folders read through `webkitGetAsEntry`, an upload per
+file with its path, empty folders made with `store.mkdir`), or chosen with
+"Upload a folder". Names already there are asked about once for all:
+replaced (uploads only: `store.move` never replaces), kept beside under
+`name (1).ext`, or skipped. Each entry has the same actions in its menu ⋮,
+in a menu where the pointer is (right click, the menu key, Shift+F10) and,
+for one entry, in a panel of details beside the list (the digest, where it
+came from, `{{ fleet_store }}/path` to copy into a playbook). A move is
+shown before the backend answers and can be undone from the notice that
+follows it. Many entries are moved, deleted or copied in one call, with
+one record in the audit trail. Every action that a drag does has a key or a menu that does
+it too (WCAG 2.2, 2.5.7). Tried in Chrome on `deb13` on 11 November:
+selection, cut and paste, a drag onto the path, undo, rename, the context
+menu from the keyboard, search, a move and an upload onto names already
+there; the drop of a real folder from a desktop was not (the browser tools
+cannot make one), only the reading of its entries in a unit test.
+
+**Many at once, copies, and a listing that has not changed.** `store.move`
+takes `moves` and `store.delete` takes `paths` besides their single path:
+under one lock every source is looked at and every target found free
+before anything is touched, and a rename that still fails half way puts
+back those made, so that the call did all or nothing. The page cuts or
+copies (Ctrl+X, Ctrl+C), pastes (Ctrl+V), drags with Ctrl to copy, and has
+"Copy to…" beside "Move to…".
+
+`store.copy` takes `copies` (path, to). A file is never a hard link to
+another in the store: the intake of a run leaves out a file with other
+links, and a write in place through one name would change the other. It is
+copied with `copy_file_range`, which on XFS and Btrfs shares the blocks
+(a reflink, at once whatever the size; the store counts the whole size all
+the same) and on ext4 copies in the kernel. Up to 1 GiB in all
+(`copier.COPY_AT_ONCE`, decided on 11 November) `fleetctl` copies at once,
+each file beside the uploads then put in place under the lock as an
+upload is, keeping the digest of its source when the source did not change
+meanwhile; a failure removes what the call made. Above that a call would
+hold the page for tens of seconds on ext4, so it queues a job of kind
+`copy` in the lane of downloads: `store.copy` gives it the files as hard
+links in `runs/<id>/copy/in/N` (they are copied as they were when asked),
+the job (`copier.py`, in the sandbox of a run like every job) copies them
+to `copy/out/N` with a `progress.json` as a download writes, and `_collect`
+puts what it made in place, each target still free (`take_copy`), the tick
+taking the digests. `store.downloads` lists copies beside downloads.
+
+`store.list` answers with a `token`, a digest of what it lists but the free
+space. Given back as `since`, it is answered `unchanged` (with the free
+space) when nothing changed: the walk of the tree is done either way, what
+is saved is the answer and the page drawing it again. The page asks every
+10 s while it is shown, so that what a run or a hand put there appears.
+
+**Archives, and paths in a playbook.** `store.archive` (viewers) writes
+files and directories of the store out as one tar, not compressed (what
+the store holds is installers and images, which do not compress), named in
+it from their own name down. It streams out as `store.read` does, through
+the link of an external channel, so its paths come in argv: `fleetctl
+COMMAND PATH...` takes several for a command that declares `paths`. Every
+file is opened before the first byte, so that a path that is not there
+fails while the answer can still say so; then a thread writes the tar into
+a pipe that `main()` copies out, nothing of it held whole. The paths of a
+link are bounded by the length of a URL: the page refuses a selection whose
+link would pass 6000 characters and asks for its folder instead.
+
+The editor of a project completes a path of the store after
+`{{ fleet_store }}/`, a level at a time (a folder chosen opens what is in
+it), from a `store.list` kept for 30 s.
+
 ## Schedules
 
 A schedule launches a job template at the times of an OnCalendar expression,

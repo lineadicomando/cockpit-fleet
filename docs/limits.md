@@ -34,7 +34,12 @@ in [security.md](security.md); the decisions behind these limits in
   that fails half way leaves a short file in the browser (compare the
   digest shown); a file of root put there by hand is not given to runs;
   one upload of 1.5 GiB dropped on the page failed at once, before reaching
-  the backend, and was not seen again (9 November; the page now says why).
+  the backend, and was not seen again (9 November; the page now says why).; an archive of
+  many entries is bounded by the length of its link (a selection of
+  hundreds goes through its folder), and one whose file shrinks while it is
+  written ends short; a copy shares blocks only on XFS and
+  Btrfs, and counts its whole size against `[store] max_gb` there too; a
+  copy made by a job is of the files as they were when it was asked.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Masking: other encodings, and secrets a run decrypts itself, not masked.
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a

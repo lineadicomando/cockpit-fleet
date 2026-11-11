@@ -1,4 +1,5 @@
 import cockpit from "cockpit";
+import { basename, dirname, isInside, renamed } from "./files.ts";
 import { AccessError, FLEETCTL, FRAME, FleetError, accessFailure, call, isElevated } from "./fleet.ts";
 
 // The store: files on the controller that playbooks copy to nodes. Its files
@@ -6,7 +7,7 @@ import { AccessError, FLEETCTL, FRAME, FleetError, accessFailure, call, isElevat
 // upload is a channel that streams the bytes after its parameters, a
 // download a link the browser saves as it comes.
 
-export type StoreOrigin = "upload" | "run" | "found" | "url";
+export type StoreOrigin = "upload" | "run" | "found" | "url" | "copy";
 
 export interface StoreFile {
     path: string;
@@ -31,6 +32,14 @@ export interface StoreList {
     free: number;
     // Bytes the store may take; 0 for no limit but the disk.
     limit: number;
+    // Changes with the listing; given back as since, it may be answered with StoreUnchanged.
+    token?: string;
+}
+
+export interface StoreUnchanged {
+    unchanged: true;
+    token: string;
+    free: number;
 }
 
 export interface PendingUpload {
@@ -43,6 +52,11 @@ export interface PendingUpload {
 // A download from a URL into the store, as store.downloads gives it.
 export interface StoreDownload {
     run_id: string;
+    // A download from a URL, or a copy within the store too large to make at once.
+    kind?: "download" | "copy";
+    // Of a copy: the first path copied, and how many were.
+    source?: string;
+    count?: number;
     status: "queued" | "running" | "successful" | "failed" | "canceled" | "error";
     url: string;
     path: string;
@@ -201,36 +215,70 @@ function base64(text: string): string {
     return btoa(binary);
 }
 
-// The link that has Cockpit run store.read and hand its output to the
-// browser as a file to save. The path is the one argument fleetctl takes
-// there: a channel opened by a link has no input.
-export function downloadUrl(path: string): string {
-    const name = path.split("/").pop() || "file";
+// The link that has Cockpit run a command of fleetctl that streams out and
+// hand its output to the browser as a file to save. The paths are the
+// arguments fleetctl takes there: a channel opened by a link has no input.
+function streamUrl(command: string, paths: string[], name: string, type: string): string {
     const options = {
         payload: "stream",
         binary: "raw",
-        spawn: [...fleetctl("store.read"), path],
+        spawn: [...fleetctl(command), ...paths],
         environ: ["LC_ALL=C"],
         ...(isElevated() ? { superuser: "try" } : {}),
         external: {
             "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
-            "content-type": "application/octet-stream",
+            "content-type": type,
         },
     };
     const prefix = new URL(cockpit.transport.uri("channel/" + cockpit.transport.csrf_token)).pathname;
     return `${prefix}?${base64(JSON.stringify(options))}`;
 }
 
+export function downloadUrl(path: string): string {
+    return streamUrl("store.read", [path], path.split("/").pop() || "file", "application/octet-stream");
+}
+
+// The paths travel in the link: a long one is refused by the web server on
+// its way, so a selection of many is archived through its folder instead.
+export const ARCHIVE_LINK = 6000;
+
+export function archiveUrl(paths: string[], name: string): string {
+    return streamUrl("store.archive", paths, name, "application/x-tar");
+}
+
+// The name of the tar of PATHS: the folder's own name when it is one.
+export function archiveName(paths: string[], directory: string): string {
+    if (paths.length === 1) return `${basename(paths[0])}.tar`;
+    return `${basename(directory) || "store"}.tar`;
+}
+
+function save(href: string, name: string) {
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+// Saves files and folders of the store as one tar. Asked first whether they
+// are all there: once the browser has begun saving, an error would only be
+// a file with nothing in it.
+export async function downloadArchive(paths: string[], name: string): Promise<void> {
+    const url = archiveUrl(paths, name);
+    if (url.length > ARCHIVE_LINK) throw new Error("too many entries for one archive: download their folder");
+    const list = await call<StoreList>("store.list");
+    const there = new Set([...list.files.map(file => file.path), ...list.directories]);
+    const missing = paths.find(path => !there.has(path));
+    if (missing) throw new Error(`no such file or directory in the store: ${missing}`);
+    save(url, name);
+}
+
 // Saves a file of the store. Asked first: once the browser has begun saving,
 // a refusal would only be a file with nothing in it.
 export async function downloadFromStore(path: string): Promise<StoreFile> {
     const file = await call<StoreFile>("store.get", { path });
-    const link = document.createElement("a");
-    link.href = downloadUrl(path);
-    link.download = path.split("/").pop() || "file";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    save(downloadUrl(path), path.split("/").pop() || "file");
     return file;
 }
 
@@ -252,4 +300,238 @@ export function entriesOf(list: StoreList, directory: string): StoreEntry[] {
 
 export function joinPath(directory: string, name: string): string {
     return directory ? `${directory}/${name}` : name;
+}
+
+// The entries of every directory of the store, each list sorted by name:
+// built once per listing, not each time a folder is drawn.
+export function indexStore(list: StoreList): Map<string, StoreEntry[]> {
+    const index = new Map<string, StoreEntry[]>([["", []]]);
+    const into = (directory: string) => {
+        let entries = index.get(directory);
+        if (!entries) index.set(directory, entries = []);
+        return entries;
+    };
+    for (const path of list.directories) {
+        into(path);
+        into(dirname(path)).push({ name: basename(path), path, file: null });
+    }
+    for (const file of list.files) into(dirname(file.path)).push({ name: basename(file.path), path: file.path, file });
+    for (const entries of index.values()) entries.sort((a, b) => a.name.localeCompare(b.name));
+    return index;
+}
+
+export type StoreSortKey = "name" | "size" | "updated";
+
+export interface StoreSort {
+    by: StoreSortKey;
+    ascending: boolean;
+}
+
+export function readStoreSort(text: string | null): StoreSort {
+    try {
+        const value = JSON.parse(text ?? "") as Partial<StoreSort>;
+        if (value.by === "name" || value.by === "size" || value.by === "updated") return { by: value.by, ascending: value.ascending !== false };
+    } catch {
+        // what was stored is not ours: the default
+    }
+    return { by: "name", ascending: true };
+}
+
+// Folders always first, by name; files by the key asked, then by name.
+export function sortEntries(entries: StoreEntry[], sort: StoreSort): StoreEntry[] {
+    const sign = sort.ascending ? 1 : -1;
+    const key = (entry: StoreEntry) => (sort.by === "size" ? entry.file?.size ?? 0 : entry.file?.updated_at ?? 0);
+    return [...entries].sort((a, b) => {
+        if (!a.file !== !b.file) return a.file ? 1 : -1;
+        if (sort.by === "name" || !a.file) return sign * a.name.localeCompare(b.name);
+        return sign * (key(a) - key(b)) || a.name.localeCompare(b.name);
+    });
+}
+
+// The entries of a folder whose name has QUERY in it, ignoring case.
+export function filterEntries(entries: StoreEntry[], query: string): StoreEntry[] {
+    const wanted = query.trim().toLowerCase();
+    return wanted ? entries.filter(entry => entry.name.toLowerCase().includes(wanted)) : entries;
+}
+
+// Files and folders anywhere in the store whose path has QUERY in it: those
+// whose name starts with it first, then those whose name has it.
+export function searchStore(list: StoreList, query: string, limit: number): { entries: StoreEntry[]; more: number } {
+    const wanted = query.trim().toLowerCase();
+    if (!wanted) return { entries: [], more: 0 };
+    const all: StoreEntry[] = [
+        ...list.directories.map(path => ({ name: basename(path), path, file: null })),
+        ...list.files.map(file => ({ name: basename(file.path), path: file.path, file })),
+    ];
+    const rank = (entry: StoreEntry) => {
+        const name = entry.name.toLowerCase();
+        if (name.startsWith(wanted)) return 0;
+        if (name.includes(wanted)) return 1;
+        return entry.path.toLowerCase().includes(wanted) ? 2 : -1;
+    };
+    const found = all.map(entry => ({ entry, rank: rank(entry) }))
+        .filter(item => item.rank >= 0)
+        .sort((a, b) => a.rank - b.rank || a.entry.path.localeCompare(b.entry.path))
+        .map(item => item.entry);
+    return { entries: found.slice(0, limit), more: Math.max(0, found.length - limit) };
+}
+
+// How many files PATHS hold, folders counted with what is in them, and their bytes.
+export function sizeOf(list: StoreList, paths: string[]): { files: number; bytes: number } {
+    const inside = list.files.filter(file => paths.some(path => isInside(file.path, path)));
+    return { files: inside.length, bytes: inside.reduce((total, file) => total + file.size, 0) };
+}
+
+// A name not in TAKEN: "setup.msi" becomes "setup (1).msi", then "(2)"...
+export function freeName(name: string, taken: Set<string>): string {
+    if (!taken.has(name)) return name;
+    const match = /^(.+?)((?:\.tar)?\.[^./]+)?$/.exec(name);
+    const stem = match?.[1] ?? name;
+    const extension = match?.[2] ?? "";
+    for (let number = 1; ; number++) {
+        const candidate = `${stem} (${number})${extension}`;
+        if (!taken.has(candidate)) return candidate;
+    }
+}
+
+// How a playbook names a file of the store.
+export function playbookPath(path: string): string {
+    return `{{ fleet_store }}/${path}`;
+}
+
+// Where a path of the store is being typed after {{ fleet_store }}/ on a
+// line: the folders written so far, and the part of a name after them.
+export function storePathAt(line: string): { folder: string; partial: string } | null {
+    const found = /\{\{-?\s*fleet_store\s*-?\}\}\/((?:[^\s"'{}/]+\/)*)([^\s"'{}/]*)$/.exec(line);
+    if (!found) return null;
+    return { folder: found[1].replace(/\/$/, ""), partial: found[2] };
+}
+
+// What the store holds in FOLDER whose name starts with PARTIAL (ignoring
+// case): folders first, with a / that goes on to their content.
+export function storeChoices(list: StoreList, folder: string, partial: string): { label: string; folder: boolean; size?: number }[] {
+    const wanted = partial.toLowerCase();
+    return (indexStore(list).get(folder) ?? [])
+        .filter(entry => entry.name.toLowerCase().startsWith(wanted))
+        .sort((a, b) => Number(!!a.file) - Number(!!b.file) || a.name.localeCompare(b.name))
+        .map(entry => (entry.file ? { label: entry.name, folder: false, size: entry.file.size } : { label: `${entry.name}/`, folder: true }));
+}
+
+// The store as it will be once MOVES are done: shown before the backend
+// has answered, and replaced by its listing as soon as it comes.
+export function moveInList(list: StoreList, moves: { path: string; to: string }[]): StoreList {
+    const move = (path: string) => {
+        for (const { path: from, to } of moves) {
+            const next = renamed(path, from, to);
+            if (next !== null) return next;
+        }
+        return path;
+    };
+    const directories = new Set(list.directories.map(move));
+    // The folders a move goes into are made on the way.
+    for (const { to } of moves) {
+        for (let parent = dirname(to); parent; parent = dirname(parent)) directories.add(parent);
+    }
+    return {
+        ...list,
+        files: list.files.map(file => ({ ...file, path: move(file.path) })),
+        directories: [...directories].sort(),
+    };
+}
+
+export function removeFromList(list: StoreList, paths: string[]): StoreList {
+    const gone = (path: string) => paths.some(removed => isInside(path, removed));
+    return { ...list, files: list.files.filter(file => !gone(file.path)), directories: list.directories.filter(path => !gone(path)) };
+}
+
+// The entries from one to the other in the order shown, both included:
+// what a click with Shift selects.
+export function rangeBetween(order: string[], from: string, to: string): string[] {
+    const start = order.indexOf(from);
+    const end = order.indexOf(to);
+    if (start < 0 || end < 0) return [to];
+    return order.slice(Math.min(start, end), Math.max(start, end) + 1);
+}
+
+// A file to upload with its path below the folder it is dropped on, and
+// the folders to make even with nothing in them.
+export interface Dropped {
+    files: { file: File; path: string }[];
+    directories: string[];
+}
+
+// What can be read of a dropped entry: the parts of FileSystemEntry used here.
+interface EntryLike {
+    isFile: boolean;
+    isDirectory: boolean;
+    name: string;
+    file?: (success: (file: File) => void, failure?: (error: unknown) => void) => void;
+    createReader?: () => { readEntries: (success: (entries: EntryLike[]) => void, failure?: (error: unknown) => void) => void };
+}
+
+// The files and folders dropped from the desktop, folders read whole with
+// the paths inside them. A reader gives its entries a hundred at a time.
+export async function readDropped(entries: EntryLike[], prefix = ""): Promise<Dropped> {
+    const dropped: Dropped = { files: [], directories: [] };
+    for (const entry of entries) {
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isFile && entry.file) {
+            const file = await new Promise<File>((resolve, reject) => entry.file!(resolve, reject));
+            dropped.files.push({ file, path });
+        } else if (entry.isDirectory && entry.createReader) {
+            const reader = entry.createReader();
+            const children: EntryLike[] = [];
+            for (;;) {
+                const batch = await new Promise<EntryLike[]>((resolve, reject) => reader.readEntries(resolve, reject));
+                if (!batch.length) break;
+                children.push(...batch);
+            }
+            const inside = await readDropped(children, path);
+            if (!inside.files.length) dropped.directories.push(path);
+            dropped.files.push(...inside.files);
+            dropped.directories.push(...inside.directories);
+        }
+    }
+    return dropped;
+}
+
+// What a drop carries: entries when the browser gives them (folders then
+// keep what is in them), the plain files otherwise.
+export async function droppedOf(transfer: DataTransfer): Promise<Dropped> {
+    const entries = Array.from(transfer.items ?? [])
+        .filter(item => item.kind === "file")
+        .map(item => item.webkitGetAsEntry?.() as EntryLike | null)
+        .filter((entry): entry is EntryLike => !!entry);
+    if (entries.length) return readDropped(entries);
+    return { files: Array.from(transfer.files).map(file => ({ file, path: file.name })), directories: [] };
+}
+
+// The files of a folder chosen with the browser's chooser of folders.
+export function chosenFolder(files: File[]): Dropped {
+    return { files: files.map(file => ({ file, path: file.webkitRelativePath || file.name })), directories: [] };
+}
+
+export type Clash = "replace" | "keep" | "skip";
+
+// Where each item goes when some of their paths are taken: replaced (only
+// files can be), under a free name, or left out. TAKEN are the paths of
+// the store; the new names do not take one another's either.
+export function settle<T extends { path: string }>(items: T[], taken: Set<string>, clash: Clash): (T & { replace: boolean })[] {
+    const used = new Set(taken);
+    const settled: (T & { replace: boolean })[] = [];
+    for (const item of items) {
+        if (!used.has(item.path)) {
+            used.add(item.path);
+            settled.push({ ...item, replace: false });
+        } else if (clash === "replace") {
+            settled.push({ ...item, replace: true });
+        } else if (clash === "keep") {
+            const directory = dirname(item.path);
+            const siblings = new Set([...used].filter(path => dirname(path) === directory).map(basename));
+            const path = joinPath(directory, freeName(basename(item.path), siblings));
+            used.add(path);
+            settled.push({ ...item, path, replace: false });
+        }
+    }
+    return settled;
 }

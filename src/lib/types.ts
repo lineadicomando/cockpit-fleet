@@ -393,7 +393,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow" | "download";
+    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow" | "download" | "copy";
     status: RunStatus;
     title: string;
     template_id: string | null;
