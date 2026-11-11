@@ -1,25 +1,27 @@
 # cockpit-fleet — plan
 
-Status and what is left. Decisions: `docs/decisions.md`; known limits:
-`docs/limits.md`; how each part works and how each phase was accepted:
-`docs/architecture.md` (2700 lines: list its sections with `grep -n '^## '
-docs/architecture.md` and read only the one needed).
+Status and what is left; what is done is in `CHANGELOG.md` and
+`docs/architecture.md`. Decisions: `docs/decisions.md`; known limits:
+`docs/limits.md`. `architecture.md` is long (2900 lines): list its
+sections with `grep -n '^## ' docs/architecture.md` and read only one,
+e.g. `sed -n '/^## The store$/,/^## /p' docs/architecture.md`.
 
-## Status (9 November 2026)
+## Status (11 November 2026)
 
-Phases 0–11 closed; 0.2.0 released on 2 November. Under `[Unreleased]`:
-runs in series, phase 12 (profiles of the assistant: built, waiting for the
-trial below) and phase 13 (the store: points 1–3 done). Commits on `main`
-are not pushed (`git log origin/main..`).
+Phases 0–11 closed; 0.2.0 released on 2 November; the next release would
+be 0.3.0 (`make next-version`), made only when the user asks. Under
+`[Unreleased]`: runs in series, phase 12 (built, waiting for the trial
+below) and phase 13 (the store: all but its acceptance).
 
-To resume: `git status`; `make check`. Each backend module says what it is
-in its docstring; `cli.py` is the registry, `db.py` the schema (26).
+To resume: `git status`; `git log origin/main..` (what is not pushed);
+`make check`. Each backend module says what it is in its docstring;
+`cli.py` is the registry of commands, `db.py` the schema (27).
 
-Tests on 9 November: unit tests (611 backend, 141 frontend); full
-`ct-test` on the three after the store, all passed but `cmdb` on Fedora
-(only in a container: netavark "invalid namespace path", since 1
-November); after the downloads `store`, `negative`, `sandbox` on the three.
-Run two distributions' `ct-test` one after the other, not together.
+Tests on 11 November: unit tests (645 backend, 156 frontend); `ct-test`
+of `store` and `negative` on the three after the sources, `sandbox` after
+the copies. The last full `ct-test` (9 November) passed but `cmdb` on
+Fedora, in a container only (netavark "invalid namespace path", since 1
+November). Run two distributions' `ct-test` one after the other.
 
 ## Phase 12: close it
 
@@ -46,23 +48,24 @@ administrators `docs/chat.md`. Code: `profiles.py`, `autonomy.py`,
 2. [ ] Acceptance of phase 12 in `architecture.md` ("Acceptance of the
    phases"); the state of the VM in `CLAUDE.local.md`.
 
-## Phase 13: the store
+## Phase 13: close it
 
-Decided on 9 November (`decisions.md`, "Store"); design and measures in
-`architecture.md`, "The store" (hard links, intake, uploads, downloads to
-the browser, downloads from URLs and the addresses refused). Code:
-`storage.py`, `fetch.py`, `cli.py` (`stream=` commands), `jobs.py`
-(`dispatch` makes the farm, `_collect` takes it in, lane `downloads`),
-`terminal.py` (`fleet store put/read`); `src/components/StorePage.tsx`,
-`src/lib/store.ts`; `test/integration/store.sh`.
+Design and measures in `architecture.md`, "The store" (hard links and
+intake, uploads, downloads to the browser and from URLs, the page, copies,
+archives, sources); decisions in `decisions.md`, "Store". Code:
 
-1. [x] Prototypes (external channel, binary upload, farm of hard links).
-2. [x] The store: commands, farm and intake, page, `fleet store`, docs.
-3. [x] Downloads from URLs: job `download`, its lane, progress, cancel.
-4. [ ] **Sources**: a file keeps the URL and digest it came from, and is
-   refreshed by a conditional GET (ETag, Last-Modified), by hand and from a
-   schedule; "try again" then resumes from what arrived.
-5. [ ] **Acceptance with `ansible-win_edulab`** (needs `win11` and its own
+- backend: `storage.py` (tree, farm and intake, commands, copies, archive,
+  sources), `fetch.py` (job `download`), `copier.py` (job `copy`),
+  `jobs.py` (lane `downloads`, `_collect`), `maintenance.tidy` (digests,
+  sources due), `terminal.py` (`fleet store put/read`), `cli.py` (`stream=`
+  commands, paths in argv);
+- page: `src/components/StorePage.tsx`, `StoreDialogs.tsx`,
+  `ContextMenu.tsx`, `RelocateModal.tsx`; `src/lib/store.ts`; completion of
+  `{{ fleet_store }}/` in `src/lib/ansible-source.ts`;
+- tests: `backend/tests/test_storage.py`, `test_copy.py`, `test_fetch.py`;
+  `test/store.test.ts`; `test/integration/store.sh`.
+
+1. [ ] **Acceptance with `ansible-win_edulab`** (needs `win11` and its own
    VMs: on `inspiron27`). Its store is `win_workman_storage_path`
    (inventory `school`, `group_vars/all/vars.yaml`): set it to
    `"{{ fleet_store }}"`; its roles `get_url` installers delegated to the
@@ -74,21 +77,9 @@ the browser, downloads from URLs and the addresses refused). Code:
    an installer downloaded by a run and kept, an ISO uploaded from the page,
    a file fetched from a node, then the phase's acceptance in
    `architecture.md`.
-6. [x] **The Store page as a file manager** (proposal of 11 November).
-   A, the page alone: search in the folder and in the whole store, columns
-   to sort by, many entries selected, "Move to…" and the folder of a
-   download with completion, drag and drop within the store and onto
-   folders, folders uploaded from the desktop, cut and paste, one dialog
-   for names already there, a panel of details with the path for a
-   playbook, a context menu, a move undone.
-7. [x] B, the backend: `store.move` and `store.delete` on many paths in one
-   call (one lock, one audit record); `store.copy` with
-   `os.copy_file_range` (never a hard link: the intake leaves out files
-   with other links), done at once under 1 GiB in all, a job in the lane
-   of downloads above (decided on 11 November); `store.list` answering
-   "unchanged" to a token, the page asking while it is shown.
-8. [x] C: completion of `{{ fleet_store }}/` in the editor of playbooks; a
-   folder or many files downloaded as one tar, streamed.
+2. [ ] In Firefox and Chrome, by hand: a folder dropped from the desktop
+   onto the Store page (the browser tools cannot drop one: only the reading
+   of its entries is tested), and a drag with Ctrl that copies.
 
 Open questions for the user: should `inventory.create`/`inventory.update`
 (class config) write a managed inventory through a draft too (today
@@ -103,10 +94,7 @@ Instructions per project for the assistant. External triggers (git
 webhooks, auto-remediation); `ansible-pull` for very large fleets; secrets
 on OpenBao or Bitwarden; export to Prometheus or InfluxDB; execution
 environments in containers; other controller distributions. A limit on the
-rows of state changes (off by default). Credentials for downloads into the
-store; parts of the store kept for some projects. Transfers of the store
-over SSH, through `fleet` (SFTP and FTP ruled out on 11 November: a daemon
-or a root chroot, files owned by whoever connects, half-written files
-given to runs, no audit): `fleet store put --file -` from stdin, `fleet
-store ls`, a folder kept in step by digests, so that `ssh controller fleet
-store put …` from another machine keeps roles, audit and resume.
+rows of state changes (off by default). Store: credentials for downloads,
+parts of it kept for some projects, transfers over SSH through `fleet`
+(`fleet store put --file -` from stdin, `fleet store ls`, a folder kept in
+step by digests; not SFTP or FTP, `decisions.md`).

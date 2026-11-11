@@ -163,7 +163,7 @@ test/integration/negative.sh         # hostile input to every command as each ro
 test/integration/runs.sh             # a whole run through fleetctl; WIPES the database (IT_WIPE=yes)
 test/integration/files.sh            # a project written in the interface, syntax checks; WIPES
 test/integration/upload.sh           # a project uploaded as an archive, hostile archives; WIPES
-test/integration/store.sh            # the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, downloads from a container node and refused addresses; WIPES
+test/integration/store.sh            # the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses; WIPES
 test/integration/galaxy.sh           # collections from a requirements file (IT_GALAXY_NET=yes for git); WIPES
 test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
 test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
