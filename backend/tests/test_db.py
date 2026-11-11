@@ -45,6 +45,21 @@ class DatabaseTest(unittest.TestCase):
             conn.execute("SELECT x FROM later")
             self.assertEqual(conn.execute("SELECT count(*) FROM audit").fetchone()[0], 1)
 
+    def test_files_downloaded_before_keep_their_url_as_source(self):
+        with mock.patch.object(db, "MIGRATIONS", db.MIGRATIONS[:26]):
+            conn = db.connect(self.path)
+        for path, origin, source in (("a.iso", "url", "https://example.org/a.iso"),
+                                     ("b.msi", "upload", "b.msi")):
+            conn.execute("INSERT INTO store_files (path, size, mtime_ns, inode, origin, source,"
+                         " updated_by, updated_at) VALUES (?, 1, 1, 1, ?, ?, 'anna', 5)",
+                         (path, origin, source))
+        conn.close()
+        conn = self.opened(db.connect(self.path))
+        rows = conn.execute("SELECT path, url, every, checked_at, updated_by FROM store_sources"
+                            ).fetchall()
+        self.assertEqual([tuple(row) for row in rows],
+                         [("a.iso", "https://example.org/a.iso", "never", 5, "anna")])
+
     def test_needs_approval_becomes_a_mode(self):
         with mock.patch.object(db, "MIGRATIONS", db.MIGRATIONS[:23]):
             conn = db.connect(self.path)

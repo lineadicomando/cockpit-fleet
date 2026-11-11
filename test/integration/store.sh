@@ -8,7 +8,8 @@
 # a file put there by hand taken by the tick; downloads from URLs, from a
 # container node, and those to the controller's own addresses refused;
 # many entries moved and deleted in one call, copies, one of them a job;
-# a folder and a file downloaded as one tar.
+# a folder and a file downloaded as one tar; a source checked again, not
+# modified then modified.
 # It DELETES the database, the runs and the store: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -215,6 +216,28 @@ expect_run "an operator downloads 256 MB from a node into the store" "$run" 300 
 expect_eq "it is there, whole" "$(sha256sum "$STORE/iso/big.iso" 2>/dev/null | cut -d' ' -f1)" "$big_sha"
 expect_eq "it came from the URL" "$(listed "f['iso/big.iso']['origin'] + ' ' + str(f['iso/big.iso']['sha256'])")" "url $big_sha"
 expect_eq "the list of downloads says so" "$(get "$(ctl itoperator store.downloads)" 'a["data"]["downloads"][0]["status"], a["data"]["downloads"][0]["size"]')" "successful 268435456"
+expect_eq "the URL is kept as the file's source" "$(listed "f['iso/big.iso']['refresh']['url']")" "http://$node:8099/big.iso"
+refresh() {  # refresh PATH: the run that checks it against its source
+    get "$(ctl itoperator store.refresh "{\"paths\": [\"$1\"]}")" 'a["data"]["run_ids"][0]'
+}
+run=$(refresh iso/big.iso)
+expect_run "a check of the source asks conditionally" "$run" 120 successful
+expect_eq "  the server says not modified, and nothing is downloaded" "$(get "$(ctl itoperator store.downloads)" 'a["data"]["downloads"][0]["unchanged"]')" True
+expect_eq "  the file is the same one" "$(sha256sum "$STORE/iso/big.iso" | cut -d' ' -f1)" "$big_sha"
+podman exec fleet-node-1 sh -c 'echo version 1 > /srv/www/notes.txt'
+run=$(get "$(fetch itoperator "http://$node:8099/notes.txt" notes.txt)" 'a["data"]["run_id"]')
+expect_run "a file with no digest given is downloaded" "$run" 120 successful
+podman exec fleet-node-1 sh -c 'sleep 1; echo version 2 > /srv/www/notes.txt; sleep 1; echo version 2 > /srv/www/big.iso'
+run=$(refresh notes.txt)
+expect_run "a check after the file changed there" "$run" 120 successful
+expect_eq "  brings the new version" "$(cat "$STORE/notes.txt")" "version 2"
+expect_eq "  and says when it changed" "$(listed "f['notes.txt']['refresh']['changed_at'] == f['notes.txt']['refresh']['checked_at']")" True
+run=$(refresh iso/big.iso)
+expect_run "a file asked to have a digest refuses another version" "$run" 120 failed
+expect_eq "  it is kept as it was" "$(sha256sum "$STORE/iso/big.iso" | cut -d' ' -f1)" "$big_sha"
+expect_eq "  and the file says the check failed" "$(listed "'digest' in f['iso/big.iso']['refresh']['error']")" True
+expect_eq "how often it is checked is set by an operator" "$(get "$(ctl itoperator store.track '{"path": "notes.txt", "every": "weekly"}')" 'a["data"]["every"]')" weekly
+expect_eq "  not by a viewer" "$(get "$(ctl itviewer store.track '{"path": "notes.txt", "every": "daily"}')" 'a["error"]["code"]')" forbidden
 run=$(get "$(fetch itoperator "http://$node:8099/big.iso" iso/wrong.iso "$(printf '0%.0s' $(seq 64))")" 'a["data"]["run_id"]')
 expect_run "a file with another digest fails" "$run" 300 failed
 expect_eq "and is not kept" "$(test -e "$STORE/iso/wrong.iso" && echo kept || echo gone)" gone

@@ -3679,3 +3679,39 @@ msgstr "Incolla una copia qui: {{what}}"
 
 msgid "Too many entries for one archive: download the folder they are in."
 msgstr "Troppi elementi per un solo archivio: scarica la cartella che li contiene."
+
+msgid "{{size}} arrived before: the download goes on from there, if the file did not change meanwhile."
+msgstr "{{size}} erano già arrivati: il download riprende da lì, se nel frattempo il file non è cambiato."
+
+msgid "A download of it is already under way."
+msgstr "Un suo download è già in corso."
+
+msgid "changed {{time}}"
+msgstr "cambiato {{time}}"
+
+msgid "Check for a newer version"
+msgstr "Controlla se c'è una versione nuova"
+
+msgid "Check the source for a newer version"
+msgstr "Controlla se la sorgente ha una versione nuova"
+
+msgid "Check the sources"
+msgstr "Controlla le sorgenti"
+
+msgid "Checked {{time}}"
+msgstr "Controllato {{time}}"
+
+msgid "Checked: {{every}}"
+msgstr "Controllo: {{every}}"
+
+msgid "Checking against the URL: the downloads above say how it goes."
+msgstr "Controllo in corso presso l'URL: i download qui sopra dicono come va."
+
+msgid "Not changed at the URL"
+msgstr "Non cambiato all'URL"
+
+msgid "The last check failed"
+msgstr "L'ultimo controllo non è riuscito"
+
+msgid "The URL is asked whether the file changed, and it is downloaded again only when it did."
+msgstr "All'URL si chiede se il file è cambiato, e lo si scarica di nuovo solo se lo è."

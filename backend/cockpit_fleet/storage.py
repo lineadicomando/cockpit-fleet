@@ -49,7 +49,7 @@ from pathlib import PurePosixPath
 
 from . import audit, copier, fetch, journal, paths, store
 from .auth import Caller
-from .cli import Bool, Context, Int, Objs, Str, Strs, Values, command
+from .cli import Bool, Choice, Context, Int, Objs, Str, Strs, Values, command
 from .errors import BadRequest, Conflict, NotFound
 from .names import check_id
 from .validators import check_file_path
@@ -180,6 +180,8 @@ def _record(conn, path: str, status: os.stat_result, origin: str, source: str,
         " updated_at = excluded.updated_at",
         (path, status.st_size, status.st_mtime_ns, status.st_ino, sha256, origin, source[:1024],
          user, time.time()))
+    if origin != "url":
+        conn.execute("DELETE FROM store_sources WHERE path = ?", (path,))
 
 
 def sync(conn) -> tuple[dict[str, os.stat_result], list[str], bool]:
@@ -199,6 +201,8 @@ def sync(conn) -> tuple[dict[str, os.stat_result], list[str], bool]:
         if whole:
             for path in rows.keys() - files.keys():
                 conn.execute("DELETE FROM store_files WHERE path = ?", (path,))
+            conn.execute("DELETE FROM store_sources WHERE path NOT IN"
+                         " (SELECT path FROM store_files)")
         conn.execute("COMMIT")
     except BaseException:
         conn.execute("ROLLBACK")
@@ -249,10 +253,13 @@ def store_list(ctx: Context, params: Values) -> dict:
     """The files and directories of the store, with what is known of each
     file: its size, its digest (null until the tick has taken it), where it
     came from (upload, run, url, copy, found when put there by hand), who
-    put it there and when; how much of the disk the store takes and has
+    put it there and when, and of one downloaded from a URL its source
+    (refresh: the URL, how often it is checked, when it last was and last
+    changed, what went wrong); how much of the disk the store takes and has
     left; and a token that changes with any of it but the free space."""
     files, directories, whole = sync(ctx.conn)
     rows = ctx.conn.execute("SELECT * FROM store_files ORDER BY path").fetchall()
+    sources = {row["path"]: row for row in ctx.conn.execute("SELECT * FROM store_sources")}
     own = os.geteuid()
     listed = []
     for row in rows:
@@ -261,7 +268,9 @@ def store_list(ctx: Context, params: Values) -> dict:
             continue
         # A file a run cannot be given: hard links are only made to the
         # account's own files (fs.protected_hardlinks).
-        listed.append({**_row(row), "usable": status.st_uid == own})
+        source = sources.get(row["path"])
+        listed.append({**_row(row), "usable": status.st_uid == own,
+                       "refresh": _source(source) if source is not None else None})
     disk = shutil.disk_usage(paths.STORE_DIR)
     limit = ctx.config.store_max_gb * 1024 ** 3
     # The walk of the tree is done either way: what is saved is the answer,
@@ -718,6 +727,8 @@ def store_move(ctx: Context, params: Values) -> dict:
                         new = to / old.relative_to(path) if old != path else to
                         conn.execute("UPDATE store_files SET path = ? WHERE path = ?",
                                      (str(new), row["path"]))
+                        conn.execute("UPDATE store_sources SET path = ? WHERE path = ?",
+                                     (str(new), row["path"]))
                         break
             conn.execute("COMMIT")
         except BaseException:
@@ -757,6 +768,7 @@ def store_delete(ctx: Context, params: Values) -> dict:
             old = PurePosixPath(row["path"])
             if any(old == path or old.is_relative_to(path) for path in gone):
                 ctx.conn.execute("DELETE FROM store_files WHERE path = ?", (row["path"],))
+                ctx.conn.execute("DELETE FROM store_sources WHERE path = ?", (row["path"],))
     return {"deleted": [str(path) for path in gone]}
 
 
@@ -1015,26 +1027,53 @@ def _room_for(ctx: Context, replacing: int) -> int:
     return max(room, 0)
 
 
-@command("store.fetch", role="operator", mutating=True, agent="code", tool=False, params={
-    "url": Str("An http or https URL, with no user or password in it", required=True),
-    "path": Str("Where the file goes in the store", required=True),
-    "sha256": Str("Its digest: the download fails when the file has another",
-                  default="", max_length=64),
-    "replace": Bool("Replace a file already there"),
-})
-def store_fetch(ctx: Context, params: Values) -> dict:
-    """Queue a download from a URL into the store. A job does it, in the
-    sandbox of a run, beside the playbooks rather than in their queue
-    ([store] max_downloads at once); store.downloads follows it, run.cancel
-    stops it. The controller's own addresses and link-local ones are refused."""
-    url = fetch.check_url(params["url"])
-    path = check_file_path(params["path"])
-    expected = params["sha256"].lower()
-    if expected and not (len(expected) == 64 and all(c in "0123456789abcdef" for c in expected)):
-        raise BadRequest("sha256 must be 64 hexadecimal digits")
+# How often the tick checks a file against its source, in days.
+EVERY = {"never": 0, "daily": 1, "weekly": 7, "monthly": 30}
+# What a download that failed left is kept this long, to be taken up.
+_PARTIAL_AGE = 7 * 86400
+_ENDED = ("failed", "canceled", "error")
+
+
+def _active(ctx: Context, path: str) -> bool:
+    """Whether a download to PATH is queued or running."""
+    return ctx.conn.execute(
+        "SELECT 1 FROM runs WHERE kind = 'download' AND status IN ('queued', 'running')"
+        " AND json_extract(options, '$.path') = ?", (path,)).fetchone() is not None
+
+
+def _partial(ctx: Context, run_id: str, url: str, path: str) -> tuple[object, dict]:
+    """What an earlier download of URL to PATH, run RUN_ID, left: its file
+    and the validators of the version it was."""
+    from . import jobs  # it builds on this module
+    run = ctx.conn.execute("SELECT * FROM runs WHERE id = ?", (check_id(run_id, "resume"),)
+                           ).fetchone()
+    options = store.loads(run["options"], {}) if run is not None else {}
+    if run is None or run["kind"] != "download" or run["status"] not in _ENDED \
+            or options.get("url") != url or options.get("path") != path:
+        raise BadRequest("resume names no download of this URL to this path that ended short")
+    directory = jobs.run_dir(run_id)
+    left = directory / fetch.TARGET
+    try:
+        status = os.lstat(left)
+    except FileNotFoundError:
+        raise Conflict("nothing is left of that download: it starts again") from None
+    if not stat.S_ISREG(status.st_mode):
+        raise Conflict("nothing is left of that download: it starts again")
+    try:
+        progress = json.loads(jobs.read_run_file(directory, fetch.PROGRESS, 4096))
+    except (OSError, ValueError):
+        progress = {}
+    validators = {name: str(progress.get(name, ""))[:512] for name in ("etag", "last_modified")
+                  if isinstance(progress, dict) and progress.get(name)}
+    return left, validators
+
+
+def _queue_download(ctx: Context, url: str, path: PurePosixPath, expected: str, replace: bool,
+                    every: str, extra: dict | None = None, refresh: bool = False,
+                    created_by: str | None = None, partial: tuple | None = None) -> str:
     row = ctx.conn.execute("SELECT size FROM store_files WHERE path = ?",
                            (str(path),)).fetchone()
-    if row is not None and not params["replace"]:
+    if row is not None and not replace:
         raise Conflict(f"{path} is already in the store")
     room = _room_for(ctx, row["size"] if row is not None else 0)
     if room <= 0:
@@ -1042,21 +1081,118 @@ def store_fetch(ctx: Context, params: Values) -> dict:
     from . import jobs  # it builds on this module
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
+    spec = {"kind": "download", "url": url, "sha256": expected, "proxy": ctx.config.proxy,
+            "max_bytes": room, **(extra or {})}
+    if partial is not None:
+        left, validators = partial
+        (directory / fetch.TARGET.parent).mkdir(mode=0o700)
+        try:
+            os.rename(left, directory / fetch.TARGET)
+        except OSError:
+            shutil.rmtree(directory, ignore_errors=True)
+            raise Conflict("what that download left cannot be taken up") from None
+        spec["partial"] = validators
     run = {"id": run_id, "kind": "download", "title": str(path),
            "options": json.dumps({"url": url, "path": str(path), "sha256": expected,
-                                  "replace": params["replace"]})}
-    spec = {"kind": "download", "url": url, "sha256": expected, "proxy": ctx.config.proxy,
-            "max_bytes": room}
+                                  "replace": replace, "every": every, "refresh": refresh})}
+    if created_by is not None:
+        run["created_by"] = created_by
     jobs.enqueue(ctx, run, spec, directory)
-    return {"run_id": run_id}
+    return run_id
+
+
+@command("store.fetch", role="operator", mutating=True, agent="code", tool=False, params={
+    "url": Str("An http or https URL, with no user or password in it", required=True),
+    "path": Str("Where the file goes in the store", required=True),
+    "sha256": Str("Its digest: the download fails when the file has another",
+                  default="", max_length=64),
+    "replace": Bool("Replace a file already there"),
+    "every": Choice(tuple(EVERY), "How often the file is checked against the URL afterwards,"
+                    " and downloaded again when it changed there", default="never"),
+    "resume": Str("A download of the same URL to the same path that ended short: what it"
+                  " left is taken up rather than downloaded again", default="", max_length=64),
+})
+def store_fetch(ctx: Context, params: Values) -> dict:
+    """Queue a download from a URL into the store. A job does it, in the
+    sandbox of a run, beside the playbooks rather than in their queue
+    ([store] max_downloads at once); store.downloads follows it, run.cancel
+    stops it. The controller's own addresses and link-local ones are refused.
+    The file keeps the URL as its source: store.refresh checks it again."""
+    url = fetch.check_url(params["url"])
+    path = check_file_path(params["path"])
+    expected = params["sha256"].lower()
+    if expected and not (len(expected) == 64 and all(c in "0123456789abcdef" for c in expected)):
+        raise BadRequest("sha256 must be 64 hexadecimal digits")
+    partial = _partial(ctx, params["resume"], url, str(path)) if params["resume"] else None
+    return {"run_id": _queue_download(ctx, url, path, expected, params["replace"],
+                                      params["every"], partial=partial)}
+
+
+def _refresh(ctx: Context, source, created_by: str | None = None) -> str:
+    """A conditional download of the source of a file: a 304 leaves it be."""
+    path = check_file_path(source["path"])
+    ctx.conn.execute("UPDATE store_sources SET tried_at = ? WHERE path = ?",
+                     (time.time(), source["path"]))
+    return _queue_download(ctx, source["url"], path, source["sha256"], True, source["every"],
+                           {"etag": source["etag"], "last_modified": source["last_modified"]},
+                           refresh=True, created_by=created_by)
+
+
+@command("store.refresh", role="operator", mutating=True, agent="code", tool=False, params={
+    "paths": Strs("Files of the store downloaded from a URL", max_items=1000),
+})
+def store_refresh(ctx: Context, params: Values) -> dict:
+    """Check files of the store against the URLs they came from, now: each a
+    conditional download (ETag, Last-Modified) that changes nothing when the
+    file there is the same, and replaces it when it is not. A file whose
+    download is already under way is skipped."""
+    if not params["paths"]:
+        raise BadRequest("nothing to check: give paths")
+    sources = []
+    for given in params["paths"]:
+        path = str(check_file_path(given))
+        source = ctx.conn.execute("SELECT * FROM store_sources WHERE path = ?",
+                                  (path,)).fetchone()
+        if source is None:
+            raise NotFound(f"{path} was not downloaded from a URL")
+        sources.append(source)
+    queued, skipped = [], []
+    for source in sources:
+        if _active(ctx, source["path"]):
+            skipped.append(source["path"])
+        else:
+            queued.append(_refresh(ctx, source))
+    return {"run_ids": queued, "skipped": skipped}
+
+
+@command("store.track", role="operator", mutating=True, agent="code", tool=False, params={
+    "path": Str("A file of the store downloaded from a URL", required=True),
+    "every": Choice(tuple(EVERY), "How often the tick checks it against the URL",
+                    default="never"),
+})
+def store_track(ctx: Context, params: Values) -> dict:
+    """Set how often a file downloaded from a URL is checked against it, and
+    downloaded again when it changed there: never, daily, weekly, monthly."""
+    path = str(check_file_path(params["path"]))
+    changed = ctx.conn.execute(
+        "UPDATE store_sources SET every = ?, updated_by = ?, updated_at = ? WHERE path = ?",
+        (params["every"], ctx.caller.user, time.time(), path)).rowcount
+    if not changed:
+        raise NotFound(f"{path} was not downloaded from a URL")
+    return {"path": path, "every": params["every"]}
+
+
+def _source(row) -> dict:
+    return {"url": row["url"], "every": row["every"], "checked_at": row["checked_at"],
+            "changed_at": row["changed_at"], "error": row["error"]}
 
 
 def _download(row) -> dict:
     options = store.loads(row["options"], {})
     copies = options.get("copies") if row["kind"] == "copy" else None
     progress: dict = {}
+    from . import jobs  # it builds on this module
     if row["status"] == "running":
-        from . import jobs  # it builds on this module
         try:
             progress = json.loads(jobs.read_run_file(jobs.run_dir(row["id"]), fetch.PROGRESS,
                                                      4096))
@@ -1072,10 +1208,20 @@ def _download(row) -> dict:
                 "total": options.get("total"), "size": options.get("size"),
                 "error": row["error"], "created_by": row["created_by"],
                 "created_at": row["created_at"], "finished_at": row["finished_at"]}
+    # What a download that ended short left, to be taken up.
+    partial = 0
+    if row["status"] in _ENDED:
+        try:
+            left = os.lstat(jobs.run_dir(row["id"]) / fetch.TARGET)
+            partial = left.st_size if stat.S_ISREG(left.st_mode) else 0
+        except OSError:
+            partial = 0
     return {"run_id": row["id"], "kind": "download", "status": row["status"],
             "url": options.get("url", ""),
             "path": options.get("path", ""), "sha256": options.get("sha256", ""),
-            "replace": bool(options.get("replace")),
+            "replace": bool(options.get("replace")), "every": options.get("every", "never"),
+            "refresh": bool(options.get("refresh")), "unchanged": bool(options.get("unchanged")),
+            "partial": partial,
             "received": received if isinstance(received, int) else None,
             "total": total if isinstance(total, int) else None,
             "size": options.get("size"), "error": row["error"],
@@ -1086,7 +1232,8 @@ def _download(row) -> dict:
 @command("store.downloads", role="operator")
 def store_downloads(ctx: Context, params: Values) -> dict:
     """Downloads into the store, and copies made by a job: those queued or
-    running, with what has arrived of each, and the last ones that ended."""
+    running, with what has arrived of each, and the last ones that ended;
+    of one that ended short, how much it left to be taken up (partial)."""
     from . import jobs  # it builds on this module
     jobs.reconcile(ctx)
     rows = ctx.conn.execute(
@@ -1097,17 +1244,30 @@ def store_downloads(ctx: Context, params: Values) -> dict:
 
 
 def take_download(ctx: Context, run, directory, result: dict) -> None:
-    """When a download has ended well: its file into the store. The digest
-    is the job's, which took it as the bytes came (and checked the one it
-    was given); the tick takes it again only if the file changes."""
+    """When a download has ended well: its file into the store, and the URL
+    as its source. The digest is the job's, which took it as the bytes came
+    (and checked the one it was given); the tick takes it again only if the
+    file changes. A check that found the file unchanged moves nothing."""
     options = store.loads(run["options"], {})
     path = check_file_path(options.get("path"))
+    now = time.time()
+    validators = {name: str(result.get(name) or "")[:512] for name in ("etag", "last_modified")}
+    if result.get("unchanged"):
+        ctx.conn.execute(
+            "UPDATE store_sources SET checked_at = ?, error = '',"
+            " etag = CASE WHEN ? != '' THEN ? ELSE etag END,"
+            " last_modified = CASE WHEN ? != '' THEN ? ELSE last_modified END WHERE path = ?",
+            (now, validators["etag"], validators["etag"], validators["last_modified"],
+             validators["last_modified"], str(path)))
+        options["unchanged"] = True
+        store.update(ctx.conn, "runs", run["id"], {"options": json.dumps(options)}, "run")
+        return
     parent = os.open(directory / fetch.TARGET.parent, _DIR_FLAGS)
     try:
         status = os.stat(fetch.TARGET.name, dir_fd=parent, follow_symlinks=False)
         if not stat.S_ISREG(status.st_mode) or status.st_nlink != 1:
             raise Conflict("the download left no file")
-        row = ctx.conn.execute("SELECT size FROM store_files WHERE path = ?",
+        row = ctx.conn.execute("SELECT size, sha256 FROM store_files WHERE path = ?",
                                (str(path),)).fetchone()
         _room(ctx, status.st_size, row["size"] if row is not None else 0)
         fd = os.open(fetch.TARGET.name, _FILE_FLAGS, dir_fd=parent)
@@ -1124,12 +1284,69 @@ def take_download(ctx: Context, run, directory, result: dict) -> None:
             digest = result.get("sha256")
             valid = isinstance(digest, str) and len(digest) == 64 \
                 and placed.st_size == status.st_size
-            _record(ctx.conn, str(path), placed, "url", str(options.get("url", "")),
-                    run["created_by"], digest if valid else None)
+            url = str(options.get("url", ""))
+            _record(ctx.conn, str(path), placed, "url", url, run["created_by"],
+                    digest if valid else None)
+            # A file the same as the one it replaced did not change.
+            changed = row is None or not valid or row["sha256"] != digest
+            previous = ctx.conn.execute("SELECT * FROM store_sources WHERE path = ?",
+                                        (str(path),)).fetchone()
+            every = options.get("every") if options.get("every") in EVERY else "never"
+            if previous is not None and options.get("refresh"):
+                every = previous["every"]
+            ctx.conn.execute(
+                "INSERT INTO store_sources (path, url, sha256, etag, last_modified, every,"
+                " checked_at, changed_at, tried_at, error, updated_by, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)"
+                " ON CONFLICT (path) DO UPDATE SET url = excluded.url, sha256 = excluded.sha256,"
+                " etag = excluded.etag, last_modified = excluded.last_modified,"
+                " every = excluded.every, checked_at = excluded.checked_at,"
+                " changed_at = CASE WHEN ? THEN excluded.changed_at ELSE changed_at END,"
+                " tried_at = excluded.tried_at, error = ''",
+                (str(path), url, str(options.get("sha256", "")), validators["etag"],
+                 validators["last_modified"], every, now, now, now, run["created_by"], now,
+                 changed or previous is None))
     finally:
         os.close(parent)
     options["size"] = status.st_size
     store.update(ctx.conn, "runs", run["id"], {"options": json.dumps(options)}, "run")
+
+
+def download_ended_short(ctx: Context, run, error: str) -> None:
+    """A check of a source that failed says so on the file."""
+    options = store.loads(run["options"], {})
+    if options.get("refresh"):
+        ctx.conn.execute("UPDATE store_sources SET error = ? WHERE path = ? AND url = ?",
+                         ((error or "the check failed")[:1000], options.get("path"),
+                          options.get("url")))
+
+
+def refresh_due(ctx: Context, now: float) -> int:
+    """At each tick: the files whose source is due to be checked, queued as
+    who set how often; what failed downloads left dropped after a week.
+    How many were queued."""
+    queued = 0
+    for source in ctx.conn.execute("SELECT * FROM store_sources WHERE every != 'never'"
+                                   " ORDER BY path").fetchall():
+        last = max(source["tried_at"] or 0, source["checked_at"] or 0) or source["updated_at"]
+        if now - last < EVERY[source["every"]] * 86400 or _active(ctx, source["path"]):
+            continue
+        user = source["updated_by"] or ""
+        try:
+            run_id = _refresh(ctx, source, created_by=user or None)
+        except (BadRequest, Conflict, NotFound) as error:
+            ctx.conn.execute("UPDATE store_sources SET tried_at = ?, error = ? WHERE path = ?",
+                             (now, str(error)[:1000], source["path"]))
+            continue
+        audit.record(ctx.conn, Caller(-1, user, None), "store.refresh",
+                     {"paths": [source["path"]], "every": source["every"]}, "ok", run_id)
+        queued += 1
+    from . import jobs  # it builds on this module
+    for row in ctx.conn.execute(
+            "SELECT id FROM runs WHERE kind = 'download' AND status IN ('failed', 'canceled',"
+            " 'error') AND finished_at < ?", (now - _PARTIAL_AGE,)).fetchall():
+        shutil.rmtree(jobs.run_dir(row["id"]) / fetch.TARGET.parent, ignore_errors=True)
+    return queued
 
 
 # --- the farm of a run ------------------------------------------------------

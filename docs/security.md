@@ -66,7 +66,10 @@ else. An administrator of the machine can, of course, do anything.
    mirrors live there, and so may internal services, which an operator
    could then read through the store. Where that matters, give the
    controller a proxy (`[network] proxy`) that allows only what downloads
-   need.
+   need. A file downloaded from a URL may be checked against it again,
+   by hand or every day, week or month: what the URL serves then replaces
+   it and reaches the next runs, so give a digest (`sha256`) to a file that
+   must not change, which then refuses another version.
    Each run has its own process and IPC namespaces, so that one run cannot
    reach the secrets of another through its processes, though all run as
    the same account. sudo and setuid programs do nothing inside it.

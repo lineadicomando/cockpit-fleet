@@ -48,6 +48,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - Folders of the store, or many files, downloaded as one tar from the Store
   page; the editor of a playbook completes the paths of the store after
   `{{ fleet_store }}/`.
+- A file downloaded from a URL keeps it as its source: it is checked
+  again with a conditional request (ETag, Last-Modified), from the Store
+  page or `store.refresh`, and every day, week or month if asked
+  (`store.track`), and downloaded again only when it changed there. A
+  download that ended short is resumed where it stopped, for a week.
 
 - What Ansible writes for a task on the controller (the whole download of a
   `get_url` delegated to it, say) is kept on the disk of the run, not in

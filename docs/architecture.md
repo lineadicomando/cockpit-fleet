@@ -919,6 +919,32 @@ Downloads have a lane of their own in `dispatch` (`[store]
 max_downloads`, 2): a file of some gigabytes must not hold a place of the
 playbooks for its whole time. `run.cancel` stops one as it stops a run.
 
+**Sources.** A file downloaded from a URL keeps it as its source
+(`store_sources`, schema 27; the files downloaded before were given one by
+the migration): the URL, the digest it was asked to have, the validators
+the server gave (ETag, Last-Modified), how often it is checked (`never`,
+`daily`, `weekly`, `monthly`, `store.track`), when it was last checked and
+last changed, and what went wrong. A file replaced by other means (an
+upload, a run, a copy, a hand) leaves its source; a move takes it along;
+a delete drops it. `store.refresh` (operators) queues a download of the
+source with `If-None-Match` and `If-Modified-Since`: a 304 leaves the file
+as it is and says so (`unchanged`), anything else replaces it, and the
+digest tells whether it really changed (`changed_at`). The tick queues the
+checks that are due, as the person who set how often, with a record in
+the audit trail; one at a time for a file, a failure kept on the file.
+Checks from the tick, rather than schedules of their own, because a
+schedule launches a template: a source has nothing to choose but how
+often (decided on 11 November).
+
+A download that ends short (failed, canceled) keeps what arrived in its
+run directory for a week, with the validators of the version it was in
+`progress.json`; `store.downloads` says how much (`partial`), and "Resume"
+on the page is `store.fetch` with `resume`: the bytes move into the new
+run, which digests them and asks for the rest with `Range` and `If-Range`
+(a strong ETag, else Last-Modified; with neither it starts again). A
+server whose file changed meanwhile answers with the whole file, which
+then starts from nothing.
+
 An operator may now make the controller open a URL, which a playbook of an
 administrator could already do but an operator could not. The job refuses
 the controller's own addresses (loopback, and those of its interfaces, read

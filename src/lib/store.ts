@@ -21,6 +21,19 @@ export interface StoreFile {
     updated_at: number;
     // False for a file a run cannot be given: not the service account's own.
     usable: boolean;
+    // Of a file downloaded from a URL: where from, and how checking it goes.
+    refresh?: StoreSource | null;
+}
+
+export type Every = "never" | "daily" | "weekly" | "monthly";
+export const EVERY: Every[] = ["never", "daily", "weekly", "monthly"];
+
+export interface StoreSource {
+    url: string;
+    every: Every;
+    checked_at: number | null;
+    changed_at: number | null;
+    error: string;
 }
 
 export interface StoreList {
@@ -57,6 +70,13 @@ export interface StoreDownload {
     // Of a copy: the first path copied, and how many were.
     source?: string;
     count?: number;
+    // Of a download: how often the file is checked afterwards; whether this
+    // was a check of a file the store had, which found it unchanged; and the
+    // bytes one that ended short left, to be taken up.
+    every?: Every;
+    refresh?: boolean;
+    unchanged?: boolean;
+    partial?: number;
     status: "queued" | "running" | "successful" | "failed" | "canceled" | "error";
     url: string;
     path: string;

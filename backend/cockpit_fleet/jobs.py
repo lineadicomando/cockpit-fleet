@@ -676,6 +676,9 @@ def _collect(ctx, run) -> None:
         if status == "successful" and run["kind"] == "download":
             from . import storage  # it builds on this module
             storage.take_download(ctx, run, directory, result)
+        elif run["kind"] == "download":
+            from . import storage  # it builds on this module
+            storage.download_ended_short(ctx, run, error or status)
         if status == "successful" and run["kind"] == "copy":
             from . import storage  # it builds on this module
             storage.take_copy(ctx, run, directory)
@@ -697,6 +700,9 @@ def _collect(ctx, run) -> None:
     # The copy of the project and the ciphertext are only needed while it runs.
     for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
                      "collections", "galaxy", "scratch", "store", "download", "copy"):
+        # What a download that ended short brought is kept a week, to be taken up.
+        if leftover == "download" and run["kind"] == "download" and status != "successful":
+            continue
         shutil.rmtree(directory / leftover, ignore_errors=True)
     (directory / "archive").unlink(missing_ok=True)
 

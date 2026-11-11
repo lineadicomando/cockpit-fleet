@@ -124,6 +124,7 @@ export function StorePage({ directory }: { directory: string }) {
     const canMove = can("store.move");
     const canDelete = can("store.delete");
     const canCopy = can("store.copy");
+    const canRefresh = can("store.refresh");
     const go = (path: string) => cockpit.location.go(["store", ...(path ? path.split("/") : [])]);
 
     useEffect(() => {
@@ -406,6 +407,23 @@ export function StorePage({ directory }: { directory: string }) {
         await act(() => downloadFromStore(path));
     }
 
+    // Files downloaded from a URL, checked against it now.
+    async function checkSources(paths: string[]) {
+        setError(null);
+        setNotice(null);
+        try {
+            const done = await call<{ run_ids: string[]; skipped: string[] }>("store.refresh", { paths });
+            setNotice({
+                text: done.run_ids.length
+                    ? t("Checking against the URL: the downloads above say how it goes.")
+                    : t("A download of it is already under way."),
+            });
+            downloads.reload();
+        } catch (ex) {
+            setError(message(ex));
+        }
+    }
+
     // Folders, or many entries, as one tar made while it downloads.
     async function downloadMany(paths: string[]) {
         const gone = topmost(paths);
@@ -461,6 +479,7 @@ export function StorePage({ directory }: { directory: string }) {
             if (entry.file) {
                 items.push({ title: t("Download"), onClick: () => download(entry.path) });
                 items.push({ title: t("Copy the path for a playbook"), onClick: () => copyPlaybookPath(entry.path) });
+                if (entry.file.refresh && canRefresh) items.push({ title: t("Check the source for a newer version"), onClick: () => checkSources([entry.path]) });
             } else {
                 items.push({ title: t("Open"), onClick: () => go(entry.path) });
                 items.push({ title: t("Download as an archive"), onClick: () => downloadMany([entry.path]) });
@@ -639,6 +658,9 @@ export function StorePage({ directory }: { directory: string }) {
                         {chosen.length === 1 && data?.files.some(file => file.path === chosen[0])
                             ? <ToolbarItem><Button variant="secondary" size="sm" onClick={() => download(chosen[0])}>{t("Download")}</Button></ToolbarItem>
                             : <ToolbarItem><Button variant="secondary" size="sm" onClick={() => downloadMany(chosen)}>{t("Download as an archive")}</Button></ToolbarItem>}
+                        {canRefresh && chosen.every(path => data?.files.some(file => file.path === path && file.refresh)) && (
+                            <ToolbarItem><Button variant="secondary" size="sm" onClick={() => checkSources(chosen)}>{t("Check the sources")}</Button></ToolbarItem>
+                        )}
                         {canMove && <ToolbarItem><Button variant="secondary" size="sm" onClick={() => setDialog({ kind: "move", paths: chosen })}>{t("Move to…")}</Button></ToolbarItem>}
                         {canCopy && <ToolbarItem><Button variant="secondary" size="sm" onClick={() => setDialog({ kind: "copy", paths: chosen })}>{t("Copy to…")}</Button></ToolbarItem>}
                         {canMove && <ToolbarItem><Button variant="secondary" size="sm" onClick={() => setClip({ paths: chosen, copy: false })}>{t("Cut")}</Button></ToolbarItem>}
@@ -836,7 +858,9 @@ export function StorePage({ directory }: { directory: string }) {
                                             label={item.status === "queued" ? t("Waiting")
                                                 : item.total ? `${formatBytes(item.received ?? 0)} / ${formatBytes(item.total)}`
                                                 : formatBytes(item.received ?? 0)} />
-                                        : item.status === "successful"
+                                        : item.status === "successful" && item.unchanged
+                                            ? <Label isCompact color="grey">{t("Not changed at the URL")}</Label>
+                                            : item.status === "successful"
                                             ? <Label isCompact color="green">{t("Done: {{size}}", { size: formatBytes(item.size ?? 0) })}</Label>
                                             : <span>{item.status === "canceled" ? (item.kind === "copy" ? t("Copy canceled") : t("Download canceled"))
                                                 : item.error || (item.kind === "copy" ? t("Copy failed") : t("Download failed"))}</span>}
@@ -846,7 +870,7 @@ export function StorePage({ directory }: { directory: string }) {
                                         <Button variant="link" onClick={() => act(() => call("run.cancel", { id: item.run_id }).then(downloads.reload))}>{t("Cancel")}</Button>
                                     )}
                                     {!ACTIVE.includes(item.status) && item.status !== "successful" && item.kind !== "copy" && can("store.fetch") && (
-                                        <Button variant="link" onClick={() => setDialog({ kind: "fetch", again: item })}>{t("Try again")}</Button>
+                                        <Button variant="link" onClick={() => setDialog({ kind: "fetch", again: item })}>{item.partial ? t("Resume") : t("Try again")}</Button>
                                     )}
                                 </Td>
                             </Tr>
@@ -870,6 +894,8 @@ export function StorePage({ directory }: { directory: string }) {
                 <DrawerContent panelContent={detailedEntry && data
                     ? (
                         <StoreDetails list={data} path={detailedEntry.path} onClose={() => setDetails(null)}
+                            onTrack={can("store.track") ? every => act(() => call("store.track", { path: detailedEntry.path, every })) : undefined}
+                            onRefresh={canRefresh ? () => checkSources([detailedEntry.path]) : undefined}
                             actions={[
                                 detailedEntry.file && <Button key="download" variant="primary" size="sm" onClick={() => download(detailedEntry.path)}>{t("Download")}</Button>,
                                 !detailedEntry.file && <Button key="open" variant="primary" size="sm" onClick={() => go(detailedEntry.path)}>{t("Open")}</Button>,

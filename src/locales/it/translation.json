@@ -1237,5 +1237,17 @@
   "Drop files or folders from your computer here or onto a folder; drag entries onto a folder, or onto the path above, to move them, holding Ctrl to copy them. Keys: Ctrl+A, Ctrl+X or Ctrl+C and Ctrl+V, Delete, F2, / to search; the menu key or Shift+F10 for an entry's menu.": "Rilascia qui o su una cartella file e cartelle dal tuo computer; trascina gli elementi su una cartella, o sul percorso in alto, per spostarli, tenendo premuto Ctrl per copiarli. Tasti: Ctrl+A, Ctrl+X o Ctrl+C e Ctrl+V, Canc, F2, / per cercare; il tasto Menu o Maiusc+F10 per il menu di un elemento.",
   "Into the store": "Nello store",
   "Paste a copy here: {{what}}": "Incolla una copia qui: {{what}}",
-  "Too many entries for one archive: download the folder they are in.": "Troppi elementi per un solo archivio: scarica la cartella che li contiene."
+  "Too many entries for one archive: download the folder they are in.": "Troppi elementi per un solo archivio: scarica la cartella che li contiene.",
+  "{{size}} arrived before: the download goes on from there, if the file did not change meanwhile.": "{{size}} erano già arrivati: il download riprende da lì, se nel frattempo il file non è cambiato.",
+  "A download of it is already under way.": "Un suo download è già in corso.",
+  "changed {{time}}": "cambiato {{time}}",
+  "Check for a newer version": "Controlla se c'è una versione nuova",
+  "Check the source for a newer version": "Controlla se la sorgente ha una versione nuova",
+  "Check the sources": "Controlla le sorgenti",
+  "Checked {{time}}": "Controllato {{time}}",
+  "Checked: {{every}}": "Controllo: {{every}}",
+  "Checking against the URL: the downloads above say how it goes.": "Controllo in corso presso l'URL: i download qui sopra dicono come va.",
+  "Not changed at the URL": "Non cambiato all'URL",
+  "The last check failed": "L'ultimo controllo non è riuscito",
+  "The URL is asked whether the file changed, and it is downloaded again only when it did.": "All'URL si chiede se il file è cambiato, e lo si scarica di nuovo solo se lo è."
 }

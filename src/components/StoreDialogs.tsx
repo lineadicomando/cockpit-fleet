@@ -14,6 +14,8 @@ import {
     DrawerPanelBody,
     DrawerPanelContent,
     Flex,
+    FormSelect,
+    FormSelectOption,
     FlexItem,
     FormGroup,
     FormHelperText,
@@ -30,7 +32,7 @@ import { formatBytes } from "../lib/checks.ts";
 import { basename, dirname, type PathChoice } from "../lib/files.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
-import { joinPath, nameFromUrl, playbookPath, sizeOf, type Clash, type StoreDownload, type StoreFile, type StoreList } from "../lib/store.ts";
+import { EVERY, joinPath, nameFromUrl, playbookPath, sizeOf, type Clash, type Every, type StoreDownload, type StoreFile, type StoreList } from "../lib/store.ts";
 import { FormModal } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ClipboardCopy } from "./pf.tsx";
@@ -53,6 +55,11 @@ export function folderChoices(list: StoreList | null): PathChoice[] {
 
 const trimSlashes = (path: string) => path.trim().replace(/^\/+|\/+$/g, "");
 
+export function useEveryLabels(): Record<Every, string> {
+    const { t } = useTranslation();
+    return { never: t("Never"), daily: t("Every day"), weekly: t("Every week"), monthly: t("Every month") };
+}
+
 // A download from a URL, queued for a job that runs beside the playbooks:
 // into a folder picked from those of the store, under a name that follows
 // the URL until it is written by hand.
@@ -70,6 +77,8 @@ export function FetchModal({ directory, again, list, onClose, onQueued }: {
     const [named, setNamed] = useState(!!again);
     const [sha256, setSha256] = useState(again?.sha256 ?? "");
     const [replace, setReplace] = useState(again?.replace ?? false);
+    const [every, setEvery] = useState<Every>(again?.every ?? "never");
+    const everyLabels = useEveryLabels();
     const digestValid = !sha256.trim() || /^[0-9a-fA-F]{64}$/.test(sha256.trim());
     const nameValid = !name.includes("/");
     const path = joinPath(trimSlashes(folder), name.trim());
@@ -84,7 +93,9 @@ export function FetchModal({ directory, again, list, onClose, onQueued }: {
         <FormModal title={t("Download from a URL")} submitLabel={t("Download")} onClose={onClose}
             isDisabled={!url.trim() || !name.trim() || !nameValid || !digestValid}
             onSubmit={async () => {
-                await call("store.fetch", { url: url.trim(), path, sha256: sha256.trim(), replace });
+                // What a download that ended short left is taken up, if it is the same URL and path.
+                const resume = again && again.partial && again.url === url.trim() && again.path === path ? again.run_id : "";
+                await call("store.fetch", { url: url.trim(), path, sha256: sha256.trim(), replace, every, resume });
                 onQueued();
                 onClose();
             }}>
@@ -116,7 +127,16 @@ export function FetchModal({ directory, again, list, onClose, onQueued }: {
                     </HelperText>
                 </FormHelperText>
             </FormGroup>
+            <FormGroup label={t("Check for a newer version")} fieldId="fetch-every">
+                <FormSelect id="fetch-every" value={every} onChange={(_e, value) => setEvery(value as Every)}>
+                    {EVERY.map(value => <FormSelectOption key={value} value={value} label={everyLabels[value]} />)}
+                </FormSelect>
+                <FormHelperText><HelperText><HelperTextItem>{t("The URL is asked whether the file changed, and it is downloaded again only when it did.")}</HelperTextItem></HelperText></FormHelperText>
+            </FormGroup>
             <Checkbox id="fetch-replace" label={t("Replace a file already there")} isChecked={replace} onChange={(_e, value) => setReplace(value)} />
+            {again && !!again.partial && (
+                <Content component="p">{t("{{size}} arrived before: the download goes on from there, if the file did not change meanwhile.", { size: formatBytes(again.partial) })}</Content>
+            )}
         </FormModal>
     );
 }
@@ -208,13 +228,17 @@ export function ConflictModal({ paths, canReplace, onChoose, onClose }: {
 
 // The panel beside the list: all that is known of a file or a folder, and
 // what can be done with it.
-export function StoreDetails({ list, path, actions, onClose }: {
+export function StoreDetails({ list, path, actions, onClose, onTrack, onRefresh }: {
     list: StoreList;
     path: string;
     actions: React.ReactNode;
     onClose: () => void;
+    // Given to who may change how a file is checked against its source.
+    onTrack?: (every: Every) => void;
+    onRefresh?: () => void;
 }) {
     const { t, i18n } = useTranslation();
+    const everyLabels = useEveryLabels();
     const file = list.files.find(candidate => candidate.path === path) ?? null;
     const inside = file ? null : sizeOf(list, [path]);
     return (
@@ -256,7 +280,7 @@ export function StoreDetails({ list, path, actions, onClose }: {
                                 <DescriptionListTerm>{t("Origin")}</DescriptionListTerm>
                                 <DescriptionListDescription>
                                     <Origin file={file} />
-                                    {(file.origin === "url" || file.origin === "copy") && <div style={{ wordBreak: "break-all" }}><small>{file.source}</small></div>}
+                                    {file.origin === "copy" && <div style={{ wordBreak: "break-all" }}><small>{file.source}</small></div>}
                                 </DescriptionListDescription>
                             </DescriptionListGroup>
                             <DescriptionListGroup>
@@ -265,6 +289,32 @@ export function StoreDetails({ list, path, actions, onClose }: {
                                     {formatTime(file.updated_at, i18n.language)}{file.updated_by ? `, ${file.updated_by}` : ""}
                                 </DescriptionListDescription>
                             </DescriptionListGroup>
+                            {file.refresh && (
+                                <DescriptionListGroup>
+                                    <DescriptionListTerm>{t("Source")}</DescriptionListTerm>
+                                    <DescriptionListDescription>
+                                        <div style={{ wordBreak: "break-all" }}>{file.refresh.url}</div>
+                                        <small>
+                                            {file.refresh.checked_at ? t("Checked {{time}}", { time: formatTime(file.refresh.checked_at, i18n.language) }) : t("Not checked yet")}
+                                            {file.refresh.changed_at ? `; ${t("changed {{time}}", { time: formatTime(file.refresh.changed_at, i18n.language) })}` : ""}
+                                        </small>
+                                        {file.refresh.error && <div><Label isCompact color="red">{t("The last check failed")}</Label> <small>{file.refresh.error}</small></div>}
+                                        {onTrack
+                                            ? (
+                                                <Flex spaceItems={{ default: "spaceItemsSm" }} alignItems={{ default: "alignItemsCenter" }} style={{ marginBlockStart: "0.5rem" }}>
+                                                    <FlexItem>
+                                                        <FormSelect id="store-every" aria-label={t("Check for a newer version")} value={file.refresh.every}
+                                                            onChange={(_e, value) => onTrack(value as Every)}>
+                                                            {EVERY.map(value => <FormSelectOption key={value} value={value} label={everyLabels[value]} />)}
+                                                        </FormSelect>
+                                                    </FlexItem>
+                                                    {onRefresh && <FlexItem><Button variant="secondary" size="sm" onClick={onRefresh}>{t("Check now")}</Button></FlexItem>}
+                                                </Flex>
+                                            )
+                                            : <div><small>{t("Checked: {{every}}", { every: everyLabels[file.refresh.every] })}</small></div>}
+                                    </DescriptionListDescription>
+                                </DescriptionListGroup>
+                            )}
                             {!file.usable && (
                                 <DescriptionListGroup>
                                     <DescriptionListTerm>{t("Runs")}</DescriptionListTerm>

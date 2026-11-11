@@ -777,6 +777,32 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # Where a file of the store downloaded from a URL came from, to check
+        # it against: the validators the server gave (ETag, Last-Modified),
+        # how often the tick checks it, and how the last check went. A file
+        # replaced by other means leaves its source.
+        """
+        CREATE TABLE store_sources (
+            path          TEXT PRIMARY KEY,
+            url           TEXT NOT NULL,
+            sha256        TEXT NOT NULL DEFAULT '',
+            etag          TEXT NOT NULL DEFAULT '',
+            last_modified TEXT NOT NULL DEFAULT '',
+            every         TEXT NOT NULL DEFAULT 'never'
+                          CHECK (every IN ('never', 'daily', 'weekly', 'monthly')),
+            checked_at    REAL,
+            changed_at    REAL,
+            tried_at      REAL,
+            error         TEXT NOT NULL DEFAULT '',
+            updated_by    TEXT,
+            updated_at    REAL NOT NULL
+        )
+        """,
+        "INSERT INTO store_sources (path, url, checked_at, changed_at, updated_by, updated_at)"
+        " SELECT path, source, updated_at, updated_at, updated_by, updated_at FROM store_files"
+        " WHERE origin = 'url' AND source != ''",
+    ],
 ]
 
 

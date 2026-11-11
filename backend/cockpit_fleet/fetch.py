@@ -181,18 +181,39 @@ def _total(response, received: int) -> int | None:
     return int(length) + (received if response.status == 206 else 0) if length.isdigit() else None
 
 
-def _progress(run_dir: Path, received: int, total: int | None) -> None:
+def _progress(run_dir: Path, received: int, total: int | None,
+              validators: dict | None = None) -> None:
     temporary = run_dir / f"{PROGRESS}.tmp"
     temporary.write_text(json.dumps({"received": received, "total": total,
-                                     "updated_at": time.time()}))
+                                     "updated_at": time.time(), **(validators or {})}))
     temporary.replace(run_dir / PROGRESS)
+
+
+def _validators(response) -> dict:
+    """What tells this version of the file from another: ETag, Last-Modified."""
+    return {"etag": (response.headers.get("ETag") or "").strip()[:512],
+            "last_modified": (response.headers.get("Last-Modified") or "").strip()[:128]}
+
+
+def _if_range(partial: dict) -> str:
+    """A validator for If-Range: a strong ETag, or a date. None: no resume."""
+    etag = str(partial.get("etag", ""))
+    if etag and not etag.startswith("W/"):
+        return etag
+    return str(partial.get("last_modified", ""))
 
 
 def download(spec: dict, run_dir: Path, say: Callable[[str], None],
              stopped: Callable[[], bool] = lambda: False,
              director: urllib.request.OpenerDirector | None = None,
              sleep: Callable[[float], None] = time.sleep) -> dict:
-    """Fetch spec["url"] into RUN_DIR/download/file; the job's result."""
+    """Fetch spec["url"] into RUN_DIR/download/file; the job's result.
+
+    With spec["etag"] or spec["last_modified"] (a check of a file the store
+    has), the first request is conditional: a 304 leaves nothing and says
+    unchanged. With spec["partial"] (the validators of what an earlier
+    download left there), what is there is taken up with If-Range: a server
+    whose file changed meanwhile sends it whole."""
     url = check_url(spec.get("url"))
     expected = str(spec.get("sha256", "")).lower()
     limit = spec.get("max_bytes")
@@ -203,13 +224,34 @@ def download(spec: dict, run_dir: Path, say: Callable[[str], None],
     target.parent.mkdir(mode=0o700, exist_ok=True)
     digest = hashlib.sha256()
     received, total, failures, final = 0, None, 0, url
+    partial = spec.get("partial") if isinstance(spec.get("partial"), dict) else None
+    resume = _if_range(partial) if partial else ""
+    if partial and resume and target.exists():
+        with open(target, "rb") as kept:
+            while chunk := kept.read(_CHUNK):
+                digest.update(chunk)
+                received += len(chunk)
+        say(f"going on from {received} bytes that arrived before")
+    elif target.exists():
+        target.unlink()
+    conditional = {}
+    if spec.get("etag"):
+        conditional["If-None-Match"] = str(spec["etag"])
+    if spec.get("last_modified"):
+        conditional["If-Modified-Since"] = str(spec["last_modified"])
+    validators = dict(partial or {}) if received else {}
     last = 0.0
     say(f"downloading {url}")
-    with open(target, "wb") as out:
+    with open(target, "r+b" if received else "wb") as out:
+        out.seek(received)
         while True:
             headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
             if received:
                 headers["Range"] = f"bytes={received}-"
+                if resume:
+                    headers["If-Range"] = resume
+            elif conditional and not failures:
+                headers.update(conditional)
             try:
                 # The opener has handlers for http and https only.
                 with director.open(urllib.request.Request(url, headers=headers),  # noqa: S310
@@ -219,6 +261,10 @@ def download(spec: dict, run_dir: Path, say: Callable[[str], None],
                         out.seek(0)
                         out.truncate()
                         digest, received = hashlib.sha256(), 0
+                    # A file taken up must stay the one it was: the first answer says which.
+                    if response.status != 206 or not validators:
+                        validators = _validators(response)
+                        resume = _if_range(validators)
                     total = _total(response, received)
                     if response.url != final:
                         final = response.url
@@ -235,20 +281,31 @@ def download(spec: dict, run_dir: Path, say: Callable[[str], None],
                         out.write(chunk)
                         digest.update(chunk)
                         if time.monotonic() - last > _PROGRESS_EVERY:
-                            _progress(run_dir, received, total)
+                            _progress(run_dir, received, total, validators)
                             last = time.monotonic()
                 if total is not None and received < total:
                     raise http.client.IncompleteRead(b"", total - received)
                 break
             except Stopped:
+                out.flush()
+                _progress(run_dir, received, total, validators)
                 raise ValueError("canceled") from None
             except Refused as error:
                 raise ValueError(str(error)) from None
             except urllib.error.HTTPError as error:
                 error.close()
+                if error.code == 304 and not received:
+                    out.close()
+                    target.unlink(missing_ok=True)
+                    say("not changed since it was downloaded")
+                    return {"rc": 0, "unchanged": True, "url": final,
+                            **{name: value for name, value in _validators(error).items()
+                               if value}}
                 if error.code == 416 and total is not None and received == total:
                     break
                 if error.code not in (408, 429, 500, 502, 503, 504) or failures >= _RETRIES:
+                    out.flush()
+                    _progress(run_dir, received, total, validators)
                     raise ValueError(f"the server answered {error.code} {error.reason}") from None
                 failures += 1
             except (OSError, http.client.HTTPException) as error:
@@ -256,15 +313,19 @@ def download(spec: dict, run_dir: Path, say: Callable[[str], None],
                 if isinstance(getattr(error, "reason", None), Refused):
                     raise ValueError(str(error.reason)) from None
                 if failures >= _RETRIES:
+                    out.flush()
+                    _progress(run_dir, received, total, validators)
                     raise ValueError(f"the download failed: {error}") from None
                 failures += 1
                 say(f"interrupted at {received} bytes ({error}): trying again")
             sleep(min(2 ** failures, 30))
         out.flush()
         os.fsync(out.fileno())
-    _progress(run_dir, received, total)
+    _progress(run_dir, received, total, validators)
     found = digest.hexdigest()
     if expected and found != expected:
+        # Whole but not the one asked for: nothing to take up later.
+        target.unlink(missing_ok=True)
         raise ValueError(f"the file has the digest {found}, not {expected}")
     say(f"{received} bytes, sha256 {found}")
-    return {"rc": 0, "size": received, "sha256": found, "url": final}
+    return {"rc": 0, "size": received, "sha256": found, "url": final, **validators}

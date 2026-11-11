@@ -27,18 +27,19 @@ in [security.md](security.md); the decisions behind these limits in
   help know only the controller's modules, no sub-parameters.
 - Store: read by every run, no part of it kept for some projects; a write in
   place through a link reaches the store during the run, not at its end;
-  no versions of a file (a replaced one is gone); a download from a URL
-  starts again from nothing when retried (a dropped connection within one
-  is taken up), no credentials for a URL, no source kept to refresh a file
-  from (phase 13); the listing stops at 20 000 entries; a download
-  that fails half way leaves a short file in the browser (compare the
-  digest shown); a file of root put there by hand is not given to runs;
-  one upload of 1.5 GiB dropped on the page failed at once, before reaching
-  the backend, and was not seen again (9 November; the page now says why).; an archive of
-  many entries is bounded by the length of its link (a selection of
-  hundreds goes through its folder), and one whose file shrinks while it is
-  written ends short; a copy shares blocks only on XFS and
-  Btrfs, and counts its whole size against `[store] max_gb` there too; a
+  no versions of a file (a replaced one is gone); the listing stops at
+  20 000 entries; a file of root put there by hand is not given to runs.
+  Downloads: no credentials for a URL; one that ended short is taken up
+  only with a strong ETag or a Last-Modified, and for a week; a source is
+  checked at most daily, by the tick, at no set time, and a server with no
+  validator sends the whole file at each check (the digest then says
+  whether it changed). Downloads to the browser: one that fails half way
+  leaves a short file (compare the digest shown); an archive of many
+  entries is bounded by the length of its link (hundreds go through their
+  folder), and one whose file shrinks meanwhile ends short; one upload of
+  1.5 GiB dropped on the page failed at once and was not seen again (9
+  November; the page now says why). Copies share blocks only on XFS and
+  Btrfs, and count their whole size against `[store] max_gb` there too; a
   copy made by a job is of the files as they were when it was asked.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Masking: other encodings, and secrets a run decrypts itself, not masked.

@@ -96,7 +96,8 @@ def tidy(ctx: Context) -> dict:
     out: dict = {}
     for name, step in (("cycles", checks.prune_cycles), ("runs", prune_runs),
                        ("orphans", sweep), ("cmdb", cmdb.prune), ("metrics", metrics.prune),
-                       ("vacuum", vacuum), ("store", storage.digest_pending)):
+                       ("vacuum", vacuum), ("store", storage.digest_pending),
+                       ("sources", storage.refresh_due)):
         try:
             out[name] = step(ctx, now)
         except Exception:  # noqa: BLE001  (one step must not keep the others from running)
