@@ -1,6 +1,7 @@
 {
   "Access is granted through three groups of this server: cockpit-fleet-viewer, cockpit-fleet-operator and cockpit-fleet-admin. Ask an administrator to add your account to one of them, then log in again.": "L'accesso si ottiene tramite tre gruppi di questo server: cockpit-fleet-viewer, cockpit-fleet-operator e cockpit-fleet-admin. Chiedi a un amministratore di aggiungere il tuo account a uno di essi, poi accedi di nuovo.",
   "Action": "Azione",
+  "Administration": "Amministrazione",
   "Administrator": "Amministratore",
   "All changes": "Tutte le modifiche",
   "All projects": "Tutti i progetti",
@@ -8,6 +9,7 @@
   "An administrator can do it with:": "Un amministratore può farlo con:",
   "Ansible": "Ansible",
   "Audit log": "Registro di audit",
+  "Automation": "Automazione",
   "Bundled Ansible collection": "Collection Ansible inclusa",
   "Changes": "Modifiche",
   "Changes made through Fleet and refused attempts are listed here.": "Qui compaiono le modifiche fatte tramite Fleet e i tentativi rifiutati.",
@@ -17,6 +19,7 @@
   "Check syntax": "Controlla la sintassi",
   "Checking the syntax…": "Controllo della sintassi in corso…",
   "Choose a file to see it.": "Scegli un file per vederlo.",
+  "Nodes": "Nodi",
   "This file is not text ({{size}} bytes): it cannot be shown or edited here.": "Questo file non è testo ({{size}} byte): qui non si può mostrare né modificare.",
   "Configuration file": "File di configurazione",
   "Copied": "Copiato",

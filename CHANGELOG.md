@@ -127,6 +127,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
   person reads it, with the command that merges what was shown, and the
   draft commands take the name of a project or inventory.
 
+### Changed
+
+- The page's eighteen tabs are now six, each with its own row of tabs
+  below: Overview, Nodes (hosts, assets, checks, host keys), Automation
+  (runs, job templates, workflows, schedules), Resources (projects,
+  inventories, store, variables, credentials), Administration
+  (notifications, system, audit log) and Assistant. Links and bookmarks
+  are unchanged. Searching Cockpit's menu for a section ("workflow",
+  "credential", "pianificazione") opens it directly.
+
 ### Fixed
 
 - With Cockpit 370 or later, uploading a project archive, or any large

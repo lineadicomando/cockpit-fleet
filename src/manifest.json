@@ -13,12 +13,167 @@
           "matches": [
             "fleet",
             "ansible",
-            "playbook",
-            "inventory",
             "automation",
-            "nodes",
-            "monitoring"
+            "automazione"
           ]
+        },
+        {
+          "matches": [
+            "host",
+            "node",
+            "nodes",
+            "nodi",
+            "monitoring",
+            "monitoraggio"
+          ],
+          "goto": "hosts"
+        },
+        {
+          "matches": [
+            "asset",
+            "cmdb",
+            "hardware",
+            "software",
+            "package",
+            "pacchetto",
+            "inventario hardware"
+          ],
+          "goto": "assets"
+        },
+        {
+          "matches": [
+            "check",
+            "checks",
+            "controllo",
+            "controlli",
+            "threshold",
+            "soglia"
+          ],
+          "goto": "checks"
+        },
+        {
+          "matches": [
+            "host key",
+            "known_hosts",
+            "fingerprint",
+            "chiave host",
+            "impronta"
+          ],
+          "goto": "hostkeys"
+        },
+        {
+          "matches": [
+            "run",
+            "job",
+            "playbook",
+            "ad-hoc",
+            "esecuzione"
+          ],
+          "goto": "runs"
+        },
+        {
+          "matches": [
+            "template",
+            "job template",
+            "modello"
+          ],
+          "goto": "templates"
+        },
+        {
+          "matches": [
+            "workflow",
+            "approval",
+            "approvazione"
+          ],
+          "goto": "workflows"
+        },
+        {
+          "matches": [
+            "schedule",
+            "timer",
+            "cron",
+            "pianificazione"
+          ],
+          "goto": "schedules"
+        },
+        {
+          "matches": [
+            "project",
+            "git",
+            "progetto"
+          ],
+          "goto": "projects"
+        },
+        {
+          "matches": [
+            "inventory",
+            "inventario"
+          ],
+          "goto": "inventories"
+        },
+        {
+          "matches": [
+            "store",
+            "file",
+            "download",
+            "archivio"
+          ],
+          "goto": "store"
+        },
+        {
+          "matches": [
+            "variable",
+            "extra vars",
+            "variabile"
+          ],
+          "goto": "variables"
+        },
+        {
+          "matches": [
+            "credential",
+            "ssh key",
+            "vault",
+            "password",
+            "credenziale"
+          ],
+          "goto": "credentials"
+        },
+        {
+          "matches": [
+            "notification",
+            "telegram",
+            "webhook",
+            "smtp",
+            "matrix",
+            "notifica"
+          ],
+          "goto": "notifications"
+        },
+        {
+          "matches": [
+            "health",
+            "configuration",
+            "backup",
+            "salute",
+            "configurazione"
+          ],
+          "goto": "system"
+        },
+        {
+          "matches": [
+            "audit",
+            "registro"
+          ],
+          "goto": "audit"
+        },
+        {
+          "matches": [
+            "assistant",
+            "chat",
+            "agent",
+            "assistente"
+          ],
+          "goto": "chat"
         }
       ]
     }

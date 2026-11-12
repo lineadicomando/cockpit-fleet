@@ -34,9 +34,8 @@ import { SchedulesPage } from "./components/SchedulesPage.tsx";
 import { TemplatesPage } from "./components/TemplatesPage.tsx";
 import { WorkflowsPage } from "./components/WorkflowsPage.tsx";
 import { SessionContext } from "./lib/session.tsx";
+import { SECTIONS, groupOf, visibleGroups } from "./lib/sections.ts";
 import { Spinner, TabPanel, Tabs } from "./components/pf.tsx";
-
-const TABS = ["overview", "hosts", "assets", "checks", "runs", "templates", "workflows", "schedules", "notifications", "inventories", "projects", "store", "credentials", "variables", "hostkeys", "chat", "system", "audit"];
 
 // A refusal by the backend itself means the same as one by sudo.
 function accessProblem(error: Error): AccessProblem {
@@ -82,23 +81,40 @@ export function App() {
         // Not every tab is for everyone: the audit trail is for administrators,
         // and the chat is there when config.toml names an agent for it, or for
         // administrators, who find there how to set it up.
-        const tabs = TABS.filter(tab => (tab !== "audit" || data.commands.includes("audit.list")) && (tab !== "chat" || data.chat || data.role === "admin"));
-        const section = tabs.includes(location.path[0]) ? location.path[0] : "overview";
+        const visible = (tab: string) => (tab !== "audit" || data.commands.includes("audit.list")) && (tab !== "chat" || data.chat || data.role === "admin");
+        const groups = visibleGroups(visible);
+        const section = SECTIONS.includes(location.path[0]) && visible(location.path[0]) ? location.path[0] : "overview";
+        const group = groupOf(groups, section);
         const go = (tab: string) => cockpit.location.go(tab === "overview" ? [] : [tab]);
+        const groupTitles: Record<string, string> = {
+            overview: t("Overview"), nodes: t("Nodes"), automation: t("Automation"), resources: t("Resources"), administration: t("Administration"), chat: t("Assistant"),
+        };
         const titles: Record<string, string> = {
             overview: t("Overview"), hosts: t("Hosts"), assets: t("Assets"), checks: t("Checks"), runs: t("Runs"), templates: t("Job templates"), workflows: t("Workflows"), schedules: t("Schedules"), notifications: t("Notifications"), inventories: t("Inventories"),
             projects: t("Projects"), store: t("Store"), credentials: t("Credentials"), variables: t("Variables"), hostkeys: t("Host keys"), system: t("System"),
             audit: t("Audit log"), chat: t("Assistant"),
         };
 
+        // A group of one section has no second row: its tab is the section's.
         return (
             <SessionContext.Provider value={data}>
                 <PageSection type="tabs" padding={{ default: "noPadding" }}>
-                    <Tabs panelId="fleet-section" activeKey={section} onSelect={(_event, key) => go(String(key))}>
-                        {tabs.map(tab => (
-                            <Tab key={tab} eventKey={tab} title={<TabTitleText>{titles[tab]}</TabTitleText>} />
+                    <Tabs panelId={group.sections.length > 1 ? "fleet-group" : "fleet-section"} activeKey={group.key}
+                        onSelect={(_event, key) => go(groups.find(item => item.key === key)?.sections[0] ?? "overview")}>
+                        {groups.map(item => (
+                            <Tab key={item.key} eventKey={item.key} title={<TabTitleText>{groupTitles[item.key]}</TabTitleText>} />
                         ))}
                     </Tabs>
+                    {group.sections.length > 1 && (
+                        <TabPanel panelId="fleet-group" active={group.key}>
+                            <Tabs panelId="fleet-section" activeKey={section} isSubtab aria-label={groupTitles[group.key]}
+                                onSelect={(_event, key) => go(String(key))}>
+                                {group.sections.map(tab => (
+                                    <Tab key={tab} eventKey={tab} title={<TabTitleText>{titles[tab]}</TabTitleText>} />
+                                ))}
+                            </Tabs>
+                        </TabPanel>
+                    )}
                 </PageSection>
                 <PageSection isFilled={filled} className={filled ? "fleet-fill" : undefined}>
                     <TabPanel panelId="fleet-section" active={section}>

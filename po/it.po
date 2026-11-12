@@ -22,6 +22,9 @@ msgstr "L'accesso si ottiene tramite tre gruppi di questo server: cockpit-fleet-
 msgid "Action"
 msgstr "Azione"
 
+msgid "Administration"
+msgstr "Amministrazione"
+
 msgid "Administrator"
 msgstr "Amministratore"
 
@@ -42,6 +45,9 @@ msgstr "Ansible"
 
 msgid "Audit log"
 msgstr "Registro di audit"
+
+msgid "Automation"
+msgstr "Automazione"
 
 msgid "Bundled Ansible collection"
 msgstr "Collection Ansible inclusa"
@@ -69,6 +75,9 @@ msgstr "Controllo della sintassi in corso…"
 
 msgid "Choose a file to see it."
 msgstr "Scegli un file per vederlo."
+
+msgid "Nodes"
+msgstr "Nodi"
 
 msgid "This file is not text ({{size}} bytes): it cannot be shown or edited here."
 msgstr "Questo file non è testo ({{size}} byte): qui non si può mostrare né modificare."

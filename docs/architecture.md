@@ -2612,6 +2612,21 @@ label). The wrappers also mend what an audit found:
   links of a workflow step, an upload) is `role="group"`, so that its label
   names the group instead of pointing at nothing.
 
+**Sections.** Cockpit's menu has no levels: a package can only add flat
+entries under System, Tools or Apps, each an HTML file of its own in a
+frame of its own (a bundle and a session loaded again for each). The page
+is therefore one entry, and orders its sections itself: a row of tabs for
+six groups and, under a group of more than one section, a row of subtabs
+(`src/lib/sections.ts`). The URL names the section alone (`#/runs`), so
+links do not depend on the grouping; a group of one section is keyed by it,
+so that its tab names the content's panel. A section a role cannot see
+leaves its group, and a group left empty goes. The manifest's keywords
+lead from Cockpit's search to a section: a `goto` without a leading slash
+is the hash of the page (`"goto": "runs"` opens `/fleet#runs`), one with a
+slash would be another page; the shell gives no translation of a package's
+keywords without a `po.manifest` of Cockpit's kind, so the Italian words are
+among the English ones.
+
 **Long lists.** Checks and job templates are filtered, grouped and sorted
 in the browser, from what their `list` command returns: neither is paged,
 and at the sizes measured (hundreds of each) there is no reason to ask the
