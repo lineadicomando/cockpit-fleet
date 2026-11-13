@@ -22,7 +22,7 @@ what it protects and what it does not in [security.md](security.md).
   `ansible-galaxy` and notifications, through `[network] proxy` if needed.
 - Memory: about 1 GB beside the system for runs; check cycles of 50 hosts
   take some 700 MB at their peak. A machine of 2 vCPUs and 4 GB watched 500
-  hosts with ten checks every 10 minutes (architecture.md, "At scale").
+  hosts with ten checks every 10 minutes ([architecture/checks.md](architecture/checks.md), "At scale").
 - SELinux may stay enforcing on Fedora and AlmaLinux: the package needs no
   policy of its own.
 

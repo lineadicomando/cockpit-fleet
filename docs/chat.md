@@ -4,8 +4,7 @@ A page of Fleet, "Assistant" in its tabs, where a user talks to an assistant tha
 controller through Fleet itself: it reads what that user may read, launches
 what that user may launch, within the profile the user chose for the
 session, and asks before the actions that profile does not let through.
-How it is built is in [architecture.md](architecture.md), "The
-chat"; this page is for the administrator who turns it on.
+How it is built is in [architecture/chat.md](architecture/chat.md); this page is for the administrator who turns it on.
 
 ## What leaves the controller
 

@@ -18,8 +18,10 @@ Documents of the project, each with one job; do not repeat one in another:
   phase under way stays in `TODO.md` until the phase closes).
 - `docs/limits.md`: known limits left as they are, by area. Add one when a
   change leaves something undone, remove it when it is done.
-- `docs/architecture.md`: what exists, why it is built that way, and what was
-  measured. Update it with every change of design.
+- `docs/architecture/*.md`, one file per area, listed in `docs/architecture.md`:
+  what exists, why it is built that way, and what was measured. Update the
+  file of the area with every change of design (and the index when a file
+  is added); read only the one at hand.
 - `CHANGELOG.md`: what changed in each release, for its users. Add a line
   under `[Unreleased]` with every change a user or an administrator would
   notice, in the commit that makes it, under the heading of its kind (see
@@ -50,7 +52,7 @@ a controller, `test/containers/` and `test/vm/` the controllers they run on
 
 ## Non-negotiable rules
 
-These come from the security model in `docs/architecture.md`; a change that breaks one of
+These come from the security model in `docs/architecture/overview.md`; a change that breaks one of
 them needs the user's explicit agreement.
 
 1. **No daemon, no listening port.** Work happens in systemd units started on demand.

@@ -157,7 +157,7 @@ def _check_collection() -> tuple[str, str]:
 
 
 # Who writes in a directory of local projects: the administrators of Fleet, as
-# docs/architecture.md says ("Projects at a terminal").
+# docs/architecture/terminal.md says ("Projects at a terminal").
 _WRITERS = "cockpit-fleet-admin"
 
 

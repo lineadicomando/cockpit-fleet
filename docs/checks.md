@@ -5,7 +5,7 @@ gives each host a state: ok, warning, critical or unknown. Nothing is
 installed on the nodes: Ansible reaches them as it does for a run. This page
 is for the administrator who sets checks up, and for whoever writes one as a
 playbook. How cycles are planned, sized and recorded is in
-[architecture.md](architecture.md), "Checks".
+[architecture/checks.md](architecture/checks.md).
 
 ## The parts of a check
 
