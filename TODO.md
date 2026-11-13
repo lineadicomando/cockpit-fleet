@@ -5,48 +5,24 @@ Status and what is left; what is done is in `CHANGELOG.md` and
 read only the file at hand). Decisions: `docs/decisions.md`; known limits:
 `docs/limits.md`.
 
-## Status (12 November 2026)
+## Status (13 November 2026)
 
-Phases 0–11 closed; 0.2.0 released on 2 November; the next release would
-be 0.3.0 (`make next-version`), made only when the user asks. Under
-`[Unreleased]`: runs in series, phase 12 (built, waiting for its trial),
-phase 13 (the store, waiting for its acceptance), the six grouped tabs.
-Phase 14 (starters) is designed, not begun.
+Phases 0–12 closed (12 accepted with Claude on 13 November,
+`architecture/acceptance.md`); 0.2.0 released on 2 November; the next
+release would be 0.3.0 (`make next-version`), made only when the user
+asks. Under `[Unreleased]`: runs in series, phase 12 (the profiles of the
+assistant), phase 13 (the store, waiting for its acceptance), the six
+grouped tabs. Phase 14 (starters) is designed, not begun.
 
-To resume: `git status`; `git log origin/main..` (not pushed: 7fdbaa6, the
-grouped tabs); `make check`. Each backend module says what it is in its
+To resume: `git status`; `git log origin/main..` (what is not pushed);
+`make check`. Each backend module says what it is in its
 docstring; `cli.py` is the registry of commands, `db.py` the schema (27).
 
-Tests on 12 November: unit tests (645 backend, 162 frontend). `ct-test`
+Tests on 13 November: unit tests (646 backend, 162 frontend). `ct-test`
 of `store` and `negative` on the three on 11 November; the last full
 `ct-test` (9 November) passed but `cmdb` on Fedora, in a container only
 (netavark "invalid namespace path", since 1 November). Run two
 distributions' `ct-test` one after the other.
-
-## Phase 12: close it
-
-Design: `architecture/agents.md`, `chat.md`, `approvals.md`; for
-administrators `docs/chat.md`. Code: `profiles.py`, `autonomy.py`,
-`approvals.py`, `drafts.py`, `instructions.py`, `chat.py`, `terminal.py`;
-`src/components/ChatPage.tsx`, `Drafts.tsx`, `src/lib/chat.ts`.
-
-1. [ ] **Trial with Claude** (the user logs in; a later session). On
-   `cockpit-fleet-deb13` (skill `vm-lab`): `reset`, `deploy`, the lab user
-   in `cockpit-fleet-admin`, the role `lineadicomando.fleet.chat_agent` with
-   `chat_agent_configure=true chat_agent_enable_mcp=true` (about 510 MB),
-   `[mcp] max_role = "admin"`, `[chat] profiles` all five, a managed project
-   with a playbook, a managed inventory (`self ansible_connection=local`), a
-   job template. The user runs `/opt/cockpit-fleet-agent/bin/claude /login`
-   as the lab user. Try, and note in `architecture/chat.md`:
-   - the page: each profile's start (risks accepted once), questions with
-     profile and class, "always" for launches, an ad-hoc command in
-     `administrator` asked every time then waiting for confirmation, a
-     playbook written to a draft, reviewed and merged;
-   - `fleet assistant --profile assisted|autonomous`: `--allowedTools`
-     beside `--permission-mode manual` (reads unasked, launches asked in
-     `assisted`, unasked in `autonomous`).
-2. [ ] Acceptance of phase 12 in `architecture/acceptance.md`; the state of
-   the VM in `CLAUDE.local.md`.
 
 ## Phase 13: close it
 

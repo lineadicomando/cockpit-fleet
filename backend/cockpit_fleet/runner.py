@@ -669,6 +669,14 @@ def build_lint_argv(spec: dict, run_dir: Path) -> list[str]:
     return [LINT, "--offline", str(playbook)]
 
 
+def lint_env(env: dict[str, str]) -> dict[str, str]:
+    """The environment of ansible-lint: that of the syntax check, less the
+    failure on an inventory not read. ansible-lint runs its own syntax check
+    with no inventory, which that setting turns into an internal-error on
+    every playbook (ansible-core 2.19)."""
+    return {key: value for key, value in env.items() if key != "ANSIBLE_INVENTORY_UNPARSED_FAILED"}
+
+
 def build_env(run_dir: Path, runtime_dir: Path, events: bool = True,
               scripts: bool = False, credentials_dir: Path | None = None) -> dict[str, str]:
     """Environment of ansible-playbook and ansible-inventory.

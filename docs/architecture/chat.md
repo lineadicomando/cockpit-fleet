@@ -134,6 +134,36 @@ once, an ad-hoc command asked about with the profile and the class and no
 draft gone and the audit holding `chat.accept`, `chat.start` and
 `draft.merge`.
 
+Then with Claude (Opus 5.5 through the adapter 0.89.1) on Debian 13 (13
+November), as an administrator with `[mcp] max_role = "admin"` and the five
+profiles enabled, on a managed project, a managed inventory of the
+controller itself and a template. On the page: `observer` read templates,
+projects, inventories and runs with no question; `assisted` asked before a
+launch, with the profile and the class, and after "always" launched again
+unasked and read the run's output; `diagnostic`, `autonomous` and
+`administrator` each told their risks before the first session and not
+again, `diagnostic` ran `ping` and `setup` unasked, `autonomous` launched
+unasked and had no `run_adhoc` among its tools; in `administrator` an
+ad-hoc `command` was asked about once, with no "always", then waited for
+approval until the user approved it in the list of runs, and a playbook
+the assistant wrote (`file_write`, asked about once) went to a draft, which
+the user reviewed and merged. At the terminal, `fleet assistant --profile
+assisted` read unasked and asked before the launch, `--profile autonomous`
+launched unasked, with no question of risks already accepted on the page.
+The audit has the three `chat.accept`, every `chat.start` (`cli` and
+`terminal` for the two at the terminal), and each call of the agent as the
+user's, via `mcp:claude-code` with the profile. What it showed beside: the
+model's own slips (an inventory's name for its id, a placeholder for a run)
+refused by the backend as `not_found`; an inventory created through
+`fleetctl` is not read until something reads it (the page asks
+`inventory.parse` after creating one), so the agent saw it with no hosts;
+the questions show the tool's description in English, from its docstring;
+`whoami` lists the commands of the role, not of the profile. And a fault
+not of the chat: ansible-lint ran its own syntax check, with no inventory,
+in the environment that makes an inventory not read fail, and reported an
+`internal-error` on every playbook with ansible-core 2.19; it now gets that
+environment without it (`runner.lint_env`).
+
 **The profile of a session.** The page offers the profiles `chat.agents`
 names as enabled, the default one first, each with what it may do. For one
 beyond `assisted` (`profiles.RISKY`) that the user has not accepted yet

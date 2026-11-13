@@ -131,8 +131,9 @@ terminal on the controller, as that user:
 The first time, it asks for a style of text and a way of logging in (an
 account with a subscription, or one billed by use), then gives an address to
 open in a browser and takes the code shown there. The login is made when it
-says "Login successful"; what it shows afterwards is for its own use at a
-terminal, and Ctrl+C leaves it. The login is kept in the user's home
+says "Login successful"; press Enter there, or the first `fleet assistant`
+asks its questions of first use again, and what it shows afterwards is for
+its own use at a terminal: Ctrl+C leaves it. The login is kept in the user's home
 (`~/.claude`). Until it is made the page says so, with this command and a
 button that opens the terminal in a new tab, so that the assistant already
 started stays as it is: once logged in, send the message again.

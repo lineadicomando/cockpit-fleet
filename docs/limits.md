@@ -51,7 +51,11 @@ in [security.md](security.md); the decisions behind these limits in
   up to date with main, nor exported; `inventory.create` and
   `inventory.update` (class config) write the main file of a managed
   inventory without a draft; the acceptance of a profile's risks is not
-  asked again when their text changes.
+  asked again when their text changes; an inventory created by an agent,
+  `fleetctl` or `fleet` is not read until something reads it (the page asks
+  for it), so an agent sees it with no hosts; `whoami` lists the commands
+  of the role, not of the profile; the questions of the page show a tool's
+  description in English.
 - Chat: plain text; conversations not deletable; model not choosable; one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,

@@ -146,6 +146,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   a message from the browser.
 - `run.result` gave a run waiting for approval as done: it is not, and the
   answer says in which mode it waits; `fleet result --wait` waits for it.
+- The syntax check of a playbook no longer reports an `internal-error` of
+  ansible-lint on every playbook with ansible-core 2.19 (Debian 13,
+  Fedora 44): ansible-lint's own syntax check, which has no inventory, is
+  no longer made to fail for it.
 
 ### Deprecated
 

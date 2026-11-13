@@ -69,3 +69,15 @@ What each closed phase had to show, and how it was shown.
   accessibility. The tree's open folders are named by their name, yet axe
   still remarks that their text (their children) is not in it: the tree
   pattern nests them, and the score is not lowered.
+- **12, profiles of the assistant** (13 November): with Claude on Debian
+  13, as an administrator under `[mcp] max_role = "admin"`, each of the
+  five profiles on the page did what it allows and asked what it should:
+  reads unasked, launches asked with "always" for the rest of the
+  conversation, the risks of the three beyond `assisted` accepted once,
+  ad-hoc commands that change nothing unasked in `diagnostic`, none at all
+  in `autonomous`, which launched unasked; in `administrator` an ad-hoc
+  `command` asked about once and then waiting for the user's approval, and
+  a playbook the assistant wrote kept in a draft until the user reviewed
+  and merged it. `fleet assistant` at the terminal asked the same in
+  `assisted` and nothing in `autonomous`. Every start, acceptance and call
+  in the audit as the user's, with the profile; see [The chat](chat.md).

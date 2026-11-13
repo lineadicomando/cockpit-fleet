@@ -129,8 +129,8 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
                                 run_dir / "project", log)}
         if result["rc"] == 0 and os.path.exists(runner.LINT):
             # What ansible-lint finds is reported, it does not fail the check.
-            result["lint_rc"] = execute(runner.build_lint_argv(spec, run_dir), env,
-                                        run_dir / "project", log)
+            result["lint_rc"] = execute(runner.build_lint_argv(spec, run_dir),
+                                        runner.lint_env(env), run_dir / "project", log)
         return result
 
     env = runner.build_env(run_dir, runtime_dir, scripts=spec.get("inventory_scripts") is True,

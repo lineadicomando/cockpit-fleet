@@ -501,6 +501,18 @@ class RunnerSyntaxTest(unittest.TestCase):
             self.assertNotIn("FLEET_EVENTS_FILE", env)
             self.assertIn("FLEET_EVENTS_FILE", runner.build_env(run_dir, run_dir / "rt"))
 
+    def test_lint_does_not_fail_on_the_inventory_it_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            (run_dir / "project").mkdir()
+            (run_dir / "rt").mkdir()
+            env = runner.build_env(run_dir, run_dir / "rt", events=False)
+            self.assertEqual(env["ANSIBLE_INVENTORY_UNPARSED_FAILED"], "True")
+            lint = runner.lint_env(env)
+            self.assertNotIn("ANSIBLE_INVENTORY_UNPARSED_FAILED", lint)
+            self.assertEqual({k: v for k, v in env.items() if k in lint}, lint)
+            self.assertEqual(len(lint), len(env) - 1)
+
 
 class RebuildMigrationTest(unittest.TestCase):
     def test_new_kinds_are_accepted_and_existing_rows_survive(self):
