@@ -236,7 +236,7 @@ expect_eq "the page of health shows it behind" \
     "$(get "$health" '[g["behind"] is not None for g in a["data"]["groups"] if g["group"] == "'"$slow"'"]')" "[True]"
 expect_eq "with the due times it skipped" \
     "$(get "$health" '[g["skipped"] > 0 for g in a["data"]["groups"] if g["group"] == "'"$slow"'"]')" "[True]"
-expect_eq "and the queue of each lane" "$(get "$health" '[q["lane"] for q in a["data"]["queue"]]')" "['runs', 'checks', 'slow']"
+expect_eq "and the queue of each lane" "$(get "$health" '[q["lane"] for q in a["data"]["queue"]]')" "['runs', 'downloads', 'checks', 'slow']"
 expect_eq "and the size of the database" "$(get "$health" 'a["data"]["database"]["bytes"] > 0')" True
 # Quick again: the next cycle ends in time, and the group is on time.
 sed -i 's/sleep 45/true/' /srv/fleet-it/own/slow.yml
