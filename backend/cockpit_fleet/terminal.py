@@ -11,7 +11,7 @@ its stdin: never on a command line.
     fleet launch TEMPLATE [-a NAME=VALUE]...
     fleet log RUN [-f]
     fleet result RUN [--wait]
-    fleet secret CREDENTIAL FIELD | --channel CHANNEL
+    fleet secret CREDENTIAL FIELD | --channel CHANNEL | --varset SET VARIABLE
     fleet assistant [--profile PROFILE] [AGENT]
     fleet store put --file FILE --path PATH [--replace] [--resume]
     fleet store read --path PATH [--output FILE | -]
@@ -56,7 +56,8 @@ SHORTCUTS = {
     "launch": "Launch a job template and follow its run",
     "log": "The output of a run, or follow it with -f",
     "result": "How a run went, host by host and task by task",
-    "secret": "Set the secret of a credential or a notification channel (admin)",
+    "secret": "Set the secret of a credential, a notification channel or a set of variables"
+              " (admin)",
     "assistant": "Talk to the agent of the chat here, with the tools of fleet-mcp only",
     "help": "What a command does and the parameters it takes",
 }
@@ -565,7 +566,7 @@ def _shortcut_candidates(before: list[str], current: str, areas: list[str],
         return []
     if current.startswith("-"):
         return {"launch": ["--answer", "--limit", "--check", "--diff", "--detach"],
-                "log": ["--follow"], "result": ["--wait"], "secret": ["--channel"],
+                "log": ["--follow"], "result": ["--wait"], "secret": ["--channel", "--varset"],
                 "assistant": ["--profile"]}.get(name, [])
     if name == "assistant" and given and given[-1] == "--profile":
         try:
@@ -589,6 +590,18 @@ def _shortcut_candidates(before: list[str], current: str, areas: list[str],
     if name == "secret":
         if "--channel" in given:
             return _names(lookup, "channel") if not positional else []
+        if "--varset" in given:
+            if not positional:
+                return _names(lookup, "varset")
+            if len(positional) == 1 and lookup is not None:
+                try:
+                    rows = lookup("varset.list", {})["variable_sets"]
+                    return sorted({one["name"] for row in rows
+                                   if positional[0] in (row["id"], row["name"])
+                                   for one in row["secrets"]})
+                except (Failure, KeyError, TypeError):
+                    return []
+            return []
         if not positional:
             return _names(lookup, "credential")
         if len(positional) == 1 and lookup is not None:
@@ -856,15 +869,31 @@ def _result(term: Terminal, args: list[str]) -> int:
 
 
 def _secret(term: Terminal, args: list[str]) -> int:
-    parser = _parser("secret", "Set the secret of a credential, or of a notification channel:"
-                     " asked for at the terminal, or read from stdin. It cannot be read back.")
-    parser.add_argument("credential", help="its name or its id")
+    parser = _parser("secret", "Set the secret of a credential, of a notification channel or"
+                     " a secret variable of a set: asked for at the terminal, or read from"
+                     " stdin. It cannot be read back.")
+    parser.add_argument("credential", help="its name or its id (the channel's, the set's)")
     parser.add_argument("field", nargs="?",
-                        help="which secret: private_key, password, vault_password…")
-    parser.add_argument("--channel", action="store_true",
-                        help="a notification channel, which has one secret, not a credential")
+                        help="which secret: private_key, password, vault_password…;"
+                        " the variable, of a set")
+    kind = parser.add_mutually_exclusive_group()
+    kind.add_argument("--channel", action="store_true",
+                      help="a notification channel, which has one secret, not a credential")
+    kind.add_argument("--varset", action="store_true",
+                      help="a set of variables: the value of one of its secret variables")
     options = parser.parse_args(args)
-    if options.channel:
+    if options.varset:
+        if not options.field:
+            raise Usage("which secret variable of the set?")
+        varset = _one(term("varset.list")["variable_sets"], options.credential,
+                      "set of variables", "fleet varset list")
+        names = {one["name"]: one["secret_name"] for one in varset["secrets"]}
+        if options.field not in names:
+            raise Usage(f"{varset['name']!r} has no secret variable {options.field!r}"
+                        + (f" (it has: {', '.join(sorted(names))})" if names
+                           else ": add it first, in the set's secrets"))
+        name, label = names[options.field], f"{options.field} of {varset['name']}"
+    elif options.channel:
         if options.field:
             raise Usage("a channel has one secret: give no field")
         channel = _one(term("channel.list")["channels"], options.credential, "channel",

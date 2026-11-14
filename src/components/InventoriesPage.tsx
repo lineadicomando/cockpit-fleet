@@ -8,11 +8,12 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { inventoryChoices } from "../lib/files.ts";
-import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths } from "../lib/types.ts";
+import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths, VariableSet } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
+import { SetOrderField } from "./VariablesPage.tsx";
 
 function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory; onClose: () => void; onDone: (problem: string | null) => void }) {
     const { t } = useTranslation();
@@ -25,6 +26,8 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     const [projectId, setProjectId] = useState(inventory?.project_id ?? "");
     const [path, setPath] = useState(inventory?.path ?? "");
     const [vaultId, setVaultId] = useState(inventory?.vault_credential_id ?? "");
+    const sets = useLoad(() => call<{ variable_sets: VariableSet[] }>("varset.list"));
+    const [setIds, setSetIds] = useState<string[]>(inventory?.variable_set_ids ?? []);
     const files = useLoad(() => projectId
         ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
         : Promise.resolve<ProjectPaths>({ files: [], directories: [] }), [projectId]);
@@ -42,7 +45,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
             // Written here: the text of its main file when it is created, then
             // its files are changed on their own page.
             : inventory ? { path: path.trim() } : { format, content };
-        const params = { name, vault_credential_id: vaultId, ...source };
+        const params = { name, vault_credential_id: vaultId, variable_set_ids: setIds, ...source };
         const saved = inventory
             ? await call<Inventory>("inventory.update", { id: inventory.id, ...params })
             : await call<Inventory>("inventory.create", { kind, ...params });
@@ -113,6 +116,8 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                 </FormSelect>
                 <FormHelperText><HelperText><HelperTextItem>{t("Needed when the inventory's variables are encrypted with Ansible Vault.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
+            <SetOrderField sets={sets.data?.variable_sets ?? []} ids={setIds} onChange={setSetIds} fieldId="inv-varsets"
+                help={t("Every job on the inventory takes them, in this order, a later one winning: runs before their template's sets, ad-hoc commands and checks. Its files use them by name, a secret variable too: {{example}}.", { example: 'ansible_password: "{{ lab_password }}"' })} />
         </FormModal>
     );
 }

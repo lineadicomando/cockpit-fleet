@@ -51,7 +51,9 @@ def config_export(ctx: Context, params: Values) -> dict:
         item = {"name": row["name"], "kind": row["kind"],
                 "project": projects.get(row["project_id"], ""), "path": row["path"],
                 "format": row["format"], "content": "",
-                "vault_credential": credentials.get(row["vault_credential_id"], "")}
+                "vault_credential": credentials.get(row["vault_credential_id"], ""),
+                "variable_sets": [one["name"]
+                                  for one in variables.inventory_sets(conn, row["id"])]}
         if row["kind"] == "managed":
             # The whole tree; content, its main file, for an import of before trees.
             item["files"] = files.tree_files(ctx, row)
@@ -62,7 +64,9 @@ def config_export(ctx: Context, params: Values) -> dict:
         for row in conn.execute("SELECT * FROM host_keys ORDER BY host, key_type")]
     document["variable_sets"] = [
         {"name": row["name"], "description": row["description"],
-         "variables": store.loads(row["variables"], {})}
+         "variables": store.loads(row["variables"], {}),
+         # Their names: the values stay here, and are entered again there.
+         "secrets": sorted(store.loads(row["secrets"], {}))}
         for row in conn.execute("SELECT * FROM variable_sets ORDER BY name COLLATE NOCASE")]
     document["templates"] = []
     for row in conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE").fetchall():
@@ -200,9 +204,14 @@ class _Importer:
 
     def inventory(self, item: dict) -> None:
         kind = item.get("kind")
+        sets = item.get("variable_sets") or []
+        if not isinstance(sets, list):
+            raise BadRequest("variable_sets must be a list")
         params = {"name": item.get("name"), "kind": kind,
                   "vault_credential_id": self._id("credentials", item.get("vault_credential"),
-                                                  "credential")}
+                                                  "credential"),
+                  "variable_set_ids": [self._id("variable_sets", name, "set of variables", True)
+                                       for name in sets]}
         if kind == "file":
             params.update(project_id=self._id("projects", item.get("project"), "project", True),
                           path=item.get("path"))
@@ -227,7 +236,8 @@ class _Importer:
 
     def variable_set(self, item: dict) -> None:
         self._create("varset.create", {key: item[key] for key in
-                                       ("name", "description", "variables") if key in item})
+                                       ("name", "description", "variables", "secrets")
+                                       if key in item})
 
     def template(self, item: dict) -> None:
         vaults = item.get("vault_credentials") or []
@@ -326,10 +336,11 @@ def config_import(ctx: Context, params: Values) -> dict:
     work = _Importer(ctx)
     work._each("credentials", document.get("credentials", []), "credentials", work.credential)
     work._each("projects", document.get("projects", []), "projects", work.project)
-    work._each("inventories", document.get("inventories", []), "inventories", work.inventory)
-    work._each("host_keys", document.get("host_keys", []), None, work.host_key)
+    # Sets before inventories, which take them.
     work._each("variable_sets", document.get("variable_sets", []), "variable_sets",
                work.variable_set)
+    work._each("inventories", document.get("inventories", []), "inventories", work.inventory)
+    work._each("host_keys", document.get("host_keys", []), None, work.host_key)
     work._each("templates", document.get("templates", []), "templates", work.template)
     work._each("workflows", document.get("workflows", []), "workflows", work.workflow)
     work._each("schedules", document.get("schedules", []), "schedules", work.schedule)

@@ -177,10 +177,11 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <Checkbox id="tpl-become" label={t("Run with privilege escalation (become)")} isChecked={become} onChange={(_e, value) => setBecome(value)} />
             </FormGroup>
             <ApprovalModeField id="tpl-approval" value={approval} onChange={setApproval} />
-            <VariableSetsField sets={choices.sets} ids={setIds} onChange={setSetIds} own={extraVars} />
+            <VariableSetsField sets={choices.sets} ids={setIds} onChange={setSetIds} own={extraVars}
+                inventoryIds={choices.inventories.find(one => one.id === inventoryId)?.variable_set_ids ?? []} />
             <FormGroup label={t("Extra variables")} fieldId="tpl-vars" role="group">
                 <CodeEditor className="fleet-code-field fleet-code-short" label={t("Extra variables")} path="vars.json" value={extraVars} onChange={setExtraVars} placeholder={'{\n  "version": "1.2"\n}'} />
-                <FormHelperText><HelperText><HelperTextItem>{t("A JSON object. Not for secrets: they would be stored in clear.")}</HelperTextItem></HelperText></FormHelperText>
+                <FormHelperText><HelperText><HelperTextItem>{t("A JSON object. Not for secrets: they would be stored in clear; they go among the secret variables of a set.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
             <SurveyEditor drafts={survey} onChange={setSurvey} />
         </FormModal>

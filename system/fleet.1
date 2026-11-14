@@ -33,6 +33,9 @@ fleet \- drive Ansible through cockpit-fleet from a terminal
 .B fleet secret \-\-channel
 .I channel
 .br
+.B fleet secret \-\-varset
+.I set variable
+.br
 .B fleet help
 .RI [ area " [" verb ]]
 .SH DESCRIPTION
@@ -184,8 +187,11 @@ waits for its end.
 .B secret
 Sets a secret of a credential, or with
 .B \-\-channel
-the secret of a notification channel (administrators only), asked for twice at
-the terminal or read from the standard input. It cannot be read back.
+the secret of a notification channel, or with
+.B \-\-varset
+the value of a secret variable of a set of variables (administrators only),
+asked for twice at the terminal or read from the standard input. It cannot be
+read back.
 .TP
 .B assistant
 Talks to the agent of the chat in this terminal, its only tools those of
@@ -214,6 +220,7 @@ fleet file write p1a2b3c4d5e6 \-\-path site.yml \-\-content @site.yml \e
     \-\-expected SHA256_OF_THE_VERSION_READ
 printf '%s' "$TOKEN" | fleet secret git\-token token
 fleet secret \-\-channel telegram
+fleet secret \-\-varset licenses sketchup_serial_number
 .fi
 .SH SEE ALSO
 .BR sudo (8),

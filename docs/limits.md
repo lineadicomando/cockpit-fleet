@@ -42,6 +42,13 @@ in [security.md](security.md); the decisions behind these limits in
   Btrfs, and count their whole size against `[store] max_gb` there too; a
   copy made by a job is of the files as they were when it was asked.
 - Ad-hoc: arguments as one line in the page, stored in clear.
+- Sets of variables: a secret variable is an extra variable, one value for
+  every host of a run (a value per group needs a name per group); its value
+  is not in the inventory's tree, so a clone of it used at a terminal does
+  not have it; a value cannot be checked against one typed (no "verify");
+  the file of a secret variable taken out of a set by a client other than
+  the page or `fleet` stays in `/etc/cockpit-fleet/secrets` (`fleet-secret
+  delete` removes it).
 - Masking: other encodings, and secrets a run decrypts itself, not masked.
 - Agents: `tools/list` while disabled audits a denial; `run.result` holds a
   process up to 50 s; 216 of 329 parameters have no description (205 of

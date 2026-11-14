@@ -212,6 +212,35 @@ expect_denied "the ticket is gone once used" test -e "/run/cockpit-fleet/answers
 expect_eq "a ticket serves one launch" \
     "$(get "$(ctl itoperator run.start "{\"template_id\": \"$secret_id\", \"answers\": {\"token\": \"$ticket\"}}")" 'a["error"]["code"]')" bad_request
 
+# --- a secret variable of a set, which the inventory's group_vars refer to -----------
+varset=$(admin varset.create '{"name": "licenses", "secrets": ["lab_token", "never_set"]}')
+varset_id=$(get "$varset" 'a["data"]["id"]')
+secret_name() { get "$varset" "[s[\"secret_name\"] for s in a[\"data\"][\"secrets\"] if s[\"name\"] == \"$1\"][0]"; }
+printf '%s' 'S3tVariable {{ 2 + 2 }}' | sudo -u itadmin sudo -n "$SECRET" set "$(secret_name lab_token)"
+expect_eq "operator cannot change a set of variables" \
+    "$(get "$(ctl itoperator varset.update "{\"id\": \"$varset_id\", \"name\": \"x\"}")" 'a["error"]["code"]')" forbidden
+expect_eq "the set says which secret variables are set, never a value" \
+    "$(ctl itoperator varset.list | python3 -c 'import json, sys; t = sys.stdin.read(); print("S3tVariable" in t, [sorted((s["name"], s["set"]) for s in v["secrets"]) for v in json.loads(t)["data"]["variable_sets"] if v["name"] == "licenses"][0])')" \
+    "False [('lab_token', True), ('never_set', False)]"
+licensed=$(get "$(admin inventory.create "{\"name\": \"licensed\", \"kind\": \"managed\", \"variable_set_ids\": [\"$varset_id\"], \"files\": [{\"path\": \"hosts\", \"content\": \"[local]\\nself ansible_host=127.0.0.1\\n\"}, {\"path\": \"group_vars/local/vars.yaml\", \"content\": \"token: \\\"{{ lab_token }}\\\"\\n\"}]}")" 'a["data"]["id"]')
+expect_run "an inventory that refers to a secret variable is read" "$(get "$(admin inventory.parse "{\"id\": \"$licensed\"}")" 'a["data"]["run_id"]')" 60 successful
+licensed_tpl=$(get "$(admin template.create "{\"name\": \"licensed\", \"project_id\": \"$project_id\", \"playbook\": \"secret.yml\", \"inventory_id\": \"$licensed\", \"machine_credential_id\": \"$cred_id\"}")" 'a["data"]["id"]')
+expect_eq "a secret variable with no value stops the launch" \
+    "$(get "$(ctl itoperator run.start "{\"template_id\": \"$licensed_tpl\"}")" 'a["error"]["code"]')" bad_request
+admin varset.update "{\"id\": \"$varset_id\", \"name\": \"licenses\", \"secrets\": [\"lab_token\"]}" >/dev/null
+rm -f /tmp/fleet-it-marker
+run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$licensed_tpl\"}")" 'a["data"]["id"]')
+expect_run "a run takes the secret variable of its inventory's set" "$run_id" 120 successful
+expect_eq "the inventory's group_vars got it, as it was typed" "$(cat /tmp/fleet-it-marker 2>/dev/null)" 'S3tVariable {{ 2 + 2 }}'
+expect_eq "the run records the name, not the value" \
+    "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["options"]["secret_vars"]')" "['lab_token']"
+log=$(get "$(ctl itoperator run.log "{\"id\": \"$run_id\"}")" 'a["data"]["text"]')
+expect_eq "printed by the playbook, it is masked" "$(printf '%s' "$log" | grep -c 'the token is \*\*\*\*\*\*\*\*')" 1
+if grep -rqa 'S3tVariable' /var/lib/cockpit-fleet /run/cockpit-fleet /etc/cockpit-fleet; then fail "the secret variable is in clear somewhere"; else pass "the secret variable is in no file, database or log of the backend"; fi
+# The run's own lines; the node, this same machine, logs the module's arguments.
+if journalctl -t cockpit-fleet-run -t cockpit-fleet --since -5min 2>/dev/null | grep -q 'S3tVariable'; then fail "the secret variable is in the journal"; else pass "the secret variable is not in the journal"; fi
+rm -f /tmp/fleet-it-marker
+
 # --- approval: the run waits, prepared, until another user approves it ------------
 useradd -m -G cockpit-fleet-approver itapprover
 admin template.update "{\"id\": \"$secret_id\", \"name\": \"secret\", \"project_id\": \"$project_id\", \"playbook\": \"secret.yml\", \"inventory_id\": \"$inventory_id\", \"machine_credential_id\": \"$cred_id\", \"survey\": [{\"name\": \"token\", \"type\": \"secret\", \"required\": true}], \"needs_approval\": true}" > /dev/null
@@ -305,7 +334,7 @@ expect_eq "and exports the same again" \
     "$(get "$(admin config.export)" '{k: v for k, v in a["data"].items() if k != "exported_at"}')" \
     "$(get "$exported" '{k: v for k, v in a["data"].items() if k != "exported_at"}')"
 expect_eq "an imported credential has no secret" "$(get "$(admin credential.list)" '[c["secrets"]["password"] for c in a["data"]["credentials"] if c["name"] == "local ssh"]')" "[False]"
-expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 5
+expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 6
 
 # --- git project ---------------------------------------------------------------
 if [ -n "${IT_GIT_URL:-}" ]; then

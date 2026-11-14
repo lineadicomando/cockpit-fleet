@@ -10,7 +10,7 @@ hand.
 |---|---|
 | [overview.md](architecture/overview.md) | The parts and how a run flows; the security model: privilege boundaries (why no polkit rule), secrets, the run sandbox |
 | [backend.md](architecture/backend.md) | `fleetctl`: the registry of commands, roles and rights, the audit |
-| [jobs.md](architecture/jobs.md) | Runs and the other jobs, `fleet-run`, the queue and lanes, runs in series; what a launch is given: host keys, keys with a passphrase, vaults, sets of variables, limits, ad-hoc commands, surveys, secret answers, masking |
+| [jobs.md](architecture/jobs.md) | Runs and the other jobs, `fleet-run`, the queue and lanes, runs in series; what a launch is given: host keys, keys with a passphrase, vaults, sets of variables and secret variables, limits, ad-hoc commands, surveys, secret answers, masking |
 | [projects.md](architecture/projects.md) | Projects (git, managed, uploaded), Galaxy, syntax checks, the files page and editor, `ansible.cfg`, help on modules, inventories (file, managed) |
 | [store.md](architecture/store.md) | The store: hard links and intake, uploads, downloads to the browser and from URLs, copies, archives, sources, the page |
 | [schedules.md](architecture/schedules.md) | The timer and `scheduler.tick`, missed times, overlap |

@@ -10,6 +10,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Secret variables in a set of variables: their values are encrypted as a
+  credential's and can never be read back; a run gets them as extra
+  variables, used as written, and they are masked in its output. An
+  inventory takes sets of variables too, so that its own files and the
+  playbooks use a secret by name (`ansible_password: "{{ lab_password }}"`,
+  a license key): every run on it takes them before its template's sets,
+  and so do ad-hoc commands and checks. Administrators set the values on
+  the Variables page or with `fleet secret --varset SET VARIABLE`; an
+  export carries their names, and they are entered again after an import.
+  A run stops when a secret variable it takes has no value.
 - The store: files on the controller that playbooks copy to nodes, on a
   page of their own (Store) and with `fleet store put` and `fleet store
   read`. Files of any size are uploaded from the browser, resumed when an

@@ -57,7 +57,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     inventory = store.fetch(ctx.conn, "inventories", template["inventory_id"], "inventory")
     limits = [template["limit_hosts"], check_limit(limit) if limit else ""]
     variables, tickets = survey.answer(store.loads(template["survey"], []), answers)
-    extra_vars, sets = varsets.effective(ctx.conn, template)
+    effective = varsets.effective(ctx.conn, template)
 
     spec = {
         "kind": "playbook",
@@ -74,7 +74,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         "verbosity": template["verbosity"],
         "tags": store.loads(template["tags"], []),
         "skip_tags": store.loads(template["skip_tags"], []),
-        "extra_vars": extra_vars,
+        "extra_vars": effective.variables,
         "survey_vars": variables,
         "survey_secrets": {},
         "workflow_vars": workflow["vars"] if workflow else {},
@@ -100,6 +100,7 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         for index, vault in enumerate(template_vaults(ctx, template_id)):
             jobs.add_secret(directory, vault["id"], "vault_password", f"vault_password_{index}")
             spec["vaults"].append({"file": f"vault_password_{index}", "id": vault["vault_id"]})
+        spec["secret_vars"] = effective.place_secrets(directory)
         for index, (name, ticket) in enumerate(tickets.items()):
             jobs.take_answer(directory, ticket, f"survey_{index}")
             spec["survey_secrets"][name] = f"survey_{index}"
@@ -111,9 +112,11 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     options = {"limit": limit, "check": check, "diff": spec["diff"], "answers": variables,
                # Which secrets were given; their values are in no record.
                "secret_answers": sorted(tickets)}
-    if sets:
+    if effective.sets:
         # Which sets of variables it took, by name as they were then.
-        options["variable_sets"] = sets
+        options["variable_sets"] = effective.sets
+    if effective.secrets:
+        options["secret_vars"] = sorted(effective.secrets)
     if serial:
         options["serial"] = True
     run = {"id": run_id, "kind": "playbook", "title": template["name"],
@@ -189,9 +192,11 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
         project_id = inventory["project_id"]
     project = store.fetch(ctx.conn, "projects", project_id, "project") if project_id else None
 
+    # The sets of its inventory, so that what its files refer to is there.
+    effective = varsets.of_inventory(ctx.conn, inventory_id)
     spec = {"kind": "adhoc", "module": module, "free_form": free_form, "args": args,
             "limit": limit, "check": check, "diff": diff or check, "become": become,
-            "forks": forks, "vaults": []}
+            "forks": forks, "vaults": [], "extra_vars": effective.variables}
     run_id = store.new_id("r")
     directory = jobs.create_dir(run_id)
     try:
@@ -213,6 +218,7 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
             vault = store.fetch(ctx.conn, "credentials", vault_id, "credential")
             jobs.add_secret(directory, vault_id, "vault_password", f"vault_password_{index}")
             spec["vaults"].append({"file": f"vault_password_{index}", "id": vault["vault_id"]})
+        spec["secret_vars"] = effective.place_secrets(directory)
         jobs.write_known_hosts(ctx.conn, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
@@ -220,6 +226,10 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
 
     options = {"module": module, "free_form": free_form, "args": args, "limit": limit,
                "check": check, "diff": spec["diff"], "become": become}
+    if effective.sets:
+        options["variable_sets"] = effective.sets
+    if effective.secrets:
+        options["secret_vars"] = sorted(effective.secrets)
     if params["serial"]:
         options["serial"] = True
     run = {"id": run_id, "kind": "adhoc", "title": f"{module} [{limit}]",

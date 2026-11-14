@@ -138,8 +138,36 @@ from the `group_vars` of an inventory, which depend on the hosts and lose
 to extra variables: a set is chosen by the template and wins over the
 defaults of roles and over the inventory. The form of a template shows what
 a run will get, variable by variable, with where each comes from
-(`src/lib/variables.ts`). Discarded for now: secret variables in a set
-(they would be encrypted as credentials are) and sets for ad-hoc commands.
+(`src/lib/variables.ts`).
+
+**Secret variables and the sets of an inventory** (phase 15, schema 28).
+A set also has secret variables: their names are in the set (`secrets`, a
+name for a random slot), their values are stored by `fleet-secret` as
+`s-SLOT`, as a credential's are, and set apart from `varset.update` by the
+interface or by `fleet secret --varset`, so that none passes through
+`fleetctl`. A name left out of an update keeps its slot, and a set the
+caller sends without `secrets` keeps them all: a client that knows nothing
+of them must not drop their values. An inventory takes sets too
+(`inventory_variable_sets`), so that what its files refer to is given to
+every job on it: a run takes the inventory's sets, then the template's,
+then the template's own variables, a later one winning whether plain or
+secret; an ad-hoc command and a check cycle take the inventory's alone.
+At launch the ciphertext of each secret that won is copied into the run's
+credentials (`secret_var_N`); one with no value stops the launch (a check
+cycle is then not prepared, and its states say why). `fleet-run` writes
+them, tagged `!unsafe`, into `secret_vars.yml` in the runtime directory,
+after the plain extra variables, and they are masked in the output as
+every secret of a run. Checked with ansible-core 2.16: an extra variable
+given that way reaches the playbook and the inventory's own files (a
+`group_vars` holding `serial: "{{ secret }}"`), and the listing of the
+inventory keeps the reference, not the value. Names are an
+administrator's, so `ansible_*` is allowed, unlike a survey's: a secret
+`ansible_become_password` works. A run takes at most 30, and its
+credentials at most 128 files (`credstage.MAX_FILES`). Rejected: editing
+Ansible Vault files in the interface (`decisions.md`), which would have
+had to decrypt them in a job; a secret is a set's, not an inventory's own,
+so that one value serves several inventories, as Semaphore's variable
+groups do for templates.
 
 **Limits a launcher can change.** Launching a template, an operator may add a
 host limit and ask for a dry run. The limit narrows the template's own and

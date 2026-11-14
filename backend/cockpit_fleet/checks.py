@@ -23,7 +23,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import catalog, cmdb, jobs, journal, metrics, notify, paths, runner, store
+from . import catalog, cmdb, jobs, journal, metrics, notify, paths, runner, store, variables
 from .catalog import COMPLIANCE, CRITICAL, OK, OWN_KINDS, PLAYBOOK, STATE_NAMES, UNKNOWN, WARNING
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
@@ -573,6 +573,10 @@ def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: boo
                                 "credential")
             jobs.add_secret(directory, vault["id"], "vault_password", "vault_password_0")
             spec["vaults"].append({"file": "vault_password_0", "id": vault["vault_id"]})
+        # The sets of the inventory, so that what its files refer to is there.
+        effective = variables.of_inventory(ctx.conn, inventory["id"])
+        spec["extra_vars"] = effective.variables
+        spec["secret_vars"] = effective.place_secrets(directory)
         jobs.write_known_hosts(ctx.conn, directory)
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)

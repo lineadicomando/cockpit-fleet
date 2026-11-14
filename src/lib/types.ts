@@ -196,6 +196,8 @@ export interface Inventory {
     path: string;
     format: "yaml" | "ini";
     vault_credential_id: string | null;
+    // The sets of variables every job on it takes, in order.
+    variable_set_ids: string[];
     parsed_at: number | null;
     parse_error: string;
     host_count: number;
@@ -247,9 +249,19 @@ export interface VariableSet {
     name: string;
     description: string;
     variables: Record<string, unknown>;
-    // The job templates that take it.
+    // Its secret variables: whether each has a value, never the value.
+    secrets: VariableSecret[];
+    // The job templates and the inventories that take it.
     templates: { id: string; name: string }[];
+    inventories: { id: string; name: string }[];
     updated_at: number;
+}
+
+export interface VariableSecret {
+    name: string;
+    // What fleet-secret stores its value under.
+    secret_name: string;
+    set: boolean;
 }
 
 export interface Template {

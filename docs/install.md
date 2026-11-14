@@ -67,7 +67,7 @@ domain), and what they may do in Fleet comes from the group of that account:
 |---|---|
 | `cockpit-fleet-viewer` | see projects, inventories, templates, schedules, the outcome of runs, hosts and the states of their checks; not the output of runs |
 | `cockpit-fleet-operator` | also launch templates (narrowing the hosts, a dry run, answering the survey), read the output of runs, cancel them, acknowledge problems, open maintenance windows, run a check or a schedule now, switch schedules on and off |
-| `cockpit-fleet-admin` | everything: projects, inventories, credentials and their secrets, host keys, templates, schedules, checks, notifications, ad-hoc commands, the audit log, export and import |
+| `cockpit-fleet-admin` | everything: projects, inventories, credentials and their secrets, sets of variables and their secret variables, host keys, templates, schedules, checks, notifications, ad-hoc commands, the audit log, export and import |
 | `cockpit-fleet-approver` | approve or reject the runs of templates that ask for it, whatever their role, or alone |
 
 The highest of the three roles wins; the approver group adds to it. A

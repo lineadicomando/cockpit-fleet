@@ -333,6 +333,22 @@ class SecretTest(unittest.TestCase):
         terminal.run(term(fake, stdin=key), COMMANDS, ["secret", "c1", "token"])
         self.assertEqual([value for _, value in fake.secrets], ["tok", key])
 
+    def test_a_secret_variable_of_a_set(self):
+        sets = {"variable_sets": [{"id": "v1", "name": "licenses", "secrets": [
+            {"name": "serial", "secret_name": "s-0123456789abcdef", "set": False}]}]}
+        fake = Fake({"varset.list": sets})
+        terminal.run(term(fake, stdin="AB-12\n"), COMMANDS,
+                     ["secret", "--varset", "licenses", "serial"])
+        self.assertEqual(fake.secrets, [(["set", "s-0123456789abcdef"], "AB-12")])
+        for args in (["secret", "--varset", "licenses"],
+                     ["secret", "--varset", "licenses", "other"],
+                     ["secret", "--varset", "--channel", "licenses", "serial"]):
+            with self.assertRaises((Usage, SystemExit), msg=args):
+                terminal.run(term(fake, stdin="x"), COMMANDS, args)
+        complete = terminal.complete
+        self.assertEqual(complete(COMMANDS, ["secret", "--varset", "licenses", ""],
+                                  lambda name, params: sets), ["serial"])
+
 
 class ErrorsTest(unittest.TestCase):
     def test_a_refusal_and_an_unreachable_backend_are_failures(self):

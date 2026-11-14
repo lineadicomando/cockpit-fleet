@@ -204,6 +204,20 @@ class CycleTest(CheckBase):
         runs = self.ok("run.list", {"kind": "inventory"})["runs"]
         self.assertEqual([run["inventory_id"] for run in runs], [inventory["id"]])
 
+    def test_a_cycle_takes_the_sets_of_variables_of_its_inventory(self):
+        inventory = self.inventory()
+        made = self.ok("varset.create", {"name": "lab", "variables": {"domain": "lab.edu"},
+                                         "secrets": ["ansible_password"]})
+        (paths.SECRETS_DIR / f"{made['secrets'][0]['secret_name']}.cred").write_text("pw")
+        self.ok("inventory.update", {"id": inventory["id"], "variable_set_ids": [made["id"]]})
+        self.check(inventory, "reachability")
+        queued = self.tick()["queued"]
+        spec = json.loads((paths.RUNS_DIR / queued[0] / "spec.json").read_text())
+        self.assertEqual((spec["extra_vars"], spec["secret_vars"]),
+                         ({"domain": "lab.edu"}, {"ansible_password": "secret_var_0"}))
+        self.assertEqual((paths.RUNS_DIR / queued[0] / "creds" / "secret_var_0").read_text(),
+                         "pw")
+
     def test_the_tick_plans_one_cycle_per_shard_with_a_limit_of_its_own(self):
         self.config = dataclasses.replace(self.config, checks_shard_size=2,
                                           checks_max_concurrent=1, max_concurrent_runs=1)

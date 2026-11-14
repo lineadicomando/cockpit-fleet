@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { effectiveVariables, moved, parseVariables } from "../src/lib/variables.ts";
 import type { VariableSet } from "../src/lib/types.ts";
 
-const set = (id: string, name: string, variables: Record<string, unknown>): VariableSet =>
-    ({ id, name, description: "", variables, templates: [], updated_at: 0 });
+const set = (id: string, name: string, variables: Record<string, unknown>, secrets: string[] = []): VariableSet =>
+    ({
+        id, name, description: "", variables, templates: [], inventories: [], updated_at: 0,
+        secrets: secrets.map(one => ({ name: one, secret_name: `s-${one}`, set: true })),
+    });
 
 test("sets apply in order, the template's own last", () => {
     const sets = [set("v1", "school", { domain: "a.edu", rooms: 1 }), set("v2", "lab", { rooms: 2, iso: "x" })];
@@ -16,6 +19,20 @@ test("sets apply in order, the template's own last", () => {
     ]);
     // The order chosen decides; a set not found is left out.
     assert.equal(effectiveVariables(sets, ["v2", "v1", "gone"], {}).find(one => one.name === "rooms")?.from, "school");
+});
+
+test("the inventory's sets come first, and a secret has no value here", () => {
+    const sets = [
+        set("v1", "licenses", { seats: 12 }, ["serial", "token"]),
+        set("v2", "lab", { token: "plain" }),
+    ];
+    const got = effectiveVariables(sets, ["v2"], {}, ["v1"]);
+    assert.deepEqual(got.map(one => [one.name, one.value, one.secret, one.from, one.ofInventory, one.overrides]), [
+        ["seats", 12, false, "licenses", true, []],
+        ["serial", undefined, true, "licenses", true, []],
+        // A plain variable of a later set wins over a secret of an earlier one.
+        ["token", "plain", false, "lab", false, ["licenses"]],
+    ]);
 });
 
 test("the editor's text is an object or nothing", () => {

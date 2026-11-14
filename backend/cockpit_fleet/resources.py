@@ -339,11 +339,12 @@ def project_files(ctx: Context, params: Values) -> dict:
 NOT_READ = "the inventory could not be read: an administrator can see why"
 
 
-def _inventory(row, with_hosts: bool = False, admin: bool = True) -> dict:
+def _inventory(conn, row, with_hosts: bool = False, admin: bool = True) -> dict:
     hosts = store.loads(row["hosts"], [])
     data = {key: row[key] for key in ("id", "name", "kind", "project_id", "path", "format",
                                       "vault_credential_id", "parsed_at", "parse_error",
                                       "revision")}
+    data["variable_set_ids"] = [one["id"] for one in variables.inventory_sets(conn, row["id"])]
     if not admin and data["parse_error"]:
         # Ansible quotes the lines it could not read, and they may hold passwords.
         data["parse_error"] = NOT_READ
@@ -364,6 +365,10 @@ _INVENTORY_PARAMS = {
     "format": Choice(("yaml", "ini"), default="yaml"),
     "content": Str("For an inventory written here, the text of its main file: hosts.yml,"
                    " or hosts for INI", max_length=512 * 1024),
+    "variable_set_ids": Strs("Sets of variables, secret ones included, that every job on the"
+                             " inventory takes (runs before their template's sets, ad-hoc"
+                             " commands, checks), in order, a later one winning. Left out of"
+                             " an update: unchanged.", max_items=variables.MAX_PER_TEMPLATE),
 }
 # The files an inventory written here is created with, as file.change writes them.
 _INVENTORY_FILES = Objs("For an inventory written here, files of its tree to create it with:"
@@ -414,7 +419,8 @@ def inventory_list(ctx: Context, params: Values) -> dict:
     """The inventories, with how many hosts each was last read to have."""
     jobs.reconcile(ctx)
     rows = ctx.conn.execute("SELECT * FROM inventories ORDER BY name COLLATE NOCASE")
-    return {"inventories": [_inventory(row, admin=ctx.caller.role == "admin") for row in rows]}
+    return {"inventories": [_inventory(ctx.conn, row, admin=ctx.caller.role == "admin")
+                            for row in rows]}
 
 
 @command("inventory.get", role="viewer",
@@ -427,7 +433,7 @@ def inventory_get(ctx: Context, params: Values) -> dict:
     inventory_id = params["id"]
     jobs.reconcile(ctx)
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-    data = _inventory(row, with_hosts=True, admin=ctx.caller.role == "admin")
+    data = _inventory(ctx.conn, row, with_hosts=True, admin=ctx.caller.role == "admin")
     # The text of a managed inventory may hold connection passwords.
     data["content"] = files.main_text(ctx, row) \
         if row["kind"] == "managed" and ctx.caller.role == "admin" else ""
@@ -454,14 +460,15 @@ def inventory_create(ctx: Context, params: Values) -> dict:
     if kind == "file" and params["files"]:
         raise BadRequest("unknown parameter: files")
     values = _inventory_values(ctx, params, kind)
+    sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"], "an inventory")
     operations = []
     for index, item in enumerate(params["files"]):
         if not isinstance(item, dict) or "op" in item or "expected" in item:
             raise BadRequest(f"files[{index}] must have path, and content or data")
         operations.append({"op": "write", **item})
     inventory_id = store.new_id("i")
-    store.insert(ctx.conn, "inventories", {"id": inventory_id, "name": name, "kind": kind,
-                                           "created_at": store.now(), **values}, "inventory")
+    _save_inventory(ctx, inventory_id, {"name": name, "kind": kind, "created_at": store.now(),
+                                        **values}, sets, create=True)
     if kind == "managed":
         row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
         try:
@@ -470,7 +477,25 @@ def inventory_create(ctx: Context, params: Values) -> dict:
             store.delete(ctx.conn, "inventories", inventory_id, "inventory")
             shutil.rmtree(paths.INVENTORIES_DIR / inventory_id, ignore_errors=True)
             raise
-    return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+    return _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+
+
+def _save_inventory(ctx: Context, inventory_id: str, values: dict, sets: list[str] | None,
+                    create: bool) -> None:
+    """Write an inventory's row and, unless None, its sets of variables, at once."""
+    conn = ctx.conn
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if create:
+            store.insert(conn, "inventories", {"id": inventory_id, **values}, "inventory")
+        else:
+            store.update(conn, "inventories", inventory_id, values, "inventory")
+        if sets is not None:
+            variables.save_inventory_sets(conn, inventory_id, sets)
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
 
 
 @command("inventory.update", role="admin", mutating=True, redact=("content",),
@@ -482,11 +507,13 @@ def inventory_update(ctx: Context, params: Values) -> dict:
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     name = store.check_name(row["name"] if params["name"] is None else params["name"])
     values = _inventory_values(ctx, params, row["kind"], row)
-    store.update(ctx.conn, "inventories", inventory_id, {"name": name, **values}, "inventory")
+    sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"], "an inventory") \
+        if "variable_set_ids" in params.given else None
+    _save_inventory(ctx, inventory_id, {"name": name, **values}, sets, create=False)
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     if row["kind"] == "managed":
         _write_main(ctx, row, params["content"], [])
-    return _inventory(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+    return _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
 @command("inventory.delete", role="admin", mutating=True, agent="code",

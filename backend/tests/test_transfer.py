@@ -22,17 +22,21 @@ class TransferTest(Base):
         source = self.ok("credential.create", {"name": "token", "kind": "source"})
         (paths.SECRETS_DIR / f"c-{machine['id']}-password.cred").write_bytes(b"TopSecretCipher")
         project = self.local_project()
+        school = self.ok("varset.create", {"name": "school", "description": "the school",
+                                           "variables": {"domain": "school.edu"},
+                                           "secrets": ["license"]})
+        (paths.SECRETS_DIR / f"{school['secrets'][0]['secret_name']}.cred").write_bytes(
+            b"LicenseCipher")
         self.ok("project.create", {"name": "git", "kind": "git", "ref": "v1",
                                    "url": "https://example.org/a/b.git",
                                    "credential_id": source["id"]})
         managed = self.ok("inventory.create", {"name": "inv", "kind": "managed", "format": "ini",
                                                "content": "[all]\na\n",
-                                               "vault_credential_id": vault["id"]})
+                                               "vault_credential_id": vault["id"],
+                                               "variable_set_ids": [school["id"]]})
         self.ok("inventory.create", {"name": "file", "kind": "file", "project_id": project["id"],
                                      "path": "inventories/hosts.yml"})
         self.ok("hostkey.add", {"host": "10.0.0.5", "key_type": "ssh-ed25519", "key": KEY})
-        school = self.ok("varset.create", {"name": "school", "description": "the school",
-                                           "variables": {"domain": "school.edu"}})
         self.ok("template.create", {
             "name": "deploy", "project_id": project["id"], "playbook": "site.yml",
             "inventory_id": managed["id"], "machine_credential_id": machine["id"],
@@ -73,13 +77,18 @@ class TransferTest(Base):
         self.assertEqual((document["format"], document["version"]), ("cockpit-fleet-config", 1))
         self.assertEqual([c["name"] for c in document["credentials"]], ["ssh", "token", "vault"])
         self.assertNotIn("TopSecretCipher", text)
-        self.assertNotIn("secret", text)
+        self.assertNotIn("LicenseCipher", text)
+        # Of a secret, only the names of a set's secret variables.
+        self.assertNotIn("secret", text.replace('"secrets": ["license"]', ""))
         template = document["templates"][0]
         self.assertEqual((template["project"], template["inventory"], template["machine_credential"],
                           template["vault_credentials"]), ("site", "inv", "ssh", ["vault"]))
         self.assertEqual(template["variable_sets"], ["school"])
         self.assertEqual(document["variable_sets"], [{"name": "school", "description": "the school",
-                                                      "variables": {"domain": "school.edu"}}])
+                                                      "variables": {"domain": "school.edu"},
+                                                      "secrets": ["license"]}])
+        self.assertEqual([one["variable_sets"] for one in document["inventories"]],
+                         [[], ["school"]])
         self.assertEqual(document["projects"][0]["credential"], "token")
         self.assertEqual(self.code("config.export", role="operator"), "forbidden")
 

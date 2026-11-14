@@ -15,7 +15,8 @@ import shutil
 import stat
 from pathlib import Path
 
-MAX_FILES = 64
+# A machine credential's four, 20 vaults, 30 secret answers, 30 secret variables.
+MAX_FILES = 128
 # A secret is 64 KiB at most; encrypted, a little more.
 MAX_SIZE = 256 * 1024
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")

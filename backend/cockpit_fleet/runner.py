@@ -49,6 +49,9 @@ CREDENTIAL_OPTIONS = {
 
 _VAULT_FILE_RE = re.compile(r"vault_password_[0-9]{1,3}")
 _SURVEY_FILE_RE = re.compile(r"survey_[0-9]{1,2}")
+_SECRET_VAR_FILE_RE = re.compile(r"secret_var_[0-9]{1,2}")
+# A variable of a set: an administrator's, so ansible_* names too.
+_VARIABLE_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
 
 # Packaged helper that prints a secret from the file named in its environment.
 # The run's scratch directory is mounted noexec, so it cannot be written there.
@@ -356,6 +359,25 @@ def survey_secrets(secrets: object, credentials_dir: Path | None) -> dict[str, s
     return values
 
 
+def secret_vars(secrets: object, credentials_dir: Path | None) -> dict[str, str]:
+    """The secret variables of a run's sets of variables, by name, read
+    from its credentials. A missing one stops the run, as a secret answer's."""
+    if not isinstance(secrets, dict) or len(secrets) > 30:
+        raise BadRequest("secret_vars must be an object")
+    values = {}
+    for name, file in secrets.items():
+        if not isinstance(file, str) or not _SECRET_VAR_FILE_RE.fullmatch(file) \
+                or not isinstance(name, str) or not _VARIABLE_RE.fullmatch(name):
+            raise BadRequest("invalid secret variable entry")
+        try:
+            if credentials_dir is None:
+                raise FileNotFoundError
+            values[name] = (credentials_dir / f"fleet_{file}").read_text()
+        except (OSError, UnicodeDecodeError):
+            raise BadRequest(f"the secret variable {name} is missing or unreadable") from None
+    return values
+
+
 def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
                    credentials_dir: Path | None, playbook: Path,
                    limit_file: Path | None = None) -> list[str]:
@@ -396,6 +418,16 @@ def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
         vars_file = runtime_dir / "extra_vars.json"
         vars_file.write_text(json.dumps(extra_vars))
         argv += ["--extra-vars", f"@{vars_file}"]
+    hidden = secret_vars(spec.get("secret_vars", {}), credentials_dir)
+    if hidden:
+        # Those of the sets of variables, where they won over a plain one:
+        # no name is in both files. In clear, as secret answers are, on
+        # tmpfs, private to the unit; tagged !unsafe, used as they are.
+        hidden_file = runtime_dir / "secret_vars.yml"
+        hidden_file.touch(mode=0o600)
+        hidden_file.write_text("".join(f"{name}: !unsafe {_yaml_string(value)}\n"
+                                       for name, value in hidden.items()))
+        argv += ["--extra-vars", f"@{hidden_file}"]
     answers = spec.get("survey_vars", {})
     secrets = survey_secrets(spec.get("survey_secrets", {}), credentials_dir)
     if answers or secrets:
@@ -629,7 +661,8 @@ def build_check_argv(
     hosts = runtime_dir / "hosts.limit"
     hosts.write_text("".join(f"{host}\n" for host in plan))
     clean = {key: spec[key] for key in ("inventory", "inventory_source", "forks", "user",
-                                         "become", "vaults") if key in spec}
+                                         "become", "vaults", "extra_vars", "secret_vars")
+             if key in spec}
     if spec.get("playbook") and spec.get("compliance") is True:
         clean.update(check=True, diff=True)
     argv = _playbook_argv(clean, run_dir, runtime_dir, credentials_dir, playbook)

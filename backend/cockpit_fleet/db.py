@@ -803,6 +803,20 @@ MIGRATIONS: list[list[str]] = [
         " SELECT path, source, updated_at, updated_at, updated_by, updated_at FROM store_files"
         " WHERE origin = 'url' AND source != ''",
     ],
+    [
+        # Secret variables of a set: name -> slot, the value encrypted by
+        # fleet-secret as s-SLOT, never here. An inventory takes sets too,
+        # before those of a template; one in use cannot be deleted.
+        "ALTER TABLE variable_sets ADD COLUMN secrets TEXT NOT NULL DEFAULT '{}'",
+        """
+        CREATE TABLE inventory_variable_sets (
+            inventory_id TEXT NOT NULL REFERENCES inventories (id) ON DELETE CASCADE,
+            set_id       TEXT NOT NULL REFERENCES variable_sets (id),
+            position     INTEGER NOT NULL,
+            PRIMARY KEY (inventory_id, set_id)
+        )
+        """,
+    ],
 ]
 
 

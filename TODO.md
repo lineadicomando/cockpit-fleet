@@ -16,7 +16,7 @@ grouped tabs. Phase 14 (starters) is designed, not begun.
 
 To resume: `git status`; `git log origin/main..` (what is not pushed);
 `make check`. Each backend module says what it is in its
-docstring; `cli.py` is the registry of commands, `db.py` the schema (27).
+docstring; `cli.py` is the registry of commands, `db.py` the schema (28).
 
 Tests on 13 November: unit tests (646 backend, 162 frontend). `ct-test`
 of `store` and `negative` on the three on 11 November; the last full
@@ -90,6 +90,46 @@ Packaged data goes under `/usr/share/cockpit-fleet` (`SHARE_DIR` in the
 5. [ ] Docs and checks: `architecture/projects.md`, `docs/install.md` (adding
    one's own), `CHANGELOG.md` (Added), `fleet help`; `files.sh` extended,
    `make ct-test` on the three (packaging changes).
+
+## Phase 15: secret variables
+
+Decided on 14 November (`decisions.md`, "Sets of variables", "Vault
+files"): a set of variables holds secret variables too, write-only, and
+an inventory takes sets as a template does, so that a secret is used
+from the inventory's files (`group_vars`: `x: "{{ secret }}"`) and from
+playbooks alike; admins write them. Checked with ansible-core 2.16: an
+extra variable from a file, tagged `!unsafe`, reaches both, and the
+inventory's listing keeps the reference, not the value. Ansible Vault
+files are not edited in the interface. Like Semaphore's variable groups,
+but on the inventory as well as the template.
+
+1. [x] Schema: `variable_set_secrets (set_id, name, slot)`, the value in
+   `fleet-secret` as `s-SLOT` (a random slot, so a name in any case fits
+   `check_id`); `inventory_variable_sets (inventory_id, set_id,
+   position)`.
+2. [x] `varset.*`: `secrets` (names) beside `variables`, never both;
+   answered with `secret_name` and whether it is set. `inventory.create`
+   and `inventory.update`: `variable_set_ids`. A set in use by either
+   cannot be deleted.
+3. [x] At launch: the inventory's sets, then the template's, then its own
+   variables, a later one winning; the secrets of what wins are copied
+   into the run's credentials and written by `fleet-run` in a file of
+   `!unsafe` variables (as secret answers); one not set fails the launch.
+   Runs, workflow steps and schedules through `runs.launch`; ad-hoc
+   commands and checks get the inventory's sets. The run records the
+   sets, never a value; masked as every secret of a run is.
+4. [x] Page: secret variables in the set's form (write-only, set or not,
+   replaced, removed: `setSecret`/`deleteSecret`), sets in the
+   inventory's form, the template's merged view showing them hidden.
+   Strings in `po/it.po`.
+5. [x] Export and import (names only, values entered again), `fleet`
+   at a terminal, agents (names only).
+6. [x] Checks: unit tests (654 backend, 163 frontend); `make ct-test` of
+   runs (a secret referred to by `group_vars`, masked, in clear nowhere),
+   negative, cli, inventories and checks on the three, `ct-lifecycle` on
+   AlmaLinux (schema 28), 14 November.
+7. [ ] In a browser on a VM: the set's form (secret variables added,
+   replaced, removed), the inventory's sets, the template's merged view.
 
 ## Open questions for the user
 

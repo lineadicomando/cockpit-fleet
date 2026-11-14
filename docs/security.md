@@ -95,6 +95,9 @@ else. An administrator of the machine can, of course, do anything.
   was expected (in the answers of a launch, of a schedule, of a step of a
   workflow, as a default) is refused, and masked in the record of the
   refusal.
+- The secret variables of a set of variables are stored the same way, by an
+  administrator; `varset.list` says which are set, never a value, and a
+  run that takes them gets them as a file of its runtime directory.
 - What a run prints is masked for the secrets it was given, as a net, not as
   a guarantee: a playbook that prints a secret in another encoding, or one
   it decrypts itself, is not masked.
@@ -159,8 +162,11 @@ Known limits, none of which lets a role do more than this page says:
   playbook from the database; a flaw in the sandbox would be a flaw here.
 - Webhook bodies carry what nodes said as it is (a Slack or Discord message
   may get their markup); `http://` is allowed for a channel with a secret;
-  webhook URLs, the extra variables of a template and the sets of variables
-  are visible to viewers (none is meant for secrets).
+  webhook URLs, the extra variables of a template and the plain variables of
+  a set are visible to viewers (none is meant for secrets; a set's secret
+  variables are). An administrator who can write a template or an ad-hoc
+  command can have a run print or send elsewhere a secret variable it
+  takes, as a credential's password: masking the output is a net.
 - `config.export` and `inventory.get` by an administrator are not audited.
 - An operator can fill the 500 places for waiting secret answers for an
   hour, which would hold up other launches that need one.

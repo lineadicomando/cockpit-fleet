@@ -300,9 +300,6 @@ msgstr "sshpass, per gli accessi SSH con password"
 msgid "systemd"
 msgstr "systemd"
 
-msgid "A JSON object. Not for secrets: they would be stored in clear."
-msgstr "Un oggetto JSON. Non per i segreti: verrebbero salvati in chiaro."
-
 msgid "A credential holds what a run needs to log in to the nodes, to open an Ansible Vault or to fetch a git repository. Secrets are encrypted and can never be read back."
 msgstr "Una credenziale contiene ciò che serve a una run per accedere ai nodi, aprire un Ansible Vault o scaricare un repository git. I segreti sono cifrati e non possono più essere riletti."
 
@@ -3077,12 +3074,6 @@ msgstr "Modifica insieme di variabili"
 msgid "No sets of variables"
 msgstr "Nessun insieme di variabili"
 
-msgid "A set of variables holds extra variables that job templates take, so that a value common to many of them is written once. A template takes them in order, before its own; a later one wins. Variables that depend on the hosts belong in the group_vars of an inventory instead."
-msgstr "Un insieme di variabili contiene variabili extra che i job template prendono, così un valore comune a molti si scrive una volta sola. Un template li prende in ordine, prima delle sue; il successivo vince. Le variabili che dipendono dagli host vanno invece nei group_vars di un inventario."
-
-msgid "A JSON object. Not for secrets: they would be stored in clear, and every role sees them."
-msgstr "Un oggetto JSON. Non per i segreti: sarebbero salvati in chiaro, e ogni ruolo li vede."
-
 msgid "The variables must be a JSON object, for example {\"domain\": \"school.edu\"}."
 msgstr "Le variabili devono essere un oggetto JSON, per esempio {\"domain\": \"school.edu\"}."
 
@@ -3091,9 +3082,6 @@ msgstr "Una modifica vale per le prossime run di: {{templates}}."
 
 msgid "Used by"
 msgstr "Usato da"
-
-msgid "Job templates use it"
-msgstr "È usato da job template"
 
 msgid "The set of variables is deleted. This cannot be undone."
 msgstr "L'insieme di variabili viene eliminato. L'operazione non si può annullare."
@@ -3115,9 +3103,6 @@ msgstr "Aggiungi un insieme di variabili…"
 
 msgid "Every set is taken"
 msgstr "Tutti gli insiemi sono già presi"
-
-msgid "Taken in this order, before the extra variables below: a later one wins."
-msgstr "Presi in quest'ordine, prima delle variabili extra qui sotto: il successivo vince."
 
 msgid "Variables of a run ({{number}})"
 msgstr "Variabili di una run ({{number}})"
@@ -3724,3 +3709,57 @@ msgstr "L'ultimo controllo non è riuscito"
 
 msgid "The URL is asked whether the file changed, and it is downloaded again only when it did."
 msgstr "All'URL si chiede se il file è cambiato, e lo si scarica di nuovo solo se lo è."
+
+msgid "{{name}} (inventory)"
+msgstr "{{name}} (inventario)"
+
+msgid "A JSON object, which every role sees: a secret goes among the secret variables below."
+msgstr "Un oggetto JSON, che ogni ruolo vede: un segreto va tra le variabili segrete qui sotto."
+
+msgid "A JSON object. Not for secrets: they would be stored in clear; they go among the secret variables of a set."
+msgstr "Un oggetto JSON. Non per i segreti: verrebbero salvati in chiaro; vanno tra le variabili segrete di un insieme."
+
+msgid "A set of variables holds extra variables, secret ones too, that job templates and inventories take, so that a value common to many of them is written once. A run takes its inventory's sets, then its template's, in order, then the template's own variables; a later one wins. Variables that depend on the hosts belong in the group_vars of an inventory instead."
+msgstr "Un insieme di variabili contiene variabili extra, anche segrete, che job template e inventari prendono, così un valore comune a molti si scrive una volta sola. Un'esecuzione prende gli insiemi del suo inventario, poi quelli del suo template, in ordine, poi le variabili del template stesso; il successivo vince. Le variabili che dipendono dagli host vanno invece nei group_vars di un inventario."
+
+msgid "Add a secret variable"
+msgstr "Aggiungi una variabile segreta"
+
+msgid "Every job on the inventory takes them, in this order, a later one winning: runs before their template's sets, ad-hoc commands and checks. Its files use them by name, a secret variable too: {{example}}."
+msgstr "Ogni job sull'inventario li prende, in quest'ordine, e il successivo vince: le esecuzioni prima degli insiemi del loro template, i comandi ad-hoc e i controlli. I suoi file li usano per nome, anche una variabile segreta: {{example}}."
+
+msgid "Give each secret variable a name."
+msgstr "Dai un nome a ogni variabile segreta."
+
+msgid "Job templates or inventories use it"
+msgstr "È usato da job template o inventari"
+
+msgid "Name of the secret variable"
+msgstr "Nome della variabile segreta"
+
+msgid "not set"
+msgstr "non impostata"
+
+msgid "Not set"
+msgstr "Non impostata"
+
+msgid "Secret variables"
+msgstr "Variabili segrete"
+
+msgid "Secret, not set: runs that take it stop"
+msgstr "Segreta, non impostata: le esecuzioni che la prendono si fermano"
+
+msgid "Set: leave empty to keep it"
+msgstr "Impostata: lascia vuoto per tenerla"
+
+msgid "Taken in this order, after those of the inventory and before the extra variables below: a later one wins."
+msgstr "Presi in quest'ordine, dopo quelli dell'inventario e prima delle variabili extra qui sotto: il successivo vince."
+
+msgid "Their values are encrypted and can never be read back, here or anywhere; a run gets them as extra variables, used as written, and they are hidden in its output. The inventory's files and the playbooks use them by name: {{example}}."
+msgstr "I loro valori sono cifrati e non si possono mai rileggere, né qui né altrove; un'esecuzione li riceve come variabili extra, usati così come sono scritti, e nel suo output sono nascosti. I file dell'inventario e i playbook li usano per nome: {{example}}."
+
+msgid "Value of {{name}}"
+msgstr "Valore di {{name}}"
+
+msgid "the secret variable"
+msgstr "la variabile segreta"

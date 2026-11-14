@@ -1,31 +1,38 @@
 import type { VariableSet } from "./types.ts";
 
 // One extra variable of a run, and where it comes from: the name of a set,
-// or null for the template's own.
+// or null for the template's own. A secret one has no value here.
 export interface EffectiveVariable {
     name: string;
     value: unknown;
+    secret: boolean;
     from: string | null;
+    // Whether the set it comes from is the inventory's.
+    ofInventory: boolean;
     // The sets before that also had it, and lost.
     overrides: string[];
 }
 
 // What a run of a template gets as extra variables, as the backend merges
-// them: the sets in order, a later one winning, then the template's own.
-export function effectiveVariables(sets: VariableSet[], ids: string[], own: Record<string, unknown>): EffectiveVariable[] {
+// them: the sets of its inventory, then its own sets, in order, a later one
+// winning, then the template's own variables.
+export function effectiveVariables(sets: VariableSet[], ids: string[], own: Record<string, unknown>,
+    inventoryIds: string[] = []): EffectiveVariable[] {
     const result = new Map<string, EffectiveVariable>();
-    const take = (variables: Record<string, unknown>, from: string | null) => {
-        for (const [name, value] of Object.entries(variables)) {
-            const before = result.get(name);
-            const overrides = before ? [...before.overrides, before.from ?? ""] : [];
-            result.set(name, { name, value, from, overrides });
-        }
+    const put = (name: string, value: unknown, secret: boolean, from: string | null, ofInventory: boolean) => {
+        const before = result.get(name);
+        const overrides = before ? [...before.overrides, before.from ?? ""] : [];
+        result.set(name, { name, value, secret, from, ofInventory, overrides });
     };
-    for (const id of ids) {
+    const takeSet = (id: string, ofInventory: boolean) => {
         const set = sets.find(candidate => candidate.id === id);
-        if (set) take(set.variables, set.name);
-    }
-    take(own, null);
+        if (!set) return;
+        for (const [name, value] of Object.entries(set.variables)) put(name, value, false, set.name, ofInventory);
+        for (const secret of set.secrets ?? []) put(secret.name, undefined, true, set.name, ofInventory);
+    };
+    inventoryIds.forEach(id => takeSet(id, true));
+    ids.forEach(id => takeSet(id, false));
+    for (const [name, value] of Object.entries(own)) put(name, value, false, null, false);
     return [...result.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
