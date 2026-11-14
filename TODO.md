@@ -8,7 +8,7 @@ Known limits: `docs/limits.md`. Lab VMs on this workstation:
 
 ## Status (14 November 2026)
 
-Phases 0–13 and 15 closed, 14 under way. 0.2.0 released on 2 November; `[Unreleased]`
+Phases 0–15 closed. 0.2.0 released on 2 November; `[Unreleased]`
 makes 0.3.0 (it has a Breaking entry; `make release` only when asked).
 
 To resume: `git status`, `git log origin/main..` (not pushed), `make
@@ -18,20 +18,26 @@ module's docstring says what it is; `cli.py` is the registry of commands,
 November, all passed but the known failure in `tests.md`; the scripts
 touched since were run again (14 November).
 
-## Phase 14: starters — under way
+## Next: `.yaml`, never `.yml`, for YAML files the project makes
 
-Ready-made content a new managed project, managed inventory or playbook
-starts from (`decisions.md`, "Starters"; design in
-`architecture/projects.md`, "Starters"). Done: `starters.py`
-(`starter.list`, `starter` of `project.create` and `inventory.create`),
-the package's in `starters/` (Linux and Windows of each kind), "Start from"
-in "New project", "New inventory" and "New file", docs, `files.sh`;
-`ct-test` of `files inventories negative` passed on the three (14 November).
+Every YAML file the project writes on its own must end in `.yaml`
+(user's request, 14 November). Where it does not today:
 
-1. [ ] On a VM of the lab, in the browser: the three dialogs, in Italian
-   too; a Windows project from its starter on `win11` (`ping.yml`, with
-   `ansible.windows` installed by its requirements file).
-2. [ ] Close the phase: acceptance in `architecture/acceptance.md`.
+- the starters (`starters/`, `starters.py`: `playbooks/NAME.yml`, the
+  name "New file" proposes in `FilesPage.tsx`);
+- the main file of a managed inventory, `MAIN_FILES` in `files.py`
+  (`hosts.yml`): existing inventories have it, so `inventory.get` and
+  `inventory.update` must find either, and a format change must not leave
+  both; say it in `CHANGELOG.md`;
+- the files of a run's runtime directory in `runner.py`
+  (`secret_vars.yml`, `survey_vars.yml`, `workflow_vars.yml`, `adhoc.yml`,
+  `checks.yml`, `plan.yml`) and whatever reads them;
+- the bundled collection (`collection/`: `playbooks/chat_agent.yml`, the
+  tasks of `roles/chat_agent`), and the playbook name documented for it.
+
+Files a user names keep their name; what is read (`requirements.yml`,
+`.yml` playbooks of projects) is still read under both. Then the examples
+and placeholders of the page and the docs (`site.yml`, `main.yml`).
 
 ## Open questions for the user
 

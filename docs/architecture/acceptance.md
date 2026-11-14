@@ -117,3 +117,20 @@ What each closed phase had to show, and how it was shown.
   otherwise than it reads, busy buttons announced in English, the merged
   view not telling a secret with no value apart, and "i run" and
   "inventory" in the Italian strings of runs in series.
+- **14, starters** (14 November): `files.sh`, `inventories.sh` and
+  `negative.sh` in containers of the three distributions, AlmaLinux with
+  ansible-core 2.16: the package's starters listed and usable, a project
+  started in one commit whose playbooks passed their syntax checks, an
+  inventory read with the connection variables of Windows, an
+  administrator's starter beside the package's of the same name, one with
+  a link to the secrets listed as unusable and refused, leaving nothing.
+  In a browser on Debian 13, in Italian, as an administrator: "Start
+  from" in "New project", "New inventory" (format and text hidden once a
+  starter is chosen) and "New file", with the translated titles and
+  descriptions. A project from the Windows starter had its collection
+  installed by its requirements file; an inventory from the Windows
+  starter, given the Windows 11 node, ran `ping.yml`, `site.yml` through
+  the role and the playbook made with "New file", all successful.
+  Following the user, `ansible_remote_tmp` is left commented out in the
+  Windows starters, and the YAML files the project makes are to end in
+  `.yaml` (in [TODO.md](../../TODO.md)).
