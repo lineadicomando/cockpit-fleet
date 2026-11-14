@@ -907,7 +907,7 @@ class SpecTest(unittest.TestCase):
         if kind in ("check", "own_check"):
             return [runner.build_check_argv(spec, self.run, self.runtime, self.creds)]
         if kind == "inventory":
-            return [runner.build_inventory_argv(spec, self.run, self.creds)]
+            return [runner.build_inventory_argv(spec, self.run, self.runtime, self.creds)]
         if kind == "syntax":
             return [runner.build_syntax_argv(spec, self.run), runner.build_lint_argv(spec, self.run)]
         if kind == "sync":

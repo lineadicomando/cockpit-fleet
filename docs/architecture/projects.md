@@ -266,6 +266,16 @@ configurations side by side), or the YAML file of an inventory plugin. Every
 one is read by a job, in the sandbox, so a plugin runs there and nowhere
 else. A plugin gets no credential beyond the vault of the inventory.
 
+The reading is `ansible-inventory --list --export`, whose listing holds
+every variable of the inventory, and those of a file encrypted with
+Ansible Vault in clear (inline `!vault` values stay encrypted; checked
+with ansible-core 2.16). So it is written in the run's runtime directory,
+gone with the unit, and `fleet-run` writes to the run's directory only
+the hosts, the groups and the three variables that say how a host is
+reached (`runner.listing_hosts`), which fleetctl deletes once it has taken
+them. Until 0.2.0 the whole listing stayed there until the run was
+deleted; the packages remove those on upgrade.
+
 A file inventory serves templates, ad-hoc commands and checks of any
 project, not only its own: playbooks from a public git repository, say,
 and the inventory of a school, with its vault, in a project of its own.

@@ -18,6 +18,7 @@ Requires:       systemd >= 257
 Requires:       sudo
 Requires:       git-core
 Requires:       openssh-clients
+Requires(post): findutils
 Recommends:     ansible
 Recommends:     sshpass
 Suggests:       ansible-lint
@@ -62,6 +63,12 @@ install -D -m 0644 system/cockpit-fleet.preset %{buildroot}%{_presetdir}/80-cock
 %systemd_post cockpit-fleet-scheduler.timer cockpit-fleet-notify.path
 if [ $1 -eq 1 ]; then
     systemctl start cockpit-fleet-scheduler.timer cockpit-fleet-notify.path >/dev/null 2>&1 || :
+fi
+# On upgrade: the listing an older version left of an inventory it read held
+# its variables, those of a file encrypted with Ansible Vault in clear.
+if [ $1 -gt 1 ] && [ -d /var/lib/cockpit-fleet/runs ]; then
+    find /var/lib/cockpit-fleet/runs -mindepth 2 -maxdepth 2 -name inventory.json \
+        -type f -delete || :
 fi
 
 %preun

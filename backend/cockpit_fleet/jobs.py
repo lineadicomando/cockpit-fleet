@@ -43,7 +43,8 @@ def run_dir(run_id: str) -> Path:
     return paths.RUNS_DIR / check_id(run_id, "run id")
 
 
-# What a run leaves of its own beyond its output: result.json, inventory.json.
+# What a run leaves of its own beyond its output: result.json, inventory.json
+# (until it is collected).
 MAX_RUN_FILE = 64 * 1024 * 1024
 
 
@@ -705,6 +706,8 @@ def _collect(ctx, run) -> None:
             continue
         shutil.rmtree(directory / leftover, ignore_errors=True)
     (directory / "archive").unlink(missing_ok=True)
+    # Taken by _store_inventory already: only hosts and groups, but no use kept.
+    (directory / "inventory.json").unlink(missing_ok=True)
 
     if status == "successful" and run["kind"] in ("sync", "unpack", "galaxy") and not imported:
         # New files may ask for collections that are not here: reconcile()

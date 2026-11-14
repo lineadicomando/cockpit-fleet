@@ -120,8 +120,9 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
         # An inventory: read as for an "inventory" job, strictly, with its vault.
         env = runner.build_env(run_dir, runtime_dir, events=False, credentials_dir=credentials)
         env.update(runner.INVENTORY_SYNTAX_ENV)
-        return {"rc": execute(runner.build_inventory_argv(spec, run_dir, credentials), env,
-                              run_dir / "project", log)}
+        return {"rc": execute(runner.build_inventory_argv(spec, run_dir, runtime_dir,
+                                                          credentials),
+                              env, run_dir / "project", log)}
 
     if kind == "syntax":
         env = runner.build_env(run_dir, runtime_dir, events=False)
@@ -139,8 +140,13 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
     if socket:
         env["SSH_AUTH_SOCK"] = socket
     if kind == "inventory":
-        command = runner.build_inventory_argv(spec, run_dir, credentials)
-    elif kind == "playbook":
+        command = runner.build_inventory_argv(spec, run_dir, runtime_dir, credentials)
+        rc = execute(command, env, run_dir / "project", log)
+        if rc == 0:
+            listing = json.loads((runtime_dir / runner.LISTING).read_text())
+            (run_dir / "inventory.json").write_text(json.dumps(runner.listing_hosts(listing)))
+        return {"rc": rc}
+    if kind == "playbook":
         limit_file = None
         plan = runner.limit_plan(spec, run_dir, runtime_dir, credentials)
         if plan:

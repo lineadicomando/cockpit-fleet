@@ -821,12 +821,36 @@ class RunnerPhase2Test(unittest.TestCase):
         (self.run / "inventory").mkdir()
         (self.run / "inventory" / "hosts.yml").write_text("")
         spec = {"kind": "inventory", "inventory": "hosts.yml", "inventory_source": "managed"}
-        argv = runner.build_inventory_argv(spec, self.run, None)
+        argv = runner.build_inventory_argv(spec, self.run, self.runtime, None)
         self.assertEqual(argv[:3], ["/usr/bin/ansible-inventory", "--inventory",
                                     str((self.run / "inventory" / "hosts.yml").resolve())])
-        self.assertEqual(argv[-2:], ["--output", str(self.run / "inventory.json")])
+        # The listing holds the variables, vaulted ones decrypted: never on disk.
+        self.assertEqual(argv[-2:], ["--output", str(self.runtime / runner.LISTING)])
         with self.assertRaises(BadRequest):
-            runner.build_inventory_argv({**spec, "inventory": "../project/x"}, self.run, None)
+            runner.build_inventory_argv({**spec, "inventory": "../project/x"}, self.run,
+                                        self.runtime, None)
+
+    def test_inventory_listing_reduced(self):
+        listing = {
+            "_meta": {"hostvars": {
+                "pc1": {"ansible_host": "10.0.0.1", "ansible_port": 2222,
+                        "ansible_connection": "ssh", "ansible_password": "secret"},
+                "pc2": {"license_key": "secret"}}},
+            "all": {"children": ["ungrouped", "lab"], "vars": {"token": "secret"}},
+            "lab": {"hosts": ["pc1", "pc2"], "vars": {"key": "secret"}},
+            "ungrouped": {"hosts": ["solo"]},
+        }
+        reduced = runner.listing_hosts(listing)
+        self.assertNotIn("secret", json.dumps(reduced))
+        self.assertEqual(reduced["_meta"]["hostvars"]["pc1"],
+                         {"ansible_host": "10.0.0.1", "ansible_port": 2222,
+                          "ansible_connection": "ssh"})
+        self.assertEqual(reduced["lab"], {"hosts": ["pc1", "pc2"]})
+        self.assertEqual(jobs.parse_inventory(reduced), jobs.parse_inventory(listing))
+        odd = runner.listing_hosts({"_meta": {"hostvars": {"pc3": "secret"}}})
+        self.assertEqual(odd, {"_meta": {"hostvars": {}}})
+        with self.assertRaises(ValueError):
+            runner.listing_hosts([])
 
 
 if __name__ == "__main__":

@@ -636,15 +636,44 @@ def build_check_argv(
     return [*argv[:-1], "--limit", f"@{hosts}", "--extra-vars", f"@{plan_file}", argv[-1]]
 
 
-def build_inventory_argv(spec: dict, run_dir: Path, credentials_dir: Path | None) -> list[str]:
-    """ansible-inventory for an "inventory" job; the listing goes to inventory.json."""
+def build_inventory_argv(spec: dict, run_dir: Path, runtime_dir: Path,
+                         credentials_dir: Path | None) -> list[str]:
+    """ansible-inventory for an "inventory" job. The listing goes to the
+    runtime directory: it holds the variables of the inventory, those of a
+    vaulted file decrypted, and only listing_hosts() of it reaches the disk."""
     return [
         "/usr/bin/ansible-inventory",
         "--inventory", str(_inventory(spec, run_dir)),
         "--list", "--export",
-        "--output", str(run_dir / "inventory.json"),
+        "--output", str(runtime_dir / LISTING),
         *_credential_args(credentials_dir, ("vault_password",)),
     ]
+
+
+LISTING = "listing.json"
+# What fleetctl keeps of a host's variables (jobs.parse_inventory).
+_LISTED_VARS = ("ansible_host", "ansible_port", "ansible_connection")
+
+
+def listing_hosts(listing: object) -> dict:
+    """An `ansible-inventory --list` reduced to its hosts and groups and the
+    variables of a host that say how it is reached, in the same shape:
+    no other variable, and none of a group."""
+    if not isinstance(listing, dict):
+        raise ValueError("the listing is not an object")
+    reduced: dict = {}
+    for name, entry in listing.items():
+        if name == "_meta" or not isinstance(entry, dict):
+            continue
+        reduced[name] = {key: [str(item) for item in entry[key]]
+                         for key in ("hosts", "children") if isinstance(entry.get(key), list)}
+    hostvars = listing.get("_meta", {})
+    hostvars = hostvars.get("hostvars", {}) if isinstance(hostvars, dict) else {}
+    if isinstance(hostvars, dict):
+        reduced["_meta"] = {"hostvars": {
+            str(host): {key: values[key] for key in _LISTED_VARS if key in values}
+            for host, values in hostvars.items() if isinstance(values, dict)}}
+    return reduced
 
 
 # A syntax check of an inventory: a source no plugin could read fails it,

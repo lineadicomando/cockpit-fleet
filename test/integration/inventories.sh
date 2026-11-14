@@ -141,6 +141,26 @@ admin file.delete "{\"id\": \"$school\", \"path\": \"broken\"}" >/dev/null
 expect_run "and passes once it is gone" "$(get "$(admin file.check "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}")" 'a["data"]["run_id"]')" 60 successful
 admin inventory.update "{\"id\": \"$school\", \"path\": \"hosts.yaml\"}" >/dev/null
 
+# A vaulted file of variables: ansible-inventory lists them decrypted, and the
+# listing must not stay in the run's directory.
+VAULT_DIR=$(mktemp -d)
+printf 'school-pass' > "$VAULT_DIR/pass"
+printf 'license_key: VAULTED-LICENSE-KEY\n' > "$VAULT_DIR/vault.yaml"
+ansible-vault encrypt --vault-password-file "$VAULT_DIR/pass" "$VAULT_DIR/vault.yaml" >/dev/null
+vault=$(admin credential.create '{"name": "school vault", "kind": "vault"}')
+printf 'school-pass' | set_secret "$vault" vault_password
+vaulted=$(get "$(admin inventory.create "$(python3 -c 'import json, sys; print(json.dumps({"name": "vaulted", "kind": "managed", "vault_credential_id": sys.argv[1], "files": [{"path": "hosts.yaml", "content": "all:\n  hosts:\n    pc01:\n      ansible_host: 192.0.2.41\n"}, {"path": "group_vars/all/vault.yaml", "content": open(sys.argv[2]).read()}]}))' "$(get "$vault" 'a["data"]["id"]')" "$VAULT_DIR/vault.yaml")")" 'a["data"]["id"]')
+rm -rf "$VAULT_DIR"
+run_id=$(parse "$vaulted")
+expect_run "an inventory with a vaulted file of variables is read" "$run_id" 60 successful
+expect_eq "with its hosts" "$(addresses "$vaulted")" "pc01=192.0.2.41"
+if grep -rqs 'VAULTED-LICENSE-KEY' /var/lib/cockpit-fleet/runs/; then
+    fail "a vaulted value was left in the directory of a run"
+else
+    pass "no vaulted value is left in the directory of a run"
+fi
+expect_eq "nor the listing" "$(ls /var/lib/cockpit-fleet/runs/"$run_id"/inventory.json 2>/dev/null)" ""
+
 # A file inventory of another project: copied for the run with what is beside it.
 mkdir -p "$SRC/labs/inventories/lab1/group_vars/all" "$SRC/labs/inventories/lab1/host_vars"
 printf 'all:\n  hosts:\n    lab1-pc01:\n    lab1-pc02:\n' > "$SRC/labs/inventories/lab1/hosts.yaml"

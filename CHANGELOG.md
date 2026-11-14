@@ -151,6 +151,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
   Fedora 44): ansible-lint's own syntax check, which has no inventory, is
   no longer made to fail for it.
 
+### Security
+
+- Reading an inventory left in the run's directory, until the run was
+  deleted, everything `ansible-inventory --list` gives: its variables, and
+  in clear those of a file encrypted with Ansible Vault. The listing now
+  stays in the run's runtime directory, gone with it, and only hosts,
+  groups and how a host is reached are written; the listings that older
+  versions left are removed on upgrade.
+
 ### Deprecated
 
 - `needs_approval` of `template.create`, `template.update` and the steps of

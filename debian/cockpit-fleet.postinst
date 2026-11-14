@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+# On upgrade: the listing an older version left of an inventory it read held
+# its variables, those of a file encrypted with Ansible Vault in clear.
+if [ "$1" = configure ] && [ -n "$2" ] && [ -d /var/lib/cockpit-fleet/runs ]; then
+    find /var/lib/cockpit-fleet/runs -mindepth 2 -maxdepth 2 -name inventory.json \
+        -type f -delete || true
+fi
+
+#DEBHELPER#
