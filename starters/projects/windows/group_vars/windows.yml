@@ -1,0 +1,7 @@
+---
+# Windows over SSH: OpenSSH Server on the host, PowerShell as its shell.
+ansible_connection: ssh
+ansible_shell_type: powershell
+# Where modules are copied before they run; by default the user's %TEMP%.
+# Set like this, become (runas) fails before any module runs.
+# ansible_remote_tmp: C:\Windows\Temp\ansible

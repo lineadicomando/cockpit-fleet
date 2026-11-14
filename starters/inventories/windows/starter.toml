@@ -1,0 +1,2 @@
+title = "Windows hosts"
+description = "A group windows, in YAML, with what Ansible needs to reach Windows over SSH."

@@ -339,3 +339,46 @@ Checked on Debian 13 with ansible-core 2.19.11 (`inventories.sh`):
 `ansible.builtin.generator`, a directory with a static file and
 `ansible.builtin.constructed`, a script with the setting off and on.
 
+
+**Starters.** A new managed project, a new managed inventory and a new
+file of a managed project may begin with ready-made content, a *starter*
+(`starters.py`; "punto di partenza" in Italian, since "template" is the job
+template's and Ansible's). They come from the package and from the
+administrator, laid out the same way:
+
+```
+/usr/share/cockpit-fleet/starters/   the package's (starters/ in the source)
+/etc/cockpit-fleet/starters/         the administrator's
+    projects/NAME/                   a tree, with starter.toml (title, description)
+    inventories/NAME/                a tree, the same
+    playbooks/NAME.yml               one file, with NAME.toml beside it
+```
+
+The metadata file is optional and never copied. `starter.list` (admin)
+gives each one by `SOURCE/NAME` (`package/linux`, `local/linux`): both are
+offered when both sources have one of the same name, since replacing the
+package's would hide what an upgrade brings. `project.create` and
+`inventory.create` take `starter` (managed only): its files are the first
+commit, `Start from TITLE`, and the inventory's format is that of its main
+file, so `content` and `files` are not taken with it. A playbook starter
+is text: `starter.list` gives it, and the page writes it with `file.write`
+in "New file". Nothing links what was made to its starter afterwards.
+
+A starter is read under the rules of the editor, not trusted because it
+sits in `/etc` or `/usr`: plain names that `file.change` would take, no
+symbolic link (a link to `/etc/cockpit-fleet/secrets` would copy a secret
+into a project), no special file, each file at most 1 MB, at most 500 files
+and 16 MB. One that breaks them is listed with the reason and refused.
+The package's titles are translated by the page, by name; an
+administrator's are shown as written.
+
+The package ships general ones, not shaped on a real project: a Linux and
+a Windows project (a `site.yml` through a role `common`, a `ping.yml`,
+variables by group; the Windows one with a `requirements.yml` for
+`ansible.windows`, which AlmaLinux does not package), a Linux and a Windows
+inventory in YAML with an empty group, and a playbook of each. The
+connection variables of Windows over SSH (`ansible_connection`,
+`ansible_shell_type`) are in the Windows inventory and in the Windows
+project's `group_vars/windows.yml`, the project's winning;
+`ansible_remote_tmp: C:\Windows\Temp\ansible` is there commented out,
+since set it breaks `become` (see [Windows nodes](windows.md)).

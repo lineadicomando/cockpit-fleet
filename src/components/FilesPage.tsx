@@ -28,13 +28,14 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Chunk, Commit, FileContent, Inventory, Project, ProjectFiles, Run } from "../lib/types.ts";
+import type { Chunk, Commit, FileContent, Inventory, Project, ProjectFiles, Run, Starter } from "../lib/types.ts";
 import { fileBase64, importArchive } from "../lib/upload.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { FileTree } from "./FileTree.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
+import { StarterSelect } from "./StarterSelect.tsx";
 import { DraftReview, PendingDrafts } from "./Drafts.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
 import { Alert, Button, FileUpload, Modal, SearchInput, Spinner, TabPanel, Tabs } from "./pf.tsx";
@@ -237,6 +238,33 @@ function PathModal({ title, submitLabel, initial, help, onSubmit, onClose }: {
             <FormGroup label={t("Path")} isRequired fieldId="file-path">
                 <TextInput id="file-path" value={value} onChange={(_e, next) => setValue(next)} spellCheck={false} autoFocus />
                 <FormHelperText><HelperText><HelperTextItem>{help}</HelperTextItem></HelperText></FormHelperText>
+            </FormGroup>
+        </FormModal>
+    );
+}
+
+// A new file of a project: empty, or the text of a playbook starter.
+function NewFileModal({ initial, offerStarters, onSubmit, onClose }: {
+    initial: string;
+    offerStarters: boolean;
+    onSubmit: (path: string, content: string) => Promise<void>;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    const [value, setValue] = useState(initial);
+    const [starter, setStarter] = useState<Starter | null>(null);
+    function choose(chosen: Starter | null) {
+        setStarter(chosen);
+        // A folder given and no name yet: the starter's own.
+        if (chosen && (value === "" || value.endsWith("/"))) setValue(`${value}${chosen.name}.yml`);
+    }
+    return (
+        <FormModal title={t("New file")} submitLabel={t("Create")} onSubmit={() => onSubmit(value, starter?.content ?? "")} onClose={onClose}
+            isDisabled={!isUsablePath(value)} variant={ModalVariant.small}>
+            {offerStarters && <StarterSelect kind="playbook" fieldId="file-starter" value={starter} onChange={choose} />}
+            <FormGroup label={t("Path")} isRequired fieldId="file-path">
+                <TextInput id="file-path" value={value} onChange={(_e, next) => setValue(next)} spellCheck={false} autoFocus />
+                <FormHelperText><HelperText><HelperTextItem>{t("Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
         </FormModal>
     );
@@ -648,21 +676,23 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
                     </div>
                 )}
             </ListState>
-            {(dialog?.kind === "new-file" || dialog?.kind === "new-folder") && (
-                <PathModal title={dialog.kind === "new-file" ? t("New file") : t("New folder")} submitLabel={t("Create")}
+            {dialog?.kind === "new-file" && (
+                <NewFileModal initial={dialog.in ? `${dialog.in}/` : ""} offerStarters={!ofInventory && can("starter.list")}
+                    onSubmit={async (next, content) => {
+                        await call("file.write", { id, path: next, content, expected: "", ...inDraft });
+                        list.reload();
+                        openFile(next);
+                        setDialog(null);
+                    }}
+                    onClose={() => setDialog(null)} />
+            )}
+            {dialog?.kind === "new-folder" && (
+                <PathModal title={t("New folder")} submitLabel={t("Create")}
                     initial={dialog.in ? `${dialog.in}/` : ""}
-                    help={dialog.kind === "new-file"
-                        ? t("Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed.")
-                        : t("Inside the project, for example roles/web/templates. Folders are created as needed.")}
+                    help={t("Inside the project, for example roles/web/templates. Folders are created as needed.")}
                     onSubmit={async next => {
-                        if (dialog.kind === "new-folder") {
-                            await apply([{ op: "mkdir", path: next }]);
-                            setOpen(previous => new Set([...(previous ?? []), ...ancestors(next), next]));
-                        } else {
-                            await call("file.write", { id, path: next, content: "", expected: "", ...inDraft });
-                            list.reload();
-                            openFile(next);
-                        }
+                        await apply([{ op: "mkdir", path: next }]);
+                        setOpen(previous => new Set([...(previous ?? []), ...ancestors(next), next]));
                         setDialog(null);
                     }}
                     onClose={() => setDialog(null)} />

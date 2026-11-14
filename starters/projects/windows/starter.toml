@@ -1,0 +1,2 @@
+title = "Windows project"
+description = "The same for Windows hosts over SSH: a playbook for the group windows, one to see that they answer, a role, and the collection ansible.windows."

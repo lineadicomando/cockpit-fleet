@@ -1,0 +1,3 @@
+---
+# Packages every host needs, by the name of the distribution's package manager.
+common_packages: []

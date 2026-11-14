@@ -10,6 +10,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Starters: a new project or inventory written in the interface may begin
+  with ready-made files instead of none, and "New file" in a project with
+  a playbook. The package has a Linux and a Windows project, inventory and
+  playbook (the Windows ones with what Ansible needs over SSH, and the
+  collection `ansible.windows`); an administrator adds their own in
+  `/etc/cockpit-fleet/starters`, offered beside the package's. `fleet
+  starter list` shows them, and `project create` and `inventory create`
+  take `--starter`.
 - Host keys by host: the page groups the trusted keys of each host (or the
   hosts by inventory, or none), filters by inventory, by trust and by text
   (host, name in an inventory, fingerprint), and lists the SSH hosts of

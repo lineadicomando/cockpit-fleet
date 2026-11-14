@@ -853,3 +853,22 @@ export interface Health {
     queue: HealthLane[];
     database: { bytes: number; free_bytes: number; wal_bytes: number; incremental: boolean };
 }
+
+// Ready-made content a new managed project, managed inventory or playbook
+// begins with: the package's ("package") or the administrator's ("local").
+export interface Starter {
+    kind: "project" | "inventory" | "playbook";
+    source: "package" | "local";
+    name: string;
+    // What project.create and inventory.create take: SOURCE/NAME.
+    ref: string;
+    title: string;
+    description: string;
+    files: string[];
+    // Why it cannot be used, if it cannot.
+    error: string;
+    // An inventory's: the format of its main file, "" if it has none.
+    format?: "yaml" | "ini" | "";
+    // A playbook's text.
+    content?: string;
+}

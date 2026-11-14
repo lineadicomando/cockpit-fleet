@@ -7,11 +7,12 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Credential, Project } from "../lib/types.ts";
+import type { Credential, Project, Starter } from "../lib/types.ts";
 import { uploadArchive } from "../lib/upload.ts";
 import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { uploadCommand } from "../lib/terminal.ts";
 import { ActionsColumn, Alert, FileUpload } from "./pf.tsx";
+import { StarterSelect } from "./StarterSelect.tsx";
 
 interface ProjectList {
     projects: Project[];
@@ -67,6 +68,8 @@ function ProjectModal({ project, roots, onClose, onDone, onUpload }: { project?:
     const [ref, setRef] = useState(project?.ref || "main");
     const [credentialId, setCredentialId] = useState(project?.credential_id ?? "");
     const [path, setPath] = useState(project?.path ?? "");
+    const [starter, setStarter] = useState<Starter | null>(null);
+    const can = useCan();
 
     async function submit() {
         const params = kind === "git"
@@ -74,7 +77,7 @@ function ProjectModal({ project, roots, onClose, onDone, onUpload }: { project?:
             : kind === "local" ? { name, path: path.trim() } : { name };
         const saved = project
             ? await call<Project>("project.update", { id: project.id, ...params })
-            : await call<Project>("project.create", { kind, ...params });
+            : await call<Project>("project.create", { kind, ...params, ...(kind === "managed" && starter ? { starter: starter.ref } : {}) });
         // A git project is of no use until its files are here, and a changed
         // URL or reference means different files.
         if (kind === "git" && (!project || project.url !== saved.url || project.ref !== saved.ref)) {
@@ -82,7 +85,7 @@ function ProjectModal({ project, roots, onClose, onDone, onUpload }: { project?:
         }
         onDone();
         onClose();
-        // An empty project: the next thing to do is to write its first file.
+        // Written here: the next thing to do is to write its files.
         if (kind === "managed" && !project) cockpit.location.go(["projects", saved.id]);
         // Likewise empty: the next thing to do is to give it its archive.
         if (kind === "archive" && !project) onUpload(saved);
@@ -120,7 +123,12 @@ function ProjectModal({ project, roots, onClose, onDone, onUpload }: { project?:
                     </FormGroup>
                 </>
             ) : kind === "managed" ? (
-                !project && <Content component="p">{t("The files are written in this interface. Every change is recorded with its author, and can be looked up later.")}</Content>
+                !project && (
+                    <>
+                        <Content component="p">{t("The files are written in this interface. Every change is recorded with its author, and can be looked up later.")}</Content>
+                        {can("starter.list") && <StarterSelect kind="project" fieldId="proj-starter" value={starter} onChange={setStarter} />}
+                    </>
+                )
             ) : kind === "archive" ? (
                 !project && <Content component="p">{t("The files come from an archive chosen in the next step. They are not changed here: a new archive replaces them all.")}</Content>
             ) : (

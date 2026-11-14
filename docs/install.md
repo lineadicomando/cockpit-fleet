@@ -143,10 +143,10 @@ As an administrator, in the page:
    and its secrets (a private key, a password, the password for `become`).
    A secret is written, never read back. Vault passwords and the token or
    key of a private git repository are credentials too.
-4. **Projects**: a git repository, a project written in the interface, or
-   an archive.
+4. **Projects**: a git repository, a project written in the interface
+   (empty, or from a starter: see below), or an archive.
 5. **Inventories**: a file or directory of a project, or one written in the
-   interface.
+   interface (empty, or from a starter).
 6. **Job templates**: a playbook of a project, an inventory, a credential,
    and a survey if the launch needs answers. Then launch it.
 
@@ -154,6 +154,40 @@ To watch the nodes, add checks in **Checks** (see [checks.md](checks.md)),
 and in **Notifications** a channel and a rule that says what to tell it.
 The same can be done at a terminal: `fleet help` lists what the role of the
 user may do.
+
+## Starters
+
+A project or an inventory written in the interface, and a new playbook,
+may begin with a starter: files copied as they are, with no link kept to
+them afterwards. The package has a Linux and a Windows one of each kind.
+Your own go in `/etc/cockpit-fleet/starters`, laid out as the package's in
+`/usr/share/cockpit-fleet/starters`:
+
+```
+/etc/cockpit-fleet/starters/projects/web/starter.toml
+/etc/cockpit-fleet/starters/projects/web/site.yml
+/etc/cockpit-fleet/starters/projects/web/roles/...
+/etc/cockpit-fleet/starters/inventories/branch/starter.toml
+/etc/cockpit-fleet/starters/inventories/branch/hosts.yml
+/etc/cockpit-fleet/starters/playbooks/patch.yml
+/etc/cockpit-fleet/starters/playbooks/patch.toml
+```
+
+`starter.toml` (or `NAME.toml` beside a playbook) is optional and is not
+copied:
+
+```toml
+title = "Web servers"
+description = "nginx behind the company's proxy."
+```
+
+A name is letters, digits, `-` and `_`. One with the same name as the
+package's does not replace it: both are offered. The files must be readable
+by the group `cockpit-fleet`, and are refused if they hold a symbolic link
+or a special file, a file larger than 1 MB, or more than 500 files; the
+page shows why next to its name. An inventory's format is that of its main
+file, `hosts.yml` (YAML) or `hosts` (INI). Do not put passwords in them:
+a starter is copied into the history of everything made from it.
 
 ## Upgrading
 

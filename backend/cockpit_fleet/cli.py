@@ -497,6 +497,7 @@ def load_commands() -> dict[str, Command]:
         resources,
         runs,
         schedules,
+        starters,
         storage,
         system,
         transfer,

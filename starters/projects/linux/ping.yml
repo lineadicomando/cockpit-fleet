@@ -1,0 +1,7 @@
+---
+- name: See that the hosts answer
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:

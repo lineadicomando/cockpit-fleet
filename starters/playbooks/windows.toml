@@ -1,0 +1,2 @@
+title = "Windows playbook"
+description = "A play for the group windows, to fill with tasks; it needs the collection ansible.windows."

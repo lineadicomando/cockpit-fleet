@@ -3835,3 +3835,57 @@ msgstr "Rimuovi la nuova variabile segreta"
 
 msgid "Secret, not set"
 msgstr "Segreta, non impostata"
+
+msgid "Start from"
+msgstr "Punto di partenza"
+
+msgid "Empty"
+msgstr "Vuoto"
+
+msgid "Nothing to begin with."
+msgstr "Si comincia da zero."
+
+msgid "package"
+msgstr "pacchetto"
+
+msgid "this controller"
+msgstr "questo controller"
+
+msgid "{{title}}: cannot be used ({{error}})"
+msgstr "{{title}}: non utilizzabile ({{error}})"
+
+msgid "Linux project"
+msgstr "Progetto Linux"
+
+msgid "A playbook for every host, one to see that they answer, a role for what they share and variables by group."
+msgstr "Un playbook per tutti gli host, uno per verificare che rispondano, un ruolo per ciò che hanno in comune e le variabili per gruppo."
+
+msgid "Windows project"
+msgstr "Progetto Windows"
+
+msgid "The same for Windows hosts over SSH: a playbook for the group windows, one to see that they answer, a role, and the collection ansible.windows."
+msgstr "Lo stesso per host Windows via SSH: un playbook per il gruppo windows, uno per verificare che rispondano, un ruolo e la collection ansible.windows."
+
+msgid "Linux hosts"
+msgstr "Host Linux"
+
+msgid "A group linux, in YAML, with the variables of the group beside it."
+msgstr "Un gruppo linux, in YAML, con accanto le variabili del gruppo."
+
+msgid "Windows hosts"
+msgstr "Host Windows"
+
+msgid "A group windows, in YAML, with what Ansible needs to reach Windows over SSH."
+msgstr "Un gruppo windows, in YAML, con quanto serve ad Ansible per raggiungere Windows via SSH."
+
+msgid "Linux playbook"
+msgstr "Playbook Linux"
+
+msgid "A play for the group linux, with privileges, to fill with tasks."
+msgstr "Un play per il gruppo linux, con privilegi, da riempire di task."
+
+msgid "Windows playbook"
+msgstr "Playbook Windows"
+
+msgid "A play for the group windows, to fill with tasks; it needs the collection ansible.windows."
+msgstr "Un play per il gruppo windows, da riempire di task; richiede la collection ansible.windows."

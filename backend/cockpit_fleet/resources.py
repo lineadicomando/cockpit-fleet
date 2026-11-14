@@ -10,7 +10,7 @@ import subprocess
 import unicodedata
 from pathlib import Path, PurePosixPath
 
-from . import approvals, files, jobs, paths, store, survey, variables
+from . import approvals, files, jobs, paths, starters, store, survey, variables
 from .cli import Bool, Choice, Context, Id, Int, Obj, Objs, Str, Strs, Values, command
 from .config import MAX_UPLOAD_MB
 from .errors import BadRequest, Conflict, NotFound, Unavailable
@@ -174,18 +174,28 @@ def _project_values(ctx: Context, params: Values, kind: str) -> dict:
 
 
 @command("project.create", role="admin", mutating=True, agent="code",
-         params={"kind": Choice(("local", "git", "managed", "archive")), **_PROJECT_PARAMS})
+         params={"kind": Choice(("local", "git", "managed", "archive")), **_PROJECT_PARAMS,
+                 "starter": starters.STARTER_PARAM})
 def project_create(ctx: Context, params: Values) -> dict:
-    """Create a project: a git repository, a local directory, or an empty one to write or upload."""
+    """Create a project: a git repository, a local directory, or one to write
+    or upload, empty or with the files of a starter."""
     kind = params["kind"]
     values = _project_values(ctx, params, kind)
+    starter = None
+    if params["starter"]:
+        if kind != "managed":
+            raise BadRequest("only a managed project starts from a starter")
+        starter = starters.load("project", params["starter"])
     project_id = store.new_id("p")
     store.insert(ctx.conn, "projects", {"id": project_id, "kind": kind,
                                         "created_at": store.now(), **values}, "project")
     if kind == "managed":
-        # Written in the interface: it starts as an empty repository.
+        # Written in the interface: it starts as an empty repository, or as a starter.
         try:
             files.init_repository(project_id)
+            if starter is not None:
+                row = store.fetch(ctx.conn, "projects", project_id, "project")
+                files.change(ctx, row, starter[1], f"Start from {starter[0]['title']}")
         except BaseException:
             ctx.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
             shutil.rmtree(paths.PROJECTS_DIR / project_id, ignore_errors=True)
@@ -451,7 +461,10 @@ _FILES_REDACTED = ("content", "files[].content", "files[].data")
          max_input=files.MAX_BUNDLE * 4 // 3 + 64 * 1024,
          params={"name": Str(required=True, max_length=200),
                  "kind": Choice(("file", "managed")), **_INVENTORY_PARAMS,
-                 "files": _INVENTORY_FILES})
+                 "files": _INVENTORY_FILES,
+                 "starter": Str(starters.STARTER_PARAM.doc + "; its main file gives the"
+                                " format, and content and files are not taken",
+                                max_length=100)})
 def inventory_create(ctx: Context, params: Values) -> dict:
     """Create an inventory: a path of a project, or a tree of files written
     here (a main file, hosts.yml or hosts, with group_vars and host_vars
@@ -460,7 +473,18 @@ def inventory_create(ctx: Context, params: Values) -> dict:
     kind = params["kind"]
     if kind == "file" and params["files"]:
         raise BadRequest("unknown parameter: files")
+    starter = None
+    if params["starter"]:
+        if kind != "managed":
+            raise BadRequest("only an inventory written here starts from a starter")
+        if params["content"] is not None or params["files"]:
+            raise BadRequest("a starter gives the files: content and files are not taken")
+        starter = starters.load("inventory", params["starter"])
     values = _inventory_values(ctx, params, kind)
+    if starter is not None and starter[0]["format"]:
+        if "format" in params.given and params["format"] != starter[0]["format"]:
+            raise BadRequest(f"the starter is an inventory in {starter[0]['format']}")
+        values["format"] = starter[0]["format"]
     sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"], "an inventory")
     operations = []
     for index, item in enumerate(params["files"]):
@@ -473,7 +497,11 @@ def inventory_create(ctx: Context, params: Values) -> dict:
     if kind == "managed":
         row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
         try:
-            _write_main(ctx, row, params["content"], operations)
+            if starter is not None:
+                files.change(ctx, row, starter[1], f"Start from {starter[0]['title']}",
+                             reread=False)
+            else:
+                _write_main(ctx, row, params["content"], operations)
         except BaseException:
             store.delete(ctx.conn, "inventories", inventory_id, "inventory")
             shutil.rmtree(paths.INVENTORIES_DIR / inventory_id, ignore_errors=True)

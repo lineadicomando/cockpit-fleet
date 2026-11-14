@@ -8,53 +8,30 @@ Known limits: `docs/limits.md`. Lab VMs on this workstation:
 
 ## Status (14 November 2026)
 
-Phases 0–13 and 15 closed. 0.2.0 released on 2 November; `[Unreleased]`
+Phases 0–13 and 15 closed, 14 under way. 0.2.0 released on 2 November; `[Unreleased]`
 makes 0.3.0 (it has a Breaking entry; `make release` only when asked).
 
 To resume: `git status`, `git log origin/main..` (not pushed), `make
-check` (659 backend, 171 frontend tests on 14 November). Each backend
+check` (669 backend, 171 frontend tests on 14 November). Each backend
 module's docstring says what it is; `cli.py` is the registry of commands,
 `db.py` the schema (28 migrations). Last full `ct-test`: on the three, 9
 November, all passed but the known failure in `tests.md`; the scripts
 touched since were run again (14 November).
 
-## Phase 14: starters — designed, not begun
+## Phase 14: starters — under way
 
 Ready-made content a new managed project, managed inventory or playbook
-starts from (`decisions.md`, "Starters"). Word: **starter** (code
-`starter.*`; Italian "punto di partenza", never "modello"). From the
-package and the administrator; static, copied as they are; no link kept to
-what is made from one; offered where things are created, no page of its
-own.
+starts from (`decisions.md`, "Starters"; design in
+`architecture/projects.md`, "Starters"). Done: `starters.py`
+(`starter.list`, `starter` of `project.create` and `inventory.create`),
+the package's in `starters/` (Linux and Windows of each kind), "Start from"
+in "New project", "New inventory" and "New file", docs, `files.sh`;
+`ct-test` of `files inventories negative` passed on the three (14 November).
 
-Where it fits: `project.create` kind `managed` starts an empty repository
-(`files.init_repository`); `inventory.create` kind `managed` takes
-`content` and `files` (`_write_main` in `resources.py`); "New file" is
-`PathModal` in `src/components/FilesPage.tsx`, saved by `file.write` /
-`file.change`. Packaged data goes under `/usr/share/cockpit-fleet`
-(`SHARE_DIR` in the `Makefile`; `COLLECTIONS_DIR` in `paths.py` is the
-model for a new path).
-
-1. [ ] Ask the user: which starters ship (a Linux project, a Windows one
-   shaped like `ansible-win_edulab`, an inventory with `group_vars`,
-   playbooks); does an administrator's starter of the same name replace the
-   package's, or do both show?
-2. [ ] Layout: `/usr/share/cockpit-fleet/starters/` and
-   `/etc/cockpit-fleet/starters/`, each with `projects/NAME/`,
-   `inventories/NAME/`, `playbooks/NAME.yml`; a title and a description
-   each (a small metadata file, or the first comment); `paths.py`,
-   `Makefile`, `debian/`, the spec.
-3. [ ] Backend: `starter.list` (admin, class read), read with the limits of
-   `files.py` (paths checked, no links, files ≤ 1 MB, a cap on the tree),
-   titles of the package's in `po/`; a `starter` parameter of
-   `project.create` and `inventory.create` (managed only), copied into the
-   first commit; tests in `test_cli.py` style, the class in
-   `test_agents.py`.
-4. [ ] Page: "Empty" or a starter in "New project" and "New inventory";
-   "New playbook from…" beside "New file"; strings in `po/it.po`.
-5. [ ] Docs and checks: `architecture/projects.md`, `docs/install.md`
-   (adding one's own), `CHANGELOG.md` (Added), `fleet help`; `files.sh`
-   extended, `make ct-test` on the three (packaging changes).
+1. [ ] On a VM of the lab, in the browser: the three dialogs, in Italian
+   too; a Windows project from its starter on `win11` (`ping.yml`, with
+   `ansible.windows` installed by its requirements file).
+2. [ ] Close the phase: acceptance in `architecture/acceptance.md`.
 
 ## Open questions for the user
 

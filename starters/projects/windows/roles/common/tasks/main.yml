@@ -1,0 +1,13 @@
+---
+- name: Show what the host runs
+  ansible.builtin.debug:
+    msg: >-
+      {{ ansible_facts['os_name'] }} {{ ansible_facts['distribution_version'] }},
+      {{ ansible_facts['processor_vcpus'] }} CPU, {{ ansible_facts['memtotal_mb'] }} MB
+      of memory
+
+- name: Create the directories every host needs
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop: "{{ common_directories }}"

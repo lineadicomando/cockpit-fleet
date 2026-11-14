@@ -1,0 +1,209 @@
+"""Starters: ready-made content that a new managed project, a new managed
+inventory or a new playbook starts from.
+
+They come from the package (/usr/share/cockpit-fleet/starters) and from the
+administrator (/etc/cockpit-fleet/starters), laid out the same way:
+projects/NAME/ and inventories/NAME/ are trees, playbooks/NAME.yml one file.
+Their title and description are in a starter.toml inside a tree, or in
+NAME.toml beside a playbook, which is not copied. When both sources have a
+starter with the same name, both are offered: one never replaces the other.
+
+A starter is copied as it is, in the first commit of what is made from it,
+and nothing links the two afterwards. It is read under the rules of the
+editor: plain names, no links, no special files, each file at most
+files.MAX_FILE, and a cap on the whole tree; one that breaks them is listed
+with what is wrong, and cannot be used.
+"""
+
+import os
+import re
+import stat
+import tomllib
+from pathlib import Path, PurePosixPath
+
+from . import paths
+from .cli import Choice, Context, Str, Values, command
+from .errors import BadRequest, NotFound
+from .files import KEEP, MAIN_FILES, MAX_FILE
+from .validators import check_file_path
+
+KINDS = {"project": "projects", "inventory": "inventories", "playbook": "playbooks"}
+SOURCES = ("package", "local")
+META = "starter.toml"
+# What one source offers of a kind, and what one starter holds.
+MAX_STARTERS = 100
+MAX_FILES = 500
+MAX_TOTAL = 16 * 1024 * 1024
+_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+_REF_RE = re.compile(r"(package|local)/([A-Za-z0-9][A-Za-z0-9_-]{0,63})")
+_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+_STARTER_DOC = ("A starter to begin with, as SOURCE/NAME (package or local, see starter.list):"
+                " its files are the first commit")
+
+
+def _root(source: str) -> Path:
+    return paths.STARTERS_DIR if source == "package" else paths.LOCAL_STARTERS_DIR
+
+
+def _read(path: Path) -> bytes:
+    """A regular file, not through a link, of at most MAX_FILE."""
+    try:
+        fd = os.open(path, _OPEN_FLAGS)
+    except OSError as error:
+        raise BadRequest(f"{path.name}: cannot be read ({error.strerror})") from None
+    with os.fdopen(fd, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise BadRequest(f"{path.name}: not a regular file")
+        data = handle.read(MAX_FILE + 1)
+    if len(data) > MAX_FILE:
+        raise BadRequest(f"{path.name}: larger than {MAX_FILE // 1024} kB")
+    return data
+
+
+def _meta(path: Path) -> dict:
+    """The title and description of a starter, from its TOML file if it has one."""
+    if not os.path.lexists(path):
+        return {}
+    try:
+        data = tomllib.loads(_read(path).decode())
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise BadRequest(f"{path.name}: {error}") from None
+    meta = {}
+    for key in ("title", "description"):
+        if key in data:
+            if not isinstance(data[key], str) or len(data[key]) > 500:
+                raise BadRequest(f"{path.name}: {key} must be a string of at most 500 characters")
+            meta[key] = data[key].strip()
+    return meta
+
+
+def _tree(base: Path) -> dict[str, bytes]:
+    """The files of the tree BASE by relative path, its metadata left out."""
+    found: dict[str, bytes] = {}
+    total = 0
+    for current, directories, names in os.walk(base):
+        here = Path(current)
+        for name in sorted(directories + names):
+            path = here / name
+            relative = PurePosixPath(path.relative_to(base).as_posix())
+            if str(relative) == META or name == KEEP:
+                continue
+            check_file_path(str(relative))
+            mode = os.lstat(path).st_mode
+            if stat.S_ISDIR(mode):
+                continue
+            if not stat.S_ISREG(mode):
+                # A link included: os.walk does not follow one to a directory either.
+                raise BadRequest(f"{relative}: not a regular file or a directory")
+            data = _read(path)
+            total += len(data)
+            if len(found) >= MAX_FILES or total > MAX_TOTAL:
+                raise BadRequest(f"more than {MAX_FILES} files or {MAX_TOTAL // 1024 // 1024} MB")
+            found[str(relative)] = data
+        directories.sort()
+    return found
+
+
+def _paths(kind: str, source: str, name: str) -> tuple[Path, Path]:
+    """Where the content of a starter is, and where its metadata."""
+    home = _root(source) / KINDS[kind]
+    if kind == "playbook":
+        return home / f"{name}.yml", home / f"{name}.toml"
+    return home / name, home / name / META
+
+
+def _content(kind: str, source: str, name: str) -> dict[str, bytes]:
+    where, _meta_path = _paths(kind, source, name)
+    if kind == "playbook":
+        return {f"{name}.yml": _read(where)}
+    mode = os.lstat(where).st_mode
+    if not stat.S_ISDIR(mode):
+        raise BadRequest("not a directory")
+    return _tree(where)
+
+
+def _names(kind: str, source: str) -> list[str]:
+    """The names of the starters of KIND a source offers."""
+    home = _root(source) / KINDS[kind]
+    try:
+        entries = sorted(os.listdir(home))
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+    names = []
+    for entry in entries:
+        if kind == "playbook":
+            if not entry.endswith(".yml"):
+                continue
+            entry = entry.removesuffix(".yml")
+        if _NAME_RE.fullmatch(entry):
+            names.append(entry)
+    return names[:MAX_STARTERS]
+
+
+def _format(content: dict[str, bytes]) -> str:
+    """The format of an inventory a starter makes: that of its main file."""
+    for fmt, main in MAIN_FILES.items():
+        if main in content:
+            return fmt
+    return ""
+
+
+def describe(kind: str, source: str, name: str) -> dict:
+    """One starter as starter.list shows it; error says why it cannot be used."""
+    entry = {"kind": kind, "source": source, "name": name, "ref": f"{source}/{name}",
+             "title": name, "description": "", "files": [], "error": ""}
+    try:
+        entry.update(_meta(_paths(kind, source, name)[1]))
+        content = _content(kind, source, name)
+        if not content:
+            raise BadRequest("it holds no file")
+        entry["files"] = sorted(content)
+        if kind == "inventory":
+            entry["format"] = _format(content)
+        elif kind == "playbook":
+            try:
+                entry["content"] = content[f"{name}.yml"].decode()
+            except UnicodeDecodeError:
+                raise BadRequest("not text") from None
+    except (BadRequest, OSError) as error:
+        entry["error"] = str(error) if isinstance(error, BadRequest) else \
+            f"cannot be read ({error.strerror})"
+        entry["files"] = []
+        entry.pop("content", None)
+    return entry
+
+
+def load(kind: str, ref: str) -> tuple[dict, list[dict]]:
+    """The starter REF of KIND, as its description and the operations of
+    files.change that write its files."""
+    match = _REF_RE.fullmatch(ref or "")
+    if not match:
+        raise BadRequest(f"invalid starter: {ref!r}: give SOURCE/NAME")
+    source, name = match.groups()
+    if name not in _names(kind, source):
+        raise NotFound(f"no such {kind} starter: {ref}")
+    entry = describe(kind, source, name)
+    if entry["error"]:
+        raise BadRequest(f"the starter {ref} cannot be used: {entry['error']}")
+    content = _content(kind, source, name)
+    operations = [{"op": "write", "path": PurePosixPath(path), "data": data, "expected": ""}
+                  for path, data in sorted(content.items())]
+    return entry, operations
+
+
+@command("starter.list", role="admin",
+         params={"kind": Choice(("all", *KINDS), "Only the starters of this kind",
+                                default="all")})
+def starter_list(ctx: Context, params: Values) -> dict:
+    """The starters a new managed project (kind project), managed inventory
+    (inventory) or playbook (playbook) can begin with, the package's and
+    this controller's, with their files; a playbook's with its text. Give
+    one as SOURCE/NAME (ref) to project.create, inventory.create, or write
+    a playbook's text with file.write."""
+    kinds = list(KINDS) if params["kind"] == "all" else [params["kind"]]
+    return {"starters": [describe(kind, source, name)
+                         for kind in kinds for source in SOURCES
+                         for name in _names(kind, source)]}
+
+
+STARTER_PARAM = Str(_STARTER_DOC, max_length=100)

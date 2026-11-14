@@ -8,11 +8,12 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { inventoryChoices } from "../lib/files.ts";
-import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths, VariableSet } from "../lib/types.ts";
+import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths, Starter, VariableSet } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
+import { StarterSelect } from "./StarterSelect.tsx";
 import { SetOrderField } from "./VariablesPage.tsx";
 
 function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory; onClose: () => void; onDone: (problem: string | null) => void }) {
@@ -28,6 +29,8 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     const [vaultId, setVaultId] = useState(inventory?.vault_credential_id ?? "");
     const sets = useLoad(() => call<{ variable_sets: VariableSet[] }>("varset.list"));
     const [setIds, setSetIds] = useState<string[]>(inventory?.variable_set_ids ?? []);
+    const [starter, setStarter] = useState<Starter | null>(null);
+    const can = useCan();
     const files = useLoad(() => projectId
         ? call<ProjectPaths>("project.files", { id: projectId }).catch(() => ({ files: [], directories: [] }))
         : Promise.resolve<ProjectPaths>({ files: [], directories: [] }), [projectId]);
@@ -44,7 +47,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
             ? { project_id: projectId, path: path.trim() }
             // Written here: the text of its main file when it is created, then
             // its files are changed on their own page.
-            : inventory ? { path: path.trim() } : { format, content };
+            : inventory ? { path: path.trim() } : starter ? { starter: starter.ref } : { format, content };
         const params = { name, vault_credential_id: vaultId, variable_set_ids: setIds, ...source };
         const saved = inventory
             ? await call<Inventory>("inventory.update", { id: inventory.id, ...params })
@@ -83,16 +86,21 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                 </FormGroup>
             ) : kind === "managed" ? (
                 <>
-                    <FormGroup label={t("Format")} role="radiogroup" isInline fieldId="inv-format">
-                        <Radio id="inv-format-yaml" name="inv-format" label="YAML" isChecked={format === "yaml"} onChange={() => setFormat("yaml")} />
-                        <Radio id="inv-format-ini" name="inv-format" label="INI" isChecked={format === "ini"} onChange={() => setFormat("ini")} />
-                    </FormGroup>
-                    <FormGroup label={t("Hosts and groups")} fieldId="inv-content" role="group">
-                        <CodeEditor key={format} className="fleet-code-field" label={t("Hosts and groups")} path={format === "yaml" ? "hosts.yml" : "hosts"}
-                            value={content} onChange={setContent}
-                            placeholder={format === "yaml" ? "all:\n  hosts:\n    web01:\n      ansible_host: 192.0.2.10" : "[web]\nweb01 ansible_host=192.0.2.10"} />
-                        <FormHelperText><HelperText><HelperTextItem>{t("Do not write passwords here: use a credential. This becomes its first file; group_vars, host_vars and other files are added with “Files”.")}</HelperTextItem></HelperText></FormHelperText>
-                    </FormGroup>
+                    {can("starter.list") && <StarterSelect kind="inventory" fieldId="inv-starter" value={starter} onChange={setStarter} />}
+                    {!starter && (
+                        <>
+                            <FormGroup label={t("Format")} role="radiogroup" isInline fieldId="inv-format">
+                                <Radio id="inv-format-yaml" name="inv-format" label="YAML" isChecked={format === "yaml"} onChange={() => setFormat("yaml")} />
+                                <Radio id="inv-format-ini" name="inv-format" label="INI" isChecked={format === "ini"} onChange={() => setFormat("ini")} />
+                            </FormGroup>
+                            <FormGroup label={t("Hosts and groups")} fieldId="inv-content" role="group">
+                                <CodeEditor key={format} className="fleet-code-field" label={t("Hosts and groups")} path={format === "yaml" ? "hosts.yml" : "hosts"}
+                                    value={content} onChange={setContent}
+                                    placeholder={format === "yaml" ? "all:\n  hosts:\n    web01:\n      ansible_host: 192.0.2.10" : "[web]\nweb01 ansible_host=192.0.2.10"} />
+                                <FormHelperText><HelperText><HelperTextItem>{t("Do not write passwords here: use a credential. This becomes its first file; group_vars, host_vars and other files are added with “Files”.")}</HelperTextItem></HelperText></FormHelperText>
+                            </FormGroup>
+                        </>
+                    )}
                 </>
             ) : (
                 <>

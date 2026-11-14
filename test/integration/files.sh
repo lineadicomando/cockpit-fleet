@@ -1,13 +1,13 @@
 #!/bin/sh
 # A project written in the interface: files, commits by the caller, syntax
-# checks in the sandbox, and a run from it.
+# checks in the sandbox, and a run from it; starters of projects and inventories.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
 require_root
 require_wipe
 
-cleanup() { wipe; rm -f /tmp/fleet-it-write.json /tmp/fleet-it-rule.py; }
+cleanup() { wipe; rm -f /tmp/fleet-it-write.json /tmp/fleet-it-rule.py; rm -rf /etc/cockpit-fleet/starters; }
 trap cleanup EXIT
 cleanup
 prepare
@@ -133,6 +133,37 @@ expect_eq "a module tells its parameters" \
     "$(get "$(admin module.doc '{"name": "ansible.builtin.copy"}')" '[o["required"] for o in a["data"]["options"] if o["name"] == "dest"]')" "[True]"
 expect_eq "a module name cannot be an option" "$(get "$(admin module.doc '{"name": "--version"}')" 'a["error"]["code"]')" bad_request
 expect_eq "operator cannot list modules" "$(get "$(ctl itoperator module.list)" 'a["error"]["code"]')" forbidden
+
+# --- starters ----------------------------------------------------------------------------
+listed=$(admin starter.list)
+expect_eq "the package's starters are listed, all usable" \
+    "$(get "$listed" '" ".join(sorted(s["kind"] + ":" + s["ref"] for s in a["data"]["starters"] if not s["error"]))')" \
+    "inventory:package/linux inventory:package/windows playbook:package/linux playbook:package/windows project:package/linux project:package/windows"
+expect_eq "operator cannot list starters" "$(get "$(ctl itoperator starter.list)" 'a["error"]["code"]')" forbidden
+linux=$(get "$(admin project.create '{"name": "from-linux", "kind": "managed", "starter": "package/linux"}')" 'a["data"]["id"]')
+expect_eq "a project starts with the files of its starter, in one commit" \
+    "$(get "$(admin file.history "{\"id\": \"$linux\"}")" '" ".join(c["author"] + ": " + c["subject"] for c in a["data"]["commits"])')" "itadmin: Start from Linux project"
+for run in $(db "SELECT group_concat(id, ' ') FROM runs WHERE project_id = '$linux' AND kind = 'syntax'"); do
+    expect_run "the playbook of a starter passes its syntax check ($run)" "$run" 90 successful
+done
+expect_eq "each playbook of the starter was checked" "$(db "SELECT count(*) FROM runs WHERE project_id = '$linux' AND kind = 'syntax'")" 2
+windows=$(get "$(admin inventory.create '{"name": "from-windows", "kind": "managed", "starter": "package/windows"}')" 'a["data"]["id"]')
+expect_run "an inventory from a starter is read" "$(get "$(admin inventory.parse "{\"id\": \"$windows\"}")" 'a["data"]["run_id"]')" 60 successful
+expect_eq "with the connection of Windows over SSH" \
+    "$(get "$(admin file.read "{\"id\": \"$windows\", \"path\": \"group_vars/windows.yml\"}")" '"ansible_shell_type: powershell" in a["data"]["content"]')" True
+mkdir -p /etc/cockpit-fleet/starters/projects/ours /etc/cockpit-fleet/starters/projects/linked
+printf 'title = "Ours"\n' > /etc/cockpit-fleet/starters/projects/ours/starter.toml
+printf -- '- hosts: all\n  tasks: []\n' > /etc/cockpit-fleet/starters/projects/ours/site.yml
+ln -s /etc/cockpit-fleet/secrets /etc/cockpit-fleet/starters/projects/linked/secrets
+chmod -R a+rX /etc/cockpit-fleet/starters
+listed=$(admin starter.list '{"kind": "project"}')
+expect_eq "an administrator's starter is offered with the package's" \
+    "$(get "$listed" '" ".join(s["ref"] + "=" + s["title"] for s in a["data"]["starters"] if not s["error"])')" \
+    "package/linux=Linux project package/windows=Windows project local/ours=Ours"
+expect_eq "one with a link is listed as unusable" \
+    "$(get "$listed" '[s["error"] for s in a["data"]["starters"] if s["ref"] == "local/linked"][0]')" "secrets: not a regular file or a directory"
+expect_eq "and refused" "$(get "$(admin project.create '{"name": "linked", "kind": "managed", "starter": "local/linked"}')" 'a["error"]["code"]')" bad_request
+expect_eq "nothing is left of what was refused" "$(db "SELECT count(*) FROM projects WHERE name = 'linked'")" 0
 
 # --- reading the files of a project that is not written here ---------------------------
 mkdir -p /srv/fleet-it/plain && echo '- hosts: all' > /srv/fleet-it/plain/site.yml && ln -s /etc/shadow /srv/fleet-it/plain/link

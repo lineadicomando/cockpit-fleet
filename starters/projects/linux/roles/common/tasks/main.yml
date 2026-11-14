@@ -1,0 +1,14 @@
+---
+- name: Show what the host runs
+  ansible.builtin.debug:
+    msg: >-
+      {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }},
+      {{ ansible_facts['processor_vcpus'] }} CPU, {{ ansible_facts['memtotal_mb'] }} MB
+      of memory
+
+- name: Install the packages every host needs
+  ansible.builtin.package:
+    name: "{{ common_packages }}"
+    state: present
+  become: true
+  when: common_packages | length > 0

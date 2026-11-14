@@ -1,0 +1,6 @@
+---
+- name: Configure the Windows hosts
+  hosts: windows
+  tasks:
+    - name: See that the host answers
+      ansible.windows.win_ping:

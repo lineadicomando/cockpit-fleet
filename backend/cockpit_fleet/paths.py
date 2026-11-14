@@ -32,6 +32,9 @@ ANSWERS_DIR = Path("/run/cockpit-fleet/answers")
 CREDS_STAGING_DIR = Path("/run/cockpit-fleet/creds")
 
 COLLECTIONS_DIR = Path("/usr/share/cockpit-fleet/collections")
+# Starters (starters.py): the package's, and an administrator's own.
+STARTERS_DIR = Path("/usr/share/cockpit-fleet/starters")
+LOCAL_STARTERS_DIR = Path("/etc/cockpit-fleet/starters")
 
 DATABASE = STATE_DIR / "fleet.db"
 # Held by the tick of the scheduler, so that two never launch the same thing.

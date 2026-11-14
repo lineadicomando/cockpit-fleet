@@ -19,7 +19,7 @@ controller that accepts password logins over SSH.
 | `test/integration/roles.sh` | roles, audit, sudoers (creates and removes test accounts) |  |
 | `test/integration/negative.sh` | hostile input to every command as each role, the caller's environment, secrets typed in clear | yes |
 | `test/integration/runs.sh` | a whole run through fleetctl | yes |
-| `test/integration/files.sh` | a project written in the interface, syntax checks | yes |
+| `test/integration/files.sh` | a project written in the interface, syntax checks, starters | yes |
 | `test/integration/upload.sh` | a project uploaded as an archive, hostile archives | yes |
 | `test/integration/store.sh` | the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses | yes |
 | `test/integration/galaxy.sh` | collections from a requirements file (IT_GALAXY_NET=yes for git) | yes |

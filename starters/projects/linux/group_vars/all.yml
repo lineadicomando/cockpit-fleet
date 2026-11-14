@@ -1,0 +1,3 @@
+---
+# Variables of every host, over the defaults of the roles.
+common_packages: []

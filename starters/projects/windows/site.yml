@@ -1,0 +1,5 @@
+---
+- name: Configure the Windows hosts
+  hosts: windows
+  roles:
+    - common

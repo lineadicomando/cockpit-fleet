@@ -1,0 +1,7 @@
+---
+- name: Configure the Linux hosts
+  hosts: linux
+  become: true
+  tasks:
+    - name: See that the host answers
+      ansible.builtin.ping:
