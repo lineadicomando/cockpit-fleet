@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { effectiveVariables, moved, parseVariables } from "../src/lib/variables.ts";
 import type { VariableSet } from "../src/lib/types.ts";
 
-const set = (id: string, name: string, variables: Record<string, unknown>, secrets: string[] = []): VariableSet =>
+const set = (id: string, name: string, variables: Record<string, unknown>, secrets: string[] = [], unset: string[] = []): VariableSet =>
     ({
         id, name, description: "", variables, templates: [], inventories: [], updated_at: 0,
-        secrets: secrets.map(one => ({ name: one, secret_name: `s-${one}`, set: true })),
+        secrets: secrets.map(one => ({ name: one, secret_name: `s-${one}`, set: !unset.includes(one) })),
     });
 
 test("sets apply in order, the template's own last", () => {
@@ -23,15 +23,17 @@ test("sets apply in order, the template's own last", () => {
 
 test("the inventory's sets come first, and a secret has no value here", () => {
     const sets = [
-        set("v1", "licenses", { seats: 12 }, ["serial", "token"]),
+        set("v1", "licenses", { seats: 12 }, ["serial", "token", "key"], ["key"]),
         set("v2", "lab", { token: "plain" }),
     ];
     const got = effectiveVariables(sets, ["v2"], {}, ["v1"]);
-    assert.deepEqual(got.map(one => [one.name, one.value, one.secret, one.from, one.ofInventory, one.overrides]), [
-        ["seats", 12, false, "licenses", true, []],
-        ["serial", undefined, true, "licenses", true, []],
+    assert.deepEqual(got.map(one => [one.name, one.value, one.secret, one.unset, one.from, one.ofInventory, one.overrides]), [
+        // A secret never given a value is told apart: a run that takes it stops.
+        ["key", undefined, true, true, "licenses", true, []],
+        ["seats", 12, false, false, "licenses", true, []],
+        ["serial", undefined, true, false, "licenses", true, []],
         // A plain variable of a later set wins over a secret of an earlier one.
-        ["token", "plain", false, "lab", false, ["licenses"]],
+        ["token", "plain", false, false, "lab", false, ["licenses"]],
     ]);
 });
 

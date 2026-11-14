@@ -1267,7 +1267,7 @@ msgid "Waiting"
 msgstr "In attesa"
 
 msgid "What you write, and what Fleet answers to the assistant (inventories, job templates, the outcome of runs and, when asked, their output), is sent to the provider of the model."
-msgstr "Ciò che scrivi, e ciò che Fleet risponde all'assistente (inventari, template, l'esito dei run e, se richiesto, il loro output), viene inviato al fornitore del modello."
+msgstr "Ciò che scrivi, e ciò che Fleet risponde all'assistente (inventari, template, l'esito delle run e, se richiesto, il loro output), viene inviato al fornitore del modello."
 
 msgid "Write a message; Enter sends it, Shift+Enter goes to a new line"
 msgstr "Scrivi un messaggio; Invio lo spedisce, Maiusc+Invio va a capo"
@@ -3093,7 +3093,7 @@ msgid "Move {{name}} down"
 msgstr "Sposta {{name}} in giù"
 
 msgid "Remove {{name}}"
-msgstr "Togli {{name}}"
+msgstr "Rimuovi {{name}}"
 
 msgid "Add a set of variables"
 msgstr "Aggiungi un insieme di variabili"
@@ -3123,10 +3123,10 @@ msgid "A survey's answer, and what earlier steps of a workflow pass on, win over
 msgstr "Le risposte di una survey, e ciò che passano gli step precedenti di un workflow, vincono su queste."
 
 msgid "Start after the runs already launched on this inventory"
-msgstr "Avvia dopo i run già lanciati su questo inventory"
+msgstr "Avvia dopo le run già lanciate su questo inventario"
 
 msgid "It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome."
-msgstr "Resta in coda finché un altro run è in esecuzione sull'inventory, o uno lanciato prima è ancora in coda, qualunque sia il loro esito."
+msgstr "Resta in coda finché un'altra run è in esecuzione sull'inventario, o una lanciata prima è ancora in coda, qualunque sia il loro esito."
 
 msgid "After {{title}}"
 msgstr "Dopo {{title}}"
@@ -3138,7 +3138,7 @@ msgid "Waits for"
 msgstr "In attesa di"
 
 msgid "After the runs launched before it on its inventory"
-msgstr "Dopo i run lanciati prima sul suo inventory"
+msgstr "Dopo le run lanciate prima sul suo inventario"
 
 msgid "No approval"
 msgstr "Nessuna approvazione"
@@ -3764,9 +3764,6 @@ msgstr "I loro valori sono cifrati e non si possono mai rileggere, né qui né a
 msgid "Value of {{name}}"
 msgstr "Valore di {{name}}"
 
-msgid "the secret variable"
-msgstr "la variabile segreta"
-
 msgid "Check the keys again"
 msgstr "Verifica di nuovo le chiavi"
 
@@ -3829,3 +3826,12 @@ msgstr "Attendibile"
 
 msgid "Trusted or not"
 msgstr "Attendibili e non"
+
+msgid "Value of the new secret variable"
+msgstr "Valore della nuova variabile segreta"
+
+msgid "Remove the new secret variable"
+msgstr "Rimuovi la nuova variabile segreta"
+
+msgid "Secret, not set"
+msgstr "Segreta, non impostata"

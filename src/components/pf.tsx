@@ -1,13 +1,14 @@
 // PatternFly components with the English text they fall back on replaced by
 // translated text: labels that only a screen reader says (an alert's kind, a
-// close button, a spinner's value), tooltips, and the buttons of an upload.
+// close button, a spinner's value, a busy button's), tooltips, and the
+// buttons of an upload.
 // Pages import these instead of the originals, so nothing is left in English.
 import React, { Children, cloneElement, isValidElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Alert as PfAlert,
     AlertActionCloseButton as PfAlertActionCloseButton,
-    Button,
+    Button as PfButton,
     ClipboardCopy as PfClipboardCopy,
     FileUpload as PfFileUpload,
     MenuToggle,
@@ -20,6 +21,7 @@ import {
 import type {
     AlertActionCloseButtonProps,
     AlertProps,
+    ButtonProps,
     ClipboardCopyProps,
     FileUploadProps,
     ModalProps,
@@ -55,6 +57,12 @@ export function Alert(props: AlertProps) {
 export function AlertActionCloseButton(props: AlertActionCloseButtonProps) {
     const { t } = useTranslation();
     return <PfAlertActionCloseButton aria-label={t("Close")} {...props} />;
+}
+
+// The spinner of a button that waits is announced as "Loading..." otherwise.
+export function Button(props: ButtonProps) {
+    const { t } = useTranslation();
+    return <PfButton spinnerAriaValueText={props.isLoading ? t("Loading") : undefined} {...props} />;
 }
 
 export function ClipboardCopy(props: Omit<ClipboardCopyProps, "ref">) {

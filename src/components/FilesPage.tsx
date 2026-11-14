@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     AlertActionLink,
-    Button,
     Content,
     ExpandableSection,
     Flex,
@@ -38,7 +37,7 @@ import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
 import { DraftReview, PendingDrafts } from "./Drafts.tsx";
 import { Diff, Output } from "./RunsPage.tsx";
-import { Alert, FileUpload, Modal, SearchInput, Spinner, TabPanel, Tabs } from "./pf.tsx";
+import { Alert, Button, FileUpload, Modal, SearchInput, Spinner, TabPanel, Tabs } from "./pf.tsx";
 
 // Up to this many files the tree starts open: there is nothing to look for.
 const OPEN_ALL = 40;

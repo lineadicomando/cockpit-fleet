@@ -31,7 +31,6 @@ const usedBy = (set: VariableSet) => [...set.templates, ...(set.inventories ?? [
 function SecretVariables({ rows, onChange }: { rows: SecretRow[]; onChange: (rows: SecretRow[]) => void }) {
     const { t } = useTranslation();
     const change = (key: number, part: Partial<SecretRow>) => onChange(rows.map(row => row.key === key ? { ...row, ...part } : row));
-    const unnamed = t("the secret variable");
     return (
         <FormGroup label={t("Secret variables")} fieldId="varset-secrets" role="group">
             {rows.length > 0 && (
@@ -47,13 +46,13 @@ function SecretVariables({ rows, onChange }: { rows: SecretRow[]; onChange: (row
                                 </Td>
                                 <Td dataLabel={t("Value")}>
                                     <TextInput id={`varset-secret-value-${index}`} type="password" autoComplete="new-password"
-                                        aria-label={t("Value of {{name}}", { name: row.name || unnamed })}
+                                        aria-label={row.name ? t("Value of {{name}}", { name: row.name }) : t("Value of the new secret variable")}
                                         value={row.value} onChange={(_e, value) => change(row.key, { value })}
                                         placeholder={row.saved?.set ? t("Set: leave empty to keep it") : t("Not set")} />
                                 </Td>
                                 <Td isActionCell>
                                     <Button variant="link" isInline onClick={() => onChange(rows.filter(one => one.key !== row.key))}
-                                        aria-label={t("Remove {{name}}", { name: row.name || unnamed })}>{t("Remove")}</Button>
+                                        aria-label={row.name ? t("Remove {{name}}", { name: row.name }) : t("Remove the new secret variable")}>{t("Remove")}</Button>
                                 </Td>
                             </Tr>
                         ))}
@@ -279,7 +278,10 @@ export function VariableSetsField({ sets, ids, onChange, own, inventoryIds }: {
                                     <Td dataLabel={t("Variable")}><code>{one.name}</code></Td>
                                     <Td dataLabel={t("Value")}>
                                         {one.secret
-                                            ? <Label isCompact color="purple" icon={<LockIcon />}>{t("Secret")}</Label>
+                                            ? <Label isCompact color={one.unset ? "orange" : "purple"} icon={<LockIcon />}
+                                                title={one.unset ? t("Secret, not set: runs that take it stop") : undefined}>
+                                                {one.unset ? t("Secret, not set") : t("Secret")}
+                                            </Label>
                                             : <code>{shown(one.value)}</code>}
                                     </Td>
                                     <Td dataLabel={t("From")}>

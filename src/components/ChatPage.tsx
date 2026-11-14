@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Button,
     Checkbox,
     Content,
     DescriptionList,
@@ -33,7 +32,7 @@ import type { ChatAgentInfo, ChatGuide, ChatInfo } from "../lib/types.ts";
 import { SectionHeader, TerminalCommand as Command } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { PendingDrafts } from "./Drafts.tsx";
-import { Alert, Modal, Spinner } from "./pf.tsx";
+import { Alert, Button, Modal, Spinner } from "./pf.tsx";
 
 // What each profile of the assistant is called, and what it may do.
 function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_run">) {

@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import cockpit from "cockpit";
 import {
-    Button,
     Content,
     EmptyState,
     EmptyStateBody,
@@ -22,7 +21,7 @@ import { shellPage } from "../lib/shell.ts";
 import type { RunStatus } from "../lib/types.ts";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { Label } from "@patternfly/react-core";
-import { Alert, ClipboardCopy, Modal, Spinner } from "./pf.tsx";
+import { Alert, Button, ClipboardCopy, Modal, Spinner } from "./pf.tsx";
 
 export function message(ex: unknown): string {
     return ex instanceof Error ? ex.message : String(ex);

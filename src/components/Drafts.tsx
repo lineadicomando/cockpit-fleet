@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Button,
     Checkbox,
     Content,
     Flex,
@@ -21,7 +20,7 @@ import { useLoad } from "../lib/hooks.ts";
 import type { DraftChange, DraftDiff, DraftInfo } from "../lib/types.ts";
 import { FormModal, RunStatusLabel, message } from "./common.tsx";
 import { Diff } from "./RunsPage.tsx";
-import { Alert, Modal, Spinner } from "./pf.tsx";
+import { Alert, Button, Modal, Spinner } from "./pf.tsx";
 
 // Where the files of a draft are edited: the page of the files, on the draft.
 export function draftPath(draft: Pick<DraftInfo, "id" | "draft">): string[] {

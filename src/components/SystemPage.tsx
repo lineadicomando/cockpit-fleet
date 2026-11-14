@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Button,
     Content,
     DescriptionList,
     DescriptionListDescription,
@@ -23,7 +22,7 @@ import type { Check, CheckStatus, Health, HealthGroup, HealthLane, ImportReport 
 import { useKindNames } from "./ChecksPage.tsx";
 import { message } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
-import { Alert, Spinner } from "./pf.tsx";
+import { Alert, Button, Spinner } from "./pf.tsx";
 
 const TONE: Record<CheckStatus, Tone> = { ok: "good", warn: "warning", fail: "bad" };
 const ORDER: Record<CheckStatus, number> = { fail: 0, warn: 1, ok: 2 };

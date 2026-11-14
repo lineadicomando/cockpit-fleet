@@ -27,7 +27,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
   and so do ad-hoc commands and checks. Administrators set the values on
   the Variables page or with `fleet secret --varset SET VARIABLE`; an
   export carries their names, and they are entered again after an import.
-  A run stops when a secret variable it takes has no value.
+  A run stops when a secret variable it takes has no value, and the
+  variables of a run shown in a template's form mark those that have none.
 - The store: files on the controller that playbooks copy to nodes, on a
   page of their own (Store) and with `fleet store put` and `fleet store
   read`. Files of any size are uploaded from the browser, resumed when an
@@ -168,6 +169,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   ansible-lint on every playbook with ansible-core 2.19 (Debian 13,
   Fedora 44): ansible-lint's own syntax check, which has no inventory, is
   no longer made to fail for it.
+- A button that waits (Save, Create, Refresh and the like) no longer tells
+  a screen reader "Loading..." in English, and the Italian interface calls
+  runs and inventories the same way everywhere ("le run", "inventario").
 
 ### Security
 

@@ -8,11 +8,11 @@ the lab's VMs on this workstation: `CLAUDE.local.md` (not tracked).
 
 ## Status (14 November 2026)
 
-Phases 0–13 closed; 0.2.0 released on 2 November. Under `[Unreleased]`
+Phases 0–13 and 15 closed; 0.2.0 released on 2 November. Under `[Unreleased]`
 (next release 0.3.0, `make next-version`, only when the user asks): runs
-in series, assistant profiles (12), the store (13), secret variables (15),
-host keys by host, the six grouped tabs. Phase 15 lacks only its check in a
-browser; phase 14 is designed, not begun.
+in series, assistant profiles (12), the store (13), secret variables (15,
+closed on 14 November), host keys by host, the six grouped tabs. Phase 14
+is designed, not begun.
 
 To resume: `git status`, `git log origin/main..` (not pushed), `make
 check`. Each backend module's docstring says what it is; `cli.py` is the
@@ -24,17 +24,6 @@ checks on the three, `ct-lifecycle` on AlmaLinux (14 November); the last
 full run (9 November) passed but `cmdb` on Fedora in a container
 (netavark "invalid namespace path", since 1 November). Run two
 distributions' `ct-test` one after the other.
-
-## Phase 15: secret variables — to close
-
-Design: `architecture/jobs.md` ("Secret variables and the sets of an
-inventory"), `architecture/export.md`; decisions: `decisions.md`, "Sets of
-variables", "Vault files". Done and tested (unit, `ct-test`).
-
-1. [ ] In a browser on a VM (`deb13`, skill `vm-lab`): the set's form
-   (secret variables added, replaced, removed), the inventory's sets, the
-   template's merged view showing them hidden; then the acceptance in
-   `architecture/acceptance.md` and phase 15 out of this file.
 
 ## Phase 14: starters
 

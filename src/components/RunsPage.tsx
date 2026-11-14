@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Button,
     Card,
     CardBody,
     Content,
@@ -33,7 +32,7 @@ import { AdhocModal } from "./AdhocModal.tsx";
 import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
 import { WorkflowSteps } from "./WorkflowsPage.tsx";
 import { Answered } from "./SurveyEditor.tsx";
-import { Alert, TabPanel, Tabs } from "./pf.tsx";
+import { Alert, Button, TabPanel, Tabs } from "./pf.tsx";
 
 const isActive = (status: RunStatus) => status === "pending_approval" || status === "queued" || status === "running";
 // Past this, only the end of the output is drawn; the whole log stays on the server.

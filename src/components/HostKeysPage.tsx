@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Button, Checkbox, Content, Flex, FlexItem, FormGroup, FormSelect, FormSelectOption, Label, Radio, Split, SplitItem, TextInput, Tooltip,
+    Checkbox, Content, Flex, FlexItem, FormGroup, FormSelect, FormSelectOption, Label, Radio, Split, SplitItem, TextInput, Tooltip,
 } from "@patternfly/react-core";
 import { ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
@@ -17,7 +17,7 @@ import type { Group } from "../lib/listview.ts";
 import type { HostKey, Inventory, ScannedKey, UntrustedHost } from "../lib/types.ts";
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { FilterChips, GroupByChoice, NothingMatches, useStoredView } from "./ListView.tsx";
-import { ActionsColumn, Alert, ExpandCell, SearchInput } from "./pf.tsx";
+import { ActionsColumn, Alert, Button, ExpandCell, SearchInput } from "./pf.tsx";
 
 interface Scan {
     keys: ScannedKey[];
