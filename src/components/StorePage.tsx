@@ -32,7 +32,7 @@ import { useLoad, usePolling, useStoredState } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import {
     ARCHIVE_LINK, archiveName, archiveUrl, chosenFolder, describe, downloadArchive, downloadFromStore, droppedOf, filterEntries, indexStore, joinPath, moveInList, playbookPath, rangeBetween,
-    readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore,
+    endedDownloads, readClosed, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, visibleDownloads,
     type Clash, type Dropped, type PendingUpload, type StoreDownload, type StoreEntry, type StoreList, type StoreSortKey, type StoreUnchanged, type Upload,
 } from "../lib/store.ts";
 import { shellLine } from "../lib/terminal.ts";
@@ -105,6 +105,9 @@ export function StorePage({ directory }: { directory: string }) {
     const [query, setQuery] = useState("");
     const [everywhere, setEverywhere] = useState(false);
     const [sort, setSort] = useStoredState("store-sort", readStoreSort);
+    // Downloads and copies that ended, taken off the page by the user: the
+    // lists do not go by themselves, which would move the page under the pointer.
+    const [closed, setClosed] = useStoredState("store-downloads-closed", readClosed);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [anchor, setAnchor] = useState<string | null>(null);
     // Entries cut or copied, to be pasted elsewhere: a clipboard of the page.
@@ -572,19 +575,37 @@ export function StorePage({ directory }: { directory: string }) {
         }
     }
 
+    // Whether Ctrl (Alt on a Mac) is down. Chrome on Linux says so on the
+    // keys and on dragstart, but not on dragover and drop: there it is
+    // always false, and its dropEffect is move.
+    const copyKey = useRef(false);
+    useEffect(() => {
+        const keys = (event: KeyboardEvent) => { copyKey.current = event.ctrlKey || event.altKey; };
+        const blur = () => { copyKey.current = false; };
+        window.addEventListener("keydown", keys, true);
+        window.addEventListener("keyup", keys, true);
+        window.addEventListener("blur", blur);
+        return () => {
+            window.removeEventListener("keydown", keys, true);
+            window.removeEventListener("keyup", keys, true);
+            window.removeEventListener("blur", blur);
+        };
+    }, []);
+    const copying = (event: React.DragEvent) => event.ctrlKey || event.altKey || copyKey.current;
+
     // Where a drag may end: folders take entries of the store and files of
     // the desktop; the list itself, files into the folder shown.
     function dropProps(into: string, mark: string) {
         return {
             onDragOver: (event: React.DragEvent) => {
                 const types = event.dataTransfer.types;
-                const copying = event.ctrlKey || event.altKey;
-                const entries = types.includes(DRAGGED) && (copying ? canCopy : canMove) && mark !== ".";
+                const copy = copying(event);
+                const entries = types.includes(DRAGGED) && (copy ? canCopy : canMove) && mark !== ".";
                 const files = types.includes("Files") && canUpload;
                 if (!entries && !files) return;
                 event.preventDefault();
                 event.stopPropagation();
-                event.dataTransfer.dropEffect = entries && !copying ? "move" : "copy";
+                event.dataTransfer.dropEffect = entries && !copy ? "move" : "copy";
                 setTarget(mark);
             },
             onDragLeave: (event: React.DragEvent) => {
@@ -600,7 +621,7 @@ export function StorePage({ directory }: { directory: string }) {
                     const paths = JSON.parse(dragged) as string[];
                     if (paths.includes(into)) return;
                     // With Ctrl (Alt on a Mac) a drag copies, as in file managers.
-                    if (event.ctrlKey || event.altKey) copyInto(paths, into);
+                    if (copying(event)) copyInto(paths, into);
                     else moveInto(paths, into);
                 } else {
                     // The entries must be taken while the drop is under way.
@@ -611,6 +632,7 @@ export function StorePage({ directory }: { directory: string }) {
     }
 
     function dragStart(event: React.DragEvent, entry: StoreEntry) {
+        copyKey.current = event.ctrlKey || event.altKey;
         const paths = selected.has(entry.path) ? chosen : [entry.path];
         event.dataTransfer.setData(DRAGGED, JSON.stringify(paths));
         event.dataTransfer.setData("text/plain", paths.map(playbookPath).join("\n"));
@@ -635,6 +657,7 @@ export function StorePage({ directory }: { directory: string }) {
     };
 
     const parts = directory ? directory.split("/") : [];
+    const shownDownloads = visibleDownloads(downloads.data?.downloads ?? [], closed).slice(0, 10);
     const elsewhere = (pending.data?.uploads ?? []).filter(upload => !uploads.some(item => item.path === upload.path && item.state === "sending"));
     const detailed = details && data && (taken.has(details)) ? details : null;
     const detailedEntry: StoreEntry | null = detailed ? { name: basename(detailed), path: detailed, file: data!.files.find(file => file.path === detailed) ?? null } : null;
@@ -811,7 +834,14 @@ export function StorePage({ directory }: { directory: string }) {
 
             {uploads.length > 0 && (
                 <Table variant="compact" aria-label={t("Uploads")} style={{ marginBottom: "1rem" }}>
-                    <Thead><Tr><Th>{t("Uploading")}</Th><Th width={40}>{t("Progress")}</Th><Th screenReaderText={t("Actions")} /></Tr></Thead>
+                    <Thead>
+                        <Tr>
+                            <Th>{t("Uploading")}</Th><Th width={40}>{t("Progress")}</Th>
+                            {sending || next
+                                ? <Th screenReaderText={t("Actions")} />
+                                : <Th modifier="fitContent"><Button variant="link" isInline onClick={() => setUploads([])}>{t("Close")}</Button></Th>}
+                        </Tr>
+                    </Thead>
                     <Tbody>
                         {uploads.map(item => (
                             <Tr key={item.key}>
@@ -828,7 +858,10 @@ export function StorePage({ directory }: { directory: string }) {
                                 <Td isActionCell>
                                     {(item.state === "waiting" || item.state === "sending") && <Button variant="link" onClick={() => cancel(item)}>{t("Cancel")}</Button>}
                                     {(item.state === "failed" || item.state === "cancelled") && (
-                                        <Button variant="link" onClick={() => update(item.key, { state: "waiting", error: undefined })}>{t("Resume")}</Button>
+                                        <>
+                                            <Button variant="link" onClick={() => update(item.key, { state: "waiting", error: undefined })}>{t("Resume")}</Button>
+                                            <Button variant="link" onClick={() => setUploads(items => items.filter(other => other.key !== item.key))}>{t("Remove from the list")}</Button>
+                                        </>
                                     )}
                                 </Td>
                             </Tr>
@@ -836,11 +869,18 @@ export function StorePage({ directory }: { directory: string }) {
                     </Tbody>
                 </Table>
             )}
-            {(downloads.data?.downloads ?? []).length > 0 && (
+            {shownDownloads.length > 0 && (
                 <Table variant="compact" aria-label={t("Downloads and copies into the store")} style={{ marginBottom: "1rem" }}>
-                    <Thead><Tr><Th>{t("Into the store")}</Th><Th>{t("Origin")}</Th><Th width={30}>{t("Progress")}</Th><Th screenReaderText={t("Actions")} /></Tr></Thead>
+                    <Thead>
+                        <Tr>
+                            <Th>{t("Into the store")}</Th><Th>{t("Origin")}</Th><Th width={30}>{t("Progress")}</Th>
+                            {shownDownloads.some(item => !ACTIVE.includes(item.status))
+                                ? <Th modifier="fitContent"><Button variant="link" isInline onClick={() => setClosed(endedDownloads(downloads.data?.downloads ?? []))}>{t("Close")}</Button></Th>
+                                : <Th screenReaderText={t("Actions")} />}
+                        </Tr>
+                    </Thead>
                     <Tbody>
-                        {(downloads.data?.downloads ?? []).slice(0, 10).map(item => (
+                        {shownDownloads.map(item => (
                             <Tr key={item.run_id}>
                                 <Td dataLabel={t("Into the store")}>
                                     <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", item.run_id])}>{item.path}</Button>

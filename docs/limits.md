@@ -25,8 +25,11 @@ in [security.md](security.md); the decisions behind these limits in
   check of a playbook without vault password, of an inventory on save or
   on request only (a file of its tree that is no source is not checked), listed among runs; completion and module
   help know only the controller's modules, no sub-parameters.
-- Store: read by every run, no part of it kept for some projects; a write in
-  place through a link reaches the store during the run, not at its end;
+- Store: read by every run, no part of it kept for some projects, so no
+  place for keys a role keeps on the controller between runs (Veyon's in
+  `ansible-win_edulab`); a write in place through a link reaches the store
+  during the run, not at its end, and so does a change of mode (`get_url`
+  with `mode` gives it to the store's file);
   no versions of a file (a replaced one is gone); the listing stops at
   20 000 entries; a file of root put there by hand is not given to runs.
   Downloads: no credentials for a URL; one that ended short is taken up

@@ -74,6 +74,25 @@ class StoreTest(StoreBase):
         self.assertEqual((paths.STORE_DIR / "iso/win.iso").read_bytes(), data)
         self.assertEqual(self.ok("store.uploads", role="operator")["uploads"], [])
 
+    def test_progress_says_what_was_written_before_the_answer(self):
+        # Cockpit acknowledges bytes as its bridge receives them, not as they
+        # are read here: the page holds back on these lines instead.
+        data = os.urandom(2 * 1024 * 1024 + 10)
+        for progress, offset, expected in (
+                (True, 0, [1024 * 1024, 2 * 1024 * 1024, len(data)]),
+                (True, 1000, [1000 + 1024 * 1024, len(data)]),
+                (False, 0, [])):
+            ctx = self.ctx("operator")
+            ctx.stdin, ctx.stdout = io.BytesIO(data[offset:]), io.StringIO()
+            if offset:
+                self.put("p.bin", data, sent=data[:offset])
+            params = {"path": f"p{progress}{offset}.bin" if not offset else "p.bin",
+                      "size": len(data), "offset": offset, "progress": progress}
+            answer = cli.dispatch("store.put", json.dumps(params).encode(), ctx)
+            self.assertTrue(answer["ok"], answer)
+            self.assertEqual([json.loads(line)["received"]
+                              for line in ctx.stdout.getvalue().splitlines()], expected)
+
     def test_what_did_not_arrive_as_promised_is_dropped(self):
         data = b"installer"
         self.assertEqual(self.put("a.exe", data, sha256=sha(b"other"))["error"]["code"],

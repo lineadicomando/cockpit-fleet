@@ -532,6 +532,10 @@ def _place(source_dir: int, source_name: str, path: PurePosixPath, replace: bool
              "sha256": Str("Its digest, checked when it has arrived", default="",
                            max_length=64),
              "replace": Bool("Replace a file already there"),
+             "progress": Bool("Write a line {\"received\": N} before the answer each time"
+                              " bytes are written, N those the upload has in all: what a"
+                              " sender through Cockpit, whose acknowledgements come before"
+                              " the bytes are read, holds back on"),
          })
 def store_put(ctx: Context, params: Values) -> dict:
     """Put a file in the store. The parameters are the first line of the
@@ -575,6 +579,7 @@ def store_put(ctx: Context, params: Values) -> dict:
         while chunk := os.read(fd, _CHUNK):
             digest.update(chunk)
         remaining = size - offset
+        report = ctx.stdout if params["progress"] else None
         while remaining:
             chunk = ctx.stdin.read(min(_CHUNK, remaining))
             if not chunk:
@@ -582,6 +587,9 @@ def store_put(ctx: Context, params: Values) -> dict:
             os.write(fd, chunk)
             digest.update(chunk)
             remaining -= len(chunk)
+            if report is not None:
+                report.write(json.dumps({"received": size - remaining}) + "\n")
+                report.flush()
         if remaining:
             raise Conflict(f"the upload stopped after {size - remaining} of {size} bytes;"
                            " it can be resumed")

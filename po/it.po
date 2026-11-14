@@ -3408,6 +3408,9 @@ msgstr "Messo a mano"
 msgid "Resume"
 msgstr "Riprendi"
 
+msgid "Remove from the list"
+msgstr "Togli dalla lista"
+
 msgid "Run {{id}}"
 msgstr "Esecuzione {{id}}"
 

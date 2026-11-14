@@ -109,8 +109,9 @@ export interface Stored {
     sha256: string;
 }
 
-// Bytes read from the file at a time, one message each, and sent without an
-// acknowledgement at most: the page holds no more than that of a file of any size.
+// Bytes read from the file at a time, one message each, and sent ahead of what
+// fleetctl says it has written at most: neither the page nor Cockpit's bridge,
+// which acknowledges what it receives before fleetctl reads it, holds more.
 const CHUNK = FRAME;
 const WINDOW = 16 * 1024 * 1024;
 
@@ -120,7 +121,7 @@ function fleetctl(command: string): string[] {
 
 // The parameters of store.put: one line, before the bytes.
 export function putHeader(path: string, size: number, offset: number, replace: boolean): Uint8Array {
-    return new TextEncoder().encode(JSON.stringify({ path, size, offset, replace }) + "\n");
+    return new TextEncoder().encode(JSON.stringify({ path, size, offset, replace, progress: true }) + "\n");
 }
 
 export interface UploadOptions {
@@ -135,38 +136,47 @@ export interface Upload {
     cancel: () => void;
 }
 
-// Sends a file to the store. Progress counts what the backend acknowledged.
+// Sends a file to the store. Progress counts what fleetctl says it has written.
 export function uploadToStore(file: Blob, path: string, options: UploadOptions = {}): Upload {
     const offset = options.offset ?? 0;
     const channel = cockpit.channel({
         payload: "stream",
         spawn: fleetctl("store.put"),
         binary: true,
-        "send-acks": "bytes",
         err: "message",
         environ: ["LC_ALL=C"],
         ...(isElevated() ? { superuser: "try" as const } : {}),
     });
     const header = putHeader(path, file.size, offset, options.replace ?? false);
-    const output: Uint8Array[] = [];
-    let acknowledged = 0;
+    // fleetctl's output: lines {"received": N} as it writes, then the answer.
+    const decoder = new TextDecoder();
+    let pending = "";
+    const lines: string[] = [];
+    let received = offset;
     let wake: (() => void) | null = null;
     let closed = false;
     // Why the page stopped sending, when it did: the file could not be read.
     let failure: unknown = null;
 
-    channel.addEventListener("message", (_event, data) => output.push(data));
-    channel.addEventListener("control", (_event, message) => {
-        if (message.command !== "ack") return;
-        acknowledged += message.bytes ?? 0;
-        options.onProgress?.(Math.min(file.size, offset + Math.max(0, acknowledged - header.length)));
-        wake?.();
+    channel.addEventListener("message", (_event, data) => {
+        const parts = (pending + decoder.decode(data, { stream: true })).split("\n");
+        pending = parts.pop() ?? "";
+        for (const line of parts) {
+            const progress = receivedIn(line);
+            if (progress !== null) {
+                received = progress;
+                options.onProgress?.(Math.min(file.size, received));
+                wake?.();
+            } else {
+                lines.push(line);
+            }
+        }
     });
     const ended = new Promise<Stored>((resolve, reject) => {
         channel.addEventListener("close", (_event, message) => {
             closed = true;
             wake?.();
-            const text = new TextDecoder().decode(concat(output));
+            const text = lines.concat(pending + decoder.decode()).join("\n").trim();
             let answer: { ok: boolean; data?: Stored; error?: { code: string; message: string } } | null = null;
             try {
                 answer = JSON.parse(text);
@@ -183,16 +193,14 @@ export function uploadToStore(file: Blob, path: string, options: UploadOptions =
 
     async function send() {
         channel.send(header);
-        let sent = header.length;
         for (let at = offset; at < file.size && !closed; at += CHUNK) {
-            while (sent - acknowledged > WINDOW && !closed) {
+            while (at - received > WINDOW && !closed) {
                 await new Promise<void>(resolve => { wake = resolve; });
                 wake = null;
             }
             if (closed) break;
             const piece = new Uint8Array(await file.slice(at, Math.min(at + CHUNK, file.size)).arrayBuffer());
             channel.send(piece);
-            sent += piece.length;
         }
         if (!closed) channel.control({ command: "done" });
     }
@@ -219,14 +227,16 @@ export function describe(error: unknown): string {
     return String(error);
 }
 
-function concat(pieces: Uint8Array[]): Uint8Array {
-    const whole = new Uint8Array(pieces.reduce((total, piece) => total + piece.length, 0));
-    let at = 0;
-    for (const piece of pieces) {
-        whole.set(piece, at);
-        at += piece.length;
+// The bytes of a line {"received": N} of store.put; null for any other line.
+export function receivedIn(line: string): number | null {
+    if (!line.startsWith('{"received"')) return null;
+    try {
+        const value: unknown = JSON.parse(line);
+        const received = (value as { received?: unknown }).received;
+        return typeof received === "number" ? received : null;
+    } catch {
+        return null;
     }
-    return whole;
 }
 
 function base64(text: string): string {
@@ -554,4 +564,27 @@ export function settle<T extends { path: string }>(items: T[], taken: Set<string
         }
     }
     return settled;
+}
+
+// The runs of downloads and copies the user closed, as kept in the browser.
+export function readClosed(text: string | null): string[] {
+    try {
+        const value: unknown = JSON.parse(text ?? "[]");
+        return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+    } catch {
+        return [];
+    }
+}
+
+const RUNNING = ["queued", "running"];
+
+// What closing the list of downloads hides: those that ended, of those listed.
+export function endedDownloads(list: StoreDownload[]): string[] {
+    return list.filter(item => !RUNNING.includes(item.status)).map(item => item.run_id);
+}
+
+// Those still shown: any that is under way, and those that ended and were not closed.
+export function visibleDownloads(list: StoreDownload[], closed: string[]): StoreDownload[] {
+    const hidden = new Set(closed);
+    return list.filter(item => RUNNING.includes(item.status) || !hidden.has(item.run_id));
 }

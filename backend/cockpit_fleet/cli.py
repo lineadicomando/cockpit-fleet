@@ -18,7 +18,7 @@ import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, TextIO
 
 from . import audit, autonomy, db, journal, paths, profiles
 from .auth import ROLES, Caller, allowed, resolve_caller
@@ -240,6 +240,8 @@ class Context:
     session: str = ""
     # The bytes after the parameters, for a command that streams in.
     stdin: BinaryIO | None = field(default=None, repr=False)
+    # Where such a command may write lines before its answer (store.put's progress).
+    stdout: TextIO | None = field(default=None, repr=False)
     # What a command that streams out opened for main() to copy to stdout.
     output: BinaryIO | None = field(default=None, repr=False)
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
@@ -562,6 +564,7 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     elif spec is not None and spec.stream == "in":
         raw = sys.stdin.buffer.readline(limit + 1)
         ctx.stdin = sys.stdin.buffer
+        ctx.stdout = sys.stdout
     else:
         raw = sys.stdin.buffer.read(limit + 1)
     answer = dispatch(argv[1], raw, ctx)

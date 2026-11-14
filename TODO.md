@@ -5,50 +5,24 @@ Status and what is left; what is done is in `CHANGELOG.md` and
 read only the file at hand). Decisions: `docs/decisions.md`; known limits:
 `docs/limits.md`.
 
-## Status (13 November 2026)
+## Status (14 November 2026)
 
-Phases 0–12 closed (12 accepted with Claude on 13 November,
+Phases 0–13 closed (13 accepted on 14 November,
 `architecture/acceptance.md`); 0.2.0 released on 2 November; the next
 release would be 0.3.0 (`make next-version`), made only when the user
 asks. Under `[Unreleased]`: runs in series, phase 12 (the profiles of the
-assistant), phase 13 (the store, waiting for its acceptance), the six
-grouped tabs. Phase 14 (starters) is designed, not begun.
+assistant), phase 13 (the store), phase 15 (secret variables), the six grouped tabs. Phase 14 (starters) is designed, not begun.
 
 To resume: `git status`; `git log origin/main..` (what is not pushed);
 `make check`. Each backend module says what it is in its
 docstring; `cli.py` is the registry of commands, `db.py` the schema (28).
 
-Tests on 13 November: unit tests (646 backend, 162 frontend). `ct-test`
-of `store` and `negative` on the three on 11 November; the last full
+Tests on 14 November: unit tests (659 backend, 171 frontend). `ct-test`
+of `store` on AlmaLinux and Debian on 14 November (after the fix of
+uploads), of `store` and `negative` on the three on 11 November; the last full
 `ct-test` (9 November) passed but `cmdb` on Fedora, in a container only
 (netavark "invalid namespace path", since 1 November). Run two
 distributions' `ct-test` one after the other.
-
-## Phase 13: close it
-
-Design and measures: `architecture/store.md`; decisions: `decisions.md`,
-"Store". Code: backend `storage.py`, `fetch.py` (job `download`),
-`copier.py` (job `copy`), `jobs.py` (lane `downloads`), `maintenance.tidy`,
-`terminal.py` (`fleet store`); page `StorePage.tsx`, `StoreDialogs.tsx`,
-`ContextMenu.tsx`, `RelocateModal.tsx`, `src/lib/store.ts`; tests
-`test_storage.py`, `test_copy.py`, `test_fetch.py`, `test/store.test.ts`,
-`test/integration/store.sh`.
-
-1. [ ] **Acceptance with `ansible-win_edulab`** (needs `win11` and its own
-   VMs: on `inspiron27`). Its store is `win_workman_storage_path`
-   (inventory `school`, `group_vars/all/vars.yaml`): set it to
-   `"{{ fleet_store }}"`; its roles `get_url` installers delegated to the
-   controller (`ansible_collections/lineadicomando/win_workman/roles/
-   pkg_utils/tasks/download.yaml`) and `win_copy` them from there; ISOs go
-   by hand into `win_iso/`, and the role `win_iso` writes `-unattended.iso`
-   beside them; `win_workman_file_copy_pull_root` fetches from nodes. Its
-   Veyon keys (`veyon/`) must leave the store (credentials or vault). Show:
-   an installer downloaded by a run and kept, an ISO uploaded from the page,
-   a file fetched from a node, then the acceptance in
-   `architecture/acceptance.md`.
-2. [ ] In Firefox and Chrome, by hand: a folder dropped from the desktop
-   onto the Store page (the browser tools cannot drop one), and a drag with
-   Ctrl that copies.
 
 ## Phase 14: starters
 

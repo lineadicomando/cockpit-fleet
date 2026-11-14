@@ -70,7 +70,16 @@ travel, held whole in memory, 50 MB at most). The page opens a channel of
 Cockpit's bridge that spawns `sudo -n -u cockpit-fleet fleetctl store.put`
 with binary input, sends the parameters on one line and the file after
 them, 64 KiB at a time read from the `File`, and keeps at most 16 MB
-not acknowledged (`send-acks: bytes`). No message of the page is larger
+ahead of what `fleetctl` says it has written: with `progress`, `store.put`
+writes a line `{"received": N}` before its answer for each MiB it writes.
+Not Cockpit's acknowledgements (`send-acks: bytes`): the bridge sends them
+as it receives the bytes, before the pipe to `fleetctl` takes them, so
+that whatever the network brings faster than `fleetctl` writes waits in
+the bridge's memory. With them, a file of 7 GB from a browser through an
+SSH tunnel to `deb13` (2 GB of memory) filled the bridge to 1.4 GB and
+then crawled at under 1 MB/s, the page at 55 % and the disk at 44 %
+(14 November); with the lines of `fleetctl`, the bridge stayed at 97 MB
+and the file arrived in 3 min 15 s (36 MB/s), its digest right. No message of the page is larger
 than 64 KiB (`FRAME`, `frames()` in `fleet.ts` for input on stdin):
 cockpit-ws 370 closes the whole session on a message from the browser over
 128 KiB, where 337 took a megabyte. `fleetctl` writes to a `.part` in
@@ -194,7 +203,13 @@ under one lock every source is looked at and every target found free
 before anything is touched, and a rename that still fails half way puts
 back those made, so that the call did all or nothing. The page cuts or
 copies (Ctrl+X, Ctrl+C), pastes (Ctrl+V), drags with Ctrl to copy, and has
-"Copy to…" beside "Move to…".
+"Copy to…" beside "Move to…". Chrome on Linux gives a drag's `dragover` and
+`drop` no modifier (`ctrlKey` false, `dropEffect` move: seen on 14
+November) though its keys and `dragstart` have them, so the page keeps
+whether Ctrl or Alt is down from those. The lists of uploads and of
+downloads and copies above the store stay until closed ("Close" when
+nothing of them is under way; the runs closed kept in the browser): one
+that went by itself would move the page under the pointer.
 
 `store.copy` takes `copies` (path, to). A file is never a hard link to
 another in the store: the intake of a run leaves out a file with other

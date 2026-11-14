@@ -81,3 +81,24 @@ What each closed phase had to show, and how it was shown.
   and merged it. `fleet assistant` at the terminal asked the same in
   `assisted` and nothing in `autonomous`. Every start, acceptance and call
   in the audit as the user's, with the profile; see [The chat](chat.md).
+- **13, the store** (14 November): `ansible-win_edulab` uploaded as an
+  archive on Debian 13, its collections from its requirements, its
+  inventory `school` read with the vault credential, run on its own
+  Windows 11 VM with `win_workman_storage_path` set to `{{ fleet_store }}`
+  by the templates. The role `p7zip` downloaded its installer with
+  `get_url` delegated to the controller and `win_copy`ed it from there,
+  and the run's intake added it to the store; a later run that took 7-Zip
+  off and installed it again found it there with its checksum and did not
+  download it (the same inode; `get_url` reported a change of mode only,
+  which reached the store's file through its link: in
+  [limits.md](../limits.md)). `file_copy` `pull` fetched a file of the
+  node into `file_copy_pull/`, taken in likewise. An ISO of 7 GB uploaded
+  from the Store page into `win_iso/` arrived whole, its digest right,
+  once the upload held back on what `fleetctl` had written rather than on
+  Cockpit's acknowledgements (see [The store](store.md), "Uploads").
+  Veyon's keys were not tried: the role keeps them on the controller,
+  where the store, read by every run, is no place for them.
+  By hand in Chrome and Firefox: a folder dropped from the desktop, a
+  drag with Ctrl that copies (Chrome on Linux tells the page of Ctrl only
+  on the keys and at the start of a drag), the lists of uploads and
+  downloads closed by the user rather than going by themselves.

@@ -4,7 +4,7 @@ import { channels } from "./mocks/cockpit.ts";
 import {
     chosenFolder, describe, downloadUrl, entriesOf, filterEntries, freeName, indexStore, moveInList, nameFromUrl, playbookPath, putHeader,
     rangeBetween, readDropped, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, type StoreFile, type StoreList,
-    archiveName, archiveUrl, storeChoices, storePathAt,
+    archiveName, archiveUrl, storeChoices, storePathAt, endedDownloads, readClosed, visibleDownloads, type StoreDownload,
 } from "../src/lib/store.ts";
 import { FleetError } from "../src/lib/fleet.ts";
 
@@ -23,34 +23,48 @@ test("an upload sends its parameters on one line, then the bytes, never in argv"
     const channel = channels[0];
     assert.deepEqual(channel.options.spawn, ["sudo", "-n", "-u", "cockpit-fleet", "/usr/libexec/cockpit-fleet/fleetctl", "store.put"]);
     assert.equal(channel.options.binary, true);
-    assert.equal(channel.options["send-acks"], "bytes");
+    // The bridge's acknowledgements say nothing of what fleetctl read.
+    assert.equal(channel.options["send-acks"], undefined);
+    let written = 0;
     while (!channel.controls.length) {
-        channel.emit("control", { command: "ack", bytes: 1024 * 1024 });
+        written = Math.min(data.length, written + 1024 * 1024);
+        channel.emit("message", new TextEncoder().encode(`{"received": ${written}}\n`));
         await tick();
     }
     assert.deepEqual(channel.controls, [{ command: "done" }]);
     const sent = channel.bytes();
     const line = sent.indexOf(10);
     assert.deepEqual(JSON.parse(new TextDecoder().decode(sent.subarray(0, line))),
-                     { path: "apps/my setup.msi", size: data.length, offset: 0, replace: false });
+                     { path: "apps/my setup.msi", size: data.length, offset: 0, replace: false, progress: true });
     assert.deepEqual(sent.subarray(line + 1), data);
     // cockpit-ws closes the session on a message over 128 KiB.
     assert.ok(channel.sent.every(piece => piece.length <= 64 * 1024));
     assert.ok(progress.length > 0 && progress.every(value => value <= data.length));
+    channel.emit("message", new TextEncoder().encode(`{"received": ${data.length}}\n`));
+    assert.equal(progress[progress.length - 1], data.length);
     answer(channel, { ok: true, data: { path: "apps/my setup.msi", size: data.length, sha256: "ab" } });
     assert.equal((await upload.done).sha256, "ab");
 });
 
-test("an upload waits for acknowledgements and resumes from an offset", async () => {
+test("an upload waits for what fleetctl wrote, and resumes from an offset", async () => {
     channels.length = 0;
     const data = new Uint8Array(40 * 1024 * 1024);
     const upload = uploadToStore(new Blob([data]), "big.iso", { offset: 2 * 1024 * 1024, replace: true });
     const channel = channels[0];
     for (let i = 0; i < 20; i++) await tick();
-    // No more than the window is sent before the backend says it has it.
+    // No more than the window is sent before fleetctl says it has written it,
+    // whatever Cockpit's bridge acknowledges.
     const header = channel.sent[0].length;
+    channel.emit("control", { command: "ack", bytes: 64 * 1024 * 1024 });
+    for (let i = 0; i < 20; i++) await tick();
     assert.ok(channel.bytes().length - header <= 17 * 1024 * 1024, String(channel.bytes().length));
     assert.equal(JSON.parse(new TextDecoder().decode(channel.sent[0])).offset, 2 * 1024 * 1024);
+    // A line may come in two messages.
+    channel.emit("message", new TextEncoder().encode('{"received": 1'));
+    channel.emit("message", new TextEncoder().encode('0485760}\n'));
+    for (let i = 0; i < 20; i++) await tick();
+    assert.ok(channel.bytes().length - header > 17 * 1024 * 1024, String(channel.bytes().length));
+    assert.ok(channel.bytes().length - header <= 25 * 1024 * 1024, String(channel.bytes().length));
     channel.emit("message", new TextEncoder().encode(JSON.stringify({ ok: false, error: { code: "conflict", message: "full" } })));
     channel.emit("close", { command: "close", "exit-status": 0 });
     await assert.rejects(upload.done, (error: unknown) => error instanceof FleetError && error.code === "conflict");
@@ -220,4 +234,19 @@ test("an archive is streamed by store.archive, the paths in argv, under a name t
     assert.equal(archiveName(["win/office"], "win"), "office.tar");
     assert.equal(archiveName(["a", "b"], "win/office"), "office.tar");
     assert.equal(archiveName(["a", "b"], ""), "store.tar");
+});
+
+test("closing the downloads hides those that ended, never one under way", () => {
+    const run = (run_id: string, status: StoreDownload["status"]) => ({ run_id, status, path: run_id }) as StoreDownload;
+    const list = [run("a", "running"), run("b", "successful"), run("c", "failed")];
+    const closed = endedDownloads(list);
+    assert.deepEqual(closed, ["b", "c"]);
+    assert.deepEqual(visibleDownloads(list, closed).map(item => item.run_id), ["a"]);
+    // One that ends after the list was closed shows until closed again.
+    const later = [run("d", "successful"), run("a", "successful"), ...list.slice(1)];
+    assert.deepEqual(visibleDownloads(later, closed).map(item => item.run_id), ["d", "a"]);
+    assert.deepEqual(readClosed(JSON.stringify(closed)), ["b", "c"]);
+    assert.deepEqual(readClosed("not json"), []);
+    assert.deepEqual(readClosed('{"a": 1}'), []);
+    assert.deepEqual(readClosed(null), []);
 });
