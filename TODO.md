@@ -1,47 +1,56 @@
 # cockpit-fleet — plan
 
-Status and what is left; what is done is in `CHANGELOG.md` and
-`docs/architecture/` (one file per area, index in `docs/architecture.md`:
-read only the file at hand). Decisions: `docs/decisions.md`; known limits:
-`docs/limits.md`.
+Status and what is left. What is done: `CHANGELOG.md` and
+`docs/architecture/` (index `docs/architecture.md`; read only the file at
+hand). Decisions: `docs/decisions.md`. Known limits: `docs/limits.md`.
+Acceptance of each phase: `docs/architecture/acceptance.md`. The state of
+the lab's VMs on this workstation: `CLAUDE.local.md` (not tracked).
 
 ## Status (14 November 2026)
 
-Phases 0–13 closed (13 accepted on 14 November,
-`architecture/acceptance.md`); 0.2.0 released on 2 November; the next
-release would be 0.3.0 (`make next-version`), made only when the user
-asks. Under `[Unreleased]`: runs in series, phase 12 (the profiles of the
-assistant), phase 13 (the store), phase 15 (secret variables), the six grouped tabs. Phase 14 (starters) is designed, not begun.
+Phases 0–13 closed; 0.2.0 released on 2 November. Under `[Unreleased]`
+(next release 0.3.0, `make next-version`, only when the user asks): runs
+in series, assistant profiles (12), the store (13), secret variables (15),
+host keys by host, the six grouped tabs. Phase 15 lacks only its check in a
+browser; phase 14 is designed, not begun.
 
-To resume: `git status`; `git log origin/main..` (what is not pushed);
-`make check`. Each backend module says what it is in its
-docstring; `cli.py` is the registry of commands, `db.py` the schema (28).
+To resume: `git status`, `git log origin/main..` (not pushed), `make
+check`. Each backend module's docstring says what it is; `cli.py` is the
+registry of commands, `db.py` the schema (28 migrations).
 
-Tests on 14 November: unit tests (659 backend, 171 frontend). `ct-test`
-of `store` on AlmaLinux and Debian on 14 November (after the fix of
-uploads), of `store` and `negative` on the three on 11 November; the last full
-`ct-test` (9 November) passed but `cmdb` on Fedora, in a container only
+Tests (14 November): 659 backend, 171 frontend. `ct-test`: `store` on
+AlmaLinux and Debian (14 November); runs, negative, cli, inventories and
+checks on the three, `ct-lifecycle` on AlmaLinux (14 November); the last
+full run (9 November) passed but `cmdb` on Fedora in a container
 (netavark "invalid namespace path", since 1 November). Run two
 distributions' `ct-test` one after the other.
+
+## Phase 15: secret variables — to close
+
+Design: `architecture/jobs.md` ("Secret variables and the sets of an
+inventory"), `architecture/export.md`; decisions: `decisions.md`, "Sets of
+variables", "Vault files". Done and tested (unit, `ct-test`).
+
+1. [ ] In a browser on a VM (`deb13`, skill `vm-lab`): the set's form
+   (secret variables added, replaced, removed), the inventory's sets, the
+   template's merged view showing them hidden; then the acceptance in
+   `architecture/acceptance.md` and phase 15 out of this file.
 
 ## Phase 14: starters
 
 Ready-made content a new managed project, managed inventory or playbook
-starts from. Decided on 12 November (`decisions.md`, "Starters"): the word
-is **starter** (code `starter.*`; Italian "punto di partenza", never
-"modello"), because "template" is the job template's (commands, schema,
-AWX and Semaphore) and Ansible's (`template`, `.j2`). Provided by the
-package and by the administrator; static (files copied as they are, no
-parameters, nothing rendered); what is made from one keeps no link to it.
-Offered as a choice where things are created, not as a page of its own.
+starts from (`decisions.md`, "Starters"): the word is **starter** (code
+`starter.*`; Italian "punto di partenza", never "modello": "template" is
+the job template's and Ansible's). From the package and the
+administrator; static (files copied as they are); what is made from one
+keeps no link to it; offered where things are created, no page of its own.
 
-Where it fits today: `project.create` kind `managed` starts an empty
-repository (`files.init_repository`, `resources.py`);
-`inventory.create` kind `managed` takes `content` and `files`
-(`_write_main`); the page's "New file" is `PathModal` in
-`src/components/FilesPage.tsx`, saved by `file.write`/`file.change`.
-Packaged data goes under `/usr/share/cockpit-fleet` (`SHARE_DIR` in the
-`Makefile`, `paths.py`).
+Where it fits: `project.create` kind `managed` starts an empty repository
+(`files.init_repository`); `inventory.create` kind `managed` takes
+`content` and `files` (`_write_main`, `resources.py`); "New file" is
+`PathModal` in `src/components/FilesPage.tsx`, saved by
+`file.write`/`file.change`. Packaged data: `/usr/share/cockpit-fleet`
+(`SHARE_DIR` in the `Makefile`, `paths.py`).
 
 1. [ ] Ask the user: which starters ship (a Linux project, a Windows one
    shaped like `ansible-win_edulab`, an inventory with `group_vars`,
@@ -49,61 +58,20 @@ Packaged data goes under `/usr/share/cockpit-fleet` (`SHARE_DIR` in the
    package's, or do both show?
 2. [ ] Layout: `/usr/share/cockpit-fleet/starters/` and
    `/etc/cockpit-fleet/starters/`, each with `projects/NAME/`,
-   `inventories/NAME/` (trees) and `playbooks/NAME.yml`; a title and a
-   description per starter (a small metadata file, or the first comment);
-   `paths.py`, `Makefile`, `debian/`, the spec.
-3. [ ] Backend: `starter.list` (role admin, class read), read with the
-   limits of `files.py` (paths checked, no links, files ≤ 1 MB, a cap on
-   the tree), English titles of the package's in `po/`; a `starter`
-   parameter of `project.create` and `inventory.create` (managed only),
-   copied into the first commit; tests in `test_cli.py` style, the class
-   in `test_agents.py`.
+   `inventories/NAME/` and `playbooks/NAME.yml`; a title and a description
+   per starter (a small metadata file, or the first comment); `paths.py`,
+   `Makefile`, `debian/`, the spec.
+3. [ ] Backend: `starter.list` (admin, class read), read with the limits of
+   `files.py` (paths checked, no links, files ≤ 1 MB, a cap on the tree),
+   English titles of the package's in `po/`; a `starter` parameter of
+   `project.create` and `inventory.create` (managed only), copied into the
+   first commit; tests in `test_cli.py` style, the class in
+   `test_agents.py`.
 4. [ ] Page: "Empty" or a starter in "New project" and "New inventory";
-   "New playbook from…" beside "New file" in the files page; strings in
-   `po/it.po`.
-5. [ ] Docs and checks: `architecture/projects.md`, `docs/install.md` (adding
-   one's own), `CHANGELOG.md` (Added), `fleet help`; `files.sh` extended,
-   `make ct-test` on the three (packaging changes).
-
-## Phase 15: secret variables
-
-Decided on 14 November (`decisions.md`, "Sets of variables", "Vault
-files"): a set of variables holds secret variables too, write-only, and
-an inventory takes sets as a template does, so that a secret is used
-from the inventory's files (`group_vars`: `x: "{{ secret }}"`) and from
-playbooks alike; admins write them. Checked with ansible-core 2.16: an
-extra variable from a file, tagged `!unsafe`, reaches both, and the
-inventory's listing keeps the reference, not the value. Ansible Vault
-files are not edited in the interface. Like Semaphore's variable groups,
-but on the inventory as well as the template.
-
-1. [x] Schema: `variable_set_secrets (set_id, name, slot)`, the value in
-   `fleet-secret` as `s-SLOT` (a random slot, so a name in any case fits
-   `check_id`); `inventory_variable_sets (inventory_id, set_id,
-   position)`.
-2. [x] `varset.*`: `secrets` (names) beside `variables`, never both;
-   answered with `secret_name` and whether it is set. `inventory.create`
-   and `inventory.update`: `variable_set_ids`. A set in use by either
-   cannot be deleted.
-3. [x] At launch: the inventory's sets, then the template's, then its own
-   variables, a later one winning; the secrets of what wins are copied
-   into the run's credentials and written by `fleet-run` in a file of
-   `!unsafe` variables (as secret answers); one not set fails the launch.
-   Runs, workflow steps and schedules through `runs.launch`; ad-hoc
-   commands and checks get the inventory's sets. The run records the
-   sets, never a value; masked as every secret of a run is.
-4. [x] Page: secret variables in the set's form (write-only, set or not,
-   replaced, removed: `setSecret`/`deleteSecret`), sets in the
-   inventory's form, the template's merged view showing them hidden.
-   Strings in `po/it.po`.
-5. [x] Export and import (names only, values entered again), `fleet`
-   at a terminal, agents (names only).
-6. [x] Checks: unit tests (654 backend, 163 frontend); `make ct-test` of
-   runs (a secret referred to by `group_vars`, masked, in clear nowhere),
-   negative, cli, inventories and checks on the three, `ct-lifecycle` on
-   AlmaLinux (schema 28), 14 November.
-7. [ ] In a browser on a VM: the set's form (secret variables added,
-   replaced, removed), the inventory's sets, the template's merged view.
+   "New playbook from…" beside "New file"; strings in `po/it.po`.
+5. [ ] Docs and checks: `architecture/projects.md`, `docs/install.md`
+   (adding one's own), `CHANGELOG.md` (Added), `fleet help`; `files.sh`
+   extended, `make ct-test` on the three (packaging changes).
 
 ## Open questions for the user
 
@@ -113,13 +81,12 @@ but on the inventory as well as the template.
 
 ## Future
 
-Sets of variables: secret variables in a set (encrypted as credentials
-are, kept off the page and out of export), and sets for ad-hoc commands.
-Instructions per project for the assistant. External triggers (git
-webhooks, auto-remediation); `ansible-pull` for very large fleets; secrets
-on OpenBao or Bitwarden; export to Prometheus or InfluxDB; execution
-environments in containers; other controller distributions. A limit on the
-rows of state changes (off by default). Store: credentials for downloads,
-parts of it kept for some projects, transfers over SSH through `fleet`
-(`fleet store put --file -` from stdin, `fleet store ls`, a folder kept in
-step by digests; not SFTP or FTP, `decisions.md`).
+Sets of variables chosen for an ad-hoc command (today it gets the
+inventory's only). Instructions per project for the assistant. External
+triggers (git webhooks, auto-remediation); `ansible-pull` for very large
+fleets; secrets on OpenBao or Bitwarden; export to Prometheus or InfluxDB;
+execution environments in containers; other controller distributions. A
+limit on the rows of state changes (off by default). Store: credentials
+for downloads, parts of it kept for some projects, transfers over SSH
+through `fleet` (`fleet store put --file -` from stdin, `fleet store ls`, a
+folder kept in step by digests; not SFTP or FTP, `decisions.md`).

@@ -155,35 +155,10 @@ make next-version               # version of the next release, from CHANGELOG.md
 make release                    # check, set the version, commit and tag it (only when asked)
 ```
 
-Integration tests run as root on a controller, with the package installed:
-
-```
-test/integration/privileges.sh       # what the service account can reach
-test/integration/sandbox.sh          # run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD)
-test/integration/roles.sh            # roles, audit, sudoers (creates and removes test accounts)
-test/integration/negative.sh         # hostile input to every command as each role, the caller's environment, secrets typed in clear; WIPES
-test/integration/runs.sh             # a whole run through fleetctl; WIPES the database (IT_WIPE=yes)
-test/integration/files.sh            # a project written in the interface, syntax checks; WIPES
-test/integration/upload.sh           # a project uploaded as an archive, hostile archives; WIPES
-test/integration/store.sh            # the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses; WIPES
-test/integration/galaxy.sh           # collections from a requirements file (IT_GALAXY_NET=yes for git); WIPES
-test/integration/adhoc.sh            # ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD); WIPES
-test/integration/inventories.sh      # inventory plugins, directories of sources, scripts off and on; WIPES
-test/integration/mcp.sh              # fleet-mcp: tools by role, ceiling, profiles, autonomy, an agent's ad-hoc confirmed, via in the audit, forced-command key; WIPES
-test/integration/chat.sh             # fleet-chat with fake-agent.py: start, limit on sessions, tools by role; WIPES
-test/integration/cli.sh              # fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin; WIPES
-test/integration/workflows.sh        # workflows: an approval at a step, a confirmation by who launched it, set_stats passed on, resume, cancel; WIPES
-test/integration/schedules.sh        # the timer, ten schedules on one minute, missed times, overlap (about 5 min); WIPES
-test/integration/notify.sh           # notifications to stand-ins of the four channels, a retry by the tick (about 3 min); WIPES
-test/integration/checks.sh           # checks on container nodes, a playbook of the user, a full disk told about, a cycle falling behind (about 10 min); WIPES
-test/integration/cmdb.sh             # the CMDB, updates and drift of container nodes, changes by hand (about 4 min); WIPES
-test/integration/measure-events.sh   # callback cost on N simulated hosts
-test/integration/load.sh             # real check cycles on IT_LOAD_HOSTS aliases and IT_LOAD_SSH nodes for IT_LOAD_MINUTES, the interface timed; WIPES
-test/integration/multihost.sh        # five container nodes: vaults, passphrase key, key changes; WIPES
-test/integration/windows.sh          # Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY); WIPES
-test/integration/nodes.sh            # the container nodes themselves: up N KEYS | recreate I KEYS | down
-test/integration/lifecycle.sh        # upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed): scripts/ct-lifecycle.sh
-```
+Integration tests are the scripts in `test/integration/`, run as root on
+a controller with the package installed; the list, with what each shows,
+the variables it takes and whether it wipes the database, is in
+`docs/architecture/tests.md`.
 
 `make ct-test` is the usual way to run them: it builds the package of
 `DISTRO` (`debian`, `fedora` or `alma`), then runs each script as root in a

@@ -5,26 +5,40 @@
 | Frontend unit tests | `test/*.test.ts` | development host, CI |
 | Backend unit tests | `backend/tests/` | development host, CI |
 | Negative tests over the whole registry | `backend/tests/test_negative.py` | development host, CI |
-| The same on the installed package, through sudo | `test/integration/negative.sh` | controller, as root; wipes the database |
-| Privilege boundaries | `test/integration/privileges.sh` | controller, as root |
-| Sandbox, secrets, SSH | `test/integration/sandbox.sh` | controller, as root |
-| Roles, audit, sudoers | `test/integration/roles.sh` | controller, as root |
-| A whole run through fleetctl | `test/integration/runs.sh` | controller, as root; wipes the database |
-| Projects written in the interface | `test/integration/files.sh` | controller, as root; wipes the database |
-| Projects uploaded as an archive | `test/integration/upload.sh` | controller, as root; wipes the database |
-| Collections from a requirements file | `test/integration/galaxy.sh` | controller, as root; wipes the database |
-| Ad-hoc commands | `test/integration/adhoc.sh` | controller, as root; wipes the database |
-| Inventory plugins, directories, scripts | `test/integration/inventories.sh` | controller, as root; wipes the database |
-| Agents: fleet-mcp, ceiling, tools, ssh | `test/integration/mcp.sh` | controller, as root; wipes the database |
-| Chat: fleet-chat, limit on sessions, tools | `test/integration/chat.sh` | controller, as root; wipes the database |
-| The command fleet for a terminal | `test/integration/cli.sh` | controller, as root; wipes the database |
-| Schedules and the timer | `test/integration/schedules.sh` | controller, as root; wipes the database |
-| Notifications, with stand-ins of the four channels | `test/integration/notify.sh` | controller, as root; wipes the database |
-| Checks of the hosts, a full disk told about, a cycle falling behind | `test/integration/checks.sh` | controller with podman, as root; wipes the database |
-| Several Linux nodes | `test/integration/multihost.sh` | controller with podman, as root; wipes the database |
-| Callback cost | `test/integration/measure-events.sh` | controller, as root |
-| Load: real cycles on many hosts, the interface timed | `test/integration/load.sh` | controller with podman, as root; wipes the database |
-| Windows node over SSH | `test/integration/windows.sh` | controller, as root; wipes the database |
+
+Integration scripts run as root on a controller with the package installed
+(a container of `make ct-test`, a VM of the lab, or another machine: see
+below). Those that wipe delete the database, runs and projects, and need
+`IT_WIPE=yes`; `IT_SSH_USER` and `IT_SSH_PASSWORD` name an account of the
+controller that accepts password logins over SSH.
+
+| Script | What it shows (variables it takes, time) | Wipes |
+|---|---|---|
+| `test/integration/privileges.sh` | what the service account can reach |  |
+| `test/integration/sandbox.sh` | run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD) |  |
+| `test/integration/roles.sh` | roles, audit, sudoers (creates and removes test accounts) |  |
+| `test/integration/negative.sh` | hostile input to every command as each role, the caller's environment, secrets typed in clear | yes |
+| `test/integration/runs.sh` | a whole run through fleetctl | yes |
+| `test/integration/files.sh` | a project written in the interface, syntax checks | yes |
+| `test/integration/upload.sh` | a project uploaded as an archive, hostile archives | yes |
+| `test/integration/store.sh` | the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses | yes |
+| `test/integration/galaxy.sh` | collections from a requirements file (IT_GALAXY_NET=yes for git) | yes |
+| `test/integration/adhoc.sh` | ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD) | yes |
+| `test/integration/inventories.sh` | inventory plugins, directories of sources, scripts off and on | yes |
+| `test/integration/mcp.sh` | fleet-mcp: tools by role, ceiling, profiles, autonomy, an agent's ad-hoc confirmed, via in the audit, forced-command key | yes |
+| `test/integration/chat.sh` | fleet-chat with fake-agent.py: start, limit on sessions, tools by role | yes |
+| `test/integration/cli.sh` | fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin | yes |
+| `test/integration/workflows.sh` | workflows: an approval at a step, a confirmation by who launched it, set_stats passed on, resume, cancel | yes |
+| `test/integration/schedules.sh` | the timer, ten schedules on one minute, missed times, overlap (about 5 min) | yes |
+| `test/integration/notify.sh` | notifications to stand-ins of the four channels, a retry by the tick (about 3 min) | yes |
+| `test/integration/checks.sh` | checks on container nodes (podman), a playbook of the user, a full disk told about, a cycle falling behind (about 10 min) | yes |
+| `test/integration/cmdb.sh` | the CMDB, updates and drift of container nodes (podman), changes by hand (about 4 min) | yes |
+| `test/integration/measure-events.sh` | callback cost on N simulated hosts |  |
+| `test/integration/load.sh` | real check cycles (podman) on IT_LOAD_HOSTS aliases and IT_LOAD_SSH nodes for IT_LOAD_MINUTES, the interface timed | yes |
+| `test/integration/multihost.sh` | five container nodes (podman): vaults, passphrase key, key changes | yes |
+| `test/integration/windows.sh` | Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY) | yes |
+| `test/integration/nodes.sh` | the container nodes themselves (podman): `up N KEYS`, `recreate I KEYS`, `down` |  |
+| `test/integration/lifecycle.sh` | upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed), through `make ct-lifecycle` |  |
 
 The controller is a container or a machine. `make ct-test`
 (`scripts/ct-test.sh`, `test/containers/`) builds an image of Debian 13,
