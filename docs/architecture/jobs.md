@@ -98,6 +98,17 @@ or a second line, any of which would trust the key for other hosts. An
 import takes host keys through the same checks, and a row stored before
 them that fails one is left out of the `known_hosts` of a run.
 
+`hostkey.list` says which inventories have each host, matching the name
+that `known_hosts` gives it (`address`, or `[address]:port`) against the
+SSH hosts of each inventory as its last reading lists them (the same
+matching as `hostkey.scan` of an inventory), and lists the SSH hosts that
+no key is trusted for: the page groups and filters on that. `hostkey.scan`
+and `hostkey.remove` also take `hosts`, as `known_hosts` names them, each
+checked as `hostkey.add` checks one; a removal takes every key of those
+hosts, and none if one of them has no key. `hostkey.export` gives the
+lines of `known_hosts` for some hosts or all, the same a run gets: host
+keys are public, so a viewer may read them.
+
 **SSH keys with a passphrase.** Ansible has no option to read a passphrase from
 a file, so `fleet-run` starts an `ssh-agent` inside the unit and loads the key
 with `ssh-add`, which gets the passphrase from `fleet-askpass`. The agent lives

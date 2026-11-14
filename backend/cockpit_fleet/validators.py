@@ -79,6 +79,15 @@ def check_known_host(value: object) -> str:
     raise BadRequest(f"invalid host name or address: {value!r}")
 
 
+def split_known_host(value: object) -> tuple[str, int]:
+    """The host and the port of a host as known_hosts names it."""
+    host = check_known_host(value)
+    bracketed = _KNOWN_HOST_RE.fullmatch(host)
+    if bracketed is None:
+        return host, 22
+    return bracketed.group(1), int(bracketed.group(2))
+
+
 def check_key_type(value: object) -> str:
     return _match(_KEY_TYPE_RE, value, "key type")
 

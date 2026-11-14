@@ -56,6 +56,7 @@ file.read admin -             file.write admin M            host.get viewer -
 file.change admin M           file.download admin M         file.restore admin M
 file.import admin M
 host.list viewer -            hostkey.add admin M           hostkey.list viewer -
+hostkey.export viewer -
 hostkey.remove admin M        hostkey.scan admin -          inventory.create admin M
 inventory.delete admin M      inventory.get viewer -        inventory.list viewer -
 inventory.parse operator M    inventory.update admin M      maintenance.create operator M
@@ -392,6 +393,7 @@ class Fixture(CheckBase):
         "hostkey.add": lambda fx: {"host": "web02", "key_type": "ssh-ed25519",
                                    "key": PUBLIC_KEY},
         "hostkey.remove": lambda fx: {"id": 1},
+        "hostkey.export": lambda fx: {"hosts": ["web01"]},
         "run.start": lambda fx: {"limit": "web01", "answers": {"colour": "blue"}},
         "run.adhoc": lambda fx: {"module": "ansible.builtin.ping", "limit": "all",
                                  "args": {"data": "x"}, "vault_credential_ids": [fx["vault"]],

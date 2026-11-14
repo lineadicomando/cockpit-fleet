@@ -594,6 +594,82 @@ class ClosingPhase2Test(Base):
                          {"10.0.0.1": "trusted", "10.0.0.2": "changed", "[10.0.0.3]:2222": "new"})
         self.assertEqual(result["unanswered"], ["named.example.org"])
 
+    def _inventory_with_hosts(self, name, hosts):
+        inventory = self.ok("inventory.create", {"name": name, "kind": "managed", "content": "x"})
+        self.ctx().conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                                (json.dumps(hosts), inventory["id"]))
+        return inventory
+
+    def test_host_keys_say_which_inventories_have_their_host(self):
+        prod = self._inventory_with_hosts("prod", [
+            {"name": "web", "address": "10.0.0.1", "port": None, "connection": "", "groups": []},
+            {"name": "db", "address": "10.0.0.2", "port": 2222, "connection": "ssh", "groups": []},
+            {"name": "win", "address": "10.0.0.9", "port": None, "connection": "winrm", "groups": []},
+            {"name": "bad", "address": "-oProxyCommand=x", "port": None, "connection": "", "groups": []},
+        ])
+        lab = self._inventory_with_hosts("lab", [
+            {"name": "web-lab", "address": "10.0.0.1", "port": None, "connection": "", "groups": []},
+        ])
+        self.ok("hostkey.add", {"host": "10.0.0.1", "key_type": "ssh-ed25519", "key": "AAAA"})
+        self.ok("hostkey.add", {"host": "10.0.0.1", "key_type": "ssh-rsa", "key": "AAAA"})
+        self.ok("hostkey.add", {"host": "10.0.0.7", "key_type": "ssh-ed25519", "key": "AAAA"})
+        listed = self.ok("hostkey.list", role="viewer")
+        where = {(key["host"], key["key_type"]): key["inventories"] for key in listed["keys"]}
+        both = [{"id": lab["id"], "name": "lab", "host": "web-lab"},
+                {"id": prod["id"], "name": "prod", "host": "web"}]
+        self.assertEqual(where[("10.0.0.1", "ssh-ed25519")], both)
+        self.assertEqual(where[("10.0.0.1", "ssh-rsa")], both)
+        self.assertEqual(where[("10.0.0.7", "ssh-ed25519")], [])
+        self.assertEqual(listed["untrusted"], [
+            {"host": "[10.0.0.2]:2222", "inventories": [{"id": prod["id"], "name": "prod", "host": "db"}]}])
+
+    def test_the_keys_of_some_hosts_go_all_or_none(self):
+        for host in ("10.0.0.1", "[10.0.0.2]:2222", "10.0.0.3"):
+            for key_type in ("ssh-ed25519", "ssh-rsa"):
+                self.ok("hostkey.add", {"host": host, "key_type": key_type, "key": "AAAA"})
+        hosts = lambda: sorted({key["host"] for key in self.ok("hostkey.list")["keys"]})  # noqa: E731
+        self.assertEqual(self.code("hostkey.remove", {"hosts": ["10.0.0.1", "10.0.0.8"]}), "not_found")
+        self.assertEqual(self.code("hostkey.remove", {"hosts": ["10.0.0.1", "*"]}), "bad_request")
+        self.assertEqual(self.code("hostkey.remove", {"hosts": ["10.0.0.1"], "id": 1}), "bad_request")
+        self.assertEqual(self.code("hostkey.remove", {}), "bad_request")
+        self.assertEqual(self.code("hostkey.remove", {"hosts": ["10.0.0.1"]}, role="operator"), "forbidden")
+        self.assertEqual(len(hosts()), 3)
+        removed = self.ok("hostkey.remove", {"hosts": ["10.0.0.1", "[10.0.0.2]:2222", "10.0.0.1"]})
+        self.assertEqual(removed["removed"], 4)
+        self.assertEqual(hosts(), ["10.0.0.3"])
+        audit = self.ctx().conn.execute(
+            "SELECT params FROM audit WHERE command = 'hostkey.remove' AND outcome = 'ok'").fetchall()
+        self.assertIn("[10.0.0.2]:2222", audit[-1]["params"])
+
+    def test_some_hosts_are_scanned_each_on_its_port(self):
+        self.ok("hostkey.add", {"host": "10.0.0.1", "key_type": "ssh-ed25519", "key": "AAAA"})
+        asked = []
+
+        def keyscan(names, port):
+            asked.append((sorted(names), port))
+            return [("10.0.0.1", "ssh-ed25519", "BBBB")] if port == 22 else []
+
+        with mock.patch.object(resources, "_keyscan", keyscan):
+            result = self.ok("hostkey.scan", {"hosts": ["10.0.0.1", "[10.0.0.2]:2222"]})
+            for bad in (["10.0.0.1,*"], ["[a]:0"], ["-oProxyCommand=x"]):
+                self.assertEqual(self.code("hostkey.scan", {"hosts": bad}), "bad_request", bad)
+            self.assertEqual(self.code("hostkey.scan", {"hosts": ["a"], "host": "b"}), "bad_request")
+        self.assertEqual(asked, [(["10.0.0.1"], 22), (["10.0.0.2"], 2222)])
+        self.assertEqual([(key["host"], key["state"]) for key in result["keys"]],
+                         [("10.0.0.1", "changed")])
+        self.assertEqual(result["unanswered"], ["10.0.0.2"])
+
+    def test_the_keys_of_some_hosts_export_as_known_hosts(self):
+        key = "AAAAC3NzaC1lZDI1NTE5AAAAIN2fabcdefghijklmnopqrstuvwxyz0123456789ABCD"
+        for host in ("10.0.0.1", "[10.0.0.2]:2222", "10.0.0.3"):
+            self.ok("hostkey.add", {"host": host, "key_type": "ssh-ed25519", "key": key})
+        some = self.ok("hostkey.export", {"hosts": ["[10.0.0.2]:2222", "10.0.0.1", "10.0.0.9"]},
+                       role="viewer")
+        self.assertEqual(some["text"], f"10.0.0.1 ssh-ed25519 {key}\n[10.0.0.2]:2222 ssh-ed25519 {key}\n")
+        self.assertEqual(some["keys"], 2)
+        self.assertEqual(self.ok("hostkey.export", {})["keys"], 3)
+        self.assertEqual(self.code("hostkey.export", {"hosts": ["a b"]}), "bad_request")
+
     def test_a_changed_host_key_needs_an_explicit_replacement(self):
         key = {"host": "10.0.0.2", "key_type": "ssh-ed25519"}
         self.ok("hostkey.add", {**key, "key": "AAAA"})

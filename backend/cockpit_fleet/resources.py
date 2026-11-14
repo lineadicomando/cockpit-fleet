@@ -28,6 +28,7 @@ from .validators import (
     check_tag,
     check_user,
     check_vault_id,
+    split_known_host,
 )
 
 # Secret fields a credential of each kind may have.
@@ -623,17 +624,48 @@ def _fingerprint(key: str) -> str:
     return "SHA256:" + base64.b64encode(digest).decode().rstrip("=")
 
 
-@command("hostkey.list", role="viewer")
-def hostkey_list(ctx: Context, params: Values) -> dict:
-    """The SSH host keys trusted for runs, with their fingerprints."""
-    rows = ctx.conn.execute("SELECT * FROM host_keys ORDER BY host, key_type")
-    return {"keys": [{"id": row["id"], "host": row["host"], "key_type": row["key_type"],
-                      "fingerprint": _fingerprint(row["key"]), "added_by": row["added_by"],
-                      "added_at": row["added_at"]} for row in rows]}
-
-
 _SSH_CONNECTIONS = ("", "ssh", "smart", "paramiko", "ansible.builtin.ssh")
 MAX_SCAN_HOSTS = 1000
+_HOSTS_DOC = "Hosts as known_hosts names them: a name or an address, or [either]:port"
+
+
+def _ssh_hosts(inventory) -> list[tuple[str, int, str]]:
+    """(address, port, name in the inventory) of every host of an inventory
+    reached over SSH, as far as its last reading says."""
+    found = []
+    for host in store.loads(inventory["hosts"], []):
+        if host.get("connection", "") not in _SSH_CONNECTIONS:
+            continue
+        try:
+            address = check_host(host.get("address") or host.get("name"))
+        except BadRequest:
+            continue
+        found.append((address, host.get("port") or 22, host.get("name") or address))
+    return found
+
+
+@command("hostkey.list", role="viewer")
+def hostkey_list(ctx: Context, params: Values) -> dict:
+    """The SSH host keys trusted for runs, with their fingerprints and the
+    inventories that have each host; and the hosts of inventories, reached
+    over SSH, that have no trusted key."""
+    named: dict[str, list[dict]] = {}
+    for inventory in ctx.conn.execute("SELECT id, name, hosts FROM inventories ORDER BY name"):
+        for address, port, name in _ssh_hosts(inventory):
+            entry = {"id": inventory["id"], "name": inventory["name"], "host": name}
+            entries = named.setdefault(_known_host(address, port), [])
+            if entry not in entries:
+                entries.append(entry)
+    rows = ctx.conn.execute("SELECT * FROM host_keys ORDER BY host, key_type").fetchall()
+    trusted = {row["host"] for row in rows}
+    return {
+        "keys": [{"id": row["id"], "host": row["host"], "key_type": row["key_type"],
+                  "fingerprint": _fingerprint(row["key"]), "added_by": row["added_by"],
+                  "added_at": row["added_at"], "inventories": named.get(row["host"], [])}
+                 for row in rows],
+        "untrusted": [{"host": host, "inventories": entries}
+                      for host, entries in sorted(named.items()) if host not in trusted],
+    }
 
 
 def _keyscan(hosts: list[str], port: int) -> list[tuple[str, str, str]]:
@@ -666,34 +698,36 @@ def _key_state(ctx: Context, host: str, key_type: str, key: str) -> str:
 @command("hostkey.scan", role="admin",
          params={
              "inventory_id": Id(required=False),
+             "hosts": Strs(_HOSTS_DOC + ", each asked on its port", max_items=MAX_SCAN_HOSTS),
              "host": Str(max_length=253),
              "port": Int(1, 65535, default=22),
          })
 def hostkey_scan(ctx: Context, params: Values) -> dict:
-    """Ask one host, or every SSH host of an inventory, for its keys.
+    """Ask one host, some hosts, or every SSH host of an inventory, for its keys.
 
     Nothing is trusted until hostkey.add. Each key says whether it is new,
     already trusted, or different from the one trusted so far.
     """
     inventory_id = params["inventory_id"]
+    single = False
+    targets: dict[int, list[str]] = {}
     if inventory_id is not None:
-        params.unused("host", "port")
+        params.unused("host", "port", "hosts")
         jobs.reconcile(ctx)
         inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-        targets: dict[int, list[str]] = {}
-        for host in store.loads(inventory["hosts"], []):
-            if host.get("connection", "") not in _SSH_CONNECTIONS:
-                continue
-            try:
-                address = check_host(host.get("address") or host["name"])
-            except BadRequest:
-                continue
-            targets.setdefault(host.get("port") or 22, []).append(address)
+        for address, port, _name in _ssh_hosts(inventory):
+            targets.setdefault(port, []).append(address)
         if sum(len(hosts) for hosts in targets.values()) > MAX_SCAN_HOSTS:
             raise BadRequest(f"more than {MAX_SCAN_HOSTS} hosts: scan a smaller inventory")
+    elif params["hosts"]:
+        params.unused("host", "port")
+        for name in params["hosts"]:
+            address, port = split_known_host(name)
+            targets.setdefault(port, []).append(address)
     else:
+        single = True
         host = check_host(params.need("host"))
-        targets = {params["port"]: [host]}
+        targets[params["port"]] = [host]
 
     keys, unanswered = [], []
     for port, hosts in sorted(targets.items()):
@@ -705,7 +739,7 @@ def hostkey_scan(ctx: Context, params: Values) -> dict:
                          "fingerprint": _fingerprint(key),
                          "state": _key_state(ctx, name, key_type, key)})
         unanswered += [host for host in unique if _known_host(host, port) not in answered]
-    if not keys and inventory_id is None:
+    if not keys and single:
         raise NotFound(f"{unanswered[0]} did not offer any SSH host key")
     return {"keys": keys, "unanswered": unanswered}
 
@@ -741,14 +775,48 @@ def hostkey_add(ctx: Context, params: Values) -> dict:
 
 @command("hostkey.remove", role="admin", mutating=True, agent="code",
          params={
-             "id": Int(1, 2**62),
+             "id": Int(1, 2**62, "One key"),
+             "hosts": Strs("Instead, every key of these hosts. " + _HOSTS_DOC
+                           + ". All must have a trusted key for any to go",
+                           max_items=MAX_SCAN_HOSTS),
          })
 def hostkey_remove(ctx: Context, params: Values) -> dict:
-    """Stop trusting one SSH host key."""
-    key_id = params["id"]
-    if ctx.conn.execute("DELETE FROM host_keys WHERE id = ?", (key_id,)).rowcount == 0:
-        raise NotFound("no such host key")
-    return {}
+    """Stop trusting one SSH host key, or every key of some hosts."""
+    if not params["hosts"]:
+        key_id = params.need("id")
+        if ctx.conn.execute("DELETE FROM host_keys WHERE id = ?", (key_id,)).rowcount == 0:
+            raise NotFound("no such host key")
+        return {"removed": 1}
+    params.unused("id")
+    hosts = sorted({check_known_host(host) for host in params["hosts"]})
+    marks = ", ".join("?" * len(hosts))
+    present = {row["host"] for row in ctx.conn.execute(
+        f"SELECT DISTINCT host FROM host_keys WHERE host IN ({marks})", hosts)}  # noqa: S608
+    missing = [host for host in hosts if host not in present]
+    if missing:
+        raise NotFound(f"no trusted key for {missing[0]}")
+    removed = ctx.conn.execute(
+        f"DELETE FROM host_keys WHERE host IN ({marks})", hosts).rowcount  # noqa: S608
+    return {"removed": removed}
+
+
+@command("hostkey.export", role="viewer",
+         params={
+             "hosts": Strs(_HOSTS_DOC + "; every host if empty", max_items=MAX_SCAN_HOSTS),
+         })
+def hostkey_export(ctx: Context, params: Values) -> dict:
+    """The trusted keys of some hosts, or of every host, as the text of a
+    known_hosts file: the one runs are given, for use elsewhere."""
+    hosts = sorted({check_known_host(host) for host in params["hosts"]})
+    if not hosts:
+        rows = ctx.conn.execute("SELECT host, key_type, key FROM host_keys ORDER BY host, key_type")
+    else:
+        marks = ", ".join("?" * len(hosts))
+        rows = ctx.conn.execute(
+            f"SELECT host, key_type, key FROM host_keys WHERE host IN ({marks})"  # noqa: S608
+            " ORDER BY host, key_type", hosts)
+    lines = [jobs.known_host_line(row) for row in rows]
+    return {"text": "".join(lines), "keys": sum(1 for line in lines if line)}
 
 
 # --- job templates -----------------------------------------------------------------

@@ -207,13 +207,28 @@ export interface Inventory {
     revision: string;
 }
 
+// An inventory that has a host, and the name it gives the host there.
+export interface HostKeyInventory {
+    id: string;
+    name: string;
+    host: string;
+}
+
 export interface HostKey {
     id: number;
+    // As known_hosts names it: "address", or "[address]:port".
     host: string;
     key_type: string;
     fingerprint: string;
     added_by: string;
     added_at: number;
+    inventories: HostKeyInventory[];
+}
+
+// A host of an inventory, reached over SSH, with no trusted key.
+export interface UntrustedHost {
+    host: string;
+    inventories: HostKeyInventory[];
 }
 
 export interface ScannedKey {

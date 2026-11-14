@@ -10,6 +10,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Host keys by host: the page groups the trusted keys of each host (or the
+  hosts by inventory, or none), filters by inventory, by trust and by text
+  (host, name in an inventory, fingerprint), and lists the SSH hosts of
+  inventories that have no trusted key, which runs would refuse. Hosts are
+  selected to check their keys again, to export them as a `known_hosts`
+  file, or to stop trusting them all at once: `hostkey.remove` and
+  `hostkey.scan` take `hosts`, and `hostkey.export` (viewers) gives the
+  lines of `known_hosts`.
 - Secret variables in a set of variables: their values are encrypted as a
   credential's and can never be read back; a run gets them as extra
   variables, used as written, and they are masked in its output. An

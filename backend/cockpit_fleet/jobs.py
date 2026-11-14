@@ -385,7 +385,7 @@ def install_missing(ctx, project_id: str | None, created_by: str | None = None,
 _KEY_RE = re.compile(r"[A-Za-z0-9+/]+={0,2}")
 
 
-def _known_host_line(row) -> str:
+def known_host_line(row) -> str:
     """One line of known_hosts, or nothing for a row stored before hostkey.add
     checked what it does now: such a row could trust its key for other hosts."""
     try:
@@ -400,7 +400,7 @@ def _known_host_line(row) -> str:
 
 def write_known_hosts(conn, directory: Path) -> None:
     rows = conn.execute("SELECT host, key_type, key FROM host_keys ORDER BY host")
-    (directory / "known_hosts").write_text("".join(_known_host_line(row) for row in rows))
+    (directory / "known_hosts").write_text("".join(known_host_line(row) for row in rows))
 
 
 def queue(ctx, run: dict, spec: dict, directory: Path, status: str = "queued") -> None:

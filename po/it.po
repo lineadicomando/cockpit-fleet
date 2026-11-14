@@ -3763,3 +3763,66 @@ msgstr "Valore di {{name}}"
 
 msgid "the secret variable"
 msgstr "la variabile segreta"
+
+msgid "Check the keys again"
+msgstr "Verifica di nuovo le chiavi"
+
+msgid "Every key offered is the one trusted"
+msgstr "Ogni chiave offerta è quella attendibile"
+
+msgid "Every key trusted for these hosts goes, and runs refuse to connect to them until their keys are trusted again: {{hosts}}"
+msgstr "Tutte le chiavi attendibili di questi host vengono tolte, e le esecuzioni rifiuteranno di collegarsi finché le loro chiavi non saranno di nuovo rese attendibili: {{hosts}}"
+
+msgid "Filter by trust"
+msgstr "Filtra per attendibilità"
+
+msgid "Filter hosts"
+msgstr "Filtra gli host"
+
+msgid "Host, name in an inventory, fingerprint…"
+msgstr "Host, nome in un inventario, fingerprint…"
+
+msgid "hosts_count"
+msgid_plural "hosts_count_plural"
+msgstr[0] "{{count}} host"
+msgstr[1] "{{count}} host"
+
+msgid "hosts_selected_count"
+msgid_plural "hosts_selected_count_plural"
+msgstr[0] "{{count}} host selezionato"
+msgstr[1] "{{count}} host selezionati"
+
+msgid "In no inventory"
+msgstr "In nessun inventario"
+
+msgid "Keys"
+msgstr "Chiavi"
+
+msgid "Keys of {{host}}"
+msgstr "Chiavi di {{host}}"
+
+msgid "No host matches the filters"
+msgstr "Nessun host corrisponde ai filtri"
+
+msgid "Not trusted"
+msgstr "Non attendibile"
+
+msgid "Reading the keys…"
+msgstr "Lettura delle chiavi…"
+
+msgid "Stop trusting this key"
+msgstr "Non considerare più attendibile questa chiave"
+
+msgid "stop_trusting_hosts_count"
+msgid_plural "stop_trusting_hosts_count_plural"
+msgstr[0] "Non considerare più attendibile {{count}} host?"
+msgstr[1] "Non considerare più attendibili {{count}} host?"
+
+msgid "The keys that these hosts offer now: {{hosts}}"
+msgstr "Le chiavi che questi host offrono ora: {{hosts}}"
+
+msgid "Trusted"
+msgstr "Attendibile"
+
+msgid "Trusted or not"
+msgstr "Attendibili e non"
