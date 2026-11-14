@@ -62,6 +62,11 @@ why `checks.sh` gives the memory and processor checks
 no thresholds: the state it expects says that the module answered, whatever
 the load of the host.
 
+Known failure: since 1 November `cmdb.sh` fails on Fedora in a container
+(podman's netavark: "invalid namespace path" when it starts its nodes); it
+passes on the other two and on machines. Run the `ct-test` of two
+distributions one after the other, not together.
+
 The containers run in UTC, which the test machines did not, and that found a
 bug: `systemd-analyze calendar` prints a time "(in UTC)" only when the local
 zone has an offset, and the schedules read only that line, so on a
