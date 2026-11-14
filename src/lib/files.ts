@@ -32,7 +32,7 @@ export function buildTree(paths: string[], empty: string[] = []): FileNode[] {
     return root.children!;
 }
 
-// The directories a file is in, outermost first: "a/b/c.yml" gives "a", "a/b".
+// The directories a file is in, outermost first: "a/b/c.yaml" gives "a", "a/b".
 export function ancestors(path: string): string[] {
     const parts = path.split("/").slice(0, -1);
     return parts.map((_part, index) => parts.slice(0, index + 1).join("/"));

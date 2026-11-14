@@ -47,8 +47,8 @@ class StarterTest(Base):
                             for one in listed.values()))
         windows = listed[("inventory", "package/windows")]
         self.assertEqual((windows["format"], windows["files"]),
-                         ("yaml", ["group_vars/windows.yml", "hosts.yml"]))
-        self.assertIn("requirements.yml", listed[("project", "package/windows")]["files"])
+                         ("yaml", ["group_vars/windows.yaml", "hosts.yaml"]))
+        self.assertIn("requirements.yaml", listed[("project", "package/windows")]["files"])
         self.assertIn("win_ping", listed[("playbook", "package/windows")]["content"])
         self.assertNotIn("starter.toml", listed[("project", "package/linux")]["files"])
         self.assertEqual(set(self.listed("playbook")), {("playbook", "package/linux"),
@@ -69,10 +69,10 @@ class StarterTest(Base):
                                              "starter": "package/linux"})
         home = paths.PROJECTS_DIR / project["id"]
         self.assertEqual(sorted(self.git_files(home)), [
-            "README.md", "group_vars/all.yml", "ping.yml", "roles/common/defaults/main.yml",
-            "roles/common/tasks/main.yml", "site.yml"])
-        self.assertEqual((home / "tree" / "site.yml").read_bytes(),
-                         (PACKAGED / "projects/linux/site.yml").read_bytes())
+            "README.md", "group_vars/all.yaml", "ping.yaml", "roles/common/defaults/main.yaml",
+            "roles/common/tasks/main.yaml", "site.yaml"])
+        self.assertEqual((home / "tree" / "site.yaml").read_bytes(),
+                         (PACKAGED / "projects/linux/site.yaml").read_bytes())
         commits = self.ok("file.history", {"id": project["id"]})["commits"]
         self.assertEqual([one["subject"] for one in commits], ["Start from Linux project"])
         self.assertTrue(self.ok("project.list")["projects"][0]["revision"])
@@ -83,7 +83,7 @@ class StarterTest(Base):
         self.assertEqual(inventory["format"], "yaml")
         tree = paths.INVENTORIES_DIR / inventory["id"] / "tree"
         self.assertIn("ansible_shell_type: powershell",
-                      (tree / "group_vars" / "windows.yml").read_text())
+                      (tree / "group_vars" / "windows.yaml").read_text())
         self.assertIn("windows:", self.ok("inventory.get", {"id": inventory["id"]})["content"])
         ini = self.local / "inventories" / "flat"
         ini.mkdir(parents=True)
@@ -140,6 +140,19 @@ class StarterTest(Base):
         home = self.local_project("outer", {"site.yml": "- hosts: all\n"})
         (home / "roles").symlink_to(target)
         self.assertIn("roles", self.listed("project")[("project", "local/outer")]["error"])
+
+    def test_a_playbook_starter_may_end_in_yml_and_yaml_comes_first(self):
+        home = self.local / "playbooks"
+        home.mkdir(parents=True)
+        (home / "old.yml").write_text("- hosts: old\n")
+        (home / "both.yml").write_text("- hosts: yml\n")
+        (home / "both.yaml").write_text("- hosts: yaml\n")
+        listed = self.listed("playbook")
+        self.assertEqual(listed[("playbook", "local/old")]["content"], "- hosts: old\n")
+        self.assertEqual((listed[("playbook", "local/both")]["files"],
+                          listed[("playbook", "local/both")]["content"]),
+                         (["both.yaml"], "- hosts: yaml\n"))
+        self.assertEqual(listed[("playbook", "package/linux")]["files"], ["linux.yaml"])
 
     def test_bad_metadata_is_an_error_of_the_starter(self):
         self.local_project("meta", {"starter.toml": "title = [1]\n", "site.yml": ""})

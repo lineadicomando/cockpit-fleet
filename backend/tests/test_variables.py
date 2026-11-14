@@ -213,7 +213,7 @@ class SecretVariablesFileTest(unittest.TestCase):
         (self.creds / "fleet_secret_var_0").write_text('AB{{ x }}"-12')
         argv = runner.build_argv(self.spec, self.run, self.runtime, self.creds)
         files = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--extra-vars"]
-        hidden = self.runtime / "secret_vars.yml"
+        hidden = self.runtime / "secret_vars.yaml"
         self.assertEqual(files, [f"@{self.runtime / 'extra_vars.json'}", f"@{hidden}"])
         self.assertEqual(hidden.read_text(), 'ansible_vault_serial: !unsafe "AB{{ x }}\\"-12"\n')
         self.assertEqual(oct(hidden.stat().st_mode & 0o077), "0o0")

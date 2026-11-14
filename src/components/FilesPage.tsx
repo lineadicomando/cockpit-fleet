@@ -256,7 +256,7 @@ function NewFileModal({ initial, offerStarters, onSubmit, onClose }: {
     function choose(chosen: Starter | null) {
         setStarter(chosen);
         // A folder given and no name yet: the starter's own.
-        if (chosen && (value === "" || value.endsWith("/"))) setValue(`${value}${chosen.name}.yml`);
+        if (chosen && (value === "" || value.endsWith("/"))) setValue(`${value}${chosen.name}.yaml`);
     }
     return (
         <FormModal title={t("New file")} submitLabel={t("Create")} onSubmit={() => onSubmit(value, starter?.content ?? "")} onClose={onClose}
@@ -264,7 +264,7 @@ function NewFileModal({ initial, offerStarters, onSubmit, onClose }: {
             {offerStarters && <StarterSelect kind="playbook" fieldId="file-starter" value={starter} onChange={choose} />}
             <FormGroup label={t("Path")} isRequired fieldId="file-path">
                 <TextInput id="file-path" value={value} onChange={(_e, next) => setValue(next)} spellCheck={false} autoFocus />
-                <FormHelperText><HelperText><HelperTextItem>{t("Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed.")}</HelperTextItem></HelperText></FormHelperText>
+                <FormHelperText><HelperText><HelperTextItem>{t("Inside the project, for example roles/web/tasks/main.yaml. Folders are created as needed.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
         </FormModal>
     );
@@ -606,8 +606,8 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
                             )}
                             {data.files.length === 0 && data.directories.length === 0
                                 ? <Content component="p">{ofInventory
-                                    ? t("Create the first file of this inventory: hosts.yml, for example, with group_vars and host_vars beside it.")
-                                    : t("Create the first file of this project: a playbook, for example site.yml.")}</Content>
+                                    ? t("Create the first file of this inventory: hosts.yaml, for example, with group_vars and host_vars beside it.")
+                                    : t("Create the first file of this project: a playbook, for example site.yaml.")}</Content>
                                 : (
                                     <FileTree label={t("Files")} files={filtered.files} directories={query ? [] : directories}
                                         open={shownOpen} onToggle={toggle} current={current}

@@ -602,7 +602,7 @@ class TerminalCloneTest(Managed):
                                             "content": "all: {}\n"})
         clone = str(self.work / "school")
         self.assertEqual(self.fleet("inventory", "clone", "school", clone)[0], 0)
-        self.assertEqual((Path(clone) / "hosts.yml").read_text(), "all: {}\n")
+        self.assertEqual((Path(clone) / "hosts.yaml").read_text(), "all: {}\n")
         target = Path(clone) / "group_vars" / "all.yml"
         target.parent.mkdir()
         target.write_text("a: 1\n")

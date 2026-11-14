@@ -423,7 +423,7 @@ def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
         # Those of the sets of variables, where they won over a plain one:
         # no name is in both files. In clear, as secret answers are, on
         # tmpfs, private to the unit; tagged !unsafe, used as they are.
-        hidden_file = runtime_dir / "secret_vars.yml"
+        hidden_file = runtime_dir / "secret_vars.yaml"
         hidden_file.touch(mode=0o600)
         hidden_file.write_text("".join(f"{name}: !unsafe {_yaml_string(value)}\n"
                                        for name, value in hidden.items()))
@@ -436,14 +436,14 @@ def _playbook_argv(spec: dict, run_dir: Path, runtime_dir: Path,
         # After the template's variables: an answer wins over a fixed value.
         # Secret answers are in clear in this file: it is in the run's runtime
         # directory, on tmpfs, private to the unit and removed with it.
-        survey_file = runtime_dir / "survey_vars.yml"
+        survey_file = runtime_dir / "survey_vars.yaml"
         survey_file.touch(mode=0o600)
         survey_file.write_text(survey_vars_file({**answers, **secrets}))
         argv += ["--extra-vars", f"@{survey_file}"]
     passed = spec.get("workflow_vars", {})
     if passed:
         # Last: what the steps before passed on wins, as in AWX.
-        passed_file = runtime_dir / "workflow_vars.yml"
+        passed_file = runtime_dir / "workflow_vars.yaml"
         passed_file.touch(mode=0o600)
         passed_file.write_text(workflow_vars_file(passed))
         argv += ["--extra-vars", f"@{passed_file}"]
@@ -549,7 +549,7 @@ def build_adhoc_argv(
     A limit is required: it is what chooses the hosts.
     """
     check_limit(spec.get("limit"))
-    playbook = runtime_dir / "adhoc.yml"
+    playbook = runtime_dir / "adhoc.yaml"
     playbook.write_text(adhoc_playbook(spec))
     return _playbook_argv(spec, run_dir, runtime_dir, credentials_dir, playbook)
 
@@ -654,9 +654,9 @@ def build_check_argv(
     if spec.get("playbook"):
         playbook = resolve_inside(run_dir / "project", spec["playbook"], "playbook")
     else:
-        playbook = runtime_dir / "checks.yml"
+        playbook = runtime_dir / "checks.yaml"
         playbook.write_text(check_playbook(timeout))
-    plan_file = runtime_dir / "plan.yml"
+    plan_file = runtime_dir / "plan.yaml"
     plan_file.write_text(f"fleet_plan: {unsafe_yaml(plan)}\n")
     hosts = runtime_dir / "hosts.limit"
     hosts.write_text("".join(f"{host}\n" for host in plan))

@@ -91,7 +91,18 @@ _GIT_ENV = {
 
 # The file of a managed inventory that its text, written before inventories
 # were trees, becomes; and what inventory.create and inventory.update write.
-MAIN_FILES = {"yaml": "hosts.yml", "ini": "hosts"}
+MAIN_FILES = {"yaml": "hosts.yaml", "ini": "hosts"}
+# The main file in YAML of an inventory made before 0.3.0, which it keeps.
+OLD_MAIN = "hosts.yml"
+
+
+def main_file(tree: Path, fmt: str) -> str:
+    """The main file of the managed inventory in TREE for the format FMT:
+    hosts.yml if that is the one it has, else the name of MAIN_FILES."""
+    if fmt == "yaml" and not os.path.lexists(tree / MAIN_FILES["yaml"]) \
+            and (tree / OLD_MAIN).is_file() and not (tree / OLD_MAIN).is_symlink():
+        return OLD_MAIN
+    return MAIN_FILES[fmt]
 
 
 def is_inventory(container_id: str) -> bool:
@@ -394,11 +405,12 @@ def container_tree(ctx: Context, row) -> Path:
 
 
 def main_text(ctx: Context, inventory) -> str:
-    """The text of the main file of a managed inventory (hosts.yml, or hosts
-    for INI), what inventory.get gives as its content; empty if there is none."""
+    """The text of the main file of a managed inventory (hosts.yaml, or
+    hosts.yml if it has that one, or hosts for INI), what inventory.get gives
+    as its content; empty if there is none."""
     tree = inventory_tree(ctx, inventory)
     try:
-        return _read(_locate(tree, PurePosixPath(MAIN_FILES[inventory["format"]]))).decode()
+        return _read(_locate(tree, PurePosixPath(main_file(tree, inventory["format"])))).decode()
     except (NotFound, Conflict, UnicodeDecodeError):
         return ""
 

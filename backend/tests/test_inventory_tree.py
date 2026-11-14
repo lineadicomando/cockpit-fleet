@@ -56,10 +56,23 @@ class InventoryTreeTest(Base):
         made = self.ok("inventory.create", {"name": "web", "kind": "managed",
                                             "content": "all: {}\n"})
         tree = self.home(made["id"]) / "tree"
-        self.assertEqual(os.listdir(tree), ["hosts.yml"])
+        self.assertEqual(os.listdir(tree), ["hosts.yaml"])
         self.ok("inventory.update", {"id": made["id"], "content": "all:\n  hosts: {}\n"})
-        self.assertEqual((tree / "hosts.yml").read_text(), "all:\n  hosts: {}\n")
+        self.assertEqual((tree / "hosts.yaml").read_text(), "all:\n  hosts: {}\n")
         # Another format: the main file of the other one goes.
+        self.ok("inventory.update", {"id": made["id"], "format": "ini", "content": "web01\n"})
+        self.assertEqual(os.listdir(tree), ["hosts"])
+        self.ok("inventory.update", {"id": made["id"], "format": "yaml", "content": "all: {}\n"})
+        self.assertEqual(os.listdir(tree), ["hosts.yaml"])
+
+    def test_one_made_before_keeps_its_hosts_yml(self):
+        made = self.ok("inventory.create", {"name": "old", "kind": "managed",
+                                            "files": [{"path": "hosts.yml", "content": "all: {}\n"}]})
+        tree = self.home(made["id"]) / "tree"
+        self.assertEqual(self.ok("inventory.get", {"id": made["id"]})["content"], "all: {}\n")
+        self.ok("inventory.update", {"id": made["id"], "content": "all:\n  hosts: {}\n"})
+        self.assertEqual(os.listdir(tree), ["hosts.yml"])
+        self.assertEqual((tree / "hosts.yml").read_text(), "all:\n  hosts: {}\n")
         self.ok("inventory.update", {"id": made["id"], "format": "ini", "content": "web01\n"})
         self.assertEqual(os.listdir(tree), ["hosts"])
         self.assertEqual(self.git(made["id"], "log", "--format=%an").split(), ["anna"] * 3)

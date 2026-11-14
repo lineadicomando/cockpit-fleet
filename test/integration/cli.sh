@@ -131,7 +131,7 @@ rm -rf /tmp/fleet-it-clone /tmp/fleet-it-other
 # An inventory written in the interface, the same way.
 admin inventory.create '{"name": "cli-inv", "kind": "managed", "content": "all:\n  hosts:\n    localhost:\n      ansible_connection: local\n"}' >/dev/null
 fleet_as itadmin inventory clone cli-inv /tmp/fleet-it-inv
-expect_eq "a managed inventory is cloned" "$code $(test -f /tmp/fleet-it-inv/hosts.yml && echo here)" "0 here"
+expect_eq "a managed inventory is cloned" "$code $(test -f /tmp/fleet-it-inv/hosts.yaml && echo here)" "0 here"
 mkdir -p /tmp/fleet-it-inv/group_vars && printf 'a: 1\n' > /tmp/fleet-it-inv/group_vars/all.yml
 chown -R itadmin /tmp/fleet-it-inv
 sudo -u itadmin -H git -C /tmp/fleet-it-inv add --all

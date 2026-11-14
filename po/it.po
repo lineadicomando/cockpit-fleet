@@ -91,8 +91,8 @@ msgstr "Copiato"
 msgid "Copy"
 msgstr "Copia"
 
-msgid "Create the first file of this project: a playbook, for example site.yml."
-msgstr "Crea il primo file di questo progetto: un playbook, per esempio site.yml."
+msgid "Create the first file of this project: a playbook, for example site.yaml."
+msgstr "Crea il primo file di questo progetto: un playbook, per esempio site.yaml."
 
 msgid "Database"
 msgstr "Database"
@@ -2871,8 +2871,8 @@ msgstr[1] "{{count}} template"
 msgid "All inventories"
 msgstr "Tutti gli inventari"
 
-msgid "Create the first file of this inventory: hosts.yml, for example, with group_vars and host_vars beside it."
-msgstr "Crea il primo file di questo inventario: hosts.yml, per esempio, con group_vars e host_vars accanto."
+msgid "Create the first file of this inventory: hosts.yaml, for example, with group_vars and host_vars beside it."
+msgstr "Crea il primo file di questo inventario: hosts.yaml, per esempio, con group_vars e host_vars accanto."
 
 msgid "Source in its files"
 msgstr "Sorgente tra i suoi file"
@@ -2995,8 +2995,8 @@ msgid "Open files"
 msgstr "File aperti"
 
 
-msgid "Inside the project, for example roles/web/tasks/main.yml. Folders are created as needed."
-msgstr "Dentro il progetto, per esempio roles/web/tasks/main.yml. Le cartelle vengono create quando servono."
+msgid "Inside the project, for example roles/web/tasks/main.yaml. Folders are created as needed."
+msgstr "Dentro il progetto, per esempio roles/web/tasks/main.yaml. Le cartelle vengono create quando servono."
 
 msgid "Inside the project, for example roles/web/templates. Folders are created as needed."
 msgstr "Dentro il progetto, per esempio roles/web/templates. Le cartelle vengono create quando servono."

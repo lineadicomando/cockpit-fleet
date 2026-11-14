@@ -3,7 +3,8 @@ inventory or a new playbook starts from.
 
 They come from the package (/usr/share/cockpit-fleet/starters) and from the
 administrator (/etc/cockpit-fleet/starters), laid out the same way:
-projects/NAME/ and inventories/NAME/ are trees, playbooks/NAME.yml one file.
+projects/NAME/ and inventories/NAME/ are trees, playbooks/NAME.yaml one file
+(or NAME.yml, which an administrator may have written).
 Their title and description are in a starter.toml inside a tree, or in
 NAME.toml beside a playbook, which is not copied. When both sources have a
 starter with the same name, both are offered: one never replaces the other.
@@ -24,7 +25,7 @@ from pathlib import Path, PurePosixPath
 from . import paths
 from .cli import Choice, Context, Str, Values, command
 from .errors import BadRequest, NotFound
-from .files import KEEP, MAIN_FILES, MAX_FILE
+from .files import KEEP, MAIN_FILES, MAX_FILE, OLD_MAIN
 from .validators import check_file_path
 
 KINDS = {"project": "projects", "inventory": "inventories", "playbook": "playbooks"}
@@ -36,6 +37,8 @@ MAX_FILES = 500
 MAX_TOTAL = 16 * 1024 * 1024
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 _REF_RE = re.compile(r"(package|local)/([A-Za-z0-9][A-Za-z0-9_-]{0,63})")
+# A playbook starter's file; .yaml first, the name of what is made from it.
+PLAYBOOK_SUFFIXES = (".yaml", ".yml")
 _OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
 _STARTER_DOC = ("A starter to begin with, as SOURCE/NAME (package or local, see starter.list):"
                 " its files are the first commit")
@@ -108,14 +111,16 @@ def _paths(kind: str, source: str, name: str) -> tuple[Path, Path]:
     """Where the content of a starter is, and where its metadata."""
     home = _root(source) / KINDS[kind]
     if kind == "playbook":
-        return home / f"{name}.yml", home / f"{name}.toml"
+        found = [home / f"{name}{suffix}" for suffix in PLAYBOOK_SUFFIXES
+                 if os.path.lexists(home / f"{name}{suffix}")]
+        return (found or [home / f"{name}.yaml"])[0], home / f"{name}.toml"
     return home / name, home / name / META
 
 
 def _content(kind: str, source: str, name: str) -> dict[str, bytes]:
     where, _meta_path = _paths(kind, source, name)
     if kind == "playbook":
-        return {f"{name}.yml": _read(where)}
+        return {where.name: _read(where)}
     mode = os.lstat(where).st_mode
     if not stat.S_ISDIR(mode):
         raise BadRequest("not a directory")
@@ -132,20 +137,19 @@ def _names(kind: str, source: str) -> list[str]:
     names = []
     for entry in entries:
         if kind == "playbook":
-            if not entry.endswith(".yml"):
+            if not entry.endswith(PLAYBOOK_SUFFIXES):
                 continue
-            entry = entry.removesuffix(".yml")
-        if _NAME_RE.fullmatch(entry):
+            entry = entry.rsplit(".", 1)[0]
+        if _NAME_RE.fullmatch(entry) and entry not in names:
             names.append(entry)
     return names[:MAX_STARTERS]
 
 
 def _format(content: dict[str, bytes]) -> str:
     """The format of an inventory a starter makes: that of its main file."""
-    for fmt, main in MAIN_FILES.items():
-        if main in content:
-            return fmt
-    return ""
+    if MAIN_FILES["yaml"] in content or OLD_MAIN in content:
+        return "yaml"
+    return "ini" if MAIN_FILES["ini"] in content else ""
 
 
 def describe(kind: str, source: str, name: str) -> dict:
@@ -162,7 +166,7 @@ def describe(kind: str, source: str, name: str) -> dict:
             entry["format"] = _format(content)
         elif kind == "playbook":
             try:
-                entry["content"] = content[f"{name}.yml"].decode()
+                entry["content"] = next(iter(content.values())).decode()
             except UnicodeDecodeError:
                 raise BadRequest("not text") from None
     except (BadRequest, OSError) as error:

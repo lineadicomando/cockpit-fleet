@@ -210,7 +210,7 @@ class RunTest(Base):
         self.assertEqual((directory / "creds" / "private_key").read_bytes(), b"KEY")
         self.assertFalse((directory / "creds" / "connection_password").exists())
         self.assertEqual((directory / "known_hosts").read_text(), "10.0.0.5 ssh-ed25519 AAAA\n")
-        self.assertEqual((directory / "inventory" / "hosts.yml").read_text(), "all:\n  hosts:\n    a:\n")
+        self.assertEqual((directory / "inventory" / "hosts.yaml").read_text(), "all:\n  hosts:\n    a:\n")
         self.assertEqual(spec["limits"], ["web*", "web01"])
         self.assertNotIn("limit", spec)
         self.assertEqual((spec["user"], spec["check"], spec["diff"]), ("maint", True, True))

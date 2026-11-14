@@ -298,21 +298,21 @@ class DraftTest(Base):
     def test_drafts_of_a_managed_inventory(self):
         made = self.ok("inventory.create", {"name": "web", "kind": "managed",
                                             "content": "all:\n  hosts:\n    a:\n"})
-        current = self.ok("file.read", {"id": made["id"], "path": "hosts.yml"})["sha256"]
-        written = self.write("hosts.yml", "all:\n  hosts:\n    b:\n", current, who="agent",
+        current = self.ok("file.read", {"id": made["id"], "path": "hosts.yaml"})["sha256"]
+        written = self.write("hosts.yaml", "all:\n  hosts:\n    b:\n", current, who="agent",
                              id=made["id"])
-        self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "hosts.yml"})["content"],
+        self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "hosts.yaml"})["content"],
                          "all:\n  hosts:\n    a:\n")
         run = self.ok("run.get", {"id": written["check_run_id"]})
         self.assertEqual((run["kind"], run["title"]), ("syntax", "web (draft)"))
         self.assertEqual(json.loads((paths.RUNS_DIR / run["id"] / "spec.json").read_text())
                          ["kind"], "syntax")
-        self.assertEqual((paths.RUNS_DIR / run["id"] / "inventory/hosts.yml").read_text(),
+        self.assertEqual((paths.RUNS_DIR / run["id"] / "inventory/hosts.yaml").read_text(),
                          "all:\n  hosts:\n    b:\n")
         self.assertEqual([d["kind"] for d in self.ok("draft.list")["drafts"]], ["inventory"])
         taken = self.merge(container=made["id"])
         self.assertEqual(len(taken["inventory_run_ids"]), 1)
-        self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "hosts.yml"})["content"],
+        self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "hosts.yaml"})["content"],
                          "all:\n  hosts:\n    b:\n")
 
     def test_projects_not_written_here_have_no_drafts(self):

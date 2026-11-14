@@ -399,7 +399,7 @@ class ImportTest(Base):
                             id=inventory["id"])
         self.assertEqual(run["inventory_id"], inventory["id"])
         self.assertEqual(self.listed(inventory["id"]),
-                         ["group_vars/all.yml", "host_vars/pc01.yml", "hosts.yml"])
+                         ["group_vars/all.yml", "host_vars/pc01.yml", "hosts.yaml"])
         # Its syntax is checked, and it is read again.
         kinds = sorted(r["kind"] for r in self.ok("run.list")["runs"]
                        if r["inventory_id"] == inventory["id"] and r["kind"] != "unpack")

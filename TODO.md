@@ -12,32 +12,11 @@ Phases 0–15 closed. 0.2.0 released on 2 November; `[Unreleased]`
 makes 0.3.0 (it has a Breaking entry; `make release` only when asked).
 
 To resume: `git status`, `git log origin/main..` (not pushed), `make
-check` (669 backend, 171 frontend tests on 14 November). Each backend
+check` (671 backend, 171 frontend tests on 14 November). Each backend
 module's docstring says what it is; `cli.py` is the registry of commands,
 `db.py` the schema (28 migrations). Last full `ct-test`: on the three, 9
 November, all passed but the known failure in `tests.md`; the scripts
 touched since were run again (14 November).
-
-## Next: `.yaml`, never `.yml`, for YAML files the project makes
-
-Every YAML file the project writes on its own must end in `.yaml`
-(user's request, 14 November). Where it does not today:
-
-- the starters (`starters/`, `starters.py`: `playbooks/NAME.yml`, the
-  name "New file" proposes in `FilesPage.tsx`);
-- the main file of a managed inventory, `MAIN_FILES` in `files.py`
-  (`hosts.yml`): existing inventories have it, so `inventory.get` and
-  `inventory.update` must find either, and a format change must not leave
-  both; say it in `CHANGELOG.md`;
-- the files of a run's runtime directory in `runner.py`
-  (`secret_vars.yml`, `survey_vars.yml`, `workflow_vars.yml`, `adhoc.yml`,
-  `checks.yml`, `plan.yml`) and whatever reads them;
-- the bundled collection (`collection/`: `playbooks/chat_agent.yml`, the
-  tasks of `roles/chat_agent`), and the playbook name documented for it.
-
-Files a user names keep their name; what is read (`requirements.yml`,
-`.yml` playbooks of projects) is still read under both. Then the examples
-and placeholders of the page and the docs (`site.yml`, `main.yml`).
 
 ## Open questions for the user
 

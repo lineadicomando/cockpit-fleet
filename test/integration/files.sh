@@ -150,7 +150,7 @@ expect_eq "each playbook of the starter was checked" "$(db "SELECT count(*) FROM
 windows=$(get "$(admin inventory.create '{"name": "from-windows", "kind": "managed", "starter": "package/windows"}')" 'a["data"]["id"]')
 expect_run "an inventory from a starter is read" "$(get "$(admin inventory.parse "{\"id\": \"$windows\"}")" 'a["data"]["run_id"]')" 60 successful
 expect_eq "with the connection of Windows over SSH" \
-    "$(get "$(admin file.read "{\"id\": \"$windows\", \"path\": \"group_vars/windows.yml\"}")" '"ansible_shell_type: powershell" in a["data"]["content"]')" True
+    "$(get "$(admin file.read "{\"id\": \"$windows\", \"path\": \"group_vars/windows.yaml\"}")" '"ansible_shell_type: powershell" in a["data"]["content"]')" True
 mkdir -p /etc/cockpit-fleet/starters/projects/ours /etc/cockpit-fleet/starters/projects/linked
 printf 'title = "Ours"\n' > /etc/cockpit-fleet/starters/projects/ours/starter.toml
 printf -- '- hosts: all\n  tasks: []\n' > /etc/cockpit-fleet/starters/projects/ours/site.yml

@@ -10,15 +10,15 @@
       absolute path, chat_agent_name made of a-z, 0-9, - and _.
 
 - name: Install the agent
-  ansible.builtin.include_tasks: install.yml
+  ansible.builtin.include_tasks: install.yaml
   when: chat_agent_state == 'present'
 
 - name: Name the agent in config.toml
-  ansible.builtin.include_tasks: configure.yml
+  ansible.builtin.include_tasks: configure.yaml
   when: chat_agent_state == 'absent' or chat_agent_configure | bool
 
 - name: Let agents reach the backend
-  ansible.builtin.include_tasks: mcp.yml
+  ansible.builtin.include_tasks: mcp.yaml
   when: chat_agent_state == 'present' and chat_agent_enable_mcp | bool
 
 - name: Remove the agent

@@ -94,7 +94,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                                 <Radio id="inv-format-ini" name="inv-format" label="INI" isChecked={format === "ini"} onChange={() => setFormat("ini")} />
                             </FormGroup>
                             <FormGroup label={t("Hosts and groups")} fieldId="inv-content" role="group">
-                                <CodeEditor key={format} className="fleet-code-field" label={t("Hosts and groups")} path={format === "yaml" ? "hosts.yml" : "hosts"}
+                                <CodeEditor key={format} className="fleet-code-field" label={t("Hosts and groups")} path={format === "yaml" ? "hosts.yaml" : "hosts"}
                                     value={content} onChange={setContent}
                                     placeholder={format === "yaml" ? "all:\n  hosts:\n    web01:\n      ansible_host: 192.0.2.10" : "[web]\nweb01 ansible_host=192.0.2.10"} />
                                 <FormHelperText><HelperText><HelperTextItem>{t("Do not write passwords here: use a credential. This becomes its first file; group_vars, host_vars and other files are added with “Files”.")}</HelperTextItem></HelperText></FormHelperText>

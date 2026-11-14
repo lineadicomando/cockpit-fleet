@@ -45,12 +45,12 @@ class AdhocPlaybookTest(unittest.TestCase):
     def test_module_and_arguments_are_in_the_file_not_in_argv(self):
         argv = runner.build_adhoc_argv({**self.spec, "free_form": "echo s3cret", "check": True},
                                        self.run, self.runtime, None)
-        self.assertEqual(argv[-1], str(self.runtime / "adhoc.yml"))
+        self.assertEqual(argv[-1], str(self.runtime / "adhoc.yaml"))
         self.assertEqual(argv[argv.index("--limit") + 1], "web*")
         self.assertIn("--check", argv)
         self.assertNotIn("s3cret", " ".join(argv))
         self.assertNotIn("ansible.builtin.command", " ".join(argv))
-        self.assertIn("s3cret", (self.runtime / "adhoc.yml").read_text())
+        self.assertIn("s3cret", (self.runtime / "adhoc.yaml").read_text())
 
     def test_rejects_what_is_not_a_full_module_name_or_has_no_limit(self):
         bad = [{"module": "command"}, {"module": "ansible.builtin"}, {"module": "a.b.c: x"},
@@ -109,7 +109,7 @@ class AdhocCommandTest(Base):
         # The tree of the inventory, its main file in it.
         self.assertEqual(argv[argv.index("--inventory") + 1],
                          str((directory / "inventory").resolve()))
-        self.assertTrue((directory / "inventory" / "hosts.yml").is_file())
+        self.assertTrue((directory / "inventory" / "hosts.yaml").is_file())
         self.assertIn("--become", argv)
 
     def test_administrators_only_and_audited(self):
@@ -165,7 +165,7 @@ class AdhocCommandTest(Base):
         run = self.ok("run.adhoc", {**self.params, "project_id": project["id"]})
         directory = paths.RUNS_DIR / run["id"]
         self.assertTrue((directory / "project" / "site.yml").is_file())
-        self.assertTrue((directory / "inventory" / "hosts.yml").is_file())
+        self.assertTrue((directory / "inventory" / "hosts.yaml").is_file())
 
     def test_outcome_is_collected_like_a_playbook(self):
         run = self.ok("run.adhoc", self.params)

@@ -131,9 +131,9 @@ class VarsFileTest(unittest.TestCase):
                                       "survey_vars": {"version": "s3cret"}}, run, runtime, None)
             files = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--extra-vars"]
             self.assertEqual(files, [f"@{runtime / 'extra_vars.json'}",
-                                     f"@{runtime / 'survey_vars.yml'}"])
+                                     f"@{runtime / 'survey_vars.yaml'}"])
             self.assertNotIn("s3cret", " ".join(argv))
-            self.assertEqual((runtime / "survey_vars.yml").read_text(),
+            self.assertEqual((runtime / "survey_vars.yaml").read_text(),
                              'version: !unsafe "s3cret"\n')
 
 
@@ -154,7 +154,7 @@ class SecretVarsTest(unittest.TestCase):
         (self.creds / "fleet_survey_0").write_text("hunter2 {{ x }}")
         argv = runner.build_argv({**self.spec, "survey_vars": {"n": 1}}, self.run, self.runtime,
                                  self.creds)
-        file = self.runtime / "survey_vars.yml"
+        file = self.runtime / "survey_vars.yaml"
         self.assertEqual(argv[argv.index("--extra-vars") + 1], f"@{file}")
         self.assertNotIn("hunter2", " ".join(argv))
         self.assertEqual(file.read_text(), 'n: 1\ntoken: !unsafe "hunter2 {{ x }}"\n')

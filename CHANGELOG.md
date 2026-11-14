@@ -156,6 +156,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- YAML files that cockpit-fleet names itself end in `.yaml`, no longer in
+  `.yml`: the main file of a new inventory written in the interface
+  (`hosts.yaml`), the files of the starters and of the bundled collection,
+  and those of a run's runtime directory. An inventory made before keeps
+  its `hosts.yml`, which is still its main file.
 - The page's eighteen tabs are now six, each with its own row of tabs
   below: Overview, Nodes (hosts, assets, checks, host keys), Automation
   (runs, job templates, workflows, schedules), Resources (projects,

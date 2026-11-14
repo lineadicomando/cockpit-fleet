@@ -311,15 +311,25 @@ the copy of a project is; an executable file in it is never run as a
 script, whatever `[inventories] scripts` says, as before.
 
 `inventory.create` and `inventory.update` still take `content`: the text of
-its main file, `hosts.yml` (or `hosts` for INI), written as a commit;
+its main file, `hosts.yaml` (or `hosts` for INI), written as a commit;
 `inventory.create` also takes `files`, every file of the tree, which is how
 an export brings an inventory back. An inventory written before it was a
 tree had its text in the database (`content`): the first time its tree is
-needed, the text is made `hosts.yml` (or `hosts`) of a new repository, in a
+needed, the text is made `hosts.yaml` (or `hosts`) of a new repository, in a
 commit of the service account, and dropped from the database. That needs no
 step of the upgrade and no migration of files, and a controller that never
 opens an inventory keeps its text where it was. The revision of the tree is
 in the database (schema 20) and in what `inventory.get` answers.
+
+The YAML files the backend names itself end in `.yaml` (decided on 14
+November): the main file of an inventory, the files of the starters, those
+a run gets in its runtime directory (`secret_vars.yaml`, `adhoc.yaml`,
+`plan.yaml`…) and the bundled collection's. An inventory made before 0.3.0
+keeps its `hosts.yml`: `inventory.get` and `inventory.update` use it as the
+main file while there is no `hosts.yaml` beside it, and renaming it is left
+to the administrator, as a change of their own. What a user names keeps its
+name, and what is read is still read under both (`requirements.yml`, a
+playbook starter `NAME.yml`).
 
 This replaces one text field: `group_vars` per group, `host_vars`, a vault
 file beside the others, several sources and a plugin with the name it wants
@@ -351,7 +361,7 @@ administrator, laid out the same way:
 /etc/cockpit-fleet/starters/         the administrator's
     projects/NAME/                   a tree, with starter.toml (title, description)
     inventories/NAME/                a tree, the same
-    playbooks/NAME.yml               one file, with NAME.toml beside it
+    playbooks/NAME.yaml              one file (or NAME.yml), with NAME.toml beside it
 ```
 
 The metadata file is optional and never copied. `starter.list` (admin)
@@ -373,12 +383,12 @@ The package's titles are translated by the page, by name; an
 administrator's are shown as written.
 
 The package ships general ones, not shaped on a real project: a Linux and
-a Windows project (a `site.yml` through a role `common`, a `ping.yml`,
-variables by group; the Windows one with a `requirements.yml` for
+a Windows project (a `site.yaml` through a role `common`, a `ping.yaml`,
+variables by group; the Windows one with a `requirements.yaml` for
 `ansible.windows`, which AlmaLinux does not package), a Linux and a Windows
 inventory in YAML with an empty group, and a playbook of each. The
 connection variables of Windows over SSH (`ansible_connection`,
 `ansible_shell_type`) are in the Windows inventory and in the Windows
-project's `group_vars/windows.yml`, the project's winning;
+project's `group_vars/windows.yaml`, the project's winning;
 `ansible_remote_tmp: C:\Windows\Temp\ansible` is there commented out,
 since set it breaks `become` (see [Windows nodes](windows.md)).

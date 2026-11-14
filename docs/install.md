@@ -165,11 +165,11 @@ Your own go in `/etc/cockpit-fleet/starters`, laid out as the package's in
 
 ```
 /etc/cockpit-fleet/starters/projects/web/starter.toml
-/etc/cockpit-fleet/starters/projects/web/site.yml
+/etc/cockpit-fleet/starters/projects/web/site.yaml
 /etc/cockpit-fleet/starters/projects/web/roles/...
 /etc/cockpit-fleet/starters/inventories/branch/starter.toml
-/etc/cockpit-fleet/starters/inventories/branch/hosts.yml
-/etc/cockpit-fleet/starters/playbooks/patch.yml
+/etc/cockpit-fleet/starters/inventories/branch/hosts.yaml
+/etc/cockpit-fleet/starters/playbooks/patch.yaml
 /etc/cockpit-fleet/starters/playbooks/patch.toml
 ```
 
@@ -186,8 +186,10 @@ package's does not replace it: both are offered. The files must be readable
 by the group `cockpit-fleet`, and are refused if they hold a symbolic link
 or a special file, a file larger than 1 MB, or more than 500 files; the
 page shows why next to its name. An inventory's format is that of its main
-file, `hosts.yml` (YAML) or `hosts` (INI). Do not put passwords in them:
-a starter is copied into the history of everything made from it.
+file, `hosts.yaml` or `hosts.yml` (YAML) or `hosts` (INI). A playbook may
+end in `.yml` too; what is made from it ends in `.yaml`. Do not put
+passwords in them: a starter is copied into the history of everything made
+from it.
 
 ## Upgrading
 

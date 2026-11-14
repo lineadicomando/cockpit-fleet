@@ -245,7 +245,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
                     <GridItem>
                         <FormGroup label={t("Playbook")} isRequired fieldId="chk-playbook">
                             <TextInput id="chk-playbook" value={playbook} onChange={(_e, value) => setPlaybook(value)}
-                                placeholder={kind === "compliance" ? "baseline.yml" : "checks/mail_queue.yml"} />
+                                placeholder={kind === "compliance" ? "baseline.yaml" : "checks/mail_queue.yaml"} />
                         </FormGroup>
                     </GridItem>
                 </Grid>

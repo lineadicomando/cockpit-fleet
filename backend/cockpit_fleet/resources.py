@@ -374,7 +374,7 @@ _INVENTORY_PARAMS = {
                 " here, the file or directory of its tree Ansible reads, empty for all of it",
                 max_length=1024),
     "format": Choice(("yaml", "ini"), default="yaml"),
-    "content": Str("For an inventory written here, the text of its main file: hosts.yml,"
+    "content": Str("For an inventory written here, the text of its main file: hosts.yaml,"
                    " or hosts for INI", max_length=512 * 1024),
     "variable_set_ids": Strs("Sets of variables, secret ones included, that every job on the"
                              " inventory takes (runs before their template's sets, ad-hoc"
@@ -408,15 +408,15 @@ def _inventory_values(ctx: Context, params: Values, kind: str, row=None) -> dict
 def _write_main(ctx: Context, inventory, content: str, operations: list[dict]) -> None:
     """Write the main file of a managed inventory, and the other files given,
     as one commit; the main file of the other format goes."""
-    main = files.MAIN_FILES[inventory["format"]]
     tree = files.inventory_tree(ctx, inventory)
+    main = files.main_file(tree, inventory["format"])
     changes = list(operations)
     if content is not None:
         current = tree / main
         expected = hashlib.sha256(current.read_bytes()).hexdigest() \
             if current.is_file() and not current.is_symlink() else ""
         changes.append({"op": "write", "path": main, "content": content, "expected": expected})
-        other = next(name for name in files.MAIN_FILES.values() if name != main)
+        other = files.main_file(tree, "ini" if inventory["format"] == "yaml" else "yaml")
         if (tree / other).is_file() and not (tree / other).is_symlink():
             changes.append({"op": "delete", "path": other})
     if changes:
@@ -467,7 +467,7 @@ _FILES_REDACTED = ("content", "files[].content", "files[].data")
                                 max_length=100)})
 def inventory_create(ctx: Context, params: Values) -> dict:
     """Create an inventory: a path of a project, or a tree of files written
-    here (a main file, hosts.yml or hosts, with group_vars and host_vars
+    here (a main file, hosts.yaml or hosts, with group_vars and host_vars
     beside it, say), which file.list and file.change work on by its id."""
     name = store.check_name(params["name"])
     kind = params["kind"]

@@ -154,16 +154,16 @@ class RunnerTest(CheckBase):
                 "inventory": "hosts.yml", "inventory_source": "managed", "vaults": [],
                 "limit": "ignored", "extra_vars": {"ignored": 1}}
         argv = runner.build_check_argv(spec, directory, runtime, None)
-        self.assertEqual(argv[-1], str(runtime / "checks.yml"))
+        self.assertEqual(argv[-1], str(runtime / "checks.yaml"))
         self.assertIn(f"@{runtime / 'hosts.limit'}", argv)
-        self.assertIn(f"@{runtime / 'plan.yml'}", argv)
+        self.assertIn(f"@{runtime / 'plan.yaml'}", argv)
         self.assertNotIn("ignored", " ".join(argv))
         self.assertEqual(argv[argv.index("--forks") + 1], "7")
         self.assertEqual((runtime / "hosts.limit").read_text(), "web01\n")
-        text = (runtime / "plan.yml").read_text()
+        text = (runtime / "plan.yaml").read_text()
         self.assertIn('!unsafe "{{ lookup(\'pipe\', \'id\') }}"', text)
         self.assertIn('"id": !unsafe "k1"', text)
-        playbook = json.loads((runtime / "checks.yml").read_text())
+        playbook = json.loads((runtime / "checks.yaml").read_text())
         task = playbook[0]["tasks"][0]
         self.assertEqual((task["timeout"], playbook[0]["strategy"]), (30, "free"))
         self.assertIn(runner.CHECKS_MODULE, task)

@@ -166,7 +166,7 @@ secret; an ad-hoc command and a check cycle take the inventory's alone.
 At launch the ciphertext of each secret that won is copied into the run's
 credentials (`secret_var_N`); one with no value stops the launch (a check
 cycle is then not prepared, and its states say why). `fleet-run` writes
-them, tagged `!unsafe`, into `secret_vars.yml` in the runtime directory,
+them, tagged `!unsafe`, into `secret_vars.yaml` in the runtime directory,
 after the plain extra variables, and they are masked in the output as
 every secret of a run. Checked with ansible-core 2.16: an extra variable
 given that way reaches the playbook and the inventory's own files (a
