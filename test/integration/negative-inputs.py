@@ -50,8 +50,10 @@ def call(user: str, name: str, raw: bytes) -> dict:
             FLEETCTL, name]
     done = subprocess.run(argv, input=raw, capture_output=True, timeout=180, check=False)
     # A command that streams out (store.read) writes bytes, not an answer, and
-    # its answer to stderr when it fails.
-    streams = cli.COMMANDS[name].stream == "out" if name in cli.COMMANDS else False
+    # its answer to stderr when it fails; so does one that holds a session
+    # (store.sftp), which speaks its own protocol.
+    streams = cli.COMMANDS[name].stream in ("out", "session") if name in cli.COMMANDS \
+        else False
     try:
         answer = json.loads(done.stderr if streams and done.returncode == 1 else done.stdout)
         if isinstance(answer, dict) and "ok" in answer:
@@ -119,7 +121,10 @@ for (_, name, raw, _), (label, answer) in zip(cases, run_all(cases), strict=True
     profile = json.loads(raw).get("profile", AGENT_PROFILES[0])
     allowed = ((spec.tool or name == "mcp.tools") and profile in AGENT_PROFILES
                and profiles.allows(profile, profiles.call_class(name, spec.agent, {}, ())))
-    if not allowed and (answer["ok"] or answer["error"]["code"] != "forbidden"):
+    # A command that holds a session reads no parameters, so it is never told
+    # that an agent calls it: what it gets is no SFTP, and it ends there.
+    refused = "bad_request" if spec.stream == "session" else "forbidden"
+    if not allowed and (answer["ok"] or answer["error"]["code"] != refused):
         problems.append(f"{label}: not refused: {answer}")
     elif allowed and (broken(answer) or answer.get("error", {}).get("code") == "forbidden"):
         problems.append(f"{label}: {answer['error']}")

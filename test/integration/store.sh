@@ -9,7 +9,8 @@
 # container node, and those to the controller's own addresses refused;
 # many entries moved and deleted in one call, copies, one of them a job;
 # a folder and a file downloaded as one tar; a source checked again, not
-# modified then modified.
+# modified then modified; OpenSSH's sftp over an SSH login, through fleet
+# store sftp, as an operator and as a viewer.
 # It DELETES the database, the runs and the store: set IT_WIPE=yes to accept.
 set -u
 . "$(dirname "$0")/lib.sh"
@@ -26,6 +27,7 @@ cleanup() {
     wipe
     userdel -r itviewer 2>/dev/null
     rm -rf "$WORK"
+    rm -f /root/.ssh/fleet-it-sftp /root/.ssh/fleet-it-sftp.pub
 }
 trap cleanup EXIT
 cleanup
@@ -248,5 +250,41 @@ for url in "http://127.0.0.1:9090/" "http://$own:9090/" "http://169.254.169.254/
     expect_eq "  where it connects" "$(grep -c 'may not connect' "/var/lib/cockpit-fleet/runs/$run/stdout.log")" 1
 done
 expect_eq "the downloads have a queue of their own" "$(get "$(admin system.health)" '[q["lane"] for q in a["data"]["queue"]]')" "['runs', 'downloads', 'checks', 'slow']"
+
+# --- over SFTP, as WinSCP or sftp reach it ---------------------------------------------
+# The user's own SSH login, and fleet store sftp as the server: sftp -s takes a
+# path for one when it has a slash.
+install -d -m 700 /root/.ssh
+ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/fleet-it-sftp
+for user in itoperator itviewer; do
+    home=$(getent passwd "$user" | cut -d: -f6)
+    install -d -m 700 -o "$user" "$home/.ssh"
+    install -m 600 -o "$user" /root/.ssh/fleet-it-sftp.pub "$home/.ssh/authorized_keys"
+done
+sftp_as() {  # sftp_as USER < BATCH: sftp's output, its status last
+    sftp -q -b - -i /root/.ssh/fleet-it-sftp -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes \
+        -s "/usr/bin/fleet store sftp" "$1@127.0.0.1" 2>&1
+    echo "status $?"
+}
+head -c 5242880 /dev/urandom > "$WORK/out/over.bin"
+over_sha=$(sha256sum "$WORK/out/over.bin" | cut -d' ' -f1)
+said=$(cd "$WORK/out" && printf '%s\n' "mkdir sftp" "cd sftp" "put over.bin" \
+    "rename over.bin moved.bin" "get moved.bin back.bin" "ls -l" | sftp_as itoperator)
+expect_eq "an operator puts, renames and gets a file over SFTP" "$(echo "$said" | tail -1)" "status 0"
+expect_eq "  it is in the store" "$(sha256sum "$STORE/sftp/moved.bin" | cut -d' ' -f1)" "$over_sha"
+expect_eq "  and came back whole" "$(sha256sum "$WORK/out/back.bin" | cut -d' ' -f1)" "$over_sha"
+expect_eq "  owned by the service" "$(stat -c %U "$STORE/sftp/moved.bin")" cockpit-fleet
+expect_eq "  nothing left among the uploads" "$(ls /var/lib/cockpit-fleet/store-uploads | wc -l)" 0
+expect_eq "  the store knows who put it there" "$(listed "(f['sftp/moved.bin']['origin'], f['sftp/moved.bin']['updated_by'])")" "('upload', 'itoperator')"
+expect_eq "  each change is in the audit trail, through sftp" \
+    "$(get "$(admin audit.list '{"limit": 20}')" 'sorted({e["command"] for e in a["data"]["entries"] if e["via"] == "sftp" and e["user"] == "itoperator"})')" \
+    "['store.mkdir', 'store.move', 'store.put', 'store.read', 'store.sftp']"
+said=$(cd "$WORK/out" && echo "get sftp/moved.bin viewer.bin" | sftp_as itviewer)
+expect_eq "a viewer reads over SFTP" "$(sha256sum "$WORK/out/viewer.bin" | cut -d' ' -f1)" "$over_sha"
+said=$(cd "$WORK/out" && echo "put over.bin sftp/viewer.bin" | sftp_as itviewer)
+expect_eq "  and may not write" "$(echo "$said" | tail -1):$(test -e "$STORE/sftp/viewer.bin" && echo there || echo absent)" "status 1:absent"
+said=$(printf '%s\n' "rm sftp/moved.bin" "rmdir sftp" | sftp_as itoperator)
+expect_eq "an operator deletes over SFTP" "$(echo "$said" | tail -1):$(test -e "$STORE/sftp" && echo there || echo gone)" "status 0:gone"
 
 finish

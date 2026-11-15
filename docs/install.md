@@ -130,6 +130,29 @@ commented out. An unknown key is an error, which the System tab and
   cockpit-fleet: /var/lib/cockpit-fleet/store`), or runs are not given
   them.
 
+### The store from an SFTP client
+
+Anyone who may log in to the controller over SSH reaches the store with an
+SFTP client, with their own role: viewers read, operators and
+administrators also write. Nothing is to be set up on the controller; in
+the client, name `/usr/bin/fleet store sftp` as the SFTP server to start:
+
+- WinSCP: the site's Advanced settings, Environment, SFTP, "SFTP server".
+- `sftp -s "/usr/bin/fleet store sftp" user@controller`.
+- `sshfs -o sftp_server="/usr/bin/fleet store sftp" user@controller: DIR`.
+
+The folder the client opens is the store. A file written there reaches the
+store, and runs, when it is closed; WinSCP's transfers to a temporary name
+(`.filepart`) are resumed if they stop. Clients that cannot name the server
+(FileZilla, the file managers of GNOME and KDE) need sshd to start it
+for them, which then is all those accounts can do over SSH:
+
+```
+# /etc/ssh/sshd_config.d/fleet-store.conf
+Match Group store-sftp
+    ForceCommand /usr/bin/fleet store sftp
+```
+
 The backend reads the file at each call: nothing needs restarting.
 
 ## First steps

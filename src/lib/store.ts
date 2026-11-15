@@ -1,6 +1,7 @@
 import cockpit from "cockpit";
 import { basename, dirname, isInside, renamed } from "./files.ts";
 import { AccessError, FLEETCTL, FRAME, FleetError, accessFailure, call, isElevated } from "./fleet.ts";
+import { shellLine } from "./terminal.ts";
 
 // The store: files on the controller that playbooks copy to nodes. Its files
 // are of any size, so they do not travel as the parameters of a call: an
@@ -587,4 +588,13 @@ export function endedDownloads(list: StoreDownload[]): string[] {
 export function visibleDownloads(list: StoreDownload[], closed: string[]): StoreDownload[] {
     const hidden = new Set(closed);
     return list.filter(item => RUNNING.includes(item.status) || !hidden.has(item.run_id));
+}
+
+// What an SFTP client names as the server to start at the other end of an
+// SSH login to the controller.
+export const SFTP_SERVER = "/usr/bin/fleet store sftp";
+
+// OpenSSH's sftp, as USER on HOST (an address of IPv6 comes in brackets).
+export function sftpCommand(user: string, host: string): string {
+    return shellLine(["sftp", "-s", SFTP_SERVER, `${user}@${host}`]);
 }

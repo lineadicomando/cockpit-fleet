@@ -15,6 +15,8 @@ its stdin: never on a command line.
     fleet assistant [--profile PROFILE] [AGENT]
     fleet store put --file FILE --path PATH [--replace] [--resume]
     fleet store read --path PATH [--output FILE | -]
+    fleet store sftp                     the store over SFTP, for a client
+                                         at the other end of an SSH login
     fleet project clone PROJECT [DIR] | pull [DIR] | push [DIR]
     fleet inventory clone INVENTORY [DIR] | pull [DIR] | push [DIR]
     fleet help [AREA [VERB]]
@@ -1181,6 +1183,12 @@ def run(term: Terminal, commands: dict[str, Command], words: list[str]) -> int:
     if "-h" in rest or "--help" in rest:
         term.out.write(describe(command))
         return OK
+    if command.stream == "session":
+        if rest:
+            raise Usage(f"fleet {command.name.replace('.', ' ')} takes no options")
+        # The client's input and output are fleetctl's own.
+        return term.execute(["/usr/bin/sudo", "-n", "-u", SERVICE_USER,
+                             str(LIBEXEC_DIR / "fleetctl"), command.name])
     if command.stream:
         return _stream_command(term, command, rest)
     extra: dict = {}

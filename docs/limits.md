@@ -44,6 +44,16 @@ in [security.md](security.md); the decisions behind these limits in
   November; the page now says why). Copies share blocks only on XFS and
   Btrfs, and count their whole size against `[store] max_gb` there too; a
   copy made by a job is of the files as they were when it was asked.
+  SFTP: version 3 only; a file of the store is replaced whole, never
+  written in place (an editor saving through `sshfs` in place is refused);
+  the limit of `[store] max_gb` is checked when a file is closed, the free
+  disk every 256 MiB written; a file written is listed with no digest
+  until the tick; a `.filepart` closed and not renamed waits a week,
+  seen by its writer only; links are neither listed nor made; clients
+  that cannot name the server need sshd's `ForceCommand`; WinSCP replaces
+  a file by deleting it and renaming the new one, so for a moment the
+  store has none there; through `sshfs` a file reaches the store a moment
+  after the copy returns.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Sets of variables: a secret variable is an extra variable, one value for
   every host of a run (a value per group needs a name per group); its value

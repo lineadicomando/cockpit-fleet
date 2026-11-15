@@ -5,6 +5,7 @@ import {
     chosenFolder, describe, downloadUrl, entriesOf, filterEntries, freeName, indexStore, moveInList, nameFromUrl, playbookPath, putHeader,
     rangeBetween, readDropped, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, type StoreFile, type StoreList,
     archiveName, archiveUrl, storeChoices, storePathAt, endedDownloads, readClosed, visibleDownloads, type StoreDownload,
+    SFTP_SERVER, sftpCommand,
 } from "../src/lib/store.ts";
 import { FleetError } from "../src/lib/fleet.ts";
 
@@ -249,4 +250,11 @@ test("closing the downloads hides those that ended, never one under way", () => 
     assert.deepEqual(readClosed("not json"), []);
     assert.deepEqual(readClosed('{"a": 1}'), []);
     assert.deepEqual(readClosed(null), []);
+});
+
+test("an SFTP client names fleet store sftp as its server, quoted for a shell", () => {
+    assert.equal(SFTP_SERVER, "/usr/bin/fleet store sftp");
+    assert.equal(sftpCommand("anna", "fleet.example.org"),
+                 "sftp -s '/usr/bin/fleet store sftp' anna@fleet.example.org");
+    assert.equal(sftpCommand("anna", "[::1]"), "sftp -s '/usr/bin/fleet store sftp' 'anna@[::1]'");
 });

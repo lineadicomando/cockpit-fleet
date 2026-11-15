@@ -70,6 +70,11 @@ else. An administrator of the machine can, of course, do anything.
    by hand or every day, week or month: what the URL serves then replaces
    it and reaches the next runs, so give a digest (`sha256`) to a file that
    must not change, which then refuses another version.
+   The store over SFTP (`fleet store sftp`) needs an SSH login to the
+   controller and gives that person what their role gives them in the
+   page, through the same `fleetctl` and the same audit trail: it opens no
+   port, and an account that may log in over SSH could already call
+   `fleetctl` itself. What it writes reaches runs only when it is closed.
    Each run has its own process and IPC namespaces, so that one run cannot
    reach the secrets of another through its processes, though all run as
    the same account. sudo and setuid programs do nothing inside it.

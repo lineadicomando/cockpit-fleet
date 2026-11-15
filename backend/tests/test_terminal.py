@@ -608,3 +608,17 @@ class CellTest(unittest.TestCase):
         self.assertEqual(_cell("name", "web\x1b]52;c;ZXZpbA==\x07\n01"), "web?]52;c;ZXZpbA==??01")
         self.assertEqual(_cell("name", ["a\x9bb"]), "a?b")
 
+
+
+class SftpTest(unittest.TestCase):
+    def test_fleet_store_sftp_hands_the_terminal_to_fleetctl(self):
+        ran = []
+        fake = Fake({})
+        t = term(fake)
+        t.execute = lambda argv: ran.append(argv) or 0
+        self.assertEqual(terminal.run(t, COMMANDS, ["store", "sftp"]), terminal.OK)
+        self.assertEqual(ran, [["/usr/bin/sudo", "-n", "-u", "cockpit-fleet",
+                                "/usr/libexec/cockpit-fleet/fleetctl", "store.sftp"]])
+        self.assertEqual((fake.calls, t.out.getvalue()), ([], ""))
+        with self.assertRaises(Usage):
+            terminal.run(t, COMMANDS, ["store", "sftp", "--path", "x"])

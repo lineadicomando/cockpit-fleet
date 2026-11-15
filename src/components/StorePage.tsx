@@ -10,6 +10,7 @@ import {
     Drawer,
     DrawerContent,
     DrawerContentBody,
+    ExpandableSection,
     Flex,
     FlexItem,
     Label,
@@ -29,10 +30,10 @@ import { formatBytes } from "../lib/checks.ts";
 import { basename, dirname, isInside, relocate, topmost } from "../lib/files.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling, useStoredState } from "../lib/hooks.ts";
-import { useCan } from "../lib/session.tsx";
+import { useCan, useSession } from "../lib/session.tsx";
 import {
-    ARCHIVE_LINK, archiveName, archiveUrl, chosenFolder, describe, downloadArchive, downloadFromStore, droppedOf, filterEntries, indexStore, joinPath, moveInList, playbookPath, rangeBetween,
-    endedDownloads, readClosed, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, visibleDownloads,
+    ARCHIVE_LINK, SFTP_SERVER, archiveName, archiveUrl, chosenFolder, describe, downloadArchive, downloadFromStore, droppedOf, filterEntries, indexStore, joinPath, moveInList, playbookPath, rangeBetween,
+    endedDownloads, readClosed, readStoreSort, removeFromList, searchStore, settle, sftpCommand, sizeOf, sortEntries, uploadToStore, visibleDownloads,
     type Clash, type Dropped, type PendingUpload, type StoreDownload, type StoreEntry, type StoreList, type StoreSortKey, type StoreUnchanged, type Upload,
 } from "../lib/store.ts";
 import { shellLine } from "../lib/terminal.ts";
@@ -40,7 +41,7 @@ import { AtTerminal, ConfirmDelete, ListState, SectionHeader, message } from "./
 import { ContextMenu, type MenuEntry } from "./ContextMenu.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
 import { ConflictModal, FetchModal, NewFolderModal, Origin, RenameModal, StoreDetails } from "./StoreDialogs.tsx";
-import { ActionsColumn, Alert, SearchInput } from "./pf.tsx";
+import { ActionsColumn, Alert, ClipboardCopy, SearchInput } from "./pf.tsx";
 
 type UploadState = "waiting" | "sending" | "done" | "failed" | "cancelled";
 
@@ -973,6 +974,7 @@ export function StorePage({ directory }: { directory: string }) {
             {canUpload && (
                 <AtTerminal text={shellLine(["fleet", "store", "put", "--file", "FILE", "--path", joinPath(directory, "FILE")])} />
             )}
+            {can("store.sftp") && <SftpAccess writes={canUpload} />}
 
             {menu && (
                 <ContextMenu x={menu.x} y={menu.y} label={menu.entry ? t("Actions of {{name}}", { name: menu.entry.name }) : t("Actions of the folder")}
@@ -1040,3 +1042,26 @@ export function StorePage({ directory }: { directory: string }) {
     );
 }
 
+
+// How to reach the store from WinSCP, sftp, sshfs: the command each names as
+// the server to start over an SSH login to this machine.
+function SftpAccess({ writes }: { writes: boolean }) {
+    const { t } = useTranslation();
+    const session = useSession();
+    const [open, setOpen] = useState(false);
+    return (
+        <ExpandableSection toggleText={t("With an SFTP client")} isExpanded={open} onToggle={(_e, value) => setOpen(value)}>
+            <Content component="p">
+                {t("WinSCP, sftp, sshfs and other SFTP clients reach the store through your own SSH login to this machine. Name this command as the SFTP server to start (in WinSCP: Advanced, Environment, SFTP, SFTP server):")}
+            </Content>
+            <ClipboardCopy isReadOnly isCode aria-label={t("SFTP server")}>{SFTP_SERVER}</ClipboardCopy>
+            <Content component="p" style={{ marginTop: "1rem" }}>{t("With OpenSSH, from another machine:")}</Content>
+            <ClipboardCopy isReadOnly isCode aria-label={t("Command")}>{sftpCommand(session.user, window.location.hostname)}</ClipboardCopy>
+            <Content component="p" style={{ marginTop: "1rem" }}>
+                {writes
+                    ? t("You can read, write, rename and delete there, each change in the audit log. A file written reaches the store, and runs, only when it is complete; an interrupted transfer can be resumed.")
+                    : t("You can read and download the files there; writing needs the operator role.")}
+            </Content>
+        </ExpandableSection>
+    );
+}

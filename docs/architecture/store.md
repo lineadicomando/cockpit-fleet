@@ -107,6 +107,71 @@ At a terminal, `fleet store put --file FILE --path PATH [--resume]` and
 `fleet store read --path PATH [--output FILE|-]` do the same through
 `fleetctl`.
 
+**Over SFTP.** `store.sftp` (`sftp.py`, viewers) is a server of SFTP
+version 3, the one OpenSSH speaks, on `fleetctl`'s input and output: a
+command whose `stream` is `session` takes no parameters, and writes an
+answer only when it fails, on stderr. A person points an SFTP client at
+their own SSH login on the controller with `/usr/bin/fleet store sftp` as
+the server to start there (WinSCP's "SFTP server" setting, `sftp -s`,
+`sshfs -o sftp_server=`), and `fleet` hands its input and output to
+`sudo -u cockpit-fleet fleetctl store.sftp`. So the sudoers rule that
+exists is all it takes: no daemon, no root, nothing of sshd's to
+configure, the role the caller's from their groups as for every command.
+SFTP and FTP had been ruled out on 11 November because OpenSSH's own
+`sftp-server` on the store would need a chroot owned by root, leave files
+owned by whoever connected, give runs files half written and record
+nothing; a server of our own avoids the four (decided on 15 November).
+
+The root of the session is the root of the store; paths are made
+absolute and normalised before `check_file_path`, so `..` stops at the
+root, and every directory is opened from the one above with `O_NOFOLLOW`
+as everywhere in the store: a link is not part of the tree, neither
+listed nor followed. Viewers read; a request that writes, from a viewer,
+is refused with `PERMISSION_DENIED` and a record in the audit trail. A
+file opened for writing goes to a `.part` among the uploads (named after
+the user and `sftp` and the path, its `.json` marked `via: sftp` so that
+the page does not offer to resume it), and is put in the store at its
+close, under the lock, as `store.put` puts an upload: a run never gets
+half a file. A name ending in `.filepart`, what WinSCP writes before
+renaming it, stays there when closed, listed and given to its writer only,
+and goes into the store when renamed; a session that ends without a close
+leaves its file there as well, and opening it again without truncating
+writes on from where it stopped, which is how WinSCP and `reput` resume.
+The tick drops them after a week, as it drops the page's. A file of the
+store is replaced whole: opened for writing without truncating, it is
+refused, since a write in place would reach runs before its end. The
+digest is left to the tick, as for a file put there by hand: writes come
+at offsets, not in order. A time set afterwards (WinSCP keeps the file's
+own) is kept, the row following it so that the file is not taken for one
+changed by hand; permissions and owners are taken and ignored. Renames
+are `store.move`'s (`posix-rename@openssh.com` replaces a file, plain
+`RENAME` does not), `REMOVE` and `RMDIR` (empty only) are `store.delete`'s,
+`MKDIR` is `store.mkdir`'s: each is a record of the audit trail under
+that name, with `sftp` as what it came through, and so is each file opened
+for reading (`store.read`); the session is one more, `store.sftp`, at its
+end. It reads no parameters, so a call is never told it comes from an
+agent: fleet-mcp offers it to none (it is not a tool), and input that is
+not SFTP ends it at once. `statvfs@openssh.com` gives what `store.put` would accept: the free
+space of the disk less the gigabyte it keeps, within `[store] max_gb`.
+
+Tried on 15 November: unit tests with a client of the protocol written in
+them; OpenSSH's `sftp -D` against the module; `store.sh`, OpenSSH's `sftp`
+over an SSH login to the container through `fleet store sftp`, on Debian
+13, Fedora 44 and AlmaLinux 10. The Store page says how to connect, under
+"With an SFTP client" (`SftpAccess`): the server to name, and the line of
+`sftp` for the caller at the address the browser reached. On `deb13`, WinSCP 6.7.1 from `win11`
+(its scripting, an account of the operator role with a key): 300 MB up at
+65 MB/s and down at 32 MB/s, the digest the same; it wrote a `.filepart`,
+renamed it and set the time, which the store kept; a transfer killed at
+86 MB left its part among the uploads and nothing in the store, and `put
+-resume` went on from there; a file put over one that existed went as
+`REMOVE` then `RENAME` (WinSCP does not use `posix-rename` there), so the
+store has no file at that path for the moment between. `sshfs` 3.17 on
+`deb13` itself: copy, move, overwrite, directories and delete work, an
+append in place is refused (`Operation not supported`), and a file copied
+appears in the store a few tenths of a second after `cp` returns: FUSE
+closes it after the copy ends. The audit trail had each change.
+
 **Downloads from URLs.** `store.fetch` (operators) queues a job of kind
 `download` (`fetch.py`), in the sandbox of a run like every job that
 handles what comes from elsewhere. Its spec holds the URL, the digest

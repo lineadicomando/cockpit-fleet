@@ -1311,5 +1311,11 @@
   "Linux playbook": "Playbook Linux",
   "A play for the group linux, with privileges, to fill with tasks.": "Un play per il gruppo linux, con privilegi, da riempire di task.",
   "Windows playbook": "Playbook Windows",
-  "A play for the group windows, to fill with tasks; it needs the collection ansible.windows.": "Un play per il gruppo windows, da riempire di task; richiede la collection ansible.windows."
+  "A play for the group windows, to fill with tasks; it needs the collection ansible.windows.": "Un play per il gruppo windows, da riempire di task; richiede la collection ansible.windows.",
+  "With an SFTP client": "Con un client SFTP",
+  "WinSCP, sftp, sshfs and other SFTP clients reach the store through your own SSH login to this machine. Name this command as the SFTP server to start (in WinSCP: Advanced, Environment, SFTP, SFTP server):": "WinSCP, sftp, sshfs e gli altri client SFTP raggiungono lo store con il tuo accesso SSH a questa macchina. Indica questo comando come server SFTP da avviare (in WinSCP: Avanzate, Ambiente, SFTP, Server SFTP):",
+  "SFTP server": "Server SFTP",
+  "With OpenSSH, from another machine:": "Con OpenSSH, da un'altra macchina:",
+  "You can read, write, rename and delete there, each change in the audit log. A file written reaches the store, and runs, only when it is complete; an interrupted transfer can be resumed.": "Lì puoi leggere, scrivere, rinominare ed eliminare, e ogni modifica finisce nel registro di audit. Un file scritto arriva nello store, e alle esecuzioni, solo quando è completo; un trasferimento interrotto si può riprendere.",
+  "You can read and download the files there; writing needs the operator role.": "Lì puoi leggere e scaricare i file; per scrivere serve il ruolo di operatore."
 }

@@ -170,7 +170,8 @@ class Command:
     agent: str = "read"
     # A command that moves a file of any size (the store's): "in" takes its
     # parameters on the first line of its input and the bytes after them,
-    # "out" writes the bytes, not an answer (see main()).
+    # "out" writes the bytes, not an answer; "session" takes no parameters and
+    # speaks a protocol of its own on its input and output (see main()).
     stream: str = ""
 
     def read(self, data: dict) -> Values:
@@ -216,7 +217,7 @@ def command(name: str, role: str, mutating: bool = False, redact: tuple[str, ...
     kind = agent or ("read" if not mutating else "config" if role == "admin" else "run")
     if kind not in AGENT_CLASSES:
         raise ValueError(f"{name}: unknown class {kind}")
-    if stream not in ("", "in", "out") or (stream and tool):
+    if stream not in ("", "in", "out", "session") or (stream and tool):
         raise ValueError(f"{name}: a command that streams is not a tool")
 
     def register(handler: Callable) -> Callable:
@@ -244,6 +245,8 @@ class Context:
     stdout: TextIO | None = field(default=None, repr=False)
     # What a command that streams out opened for main() to copy to stdout.
     output: BinaryIO | None = field(default=None, repr=False)
+    # Where a command that holds a session writes its replies.
+    replies: BinaryIO | None = field(default=None, repr=False)
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
     _config: Config | None = field(default=None, repr=False)
 
@@ -497,6 +500,7 @@ def load_commands() -> dict[str, Command]:
         resources,
         runs,
         schedules,
+        sftp,
         starters,
         storage,
         system,
@@ -541,6 +545,11 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
                                              where a Cockpit channel opened
                                              by a link has no input; several,
                                              to one that takes paths
+    fleetctl COMMAND <> protocol             a command that holds a session
+                                             (the store's SFTP): no parameters,
+                                             its own protocol on stdin and
+                                             stdout, the answer on stderr
+                                             only when it fails
     """
     load_commands()
     spec = COMMANDS.get(argv[1]) if len(argv) > 1 else None
@@ -562,6 +571,9 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     limit = spec.max_input if spec is not None else MAX_INPUT
     if len(argv) > 2:
         raw = json.dumps({"paths": argv[2:]} if many else {"path": argv[2]}).encode()
+    elif spec is not None and spec.stream == "session":
+        raw = b""
+        ctx.stdin, ctx.replies = sys.stdin.buffer, sys.stdout.buffer
     elif spec is not None and spec.stream == "in":
         raw = sys.stdin.buffer.readline(limit + 1)
         ctx.stdin = sys.stdin.buffer
@@ -571,6 +583,12 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
     answer = dispatch(argv[1], raw, ctx)
     if out:
         return _stream_out(answer, ctx)
+    if spec is not None and spec.stream == "session":
+        if answer["ok"]:
+            return 0
+        json.dump(answer, sys.stderr, ensure_ascii=False)
+        sys.stderr.write("\n")
+        return 1
     json.dump(answer, sys.stdout, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0

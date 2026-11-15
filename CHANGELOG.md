@@ -10,6 +10,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- The store from an SFTP client: WinSCP, `sftp`, `sshfs` and the like
+  reach it over a person's own SSH login to the controller, naming
+  `/usr/bin/fleet store sftp` as the SFTP server, with nothing to set up
+  on the controller. Viewers read; operators and administrators also
+  write, rename and delete, each change in the audit trail. A file written
+  reaches the store, and runs, only when it is complete; WinSCP's
+  interrupted transfers are resumed. The Store page says how, under "With
+  an SFTP client", with the command to copy.
 - Starters: a new project or inventory written in the interface may begin
   with ready-made files instead of none, and "New file" in a project with
   a playbook. The package has a Linux and a Windows project, inventory and

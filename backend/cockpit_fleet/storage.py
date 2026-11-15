@@ -467,7 +467,8 @@ def _uploads(user: str) -> list[dict]:
             part = os.stat(entry.path[:-5] + ".part", follow_symlinks=False)
         except (OSError, ValueError):
             continue
-        if isinstance(meta, dict) and meta.get("user") == user:
+        # Those of SFTP are resumed there, never from the page.
+        if isinstance(meta, dict) and meta.get("user") == user and "via" not in meta:
             found.append({"path": meta.get("path"), "size": meta.get("size"),
                           "received": part.st_size, "started_at": meta.get("started_at")})
     return found
@@ -672,6 +673,40 @@ def _absent(path: PurePosixPath) -> None:
         os.close(parent)
 
 
+def moved_rows(conn, pairs: list[tuple[PurePosixPath, PurePosixPath]],
+               replaced: tuple[PurePosixPath, ...] = ()) -> None:
+    """The rows of what was moved on disk, at their new paths; those of the
+    files REPLACED by a move go first."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for path in replaced:
+            conn.execute("DELETE FROM store_files WHERE path = ?", (str(path),))
+            conn.execute("DELETE FROM store_sources WHERE path = ?", (str(path),))
+        for row in conn.execute("SELECT path FROM store_files").fetchall():
+            old = PurePosixPath(row["path"])
+            for path, to in pairs:
+                if old == path or old.is_relative_to(path):
+                    new = to / old.relative_to(path) if old != path else to
+                    conn.execute("UPDATE store_files SET path = ? WHERE path = ?",
+                                 (str(new), row["path"]))
+                    conn.execute("UPDATE store_sources SET path = ? WHERE path = ?",
+                                 (str(new), row["path"]))
+                    break
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def forget(conn, gone: list[PurePosixPath]) -> None:
+    """Drop the rows of the files under what was deleted from disk."""
+    for row in conn.execute("SELECT path FROM store_files").fetchall():
+        old = PurePosixPath(row["path"])
+        if any(old == path or old.is_relative_to(path) for path in gone):
+            conn.execute("DELETE FROM store_files WHERE path = ?", (row["path"],))
+            conn.execute("DELETE FROM store_sources WHERE path = ?", (row["path"],))
+
+
 def _rename(path: PurePosixPath, to: PurePosixPath) -> None:
     source = _open_dir(path.parts[:-1])
     try:
@@ -725,23 +760,7 @@ def store_move(ctx: Context, params: Values) -> dict:
                 except OSError:
                     journal.send(f"store: {to} could not be moved back to {path}", 3)
             raise
-        conn = ctx.conn
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            for row in conn.execute("SELECT path FROM store_files").fetchall():
-                old = PurePosixPath(row["path"])
-                for path, to in pairs:
-                    if old == path or old.is_relative_to(path):
-                        new = to / old.relative_to(path) if old != path else to
-                        conn.execute("UPDATE store_files SET path = ? WHERE path = ?",
-                                     (str(new), row["path"]))
-                        conn.execute("UPDATE store_sources SET path = ? WHERE path = ?",
-                                     (str(new), row["path"]))
-                        break
-            conn.execute("COMMIT")
-        except BaseException:
-            conn.execute("ROLLBACK")
-            raise
+        moved_rows(ctx.conn, pairs)
     return {"path": str(pairs[0][1]), "moved": [{"path": str(path), "to": str(to)}
                                                 for path, to in pairs]}
 
@@ -772,11 +791,7 @@ def store_delete(ctx: Context, params: Values) -> dict:
                     os.unlink(path.name, dir_fd=parent)
             finally:
                 os.close(parent)
-        for row in ctx.conn.execute("SELECT path FROM store_files").fetchall():
-            old = PurePosixPath(row["path"])
-            if any(old == path or old.is_relative_to(path) for path in gone):
-                ctx.conn.execute("DELETE FROM store_files WHERE path = ?", (row["path"],))
-                ctx.conn.execute("DELETE FROM store_sources WHERE path = ?", (row["path"],))
+        forget(ctx.conn, gone)
     return {"deleted": [str(path) for path in gone]}
 
 
