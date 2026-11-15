@@ -26,7 +26,9 @@ of change in `CHANGELOG.md`, set in the files that carry it
 (`backend/cockpit_fleet/__init__.py`, `package.json`, `package-lock.json`,
 the collection's `galaxy.yml`, the spec's `Version:` and `%changelog`,
 `debian/changelog`; `scripts/versions.mjs`, checked by `test_version.py`),
-a commit and a tag. The Overview tab shows a build as `0.1.0-3-gabc1234`.
+a commit and a tag. Pushed, the tag reaches GitHub through the mirror, and
+GitHub's CI publishes the packages built at it as a release
+([tests.md](tests.md), "CI"). The Overview tab shows a build as `0.1.0-3-gabc1234`.
 
 The `.rpm` for Fedora 44 and AlmaLinux 10 comes from `packaging/cockpit-fleet.spec`,
 built in a container of each (`make rpm`, output in `rpm/`) and checked with

@@ -62,6 +62,10 @@ the security model in [docs/security.md](docs/security.md).
 
 ## Build and install
 
+The packages of each release, for Debian 13, Fedora 44 and AlmaLinux 10, are
+on the [releases page](https://github.com/lineadicomando/cockpit-fleet/releases).
+To build them from the sources:
+
 ```bash
 npm install
 make deb                                    # builds deb/cockpit-fleet_<version>_all.deb

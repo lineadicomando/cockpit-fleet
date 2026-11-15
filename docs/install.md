@@ -28,14 +28,17 @@ what it protects and what it does not in [security.md](security.md).
 
 ## Installing
 
-The package is built from the sources (`make deb`, `make rpm`, see the
-README) and installed with the distribution's tool, which brings what it
-depends on:
+The packages of each release are on
+[GitHub](https://github.com/lineadicomando/cockpit-fleet/releases), with
+their `SHA256SUMS`; they can also be built from the sources (`make deb`,
+`make rpm`, see the README). Install one with the distribution's tool,
+which brings what it depends on:
 
 ```sh
-sudo apt-get install ./cockpit-fleet_0.1.0_all.deb            # Debian
-sudo dnf install ./cockpit-fleet-0.1.0-1.fc44.noarch.rpm      # Fedora
-sudo dnf install ./cockpit-fleet-0.1.0-1.el10.noarch.rpm      # AlmaLinux
+sha256sum --check --ignore-missing SHA256SUMS
+sudo apt-get install ./cockpit-fleet_0.3.0_all.deb            # Debian
+sudo dnf install ./cockpit-fleet-0.3.0-1.fc44.noarch.rpm      # Fedora
+sudo dnf install ./cockpit-fleet-0.3.0-1.el10.noarch.rpm      # AlmaLinux
 ```
 
 It installs:

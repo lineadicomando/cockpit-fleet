@@ -10,6 +10,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Each release is published on GitHub with its packages: the `.deb` for
+  Debian 13, the `.rpm` for Fedora 44 and AlmaLinux 10, and their
+  `SHA256SUMS`.
 - The store from an SFTP client: WinSCP, `sftp`, `sshfs` and the like
   reach it over a person's own SSH login to the controller, naming
   `/usr/bin/fleet store sftp` as the SFTP server, with nothing to set up

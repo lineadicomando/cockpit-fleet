@@ -8,6 +8,7 @@ in [TODO.md](../TODO.md) until the phase closes.
 
 | Topic | Decision |
 |---|---|
+| Release packages | GitHub's CI publishes each release tag `vX.Y.Z` the Gitea mirror pushes as a GitHub release: the `.deb` and the two `.rpm` it builds and tests at that tag, `SHA256SUMS`, its section of `CHANGELOG.md` as notes; not signed, no repository of packages, nothing published on Gitea (15 November) |
 | Name | `cockpit-fleet`, menu "Fleet", collection `lineadicomando.fleet`, command `fleet`; `fleetctl` stays the backend's (out of `PATH`) |
 | License, repo | `LGPL-2.1-or-later`, confirmed on 2 November; developed on a private Gitea, published at `github.com/lineadicomando/cockpit-fleet` with its history rewritten by `git filter-repo --replace-text` (the private one holds workstation details); a fresh history discarded, as it loses blame, bisect and the commit of v0.1.0 |
 | Backend | No daemon, no port: units on demand; account `cockpit-fleet`; root only in `fleet-unit`, `fleet-secret` |

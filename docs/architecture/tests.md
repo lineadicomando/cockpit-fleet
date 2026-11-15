@@ -183,7 +183,15 @@ workflow and installed once per runner by `scripts/ci-tool.sh`.
 container of its distribution (`debian:trixie`, `fedora:44`,
 `almalinux:10`) on `ubuntu-latest`, where the job is root and nothing
 persists, so the build tools and the pinned ones are installed at each
-run; the packages are kept as artifacts of the run. The
+run; the packages are kept as artifacts of the run. At a tag `vX.Y.Z`
+(pushed to GitHub by Gitea's mirror) one more job, `release`, after the
+others pass, checks the tag (`release.mjs verify`) and that the three
+packages have its version, and publishes them with `SHA256SUMS` as the
+GitHub release of the tag, notes from `release.mjs notes`; run again, it
+replaces the assets. A tag made before the job existed is published by
+running the workflow by hand with the input `tag` (`gh workflow run ci.yml
+-f tag=vX.Y.Z`): the packages are built at the tag, the notes come from
+main's `CHANGELOG.md`. The Gitea workflow has no such job. The
 integration scripts are not part of CI: they need podman able to start
 privileged containers, which the runner, itself a container where jobs run
 as a non-root user, was not set up for.

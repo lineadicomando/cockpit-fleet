@@ -202,7 +202,9 @@ or on another machine: `docs/architecture/tests.md`.
   version in those files, commits `Release X.Y.Z` and tags `vX.Y.Z`.
   `make next-version` says beforehand which version it will be;
   `VERSION=X.Y.Z` only goes higher. Nothing is pushed unless asked: then
-  `git push origin main vX.Y.Z`.
+  `git push origin main vX.Y.Z`. The mirror brings the tag to GitHub,
+  whose CI publishes the packages as the release of the tag; check that
+  it did (`gh release view vX.Y.Z -R lineadicomando/cockpit-fleet`).
 
 ## Repository
 
