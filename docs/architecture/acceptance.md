@@ -148,3 +148,16 @@ What each closed phase had to show, and how it was shown.
   moved, replaced and deleted, and was refused an append in place. The
   section "With an SFTP client" of the Store page seen in Italian in a
   browser; see [The store](store.md), "Over SFTP".
+- **17, duplicate and starters kept here** (15 November): `files.sh` on
+  containers of the three distributions, `negative.sh` and `checks.sh`
+  on Debian and Fedora, and `make ct-lifecycle` on AlmaLinux (an upgrade
+  from 0.3.0 through schema 29). In a browser on `deb13`, in Italian, as
+  an administrator: a project made from the package's Linux starter,
+  duplicated ("Modello web (copia)", one commit, the same files), the
+  copy kept as a starter and marked in the list, offered in its own
+  group of "Punto di partenza" when a project was created, and a project
+  made from it with its files; the copy was not among the projects of a
+  new template. An inventory made from a starter, duplicated and kept as
+  a starter the same way, its menu then offering "Usa di nuovo nei run".
+  The check found, and fixed, "set di variabili" in an Italian string
+  where the page says "insiemi di variabili".
