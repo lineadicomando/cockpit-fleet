@@ -10,8 +10,8 @@ not tracked).
 ## Status (15 November 2026)
 
 Phases 0–16 closed; none under way: the user picks the next one from
-Future. 0.2.0 released on 2 November; `[Unreleased]` makes 0.3.0 (it has
-a Breaking entry: `make next-version`); `make release` only when asked.
+Future. 0.3.0 released on 15 November (its packages on GitHub, published
+by the job "release" at the tag); `make release` only when asked.
 
 To resume: `git status`; `git log origin/main..` for what is not pushed
 (push only when asked: `git push origin main`); `make check` (683 backend,
