@@ -47,7 +47,7 @@ jobs:
 
       # The tags too: the packages take their version from git describe.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
@@ -87,7 +87,7 @@ jobs:
         run: scripts/build-deb.sh --native
 
       - name: Keep the .deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deb
           path: deb/*.deb
@@ -115,7 +115,7 @@ jobs:
 
       # The tags too: the packages take their version from git describe.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
@@ -140,7 +140,7 @@ jobs:
         run: scripts/build-rpm.sh --native
 
       - name: Keep the .rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rpm-${{ matrix.distro }}
           path: rpm/*.rpm
@@ -163,19 +163,20 @@ jobs:
       # The tag itself, or main for a tag published by hand: the notes of an
       # earlier release are in main's CHANGELOG.md too.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
 
       - name: Check the tag
         if: github.event_name == 'push'
         run: node scripts/release.mjs verify "$TAG"
 
       - name: Collect the packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

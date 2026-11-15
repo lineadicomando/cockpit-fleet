@@ -21,13 +21,6 @@ Integration last run on 15 November: every script on AlmaLinux, `store`
 and `negative` on Debian and Fedora, all passed; the known failure of
 `cmdb.sh` on Fedora in a container is in `architecture/tests.md`.
 
-## Maintenance
-
-- CI: GitHub warns that `actions/checkout`, `upload-artifact`,
-  `download-artifact` and `setup-node` at `@v4` run on Node.js 20,
-  deprecated: move both workflows to the major versions on Node.js 24
-  (check that Gitea's runners take them), keeping the two in step.
-
 ## Future
 
 Not planned as phases yet; the user picks the next one.
