@@ -9,10 +9,12 @@ import {
     Flex,
     FlexItem,
     Form,
+    FormGroup,
     ModalBody,
     ModalFooter,
     ModalHeader,
     ModalVariant,
+    TextInput,
     Title,
 } from "@patternfly/react-core";
 import { ExternalLinkAltIcon } from "@patternfly/react-icons";
@@ -129,6 +131,26 @@ export function ConfirmDelete({ what, name, onDelete, onClose }: {
             variant={ModalVariant.small}
         >
             <Content component="p">{what}</Content>
+        </FormModal>
+    );
+}
+
+// Asks the name of a copy of a project or an inventory written here, and makes it.
+export function DuplicateModal({ name, what, onDuplicate, onClose }: {
+    name: string;
+    what: string;
+    onDuplicate: (name: string) => Promise<void>;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    const [copy, setCopy] = useState(t("{{name}} (copy)", { name }));
+    return (
+        <FormModal title={t("Duplicate {{name}}", { name })} submitLabel={t("Duplicate")}
+            onSubmit={() => onDuplicate(copy.trim())} onClose={onClose} isDisabled={!copy.trim()} variant={ModalVariant.small}>
+            <Content component="p">{what}</Content>
+            <FormGroup label={t("Name")} isRequired fieldId="duplicate-name">
+                <TextInput id="duplicate-name" value={copy} onChange={(_e, value) => setCopy(value)} />
+            </FormGroup>
         </FormModal>
     );
 }

@@ -10,7 +10,7 @@ import { useCan } from "../lib/session.tsx";
 import { inventoryChoices } from "../lib/files.ts";
 import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths, Starter, VariableSet } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ConfirmDelete, DuplicateModal, FormModal, ListState, SectionHeader, message } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
 import { StarterSelect } from "./StarterSelect.tsx";
@@ -165,6 +165,7 @@ export function InventoriesPage() {
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<Inventory | null>(null);
     const [deleting, setDeleting] = useState<Inventory | null>(null);
+    const [duplicating, setDuplicating] = useState<Inventory | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     // Reading an inventory is a job: poll for a while after asking for one.
@@ -221,6 +222,7 @@ export function InventoriesPage() {
                                             ...(inventory.kind === "managed" && can("file.list") ? [{ title: t("Files"), onClick: () => cockpit.location.go(["inventories", inventory.id]) }] : []),
                                             ...(can("inventory.parse") ? [{ title: t("Read again"), onClick: () => read(inventory) }] : []),
                                             ...(can("inventory.update") ? [{ title: t("Edit"), onClick: () => edit(inventory) }] : []),
+                                            ...(inventory.kind === "managed" && can("inventory.duplicate") ? [{ title: t("Duplicate"), onClick: () => setDuplicating(inventory) }] : []),
                                             ...(can("inventory.delete") ? [{ title: t("Delete"), onClick: () => setDeleting(inventory) }] : []),
                                         ]} />
                                     </Td>
@@ -239,6 +241,12 @@ export function InventoriesPage() {
             </ListState>
             {creating && <InventoryModal onClose={() => setCreating(false)} onDone={saved} />}
             {editing && <InventoryModal inventory={editing} onClose={() => setEditing(null)} onDone={saved} />}
+            {duplicating && (
+                <DuplicateModal name={duplicating.name}
+                    what={t("A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its vault and sets of variables. Templates and checks of this one are not copied.")}
+                    onDuplicate={async name => { await call("inventory.duplicate", { id: duplicating.id, name }); setDuplicating(null); refresh(); }}
+                    onClose={() => setDuplicating(null)} />
+            )}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The inventory is deleted. Files of a project are not touched.")}
                     onDelete={async () => { await call("inventory.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}

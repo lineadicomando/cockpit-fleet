@@ -8,6 +8,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+### Added
+
+- Duplicate: a project or an inventory written in the interface can be
+  copied under a new name, from the menu of its row or with `fleet
+  project duplicate` and `fleet inventory duplicate`. The copy begins with
+  the files as they are now, in one commit, without the history; an
+  inventory keeps its vault and sets of variables. Templates and checks
+  of the original are not copied.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

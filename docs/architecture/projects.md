@@ -392,3 +392,15 @@ connection variables of Windows over SSH (`ansible_connection`,
 project's `group_vars/windows.yaml`, the project's winning;
 `ansible_remote_tmp: C:\Windows\Temp\ansible` is there commented out,
 since set it breaks `become` (see [Windows nodes](windows.md)).
+
+**Duplicates.** `project.duplicate` and `inventory.duplicate` (admin) make
+a new managed project or inventory from the files of another as `main` has
+them, read under the same lock as a change, as the first commit of a new
+repository (`Copy of NAME`): an empty `.gitkeep` becomes the folder it
+keeps, made again. The history is not copied, so that a secret taken out
+of a file stays where it was; a draft is not copied either. An inventory
+keeps its format, `path`, vault and sets of variables, and is read once
+made; nothing that uses the original (templates, checks, schedules)
+follows. A project copied gets no syntax check of its playbooks (they
+were checked as they were written), but its collections are installed if
+its requirements ask for what is missing, as for any change.

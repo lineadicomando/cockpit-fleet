@@ -26,7 +26,8 @@ CLASS_TABLE = {
         workflow.create workflow.update""",
     "code": """channel.delete check.delete config.import credential.create credential.delete
         credential.update file.change file.delete file.move file.restore file.write hostkey.add
-        hostkey.remove inventory.delete project.collections project.create project.delete
+        hostkey.remove inventory.delete inventory.duplicate project.collections project.create
+        project.delete project.duplicate
         project.sync project.update rule.delete schedule.delete template.delete varset.delete
         workflow.delete""",
 }

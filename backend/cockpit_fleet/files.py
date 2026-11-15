@@ -376,10 +376,8 @@ def inventory_tree(ctx: Context, inventory) -> Path:
     return (home / "tree").resolve()
 
 
-def tree_files(ctx: Context, inventory) -> list[dict]:
-    """Every file of a managed inventory, as inventory.create takes them:
-    path, and content if it is text, data in base64 if not."""
-    tree = inventory_tree(ctx, inventory)
+def _tree_data(tree: Path) -> list[tuple[str, bytes]]:
+    """Every regular file of TREE, by relative path, with its bytes."""
     found = []
     for current, directories, names in os.walk(tree):
         directories.sort()
@@ -387,14 +385,39 @@ def tree_files(ctx: Context, inventory) -> list[dict]:
             source = Path(current) / name
             if not stat.S_ISREG(os.lstat(source).st_mode):
                 continue
-            data = _read(source)
-            entry: dict = {"path": source.relative_to(tree).as_posix()}
-            try:
-                entry["content"] = data.decode()
-            except UnicodeDecodeError:
-                entry["data"] = base64.b64encode(data).decode()
-            found.append(entry)
+            found.append((source.relative_to(tree).as_posix(), _read(source)))
     return found
+
+
+def tree_files(ctx: Context, inventory) -> list[dict]:
+    """Every file of a managed inventory, as inventory.create takes them:
+    path, and content if it is text, data in base64 if not."""
+    found = []
+    for path, data in _tree_data(inventory_tree(ctx, inventory)):
+        entry: dict = {"path": path}
+        try:
+            entry["content"] = data.decode()
+        except UnicodeDecodeError:
+            entry["data"] = base64.b64encode(data).decode()
+        found.append(entry)
+    return found
+
+
+def copy_operations(ctx: Context, row) -> list[dict]:
+    """The operations of change() that write every file of main of a managed
+    project or inventory into another; an empty .gitkeep is its folder, made."""
+    tree = container_tree(ctx, row)
+    with locked(row["id"]):
+        found = _tree_data(tree)
+    operations = []
+    for path, data in found:
+        where = PurePosixPath(path)
+        if where.name == KEEP and not data:
+            if where.parent != PurePosixPath("."):
+                operations.append({"op": "mkdir", "path": where.parent})
+        else:
+            operations.append({"op": "write", "path": where, "data": data, "expected": ""})
+    return operations
 
 
 def container_tree(ctx: Context, row) -> Path:
@@ -758,12 +781,14 @@ def _rollback(project_id: str, draft: Draft | None = None) -> None:
 def change(ctx: Context, project, operations: list[dict], message: str,
            revision: str = "", reread: bool = True, author: str | None = None,
            start: bool = True, draft: Draft | None = None,
-           tidy=None) -> dict:
+           tidy=None, syntax: bool = True) -> dict:
     """Make OPERATIONS in a managed project or inventory as one commit, all
     or none, and what follows from them: for a project, syntax checks of the
     playbooks written, the collections a requirements file asks for, its
     inventories read again; for an inventory, reading it again (unless not
     REREAD: inventory.create and inventory.update leave that to the caller).
+    Not SYNTAX: no syntax check of the playbooks written (a copy of a tree
+    that was checked as it was written).
     The author is AUTHOR, or the caller; the jobs are only queued if not START
     (reconcile, which starts them after).
 
@@ -832,7 +857,7 @@ def change(ctx: Context, project, operations: list[dict], message: str,
             content = operation["data"].decode()
         except UnicodeDecodeError:
             continue
-        if looks_like_playbook(name, content) and (tree / name).is_file() \
+        if syntax and looks_like_playbook(name, content) and (tree / name).is_file() \
                 and not (tree / name).is_symlink():
             done["check_run_ids"].append(_queue_check(ctx, project, operation["path"], start,
                                                       draft))

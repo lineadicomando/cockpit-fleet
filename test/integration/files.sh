@@ -165,6 +165,22 @@ expect_eq "one with a link is listed as unusable" \
 expect_eq "and refused" "$(get "$(admin project.create '{"name": "linked", "kind": "managed", "starter": "local/linked"}')" 'a["error"]["code"]')" bad_request
 expect_eq "nothing is left of what was refused" "$(db "SELECT count(*) FROM projects WHERE name = 'linked'")" 0
 
+# --- duplicates ---------------------------------------------------------------------------
+copy=$(get "$(admin project.duplicate "{\"id\": \"$linux\", \"name\": \"from-linux copy\"}")" 'a["data"]["id"]')
+expect_eq "a duplicate begins with one commit of who made it" \
+    "$(get "$(admin file.history "{\"id\": \"$copy\"}")" '" ".join(c["author"] + ": " + c["subject"] for c in a["data"]["commits"])')" "itadmin: Copy of from-linux"
+expect_eq "with the files of the original" \
+    "$(get "$(admin file.list "{\"id\": \"$copy\"}")" '" ".join(sorted(f["path"] for f in a["data"]["files"]))')" \
+    "$(get "$(admin file.list "{\"id\": \"$linux\"}")" '" ".join(sorted(f["path"] for f in a["data"]["files"]))')"
+expect_eq "and no syntax check of them" "$(db "SELECT count(*) FROM runs WHERE project_id = '$copy' AND kind = 'syntax'")" 0
+expect_eq "operator cannot duplicate" \
+    "$(get "$(ctl itoperator project.duplicate "{\"id\": \"$linux\", \"name\": \"x\"}")" 'a["error"]["code"]')" forbidden
+twin=$(get "$(admin inventory.duplicate "{\"id\": \"$windows\", \"name\": \"from-windows copy\"}")" 'a["data"]["id"]')
+read_twin=$(db "SELECT id FROM runs WHERE inventory_id = '$twin' AND kind = 'inventory'")
+expect_run "a duplicated inventory is read" "$read_twin" 60 successful
+expect_eq "with its files" \
+    "$(get "$(admin file.read "{\"id\": \"$twin\", \"path\": \"group_vars/windows.yaml\"}")" '"ansible_shell_type: powershell" in a["data"]["content"]')" True
+
 # --- reading the files of a project that is not written here ---------------------------
 mkdir -p /srv/fleet-it/plain && echo '- hosts: all' > /srv/fleet-it/plain/site.yml && ln -s /etc/shadow /srv/fleet-it/plain/link
 chmod -R a+rX /srv/fleet-it

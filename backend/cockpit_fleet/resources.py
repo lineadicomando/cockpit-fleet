@@ -226,6 +226,33 @@ def project_delete(ctx: Context, params: Values) -> dict:
     return {}
 
 
+@command("project.duplicate", role="admin", mutating=True, agent="code",
+         params={"id": Id(), "name": Str(required=True, max_length=200)})
+def project_duplicate(ctx: Context, params: Values) -> dict:
+    """Make a new project written in the interface with the files of another
+    as they are on main, as its first commit; the history is not copied, nor
+    what uses the original (templates, inventories of it)."""
+    source = store.fetch(ctx.conn, "projects", params["id"], "project")
+    if source["kind"] != "managed":
+        raise BadRequest("only a project written in the interface is duplicated")
+    name = store.check_name(params["name"])
+    operations = files.copy_operations(ctx, source)
+    project_id = store.new_id("p")
+    store.insert(ctx.conn, "projects", {"id": project_id, "kind": "managed", "name": name,
+                                        "created_at": store.now()}, "project")
+    try:
+        files.init_repository(project_id)
+        if operations:
+            row = store.fetch(ctx.conn, "projects", project_id, "project")
+            files.change(ctx, row, operations, f"Copy of {source['name']}"[:200],
+                         syntax=False)
+    except BaseException:
+        ctx.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        shutil.rmtree(paths.PROJECTS_DIR / project_id, ignore_errors=True)
+        raise
+    return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
+
+
 @command("project.sync", role="admin", mutating=True, agent="code",
          params={
              "id": Id(),
@@ -579,6 +606,35 @@ def inventory_delete(ctx: Context, params: Values) -> dict:
     shutil.rmtree(paths.INVENTORIES_DIR / check_id(inventory_id, "inventory id"),
                   ignore_errors=True)
     return {}
+
+
+@command("inventory.duplicate", role="admin", mutating=True, agent="code",
+         params={"id": Id(), "name": Str(required=True, max_length=200)})
+def inventory_duplicate(ctx: Context, params: Values) -> dict:
+    """Make a new inventory written here with the files of another as they
+    are on main, as its first commit, and its format, path, vault and sets
+    of variables; the history is not copied, nor what uses the original
+    (templates, checks). It is read once made."""
+    source = store.fetch(ctx.conn, "inventories", params["id"], "inventory")
+    if source["kind"] != "managed":
+        raise BadRequest("only an inventory written here is duplicated")
+    name = store.check_name(params["name"])
+    operations = files.copy_operations(ctx, source)
+    sets = [one["id"] for one in variables.inventory_sets(ctx.conn, source["id"])]
+    inventory_id = store.new_id("i")
+    values = {key: source[key] for key in ("format", "path", "vault_credential_id")}
+    _save_inventory(ctx, inventory_id, {"name": name, "kind": "managed",
+                                        "created_at": store.now(), **values}, sets, create=True)
+    try:
+        row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+        files.inventory_tree(ctx, row)
+        if operations:
+            files.change(ctx, row, operations, f"Copy of {source['name']}"[:200])
+    except BaseException:
+        store.delete(ctx.conn, "inventories", inventory_id, "inventory")
+        shutil.rmtree(paths.INVENTORIES_DIR / inventory_id, ignore_errors=True)
+        raise
+    return _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
 
 
 def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | None,
