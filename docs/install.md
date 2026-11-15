@@ -217,6 +217,17 @@ end in `.yml` too; what is made from it ends in `.yaml`. Do not put
 passwords in them: a starter is copied into the history of everything made
 from it.
 
+Without writing files on the controller, a project or an inventory written
+in the interface can itself be a starter: "Use as starter" in the menu of
+its row (`fleet project starter` and `fleet inventory starter` at a
+terminal). It stays in its list with the label "Starter", its files are
+edited as before, and it is offered when a project or an inventory is
+created, with what it holds then. No template, check, ad-hoc command or
+maintenance window can use it, and it cannot be made one while something
+uses it; an inventory's hosts leave the list of hosts, with what was
+gathered of them, until "Use in runs again" and a new reading. Duplicate
+one first to keep it in use as well.
+
 ## Upgrading
 
 Install the newer package as the first one. The database, the projects, the

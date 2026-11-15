@@ -152,6 +152,8 @@ export interface Project {
     // What its requirements file asks for: "none" when it has no such file,
     // "missing" until a job has installed what the file lists now.
     collections: { file: string; state: "none" | "installed" | "missing"; installed_at: number | null; error: string };
+    // Kept as a starter: offered by starter.list, used by no run.
+    starter: boolean;
 }
 
 export interface ProjectFiles {
@@ -205,6 +207,8 @@ export interface Inventory {
     content?: string;
     // The commit its tree is at, for one written here.
     revision: string;
+    // Kept as a starter: offered by starter.list, used by no run.
+    starter: boolean;
 }
 
 // An inventory that has a host, and the name it gives the host there.
@@ -858,7 +862,8 @@ export interface Health {
 // begins with: the package's ("package") or the administrator's ("local").
 export interface Starter {
     kind: "project" | "inventory" | "playbook";
-    source: "package" | "local";
+    // saved: a project or an inventory of this controller kept as a starter.
+    source: "package" | "local" | "saved";
     name: string;
     // What project.create and inventory.create take: SOURCE/NAME.
     ref: string;
@@ -869,6 +874,8 @@ export interface Starter {
     error: string;
     // An inventory's: the format of its main file, "" if it has none.
     format?: "yaml" | "ini" | "";
+    // A saved inventory's: the file or directory of its tree Ansible reads.
+    path?: string;
     // A playbook's text.
     content?: string;
 }

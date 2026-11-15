@@ -600,7 +600,11 @@ export function ChecksPage() {
             call<{ credentials: Credential[] }>("credential.list"),
             call<{ projects: Project[] }>("project.list"),
         ]);
-        return { catalog: catalog.catalog, inventories: inventories.inventories, hosts: hosts.hosts, credentials: credentials.credentials, projects: projects.projects };
+        // A starter is used by no check: it is not offered.
+        return {
+            catalog: catalog.catalog, inventories: inventories.inventories.filter(one => !one.starter), hosts: hosts.hosts,
+            credentials: credentials.credentials, projects: projects.projects.filter(one => !one.starter),
+        };
     });
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<CheckDef | null>(null);

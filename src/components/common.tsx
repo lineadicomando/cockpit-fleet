@@ -160,6 +160,31 @@ const RUN_TONE: Record<RunStatus, Tone | null> = {
     rejected: "warning", expired: "warning",
 };
 
+// Shown beside the name of a project or an inventory kept as a starter.
+export function StarterLabel() {
+    const { t } = useTranslation();
+    return <Label color="purple" isCompact style={{ marginInlineStart: "0.5rem" }}>{t("Starter")}</Label>;
+}
+
+// Keeps a project or an inventory as a starter, or makes it usable again.
+export function StarterModal({ name, starter, what, onConfirm, onClose }: {
+    name: string;
+    // What it becomes.
+    starter: boolean;
+    what: string;
+    onConfirm: () => Promise<void>;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    return (
+        <FormModal title={starter ? t("Use {{name}} as a starter?", { name }) : t("Use {{name}} in runs again?", { name })}
+            submitLabel={starter ? t("Use as starter") : t("Use in runs again")}
+            onSubmit={onConfirm} onClose={onClose} variant={ModalVariant.small}>
+            <Content component="p">{what}</Content>
+        </FormModal>
+    );
+}
+
 export function RunStatusLabel({ status }: { status: RunStatus }) {
     const { t } = useTranslation();
     const text: Record<RunStatus, string> = {

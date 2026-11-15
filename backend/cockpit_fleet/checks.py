@@ -57,6 +57,9 @@ def sync_hosts(ctx: Context, inventory_id: str | None, listing: list[dict]) -> N
     if inventory_id is None:
         return
     conn = ctx.conn
+    row = conn.execute("SELECT starter FROM inventories WHERE id = ?", (inventory_id,)).fetchone()
+    if row is not None and row["starter"]:
+        listing = []  # a starter's hosts are no nodes: kept out of hosts, CMDB and checks
     now = store.now()
     existing = {row["name"]: row["id"] for row in conn.execute(
         "SELECT id, name FROM hosts WHERE inventory_id = ?", (inventory_id,))}
@@ -993,13 +996,15 @@ def _playbook_values(ctx: Context, params: Values, kind: str, inventory) -> dict
     if kind not in OWN_KINDS:
         params.unused("project_id", "playbook")
         return {"project_id": None, "playbook": ""}
-    project = store.fetch(ctx.conn, "projects", params.need("project_id"), "project")
+    project = store.usable(store.fetch(ctx.conn, "projects", params.need("project_id"),
+                                       "project"), "project")
     path = str(check_relative_path(params.need("playbook"), "playbook"))
     return {"project_id": project["id"], "playbook": path}
 
 
 def _check_values(ctx: Context, params: Values, kind: str) -> dict:
-    inventory = store.fetch(ctx.conn, "inventories", params["inventory_id"], "inventory")
+    inventory = store.usable(store.fetch(ctx.conn, "inventories", params["inventory_id"],
+                                         "inventory"), "inventory")
     where = _playbook_values(ctx, params, kind, inventory)
     group = check_group(params["group"].strip())
     if group != "all" and inventory["parsed_at"] is not None and not inventory["parse_error"]:
@@ -1290,7 +1295,8 @@ def maintenance_create(ctx: Context, params: Values) -> dict:
     """Open a maintenance window: nothing about the hosts in it is told while
     it lasts. Their checks still run; what is still a problem when it ends is
     told then."""
-    inventory = store.fetch(ctx.conn, "inventories", params["inventory_id"], "inventory")
+    inventory = store.usable(store.fetch(ctx.conn, "inventories", params["inventory_id"],
+                                         "inventory"), "inventory")
     group = params["group"].strip()
     host_id = params["host_id"]
     if (host_id is None) == (not group):

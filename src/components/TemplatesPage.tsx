@@ -40,7 +40,11 @@ function loadChoices(): Promise<Choices> {
         call<{ inventories: Inventory[] }>("inventory.list"),
         call<{ credentials: Credential[] }>("credential.list"),
         call<{ variable_sets: VariableSet[] }>("varset.list"),
-    ]).then(([p, i, c, v]) => ({ projects: p.projects, inventories: i.inventories, credentials: c.credentials, sets: v.variable_sets }));
+    ]).then(([p, i, c, v]) => ({
+        // A starter is used by no run: it is not offered.
+        projects: p.projects.filter(one => !one.starter), inventories: i.inventories.filter(one => !one.starter),
+        credentials: c.credentials, sets: v.variable_sets,
+    }));
 }
 
 function TemplateModal({ template, choices, onClose, onDone }: { template?: Template; choices: Choices; onClose: () => void; onDone: () => void }) {

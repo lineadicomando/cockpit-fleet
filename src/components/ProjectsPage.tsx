@@ -9,7 +9,7 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Credential, Project, Starter } from "../lib/types.ts";
 import { uploadArchive } from "../lib/upload.ts";
-import { AtTerminal, ConfirmDelete, DuplicateModal, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, DuplicateModal, FormModal, StarterLabel, StarterModal, ListState, SectionHeader, message } from "./common.tsx";
 import { uploadCommand } from "../lib/terminal.ts";
 import { ActionsColumn, Alert, FileUpload } from "./pf.tsx";
 import { StarterSelect } from "./StarterSelect.tsx";
@@ -157,6 +157,7 @@ export function ProjectsPage() {
     const [editing, setEditing] = useState<Project | null>(null);
     const [deleting, setDeleting] = useState<Project | null>(null);
     const [duplicating, setDuplicating] = useState<Project | null>(null);
+    const [marking, setMarking] = useState<Project | null>(null);
     const [uploading, setUploading] = useState<Project | null>(null);
     const [error, setError] = useState<string | null>(null);
     // A new git project is fetched by a job: poll for a while to show its revision.
@@ -202,6 +203,7 @@ export function ProjectsPage() {
                                         {can("file.list")
                                             ? <Button variant="link" isInline onClick={() => cockpit.location.go(["projects", project.id])}>{project.name}</Button>
                                             : project.name}
+                                        {project.starter && <StarterLabel />}
                                     </Td>
                                     <Td dataLabel={t("Source")}>
                                         {project.kind === "git" ? `${project.url} (${project.ref})` : project.kind === "local" ? project.path : project.kind === "archive" ? t("Uploaded archive") : t("Written here")}
@@ -226,6 +228,7 @@ export function ProjectsPage() {
                                                 { title: t("Files"), onClick: () => cockpit.location.go(["projects", project.id]) },
                                                 { title: t("Edit"), onClick: () => setEditing(project) },
                                                 ...(project.kind === "managed" && can("project.duplicate") ? [{ title: t("Duplicate"), onClick: () => setDuplicating(project) }] : []),
+                                                ...(project.kind === "managed" && can("project.starter") ? [{ title: project.starter ? t("Use in runs again") : t("Use as starter"), onClick: () => setMarking(project) }] : []),
                                                 { title: t("Delete"), onClick: () => setDeleting(project) },
                                             ]} />
                                         )}
@@ -239,6 +242,14 @@ export function ProjectsPage() {
             {creating && <ProjectModal roots={list.data?.local_roots ?? []} onClose={() => setCreating(false)} onDone={() => { list.reload(); setWaiting(15); }} onUpload={setUploading} />}
             {editing && <ProjectModal project={editing} roots={list.data?.local_roots ?? []} onClose={() => setEditing(null)} onDone={() => { list.reload(); setWaiting(15); }} onUpload={setUploading} />}
             {uploading && <UploadModal project={uploading} maxMb={list.data?.max_upload_mb ?? 20} onClose={() => setUploading(null)} />}
+            {marking && (
+                <StarterModal name={marking.name} starter={!marking.starter}
+                    what={marking.starter
+                        ? t("Templates and checks can use it again, and it is no longer offered when a project is created.")
+                        : t("It is offered when a project is created, and its files are edited as before, but no template, check or command can use it. It cannot be done while something uses it.")}
+                    onConfirm={async () => { await call("project.starter", { id: marking.id, starter: !marking.starter }); setMarking(null); list.reload(); }}
+                    onClose={() => setMarking(null)} />
+            )}
             {duplicating && (
                 <DuplicateModal name={duplicating.name}
                     what={t("A new project written here begins with the files of this one, as they are now, without the record of their changes. Templates of this one are not copied.")}

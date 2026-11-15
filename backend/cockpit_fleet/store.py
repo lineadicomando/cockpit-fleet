@@ -32,6 +32,15 @@ def fetch(conn: sqlite3.Connection, table: str, row_id: str | None, what: str) -
     return row
 
 
+def usable(row: sqlite3.Row, what: str) -> sqlite3.Row:
+    """ROW, a project or an inventory, unless it is kept as a starter: one
+    is used only to begin others with, never by a run."""
+    if row["starter"]:
+        raise Conflict(f"the {what} {row['name']} is kept as a starter: it is used only"
+                       " to begin others with, not by templates, checks or runs")
+    return row
+
+
 def insert(conn: sqlite3.Connection, table: str, values: dict, what: str) -> None:
     columns = ", ".join(values)
     marks = ", ".join("?" for _ in values)

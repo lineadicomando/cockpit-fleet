@@ -16,6 +16,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   the files as they are now, in one commit, without the history; an
   inventory keeps its vault and sets of variables. Templates and checks
   of the original are not copied.
+- Use as starter: a project or an inventory written in the interface can
+  be kept as a starter ("Usa come punto di partenza" in Italian), from the
+  menu of its row or with `fleet project starter` and `fleet inventory
+  starter`. It stays in its list, marked, and is edited as before; it is
+  offered when a project or an inventory is created, and no template,
+  check, ad-hoc command or maintenance window can use it. The hosts of an
+  inventory so kept leave the list of hosts. The flag is reversible, and
+  is carried by the export of the configuration.
 
 ## [0.3.0] - 2026-11-15
 

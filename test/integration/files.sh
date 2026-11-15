@@ -181,6 +181,23 @@ expect_run "a duplicated inventory is read" "$read_twin" 60 successful
 expect_eq "with its files" \
     "$(get "$(admin file.read "{\"id\": \"$twin\", \"path\": \"group_vars/windows.yaml\"}")" '"ansible_shell_type: powershell" in a["data"]["content"]')" True
 
+# --- kept as starters ----------------------------------------------------------------------
+expect_eq "a project is kept as a starter" \
+    "$(get "$(admin project.starter "{\"id\": \"$copy\", \"starter\": true}")" 'a["data"]["starter"]')" True
+expect_eq "and offered as one, with its files" \
+    "$(get "$(admin starter.list '{"kind": "project"}')" '[s["title"] for s in a["data"]["starters"] if s["ref"] == "saved/'"$copy"'" and s["files"] and not s["error"]][0]')" "from-linux copy"
+made=$(get "$(admin project.create "{\"name\": \"from-saved\", \"kind\": \"managed\", \"starter\": \"saved/$copy\"}")" 'a["data"]["id"]')
+expect_eq "a project made from it has its files" \
+    "$(get "$(admin file.list "{\"id\": \"$made\"}")" '" ".join(sorted(f["path"] for f in a["data"]["files"]))')" \
+    "$(get "$(admin file.list "{\"id\": \"$copy\"}")" '" ".join(sorted(f["path"] for f in a["data"]["files"]))')"
+expect_eq "no template uses a starter" \
+    "$(get "$(admin template.create "{\"name\": \"t\", \"project_id\": \"$copy\", \"playbook\": \"site.yaml\", \"inventory_id\": \"$twin\"}")" '"kept as a starter" in a["error"]["message"]')" True
+expect_eq "an inventory is kept as a starter" \
+    "$(get "$(admin inventory.starter "{\"id\": \"$twin\", \"starter\": true}")" 'a["data"]["starter"]')" True
+expect_eq "and its hosts leave the list of hosts" "$(db "SELECT count(*) FROM hosts WHERE inventory_id = '$twin'")" 0
+expect_eq "no ad-hoc command uses it" \
+    "$(get "$(admin run.adhoc "{\"inventory_id\": \"$twin\", \"module\": \"ansible.builtin.ping\", \"limit\": \"all\"}")" '"kept as a starter" in a["error"]["message"]')" True
+
 # --- reading the files of a project that is not written here ---------------------------
 mkdir -p /srv/fleet-it/plain && echo '- hosts: all' > /srv/fleet-it/plain/site.yml && ln -s /etc/shadow /srv/fleet-it/plain/link
 chmod -R a+rX /srv/fleet-it

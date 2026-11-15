@@ -23,7 +23,9 @@ function loadChoices(): Promise<Choices> {
         call<{ inventories: Inventory[] }>("inventory.list"),
         call<{ credentials: Credential[] }>("credential.list"),
     ]).then(([config, p, i, c]) => ({
-        modules: config.values.adhoc_modules, projects: p.projects, inventories: i.inventories, credentials: c.credentials,
+        // A starter is used by no run: it is not offered.
+        modules: config.values.adhoc_modules, projects: p.projects.filter(one => !one.starter),
+        inventories: i.inventories.filter(one => !one.starter), credentials: c.credentials,
     }));
 }
 

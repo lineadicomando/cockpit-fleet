@@ -13,9 +13,9 @@ Phases 0–16 closed; phase 17 under way. 0.3.0 released on 15 November (its pac
 by the job "release" at the tag); `make release` only when asked.
 
 To resume: `git status`; `git log origin/main..` for what is not pushed
-(push only when asked: `git push origin main`); `make check` (683 backend,
+(push only when asked: `git push origin main`); `make check` (694 backend,
 172 frontend tests). Each backend module's docstring says what it is;
-`cli.py` is the registry of commands, `db.py` the schema (28 migrations).
+`cli.py` is the registry of commands, `db.py` the schema (29 migrations).
 Integration last run on 15 November: every script on AlmaLinux, `store`
 and `negative` on Debian and Fedora, all passed; the known failure of
 `cmdb.sh` on Fedora in a container is in `architecture/tests.md`.
@@ -31,7 +31,7 @@ Decided on 15 November. Managed projects and managed inventories only.
   vault and its sets of variables; nothing that uses the original
   (templates, checks, schedules) follows. No syntax check per playbook
   copied. "Duplicate" in the menu of a row, asking the name.
-- [ ] **Use as starter** ("Usa come punto di partenza"): a reversible flag
+- [x] **Use as starter** ("Usa come punto di partenza"): a reversible flag
   (`starter`, a migration) on a managed project or inventory, which stays
   in its list, is edited as before, and is offered by `starter.list` as a
   third source (`saved/<id>`), within the limits of a tree, not of a

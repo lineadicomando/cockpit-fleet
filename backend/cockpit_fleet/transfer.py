@@ -44,7 +44,8 @@ def config_export(ctx: Context, params: Values) -> dict:
         for row in conn.execute("SELECT * FROM credentials ORDER BY name COLLATE NOCASE")]
     document["projects"] = [
         {"name": row["name"], "kind": row["kind"], "path": row["path"], "url": row["url"],
-         "ref": row["ref"], "credential": credentials.get(row["credential_id"], "")}
+         "ref": row["ref"], "credential": credentials.get(row["credential_id"], ""),
+         "starter": bool(row["starter"])}
         for row in conn.execute("SELECT * FROM projects ORDER BY name COLLATE NOCASE")]
     document["inventories"] = []
     for row in conn.execute("SELECT * FROM inventories ORDER BY name COLLATE NOCASE").fetchall():
@@ -53,7 +54,8 @@ def config_export(ctx: Context, params: Values) -> dict:
                 "format": row["format"], "content": "",
                 "vault_credential": credentials.get(row["vault_credential_id"], ""),
                 "variable_sets": [one["name"]
-                                  for one in variables.inventory_sets(conn, row["id"])]}
+                                  for one in variables.inventory_sets(conn, row["id"])],
+                "starter": bool(row["starter"])}
         if row["kind"] == "managed":
             # The whole tree; content, its main file, for an import of before trees.
             item["files"] = files.tree_files(ctx, row)
@@ -201,6 +203,7 @@ class _Importer:
                           credential_id=self._id("credentials", item.get("credential"),
                                                  "credential"))
         self._create("project.create", params)
+        self._starter("projects", "project.starter", item)
 
     def inventory(self, item: dict) -> None:
         kind = item.get("kind")
@@ -221,6 +224,13 @@ class _Importer:
         else:
             params.update(format=item.get("format") or "yaml", content=item.get("content") or "")
         self._create("inventory.create", params)
+        self._starter("inventories", "inventory.starter", item)
+
+    def _starter(self, table: str, command: str, item: dict) -> None:
+        """Keep what was just created as a starter, if it was one there."""
+        if item.get("starter") is True:
+            self._create(command, {"id": self._id(table, item.get("name"), table, True),
+                                   "starter": True})
 
     def host_key(self, item: dict) -> str:
         params = {key: item.get(key) for key in ("host", "key_type", "key")}

@@ -10,7 +10,7 @@ import { useCan } from "../lib/session.tsx";
 import { inventoryChoices } from "../lib/files.ts";
 import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths, Starter, VariableSet } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { ConfirmDelete, DuplicateModal, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ConfirmDelete, DuplicateModal, FormModal, StarterLabel, StarterModal, ListState, SectionHeader, message } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
 import { StarterSelect } from "./StarterSelect.tsx";
@@ -107,7 +107,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                     <FormGroup label={t("Project")} isRequired fieldId="inv-project">
                         <FormSelect id="inv-project" value={projectId} onChange={(_e, value) => { setProjectId(value); setPath(""); }}>
                             <FormSelectOption value="" label={t("Choose a project")} isPlaceholder />
-                            {(projects.data?.projects ?? []).map(project => <FormSelectOption key={project.id} value={project.id} label={project.name} />)}
+                            {(projects.data?.projects ?? []).filter(project => !project.starter).map(project => <FormSelectOption key={project.id} value={project.id} label={project.name} />)}
                         </FormSelect>
                     </FormGroup>
                     <FormGroup label={t("Inventory file or directory")} isRequired fieldId="inv-path">
@@ -166,6 +166,7 @@ export function InventoriesPage() {
     const [editing, setEditing] = useState<Inventory | null>(null);
     const [deleting, setDeleting] = useState<Inventory | null>(null);
     const [duplicating, setDuplicating] = useState<Inventory | null>(null);
+    const [marking, setMarking] = useState<Inventory | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     // Reading an inventory is a job: poll for a while after asking for one.
@@ -207,7 +208,7 @@ export function InventoriesPage() {
                             <Tbody key={inventory.id} isExpanded={expanded === inventory.id}>
                                 <Tr>
                                     <ExpandCell isExpanded={expanded === inventory.id} onToggle={() => setExpanded(expanded === inventory.id ? null : inventory.id)} />
-                                    <Td dataLabel={t("Name")}>{inventory.name}</Td>
+                                    <Td dataLabel={t("Name")}>{inventory.name}{inventory.starter && <StarterLabel />}</Td>
                                     <Td dataLabel={t("Source")}>
                                         {inventory.kind === "managed"
                                             ? (inventory.path ? t("Written here: {{path}}", { path: inventory.path }) : t("Written here"))
@@ -223,6 +224,7 @@ export function InventoriesPage() {
                                             ...(can("inventory.parse") ? [{ title: t("Read again"), onClick: () => read(inventory) }] : []),
                                             ...(can("inventory.update") ? [{ title: t("Edit"), onClick: () => edit(inventory) }] : []),
                                             ...(inventory.kind === "managed" && can("inventory.duplicate") ? [{ title: t("Duplicate"), onClick: () => setDuplicating(inventory) }] : []),
+                                            ...(inventory.kind === "managed" && can("inventory.starter") ? [{ title: inventory.starter ? t("Use in runs again") : t("Use as starter"), onClick: () => setMarking(inventory) }] : []),
                                             ...(can("inventory.delete") ? [{ title: t("Delete"), onClick: () => setDeleting(inventory) }] : []),
                                         ]} />
                                     </Td>
@@ -241,6 +243,14 @@ export function InventoriesPage() {
             </ListState>
             {creating && <InventoryModal onClose={() => setCreating(false)} onDone={saved} />}
             {editing && <InventoryModal inventory={editing} onClose={() => setEditing(null)} onDone={saved} />}
+            {marking && (
+                <StarterModal name={marking.name} starter={!marking.starter}
+                    what={marking.starter
+                        ? t("Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read.")
+                        : t("It is offered when an inventory is created, and its files are edited as before, but no template, check or command can use it, and its hosts leave the list of hosts, with what was gathered of them. It cannot be done while something uses it.")}
+                    onConfirm={async () => { await call("inventory.starter", { id: marking.id, starter: !marking.starter }); setMarking(null); refresh(); }}
+                    onClose={() => setMarking(null)} />
+            )}
             {duplicating && (
                 <DuplicateModal name={duplicating.name}
                     what={t("A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its vault and sets of variables. Templates and checks of this one are not copied.")}

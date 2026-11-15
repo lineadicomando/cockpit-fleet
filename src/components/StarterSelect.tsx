@@ -1,7 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem } from "@patternfly/react-core";
+import { FormGroup, FormHelperText, FormSelect, FormSelectOption, FormSelectOptionGroup, HelperText, HelperTextItem } from "@patternfly/react-core";
 import { call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { Starter } from "../lib/types.ts";
@@ -52,12 +52,19 @@ export function StarterSelect({ kind, fieldId, value, onChange }: {
     const { t } = useTranslation();
     const loaded = useLoad(() => call<{ starters: Starter[] }>("starter.list", { kind }));
     const starters = loaded.data?.starters ?? [];
-    // Both sources may have one of the same name: say which one it is.
+    // Both sources of files may have one of the same name: say which one it is.
     const label = (starter: Starter) => {
         const { title } = starterText(t, starter);
-        const shared = starters.some(other => other.name === starter.name && other.source !== starter.source);
+        const shared = starter.source !== "saved" &&
+            starters.some(other => other.name === starter.name && other.source !== starter.source && other.source !== "saved");
         return shared ? `${title} (${starter.source === "package" ? t("package") : t("this controller")})` : title;
     };
+    const option = (starter: Starter) => (
+        <FormSelectOption key={starter.ref} value={starter.ref} isDisabled={!!starter.error}
+            label={starter.error ? t("{{title}}: cannot be used ({{error}})", { title: label(starter), error: starter.error }) : label(starter)} />
+    );
+    const files = starters.filter(starter => starter.source !== "saved");
+    const saved = starters.filter(starter => starter.source === "saved");
     const help = loaded.error
         ? loaded.error.message
         : value ? (starterText(t, value).description || value.files.join(", ")) : t("Nothing to begin with.");
@@ -66,10 +73,12 @@ export function StarterSelect({ kind, fieldId, value, onChange }: {
             <FormSelect id={fieldId} value={value?.ref ?? ""} isDisabled={!starters.length}
                 onChange={(_e, ref) => onChange(starters.find(starter => starter.ref === ref) ?? null)}>
                 <FormSelectOption value="" label={t("Empty")} />
-                {starters.map(starter => (
-                    <FormSelectOption key={starter.ref} value={starter.ref} isDisabled={!!starter.error}
-                        label={starter.error ? t("{{title}}: cannot be used ({{error}})", { title: label(starter), error: starter.error }) : label(starter)} />
-                ))}
+                {saved.length
+                    ? <>
+                        <FormSelectOptionGroup label={t("Ready-made")}>{files.map(option)}</FormSelectOptionGroup>
+                        <FormSelectOptionGroup label={kind === "project" ? t("Projects kept as starters") : t("Inventories kept as starters")}>{saved.map(option)}</FormSelectOptionGroup>
+                    </>
+                    : files.map(option)}
             </FormSelect>
             <FormHelperText>
                 <HelperText><HelperTextItem variant={loaded.error ? "error" : "default"}>{help}</HelperTextItem></HelperText>

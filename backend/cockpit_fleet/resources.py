@@ -129,6 +129,7 @@ def credential_delete(ctx: Context, params: Values) -> dict:
 def _project(ctx: Context, row) -> dict:
     data = {key: row[key] for key in ("id", "name", "kind", "path", "url", "ref", "credential_id",
                                       "revision", "synced_at", "sync_error")}
+    data["starter"] = bool(row["starter"])
     # What its requirements file asks for, if it has one.
     data["collections"] = {**jobs.collections_state(row, ctx.config),
                            "installed_at": row["collections_at"],
@@ -185,7 +186,7 @@ def project_create(ctx: Context, params: Values) -> dict:
     if params["starter"]:
         if kind != "managed":
             raise BadRequest("only a managed project starts from a starter")
-        starter = starters.load("project", params["starter"])
+        starter = starters.load(ctx, "project", params["starter"])
     project_id = store.new_id("p")
     store.insert(ctx.conn, "projects", {"id": project_id, "kind": kind,
                                         "created_at": store.now(), **values}, "project")
@@ -251,6 +252,40 @@ def project_duplicate(ctx: Context, params: Values) -> dict:
         shutil.rmtree(paths.PROJECTS_DIR / project_id, ignore_errors=True)
         raise
     return _project(ctx, store.fetch(ctx.conn, "projects", project_id, "project"))
+
+
+_STARTER_DOC = ("True: kept as a starter, offered by starter.list and used by no template,"
+                " check or run; false: usable again")
+
+
+def _users(ctx: Context, queries: tuple[tuple[str, str], ...], row_id: str) -> list[str]:
+    """What uses ROW_ID, by kind and name, from QUERIES of (what, SQL)."""
+    found = []
+    for what, sql in queries:
+        found += [f"{what} {one['name']}" for one in ctx.conn.execute(sql, (row_id,))]
+    return found
+
+
+@command("project.starter", role="admin", mutating=True, agent="code",
+         params={"id": Id(), "starter": Bool(_STARTER_DOC)})
+def project_starter(ctx: Context, params: Values) -> dict:
+    """Keep a project written in the interface as a starter, or make it
+    usable again; it is refused while a template, a check or an inventory
+    of its files uses it."""
+    project = store.fetch(ctx.conn, "projects", params["id"], "project")
+    if project["kind"] != "managed":
+        raise BadRequest("only a project written in the interface is kept as a starter")
+    if params["starter"]:
+        users = _users(ctx, (
+            ("template", "SELECT name FROM templates WHERE project_id = ?"),
+            ("check", "SELECT name FROM checks WHERE project_id = ?"),
+            ("inventory", "SELECT name FROM inventories WHERE project_id = ?")), project["id"])
+        if users:
+            raise Conflict("it is used by " + ", ".join(users[:5])
+                           + (" and others" if len(users) > 5 else ""))
+    store.update(ctx.conn, "projects", project["id"], {"starter": int(params["starter"])},
+                 "project")
+    return _project(ctx, store.fetch(ctx.conn, "projects", project["id"], "project"))
 
 
 @command("project.sync", role="admin", mutating=True, agent="code",
@@ -383,6 +418,7 @@ def _inventory(conn, row, with_hosts: bool = False, admin: bool = True) -> dict:
                                       "vault_credential_id", "parsed_at", "parse_error",
                                       "revision")}
     data["variable_set_ids"] = [one["id"] for one in variables.inventory_sets(conn, row["id"])]
+    data["starter"] = bool(row["starter"])
     if not admin and data["parse_error"]:
         # Ansible quotes the lines it could not read, and they may hold passwords.
         data["parse_error"] = NOT_READ
@@ -421,7 +457,8 @@ def _inventory_values(ctx: Context, params: Values, kind: str, row=None) -> dict
     if kind == "file":
         params.unused("format", "content")
         values["project_id"] = params.need("project_id")
-        store.fetch(ctx.conn, "projects", values["project_id"], "project")
+        store.usable(store.fetch(ctx.conn, "projects", values["project_id"], "project"),
+                     "project")
         values["path"] = str(check_relative_path(params.need("path"), "path"))
     else:
         params.unused("project_id")
@@ -514,12 +551,14 @@ def inventory_create(ctx: Context, params: Values) -> dict:
             raise BadRequest("only an inventory written here starts from a starter")
         if params["content"] is not None or params["files"]:
             raise BadRequest("a starter gives the files: content and files are not taken")
-        starter = starters.load("inventory", params["starter"])
+        starter = starters.load(ctx, "inventory", params["starter"])
     values = _inventory_values(ctx, params, kind)
     if starter is not None and starter[0]["format"]:
         if "format" in params.given and params["format"] != starter[0]["format"]:
             raise BadRequest(f"the starter is an inventory in {starter[0]['format']}")
         values["format"] = starter[0]["format"]
+    if starter is not None and starter[0].get("path") and params["path"] is None:
+        values["path"] = starter[0]["path"]  # the source it read in its tree
     sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"], "an inventory")
     operations = []
     for index, item in enumerate(params["files"]):
@@ -635,6 +674,43 @@ def inventory_duplicate(ctx: Context, params: Values) -> dict:
         shutil.rmtree(paths.INVENTORIES_DIR / inventory_id, ignore_errors=True)
         raise
     return _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+
+
+@command("inventory.starter", role="admin", mutating=True, agent="code",
+         params={"id": Id(), "starter": Bool(_STARTER_DOC)})
+def inventory_starter(ctx: Context, params: Values) -> dict:
+    """Keep an inventory written here as a starter, or make it usable again;
+    it is refused while a template, a check or a maintenance window uses
+    it. Its hosts leave the list of hosts, with what was gathered of them,
+    and come back when it is read again."""
+    inventory = store.fetch(ctx.conn, "inventories", params["id"], "inventory")
+    if inventory["kind"] != "managed":
+        raise BadRequest("only an inventory written here is kept as a starter")
+    starter = params["starter"]
+    if starter:
+        users = _users(ctx, (
+            ("template", "SELECT name FROM templates WHERE inventory_id = ?"),
+            ("check", "SELECT name FROM checks WHERE inventory_id = ?"),
+            ("maintenance window", "SELECT coalesce(nullif(comment, ''), id) AS name"
+             " FROM maintenances WHERE inventory_id = ?")), inventory["id"])
+        if users:
+            raise Conflict("it is used by " + ", ".join(users[:5])
+                           + (" and others" if len(users) > 5 else ""))
+    ctx.conn.execute("BEGIN IMMEDIATE")
+    try:
+        store.update(ctx.conn, "inventories", inventory["id"], {"starter": int(starter)},
+                     "inventory")
+        if starter:
+            from .checks import sync_hosts  # it builds on this module
+            sync_hosts(ctx, inventory["id"], [])
+        ctx.conn.execute("COMMIT")
+    except BaseException:
+        ctx.conn.execute("ROLLBACK")
+        raise
+    row = store.fetch(ctx.conn, "inventories", inventory["id"], "inventory")
+    if not starter and inventory["starter"]:
+        queue_parse(ctx, row)  # its hosts back in the list
+    return _inventory(ctx.conn, row)
 
 
 def place_inventory(ctx: Context, inventory, directory: Path, project_id: str | None,
@@ -756,7 +832,8 @@ def hostkey_list(ctx: Context, params: Values) -> dict:
     inventories that have each host; and the hosts of inventories, reached
     over SSH, that have no trusted key."""
     named: dict[str, list[dict]] = {}
-    for inventory in ctx.conn.execute("SELECT id, name, hosts FROM inventories ORDER BY name"):
+    for inventory in ctx.conn.execute("SELECT id, name, hosts FROM inventories WHERE NOT starter"
+                                      " ORDER BY name"):
         for address, port, name in _ssh_hosts(inventory):
             entry = {"id": inventory["id"], "name": inventory["name"], "host": name}
             entries = named.setdefault(_known_host(address, port), [])
@@ -1001,8 +1078,8 @@ def _template_values(ctx: Context, params: Values) -> dict:
     name = store.check_name(params["name"])
     project_id = params["project_id"]
     inventory_id = params["inventory_id"]
-    store.fetch(ctx.conn, "projects", project_id, "project")
-    store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    store.usable(store.fetch(ctx.conn, "projects", project_id, "project"), "project")
+    store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"), "inventory")
     limit = params["limit_hosts"]
     forks = params["forks"]
     if forks is not None and forks > ctx.config.max_forks:

@@ -53,8 +53,10 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     at its time, with the answers stored with it, and what a workflow does for
     one of its steps, with what the steps before it passed on."""
     template = store.fetch(ctx.conn, "templates", template_id, "template")
-    project = store.fetch(ctx.conn, "projects", template["project_id"], "project")
-    inventory = store.fetch(ctx.conn, "inventories", template["inventory_id"], "inventory")
+    project = store.usable(store.fetch(ctx.conn, "projects", template["project_id"], "project"),
+                           "project")
+    inventory = store.usable(store.fetch(ctx.conn, "inventories", template["inventory_id"],
+                                         "inventory"), "inventory")
     limits = [template["limit_hosts"], check_limit(limit) if limit else ""]
     variables, tickets = survey.answer(store.loads(template["survey"], []), answers)
     effective = varsets.effective(ctx.conn, template)
@@ -186,11 +188,13 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
                        " for ad-hoc commands ([adhoc] modules)")
     if len(json.dumps(args)) > 64 * 1024:
         raise BadRequest("args is too large")
-    inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    inventory = store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
+                             "inventory")
     if inventory["kind"] == "file" and project_id is None:
         # What stands beside it, and the collections of its project.
         project_id = inventory["project_id"]
-    project = store.fetch(ctx.conn, "projects", project_id, "project") if project_id else None
+    project = store.usable(store.fetch(ctx.conn, "projects", project_id, "project"), "project") \
+        if project_id else None
 
     # The sets of its inventory, so that what its files refer to is there.
     effective = varsets.of_inventory(ctx.conn, inventory_id)

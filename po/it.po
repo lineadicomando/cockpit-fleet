@@ -3922,3 +3922,39 @@ msgstr "Lì puoi leggere, scrivere, rinominare ed eliminare, e ogni modifica fin
 
 msgid "You can read and download the files there; writing needs the operator role."
 msgstr "Lì puoi leggere e scaricare i file; per scrivere serve il ruolo di operatore."
+
+msgid "Starter"
+msgstr "Punto di partenza"
+
+msgid "Use as starter"
+msgstr "Usa come punto di partenza"
+
+msgid "Use in runs again"
+msgstr "Usa di nuovo nei run"
+
+msgid "Use {{name}} as a starter?"
+msgstr "Usare {{name}} come punto di partenza?"
+
+msgid "Use {{name}} in runs again?"
+msgstr "Usare di nuovo {{name}} nei run?"
+
+msgid "Ready-made"
+msgstr "Già pronti"
+
+msgid "Projects kept as starters"
+msgstr "Progetti usati come punto di partenza"
+
+msgid "Inventories kept as starters"
+msgstr "Inventari usati come punto di partenza"
+
+msgid "It is offered when a project is created, and its files are edited as before, but no template, check or command can use it. It cannot be done while something uses it."
+msgstr "Viene proposto quando si crea un progetto e i suoi file si modificano come prima, ma nessun template, check o comando può usarlo. Non si può fare mentre qualcosa lo usa."
+
+msgid "It is offered when an inventory is created, and its files are edited as before, but no template, check or command can use it, and its hosts leave the list of hosts, with what was gathered of them. It cannot be done while something uses it."
+msgstr "Viene proposto quando si crea un inventario e i suoi file si modificano come prima, ma nessun template, check o comando può usarlo, e i suoi host escono dall'elenco degli host, con quanto raccolto su di loro. Non si può fare mentre qualcosa lo usa."
+
+msgid "Templates and checks can use it again, and it is no longer offered when a project is created."
+msgstr "Template e check possono usarlo di nuovo, e non viene più proposto quando si crea un progetto."
+
+msgid "Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read."
+msgstr "Template, check e comandi possono usarlo di nuovo, e non viene più proposto quando si crea un inventario. I suoi host tornano nell'elenco degli host una volta letto."

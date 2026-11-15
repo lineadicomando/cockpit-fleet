@@ -90,6 +90,7 @@ store.archive viewer M         store.refresh operator M      store.track operato
 store.sftp viewer M
 starter.list admin -
 project.duplicate admin M     inventory.duplicate admin M
+project.starter admin M       inventory.starter admin M
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()

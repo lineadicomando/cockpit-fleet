@@ -27,7 +27,7 @@ CLASS_TABLE = {
     "code": """channel.delete check.delete config.import credential.create credential.delete
         credential.update file.change file.delete file.move file.restore file.write hostkey.add
         hostkey.remove inventory.delete inventory.duplicate project.collections project.create
-        project.delete project.duplicate
+        project.delete project.duplicate project.starter inventory.starter
         project.sync project.update rule.delete schedule.delete template.delete varset.delete
         workflow.delete""",
 }

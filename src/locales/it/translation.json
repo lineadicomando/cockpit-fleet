@@ -1322,5 +1322,17 @@
   "SFTP server": "Server SFTP",
   "With OpenSSH, from another machine:": "Con OpenSSH, da un'altra macchina:",
   "You can read, write, rename and delete there, each change in the audit log. A file written reaches the store, and runs, only when it is complete; an interrupted transfer can be resumed.": "Lì puoi leggere, scrivere, rinominare ed eliminare, e ogni modifica finisce nel registro di audit. Un file scritto arriva nello store, e alle esecuzioni, solo quando è completo; un trasferimento interrotto si può riprendere.",
-  "You can read and download the files there; writing needs the operator role.": "Lì puoi leggere e scaricare i file; per scrivere serve il ruolo di operatore."
+  "You can read and download the files there; writing needs the operator role.": "Lì puoi leggere e scaricare i file; per scrivere serve il ruolo di operatore.",
+  "Starter": "Punto di partenza",
+  "Use as starter": "Usa come punto di partenza",
+  "Use in runs again": "Usa di nuovo nei run",
+  "Use {{name}} as a starter?": "Usare {{name}} come punto di partenza?",
+  "Use {{name}} in runs again?": "Usare di nuovo {{name}} nei run?",
+  "Ready-made": "Già pronti",
+  "Projects kept as starters": "Progetti usati come punto di partenza",
+  "Inventories kept as starters": "Inventari usati come punto di partenza",
+  "It is offered when a project is created, and its files are edited as before, but no template, check or command can use it. It cannot be done while something uses it.": "Viene proposto quando si crea un progetto e i suoi file si modificano come prima, ma nessun template, check o comando può usarlo. Non si può fare mentre qualcosa lo usa.",
+  "It is offered when an inventory is created, and its files are edited as before, but no template, check or command can use it, and its hosts leave the list of hosts, with what was gathered of them. It cannot be done while something uses it.": "Viene proposto quando si crea un inventario e i suoi file si modificano come prima, ma nessun template, check o comando può usarlo, e i suoi host escono dall'elenco degli host, con quanto raccolto su di loro. Non si può fare mentre qualcosa lo usa.",
+  "Templates and checks can use it again, and it is no longer offered when a project is created.": "Template e check possono usarlo di nuovo, e non viene più proposto quando si crea un progetto.",
+  "Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read.": "Template, check e comandi possono usarlo di nuovo, e non viene più proposto quando si crea un inventario. I suoi host tornano nell'elenco degli host una volta letto."
 }

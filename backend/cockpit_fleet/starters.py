@@ -14,6 +14,11 @@ and nothing links the two afterwards. It is read under the rules of the
 editor: plain names, no links, no special files, each file at most
 files.MAX_FILE, and a cap on the whole tree; one that breaks them is listed
 with what is wrong, and cannot be used.
+
+A third source, saved, is the managed projects and inventories kept as
+starters (project.starter, inventory.starter): their files as main has
+them, within the limits of a tree rather than of a starter on disk, since
+the editor wrote them.
 """
 
 import os
@@ -22,26 +27,28 @@ import stat
 import tomllib
 from pathlib import Path, PurePosixPath
 
-from . import paths
+from . import files, paths
 from .cli import Choice, Context, Str, Values, command
-from .errors import BadRequest, NotFound
+from .errors import BadRequest, FleetError, NotFound
 from .files import KEEP, MAIN_FILES, MAX_FILE, OLD_MAIN
 from .validators import check_file_path
 
 KINDS = {"project": "projects", "inventory": "inventories", "playbook": "playbooks"}
 SOURCES = ("package", "local")
+SAVED = "saved"
+_TABLES = {"project": "projects", "inventory": "inventories"}
 META = "starter.toml"
 # What one source offers of a kind, and what one starter holds.
 MAX_STARTERS = 100
 MAX_FILES = 500
 MAX_TOTAL = 16 * 1024 * 1024
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
-_REF_RE = re.compile(r"(package|local)/([A-Za-z0-9][A-Za-z0-9_-]{0,63})")
+_REF_RE = re.compile(r"(package|local|saved)/([A-Za-z0-9][A-Za-z0-9_-]{0,63})")
 # A playbook starter's file; .yaml first, the name of what is made from it.
 PLAYBOOK_SUFFIXES = (".yaml", ".yml")
 _OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
-_STARTER_DOC = ("A starter to begin with, as SOURCE/NAME (package or local, see starter.list):"
-                " its files are the first commit")
+_STARTER_DOC = ("A starter to begin with, as SOURCE/NAME (package, local or saved, see"
+                " starter.list): its files are the first commit")
 
 
 def _root(source: str) -> Path:
@@ -177,13 +184,54 @@ def describe(kind: str, source: str, name: str) -> dict:
     return entry
 
 
-def load(kind: str, ref: str) -> tuple[dict, list[dict]]:
+def _saved_rows(ctx: Context, kind: str) -> list:
+    """The managed projects or inventories kept as starters."""
+    if kind not in _TABLES:
+        return []
+    return ctx.conn.execute(
+        f"SELECT * FROM {_TABLES[kind]} WHERE kind = 'managed' AND starter"  # noqa: S608
+        " ORDER BY name COLLATE NOCASE").fetchall()
+
+
+def describe_saved(ctx: Context, kind: str, row) -> dict:
+    """A project or an inventory kept as a starter, as starter.list shows it."""
+    entry = {"kind": kind, "source": SAVED, "name": row["id"], "ref": f"{SAVED}/{row['id']}",
+             "title": row["name"], "description": "", "files": [], "error": ""}
+    if kind == "inventory":
+        entry["format"] = row["format"]
+        entry["path"] = row["path"]
+    try:
+        tree = files.container_tree(ctx, row)
+        for current, directories, names in os.walk(tree):
+            directories.sort()
+            for name in sorted(names):
+                path = Path(current) / name
+                status = os.lstat(path)
+                if stat.S_ISREG(status.st_mode) and not (name == KEEP and not status.st_size):
+                    entry["files"].append(path.relative_to(tree).as_posix())
+        if not entry["files"]:
+            entry["error"] = "it holds no file"
+    except (FleetError, OSError) as error:
+        entry["error"] = str(error)
+        entry["files"] = []
+    return entry
+
+
+def load(ctx: Context, kind: str, ref: str) -> tuple[dict, list[dict]]:
     """The starter REF of KIND, as its description and the operations of
     files.change that write its files."""
     match = _REF_RE.fullmatch(ref or "")
     if not match:
         raise BadRequest(f"invalid starter: {ref!r}: give SOURCE/NAME")
     source, name = match.groups()
+    if source == SAVED:
+        row = next((one for one in _saved_rows(ctx, kind) if one["id"] == name), None)
+        if row is None:
+            raise NotFound(f"no such {kind} starter: {ref}")
+        entry = describe_saved(ctx, kind, row)
+        if entry["error"]:
+            raise BadRequest(f"the starter {ref} cannot be used: {entry['error']}")
+        return entry, files.copy_operations(ctx, row)
     if name not in _names(kind, source):
         raise NotFound(f"no such {kind} starter: {ref}")
     entry = describe(kind, source, name)
@@ -200,14 +248,18 @@ def load(kind: str, ref: str) -> tuple[dict, list[dict]]:
                                 default="all")})
 def starter_list(ctx: Context, params: Values) -> dict:
     """The starters a new managed project (kind project), managed inventory
-    (inventory) or playbook (playbook) can begin with, the package's and
-    this controller's, with their files; a playbook's with its text. Give
+    (inventory) or playbook (playbook) can begin with, the package's, this
+    controller's files and its projects and inventories kept as starters
+    (saved), with their files; a playbook's with its text. Give
     one as SOURCE/NAME (ref) to project.create, inventory.create, or write
     a playbook's text with file.write."""
     kinds = list(KINDS) if params["kind"] == "all" else [params["kind"]]
-    return {"starters": [describe(kind, source, name)
-                         for kind in kinds for source in SOURCES
-                         for name in _names(kind, source)]}
+    found = []
+    for kind in kinds:
+        found += [describe(kind, source, name) for source in SOURCES
+                  for name in _names(kind, source)]
+        found += [describe_saved(ctx, kind, row) for row in _saved_rows(ctx, kind)]
+    return {"starters": found}
 
 
 STARTER_PARAM = Str(_STARTER_DOC, max_length=100)

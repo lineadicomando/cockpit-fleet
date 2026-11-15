@@ -817,6 +817,12 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # A managed project or inventory kept as a starter: offered by
+        # starter.list, used by no run.
+        "ALTER TABLE projects ADD COLUMN starter INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE inventories ADD COLUMN starter INTEGER NOT NULL DEFAULT 0",
+    ],
 ]
 
 

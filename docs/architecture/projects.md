@@ -382,6 +382,25 @@ and 16 MB. One that breaks them is listed with the reason and refused.
 The package's titles are translated by the page, by name; an
 administrator's are shown as written.
 
+A managed project or inventory can be kept as a starter itself
+(`project.starter`, `inventory.starter`, admin; a column `starter`,
+schema 29): `starter.list` offers it as a third source, `saved/<id>`,
+titled by its name, and `project.create` or `inventory.create` copy its
+files as `main` has them, through the same `files.copy_operations` as a
+duplicate, within the limits of a tree rather than of a starter on disk,
+since the editor wrote them (an inventory also gives its `path`). The flag
+is reversible, and nothing but the flag changes: it stays in its list and
+is edited, checked and read as before. What makes it a starter is that no
+run uses it, which the backend holds, not the page that hides it:
+`store.usable` refuses it to a template (created, changed, launched), an
+ad-hoc command, a check, a maintenance window and a file inventory of a
+project so kept; and the flag is refused while one of those uses it. The
+hosts of an inventory so kept are no nodes: `checks.sync_hosts` lists none
+for it (so the host registry, the CMDB and the checks lose them, with what
+was gathered), and `hostkey.list` leaves it out; making it usable again
+queues a reading. `config.export` carries the flag and `config.import`
+sets it again.
+
 The package ships general ones, not shaped on a real project: a Linux and
 a Windows project (a `site.yaml` through a role `common`, a `ping.yaml`,
 variables by group; the Windows one with a `requirements.yaml` for
