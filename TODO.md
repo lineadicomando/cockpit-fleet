@@ -14,17 +14,11 @@ Phases 0–15 closed; no phase under way. 0.2.0 released on 2 November;
 when asked).
 
 To resume: `git status`, `git log origin/main..` (not pushed: push only
-when asked, `git push origin main`), `make check` (671 backend, 171
+when asked, `git push origin main`), `make check` (673 backend, 171
 frontend tests). Each backend module's docstring says what it is; `cli.py`
 is the registry of commands, `db.py` the schema (28 migrations). Last full
 `make ct-test` on the three: 15 November, after the `.yaml` change, all
 passed but the known failure of `cmdb.sh` on Fedora (`tests.md`).
-
-## Open questions for the user
-
-- Should `inventory.create`/`inventory.update` write a managed inventory
-  through a draft too? (Today straight to `main`; `limits.md`, Agents.)
-- "Store" in the Italian interface, or another word ("Deposito")?
 
 ## Future
 

@@ -156,6 +156,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- An assistant that creates or updates an inventory written in the
+  interface no longer writes its files straight into it: they go to the
+  draft of its session, like any file it writes, for an administrator to
+  review and merge. Its name and other settings still change at once, and
+  an assistant can no longer change such an inventory's format.
 - YAML files that cockpit-fleet names itself end in `.yaml`, no longer in
   `.yml`: the main file of a new inventory written in the interface
   (`hosts.yaml`), the files of the starters and of the bundled collection,

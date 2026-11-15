@@ -11,9 +11,9 @@ import unicodedata
 from pathlib import Path, PurePosixPath
 
 from . import approvals, files, jobs, paths, starters, store, survey, variables
-from .cli import Bool, Choice, Context, Id, Int, Obj, Objs, Str, Strs, Values, command
+from .cli import Bool, Choice, Context, Id, Int, Obj, Objs, Str, Strs, Values, command, is_agent
 from .config import MAX_UPLOAD_MB
-from .errors import BadRequest, Conflict, NotFound, Unavailable
+from .errors import BadRequest, Conflict, Forbidden, NotFound, Unavailable
 from .names import check_id
 from .validators import (
     check_file_path,
@@ -405,10 +405,17 @@ def _inventory_values(ctx: Context, params: Values, kind: str, row=None) -> dict
     return values
 
 
-def _write_main(ctx: Context, inventory, content: str, operations: list[dict]) -> None:
+def _write_main(ctx: Context, inventory, content: str, operations: list[dict]) -> str | None:
     """Write the main file of a managed inventory, and the other files given,
-    as one commit; the main file of the other format goes."""
+    as one commit; the main file of the other format goes. An agent writes
+    them to the draft of its session, as any file it writes; returns the
+    draft, if so."""
+    if content is None and not operations:
+        return None
     tree = files.inventory_tree(ctx, inventory)
+    draft = files.place(ctx, inventory, "", writing=True)
+    if draft is not None:
+        tree = files.draft_tree(draft)
     main = files.main_file(tree, inventory["format"])
     changes = list(operations)
     if content is not None:
@@ -422,7 +429,8 @@ def _write_main(ctx: Context, inventory, content: str, operations: list[dict]) -
     if changes:
         checked = [files.check_operation(index, item) for index, item in enumerate(changes)]
         files.change(ctx, store.fetch(ctx.conn, "inventories", inventory["id"], "inventory"),
-                     checked, "", reread=False)
+                     checked, "", reread=False, draft=draft)
+    return draft.session if draft is not None else None
 
 
 @command("inventory.list", role="viewer")
@@ -491,22 +499,29 @@ def inventory_create(ctx: Context, params: Values) -> dict:
         if not isinstance(item, dict) or "op" in item or "expected" in item:
             raise BadRequest(f"files[{index}] must have path, and content or data")
         operations.append({"op": "write", **item})
+    if kind == "managed" and is_agent(ctx.via) and not ctx.session:
+        raise Forbidden("an agent writes files only within a session of fleet-mcp")
     inventory_id = store.new_id("i")
     _save_inventory(ctx, inventory_id, {"name": name, "kind": kind, "created_at": store.now(),
                                         **values}, sets, create=True)
+    draft = None
     if kind == "managed":
         row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
         try:
             if starter is not None:
+                files.inventory_tree(ctx, row)
+                place = files.place(ctx, row, "", writing=True)
                 files.change(ctx, row, starter[1], f"Start from {starter[0]['title']}",
-                             reread=False)
+                             reread=False, draft=place)
+                draft = place.session if place is not None else None
             else:
-                _write_main(ctx, row, params["content"], operations)
+                draft = _write_main(ctx, row, params["content"], operations)
         except BaseException:
             store.delete(ctx.conn, "inventories", inventory_id, "inventory")
             shutil.rmtree(paths.INVENTORIES_DIR / inventory_id, ignore_errors=True)
             raise
-    return _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+    data = _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+    return {**data, "draft": draft} if draft else data
 
 
 def _save_inventory(ctx: Context, inventory_id: str, values: dict, sets: list[str] | None,
@@ -531,18 +546,25 @@ def _save_inventory(ctx: Context, inventory_id: str, values: dict, sets: list[st
          params={"id": Id(), "name": Str(max_length=200), **_INVENTORY_PARAMS})
 def inventory_update(ctx: Context, params: Values) -> dict:
     """Change an inventory; for one written here, content replaces the text
-    of its main file, as a commit."""
+    of its main file, as a commit (an agent's goes to the draft of its
+    session, for a person to take into main)."""
     inventory_id = params["id"]
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    if row["kind"] == "managed" and is_agent(ctx.via):
+        if params["content"] is not None and not ctx.session:
+            raise Forbidden("an agent writes files only within a session of fleet-mcp")
+        if "format" in params.given and params["format"] != row["format"]:
+            raise Forbidden("an agent does not change the format of an inventory written"
+                            " here: what it writes waits in a draft, the format would not")
     name = store.check_name(row["name"] if params["name"] is None else params["name"])
     values = _inventory_values(ctx, params, row["kind"], row)
     sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"], "an inventory") \
         if "variable_set_ids" in params.given else None
     _save_inventory(ctx, inventory_id, {"name": name, **values}, sets, create=False)
     row = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
-    if row["kind"] == "managed":
-        _write_main(ctx, row, params["content"], [])
-    return _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+    draft = _write_main(ctx, row, params["content"], []) if row["kind"] == "managed" else None
+    data = _inventory(ctx.conn, store.fetch(ctx.conn, "inventories", inventory_id, "inventory"))
+    return {**data, "draft": draft} if draft else data
 
 
 @command("inventory.delete", role="admin", mutating=True, agent="code",

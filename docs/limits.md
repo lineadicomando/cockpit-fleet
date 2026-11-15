@@ -58,9 +58,10 @@ in [security.md](security.md); the decisions behind these limits in
   307 of the tools; 5 November); in the profile diagnostic, `setup` with
   `fact_path` runs the `*.fact` programs of that directory on the node; a draft is taken file by file (a file
   changed in main too is a conflict, settled by hand) and is not brought
-  up to date with main, nor exported; `inventory.create` and
-  `inventory.update` (class config) write the main file of a managed
-  inventory without a draft; the acceptance of a profile's risks is not
+  up to date with main, nor exported; an agent's `inventory.create` and
+  `inventory.update` change the inventory's row at once (name, path, sets)
+  and only its files wait in the draft, and an agent does not change the
+  format of a managed inventory; the acceptance of a profile's risks is not
   asked again when their text changes; an inventory created by an agent,
   `fleetctl` or `fleet` is not read until something reads it (the page asks
   for it), so an agent sees it with no hosts; `whoami` lists the commands

@@ -6,6 +6,8 @@ import os
 import subprocess
 import unittest
 from dataclasses import replace
+from pathlib import Path
+from unittest import mock
 
 from test_phase2 import Base
 
@@ -314,6 +316,49 @@ class DraftTest(Base):
         self.assertEqual(len(taken["inventory_run_ids"]), 1)
         self.assertEqual(self.ok("file.read", {"id": made["id"], "path": "hosts.yaml"})["content"],
                          "all:\n  hosts:\n    b:\n")
+
+    def test_an_agent_creates_and_updates_an_inventory_through_its_draft(self):
+        made = self.agent_ok("inventory.create", {"name": "web", "kind": "managed",
+                                                  "content": "all:\n  hosts:\n    a:\n"})
+        self.assertEqual(made["draft"], SESSION)
+        # main has nothing yet: no run reads the agent's hosts.
+        self.assertEqual(self.ok("file.list", {"id": made["id"]})["files"], [])
+        self.assertEqual(self.ok("inventory.get", {"id": made["id"]})["content"], "")
+        self.merge(container=made["id"])
+        self.assertEqual(self.ok("inventory.get", {"id": made["id"]})["content"],
+                         "all:\n  hosts:\n    a:\n")
+        updated = self.agent_ok("inventory.update", {"id": made["id"], "name": "web2",
+                                                     "content": "all:\n  hosts:\n    b:\n"})
+        self.assertEqual(updated["draft"], SESSION)
+        # The row changes at once, the file waits for a person.
+        self.assertEqual(updated["name"], "web2")
+        self.assertEqual(self.ok("inventory.get", {"id": made["id"]})["content"],
+                         "all:\n  hosts:\n    a:\n")
+        self.assertEqual([c["path"] for c in self.diff(container=made["id"])["changes"]],
+                         ["hosts.yaml"])
+        self.assertNotIn("draft", self.agent_ok("inventory.update",
+                                                {"id": made["id"], "name": "web3"}))
+        self.assertEqual(self.agent("inventory.update", {"id": made["id"], "format": "ini",
+                                                         "content": "b\n"})["error"]["code"],
+                         "forbidden")
+        self.assertEqual(self.agent("inventory.update", {"id": made["id"], "content": "x\n"},
+                                    session=None)["error"]["code"], "forbidden")
+        self.assertEqual(self.agent("inventory.create", {"name": "x", "kind": "managed",
+                                                         "content": ""},
+                                    session=None)["error"]["code"], "forbidden")
+        self.assertEqual(len(self.ok("inventory.list")["inventories"]), 1)
+        # A person's update still writes main.
+        self.assertNotIn("draft", self.ok("inventory.update", {"id": made["id"],
+                                                               "content": "all: {}\n"}))
+
+    def test_an_agent_starts_an_inventory_from_a_starter_in_its_draft(self):
+        packaged = Path(__file__).resolve().parents[2] / "starters"
+        with mock.patch.object(paths, "STARTERS_DIR", packaged):
+            made = self.agent_ok("inventory.create", {"name": "lin", "kind": "managed",
+                                                      "starter": "package/linux"})
+        self.assertEqual(made["draft"], SESSION)
+        self.assertEqual(self.ok("file.list", {"id": made["id"]})["files"], [])
+        self.assertTrue(self.agent_ok("file.list", {"id": made["id"]})["files"])
 
     def test_projects_not_written_here_have_no_drafts(self):
         project = self.local_project("local")

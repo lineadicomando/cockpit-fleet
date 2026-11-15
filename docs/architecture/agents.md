@@ -112,7 +112,9 @@ person.
 
 **Drafts.** An agent never writes to `main` of a managed project or
 inventory: `file.write`, `file.change`, `file.delete`, `file.move` and
-`file.restore` called by an agent go to the branch `drafts/SESSION` of the
+`file.restore` called by an agent, and the files `inventory.create` and
+`inventory.update` write in a managed inventory (its main file, the files
+given, a starter's), go to the branch `drafts/SESSION` of the
 same repository, made at its first write from where `main` is then
 (`files.place`). The branch is checked out in a work tree of its own,
 `drafts/SESSION/tree` beside the project's `tree`, with its own index
@@ -126,7 +128,12 @@ inventories wait for `main`. While its draft exists an agent reads it
 (`file.list`, `file.read`, `file.history`, `file.check`), so the digest it
 quotes is the draft's; another session's draft it may read by naming it
 (`draft`), never write. Without a session there is nothing to write to,
-and an agent's write is refused.
+and an agent's write is refused. The row of an inventory (name, path,
+sets of variables) is no file and changes at once; so an agent may not
+change the format of a managed inventory, which names its main file and
+would no longer match what `main` has until a person merges. An inventory
+an agent creates has nothing in `main` until then, and its answer names
+the draft.
 
 `drafts.py` is the person's side: `draft.list` (every draft, or those of a
 project, with how many files each changes and how many main changed too),
