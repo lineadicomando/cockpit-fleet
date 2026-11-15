@@ -40,6 +40,53 @@ controller that accepts password logins over SSH.
 | `test/integration/nodes.sh` | the container nodes themselves (podman): `up N KEYS`, `recreate I KEYS`, `down` |  |
 | `test/integration/lifecycle.sh` | upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed), through `make ct-lifecycle` |  |
 
+## Running them
+
+- **Containers**: `make ct-test DISTRO=debian|fedora|alma [TESTS="a b"]`
+  builds the package of `DISTRO` and runs each script as root in a fresh
+  container of it, `CT_JOBS` at a time (2), with `IT_WIPE=yes` and an
+  account for `IT_SSH_USER`; other `IT_*` variables of the caller are
+  passed on; logs in `it-results/DISTRO/`. `windows.sh`,
+  `measure-events.sh` and `load.sh` run only when named; `lifecycle.sh`
+  only through `make ct-lifecycle`, which builds an older package too
+  (`CT_KEEP_PACKAGES=DIR` keeps both, to run it on a VM). It needs
+  rootless podman on cgroup v2, nothing else of the host.
+- **The lab**: `test/vm/lab.sh deploy TARGET` installs the package of the
+  work tree, `test/vm/lab.sh it TARGET SCRIPT...` runs scripts the same way,
+  logs in `it-results/vm-TARGET/` (skill `vm-lab`).
+- **Another machine**: copy `test/integration` there and start one as root,
+  e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
+  integration/runs.sh`. With `systemd-run` (to outlive the session) on
+  Fedora or AlmaLinux, pass `-p
+  SELinuxContext=unconfined_u:unconfined_r:unconfined_t:s0` and redirect
+  the output in the shell, not with `StandardOutput=`: a unit runs in
+  `initrc_t`, where `ssh-keygen` cannot write in `/run`.
+
+A controller is a machine of a target distribution with `cockpit`, the
+package, `podman`, `sshpass` and `acl` (for `cli.sh`); `nodes.sh` starts
+Linux nodes on podman's default network, at 10.88.0.101 onwards. Windows
+nodes are reached over SSH with a key: authorise a key pair made for the
+test on the node and store its private half as a credential, or as the
+secret `it-win-key` that `windows.sh` expects.
+
+The scripts that go through `fleetctl` share helpers in `lib.sh` (`admin`,
+`get`, `expect_run`, `wipe`, `prepare`); a failed `expect_run` prints the
+end of the run's output. With `IT_KEEP=yes`, `windows.sh` leaves its data
+in place so the same run can be launched from the interface; so does
+`checks.sh`, whose stand-in for the webhook then stays up (`pkill -f
+notify-sinks.py` as root).
+
+Installing on a test controller: `apt-get install ./cockpit-fleet_*.deb`,
+`dnf install ./cockpit-fleet-*.noarch.rpm` (`dnf reinstall` for the same
+version, which `install` skips). dpkg stops to ask when
+`/etc/cockpit-fleet/config.toml` was changed there and in the package too:
+put the packaged file back first, or install with `--force-confold`. After
+a deploy a Cockpit tab runs the old bundle until reloaded, and a copy in
+`~/.local/share/cockpit` (left by `make devel-install`) shadows the
+package's.
+
+## Where they run
+
 The controller is a container or a machine. `make ct-test`
 (`scripts/ct-test.sh`, `test/containers/`) builds an image of Debian 13,
 Fedora 44 or AlmaLinux 10 with systemd as PID 1, what the package needs and
@@ -88,6 +135,8 @@ system with the package of the commit under test (`lab.sh deploy`). What
 identifies the VMs is tracked (`test/vm/lab.conf`); what belongs to one
 workstation, the password and the path of the Windows ISO, is in `.env`.
 
+## Negative tests
+
 The negative tests take the registry as a whole, so that a command added
 later is covered without a test of its own. A table in the test gives every
 command its least role and whether it is audited as a change: a command
@@ -120,12 +169,15 @@ command, through sudo as each role, an empty object, one hostile value per
 parameter and input that is not an object, and checks what the caller's
 environment and working directory cannot bring into fleetctl.
 
+## CI
+
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
 suites, ruff, and a native package build with lintian, which fails on errors
-and warnings, on a Debian 13 runner; and the `.rpm` built natively and
-checked with rpmlint on two more runners, Fedora 44 and AlmaLinux 10, one
-job each. The runners are containers where jobs run directly, as a user
-that is not root; tools with a version (Node.js, ruff) are pinned in the
+and warnings, on a Debian 13 runner (label `cockpit-fleet`); and the `.rpm`
+built natively and checked with rpmlint on two more runners, Fedora 44 and
+AlmaLinux 10 (`cockpit-fleet-fedora`, `cockpit-fleet-alma`), one job each.
+The runners are arm64 containers where jobs run directly, as a user that
+is not root; tools with a version (Node.js, ruff) are pinned in the
 workflow and installed once per runner by `scripts/ci-tool.sh`.
 `.github/workflows/ci.yml` runs the same steps on GitHub, each job in a
 container of its distribution (`debian:trixie`, `fedora:44`,

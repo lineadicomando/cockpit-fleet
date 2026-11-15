@@ -132,5 +132,7 @@ What each closed phase had to show, and how it was shown.
   starter, given the Windows 11 node, ran `ping.yml`, `site.yml` through
   the role and the playbook made with "New file", all successful.
   Following the user, `ansible_remote_tmp` is left commented out in the
-  Windows starters, and the YAML files the project makes are to end in
-  `.yaml` (in [TODO.md](../../TODO.md)).
+  Windows starters, and the YAML files the project makes end in `.yaml`
+  (done on 15 November, [decisions.md](../decisions.md), "YAML
+  extension"): `make ct-test` on the three passed but the known failure
+  in [tests.md](tests.md).

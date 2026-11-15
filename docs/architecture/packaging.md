@@ -22,8 +22,11 @@ entry of `debian/changelog` or of the spec's `%changelog` and into
 `__init__.py`, never into the repository; a container that builds has no
 git, so the host passes `FLEET_DESCRIBE` into it. A release itself is
 `scripts/release.mjs` (`make release`): the version computed from the kinds
-of change in `CHANGELOG.md`, set in the six files that carry it, a commit
-and a tag.
+of change in `CHANGELOG.md`, set in the files that carry it
+(`backend/cockpit_fleet/__init__.py`, `package.json`, `package-lock.json`,
+the collection's `galaxy.yml`, the spec's `Version:` and `%changelog`,
+`debian/changelog`; `scripts/versions.mjs`, checked by `test_version.py`),
+a commit and a tag. The Overview tab shows a build as `0.1.0-3-gabc1234`.
 
 The `.rpm` for Fedora 44 and AlmaLinux 10 comes from `packaging/cockpit-fleet.spec`,
 built in a container of each (`make rpm`, output in `rpm/`) and checked with

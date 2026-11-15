@@ -156,81 +156,26 @@ make release                    # check, set the version, commit and tag it (onl
 ```
 
 Integration tests are the scripts in `test/integration/`, run as root on
-a controller with the package installed; the list, with what each shows,
-the variables it takes and whether it wipes the database, is in
-`docs/architecture/tests.md`.
-
-`make ct-test` is the usual way to run them: it builds the package of
-`DISTRO` (`debian`, `fedora` or `alma`), then runs each script as root in a
-fresh container of that distribution (`test/containers/`), `CT_JOBS` at a
-time (2 by default), with `IT_WIPE=yes` and an account for `IT_SSH_USER`.
-Other `IT_*` variables of the caller are passed on; the logs go to
-`it-results/DISTRO/`. `windows.sh`, `measure-events.sh` and `load.sh` run
-only when named; `lifecycle.sh` only through `make ct-lifecycle`, which
-builds an older package too (`CT_KEEP_PACKAGES=DIR` keeps both, to run it
-on a VM). On a VM of the lab, `test/vm/lab.sh deploy TARGET` installs
-the package and `test/vm/lab.sh it TARGET SCRIPT...` runs scripts the same
-way, logs in `it-results/vm-TARGET/`. On another machine, copy `test/integration` there and start one as root,
-e.g. `sudo env IT_WIPE=yes IT_SSH_USER=USER IT_SSH_PASSWORD=... sh
-integration/runs.sh`, where `USER` is an account of the controller that
-accepts password logins over SSH. To start one with `systemd-run` (to outlive
-the session) on Fedora or AlmaLinux, pass `-p
-SELinuxContext=unconfined_u:unconfined_r:unconfined_t:s0` and redirect its
-output in the shell, not with `StandardOutput=`: a unit runs in `initrc_t`,
-where `ssh-keygen` cannot write in `/run`. The tests that go through
-`fleetctl` share helpers in `lib.sh` (`admin`, `get`, `expect_run`, `wipe`, `prepare`). A
-failed `expect_run` prints the end of the run's output. With `IT_KEEP=yes`,
-`windows.sh` leaves its data in place so the same run can be launched from the
-interface; so does `checks.sh`, whose stand-in for the webhook then stays up
-(`pkill -f notify-sinks.py` as root).
+a controller with the package installed. What each shows, the variables
+it takes, whether it wipes, and how to run them in containers, on the lab
+or on another machine: `docs/architecture/tests.md`.
 
 ## Test environment
 
-- `make ct-test` needs rootless podman on cgroup v2, nothing else of the
-  host. Its containers are privileged within the user's namespace and make
-  `/` a shared mount at boot (`test/containers/make-rshared.service`): the
-  sandbox of a run cannot start otherwise, and without the shared mount a
-  run gets no credentials, with no error. They run in UTC.
 - What a container cannot show, and so needs a machine of the distribution:
-  SELinux (Fedora and AlmaLinux are enforcing; a container has none of its
-  own); that the sandbox of a run holds on its own kernel, since a container
-  shares the host's and, unprivileged, ignores `PrivateIPC` with only a
-  warning: confirm a change to the unit with `sandbox.sh` on a machine (rule
-  8); the interface in a browser; Windows nodes. Container nodes also show
-  the memory and processor of the host, which is why `checks.sh` turns off
-  the thresholds of those two checks.
-- The machines are the VMs of the lab, dedicated to this project:
-  `cockpit-fleet-deb13`, `cockpit-fleet-fed44` and `cockpit-fleet-alma10`
-  (controllers) and `cockpit-fleet-win11` (a Windows node), on a libvirt
-  network of their own. `test/vm/` builds them from scratch (cloud images
-  with cloud-init; Windows Setup with an answer file, from the Evaluation
-  ISO) and drives them; `test/vm/lab.conf` says what they are, the same for
-  everyone, and `.env` (from `.env.example`) holds what belongs to one
-  workstation: the password and the path of the ISO. Load the skill
+  SELinux (Fedora and AlmaLinux are enforcing); that the sandbox of a run
+  holds on its own kernel: confirm a change to the unit with `sandbox.sh`
+  on a machine (rule 8); the interface in a browser; Windows nodes.
+- The machines are the lab's VMs (`cockpit-fleet-deb13`, `-fed44`,
+  `-alma10`, `-win11`), built and driven by `test/vm/`. Load the skill
   `vm-lab` before using them. An agent may build, rebuild, revert and
   destroy the VMs named `cockpit-fleet-*` without asking; any other VM on
   the host belongs to something else: do not touch it without the user's
-  agreement. Before starting VMs, check that the host can give what they
-  need (`lab.sh resources`), and shut down what you started.
-- A controller is a machine of one of the target distributions with
-  `cockpit`, the package, `podman`, `sshpass` and `acl` (for `cli.sh`); `nodes.sh` needs podman
-  there and starts Linux nodes on its default network, at 10.88.0.101
-  onwards. Windows nodes are reached over SSH with a key: authorise a key
-  pair made for the test on the node and store its private half as a
-  credential, or as the secret `it-win-key` that `windows.sh` expects.
-- Install the `.deb` with `apt-get install ./cockpit-fleet_*.deb`, the `.rpm`
-  with `dnf install ./cockpit-fleet-*.noarch.rpm`; `dnf install` of a `.rpm`
-  of the same version does nothing: use `dnf reinstall`.
-- An install stops at dpkg's question when `/etc/cockpit-fleet/config.toml`
-  was changed on the controller and the packaged one changed too: put the
-  packaged file back first, or install with `--force-confold` to keep the
-  test configuration.
-- After a deploy, a Cockpit tab keeps running the old bundle until reloaded,
-  and a package in `/usr/share/cockpit` is shadowed by a copy in
-  `~/.local/share/cockpit` (what `make devel-install` leaves).
-- Cockpit has a self-signed certificate, which the browser tools refuse.
-  Open an SSH tunnel to the controller (`ssh -L 9091:127.0.0.1:9090`) and use
-  `http://127.0.0.1:9091`: Cockpit accepts plain HTTP from localhost.
+  agreement. Check `lab.sh resources` before starting VMs, and shut down
+  what you started.
+- Cockpit has a self-signed certificate, which the browser tools refuse:
+  tunnel (`lab.sh tunnel`, or `ssh -L 9091:127.0.0.1:9090`) and use
+  `http://127.0.0.1:9091`.
 - Do not `pkill -f` or `pgrep -f` with a pattern that also appears in your own
   command line: it matches the shell that runs it.
 
@@ -248,22 +193,13 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
   `Added`, `Changed`, `Deprecated`, `Removed` and `Breaking` raise the
   minor number (before 1.0.0), `Fixed` and `Security` alone the patch.
   A change only of tests, CI or the lab goes in no entry.
-- The version is written in `backend/cockpit_fleet/__init__.py`,
-  `package.json` and `package-lock.json`, the collection's `galaxy.yml`,
-  `packaging/cockpit-fleet.spec` (`Version:`, and an entry of
-  `%changelog`) and `debian/changelog` (`scripts/versions.mjs`);
-  `test_version.py` checks that they agree. They change only in a release,
-  never by hand.
-- A package built between two releases says how far from the last one it
-  is: `scripts/version.sh` turns `git describe` into `0.1.0+3.gabc1234` for
-  the `.deb` and `0.1.0^3.gabc1234` for the `.rpm` (`.dirty` with changes
-  not committed), above the release and below the next one, and
-  `build-deb.sh` and `build-rpm.sh` write it, with a changelog entry, into
-  their copy of the tree; the Overview tab shows `0.1.0-3-gabc1234`.
+- The version is in several files (`scripts/versions.mjs`,
+  `docs/architecture/packaging.md`) and changes only in a release, never by
+  hand; builds between releases are named by `scripts/version.sh`.
 - A release is made only when the user asks, with `make release` on a clean
   `main`: it runs the checks, moves the `[Unreleased]` entries under
   `## [X.Y.Z] - YYYY-MM-DD` with the links at the end of the file, sets the
-  version in the files above, commits `Release X.Y.Z` and tags `vX.Y.Z`.
+  version in those files, commits `Release X.Y.Z` and tags `vX.Y.Z`.
   `make next-version` says beforehand which version it will be;
   `VERSION=X.Y.Z` only goes higher. Nothing is pushed unless asked: then
   `git push origin main vX.Y.Z`.
@@ -275,14 +211,9 @@ interface; so does `checks.sh`, whose stand-in for the webhook then stays up
   is public history: no secrets, no passwords, no details of real (non-test)
   environments or of a developer's machines, in files or in commit messages.
 - License: `LGPL-2.1-or-later`, same as `cockpit-samba-dc`.
-- CI: `.gitea/workflows/ci.yml`, on runners labelled `cockpit-fleet`
-  (Debian 13: tests, the `.deb`), `cockpit-fleet-fedora` and
-  `cockpit-fleet-alma` (the `.rpm` with rpmlint): arm64 containers where
-  jobs run directly, as a non-root user. `.github/workflows/ci.yml` does
-  the same on GitHub, in containers of the three distributions on
-  `ubuntu-latest`, as root, the tools installed at each run. Keep the two
-  in step. Tools with a version (Node.js, ruff) are pinned in both
-  workflows and installed by `scripts/ci-tool.sh`.
+- CI: `.gitea/workflows/ci.yml` (Gitea) and `.github/workflows/ci.yml`
+  (GitHub) run the same steps: keep the two in step; see
+  `docs/architecture/tests.md`, "CI".
 - Never commit, push or create remote repositories unless asked.
 
 ## Reference material
