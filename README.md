@@ -37,8 +37,8 @@ nodes through Ansible alone, without installing an agent on them.
   editor or an uploaded archive; inventories, credentials, job templates with
   survey forms, dry runs with diff, schedules, workflows and approvals.
 - **Keep files for the nodes** — a store of installers and images of any
-  size, uploaded from the browser or written by playbooks, that every run
-  can copy to nodes.
+  size, uploaded from the browser or an SFTP client (WinSCP, sshfs) or
+  written by playbooks, that every run can copy to nodes.
 - **Watch the fleet** — health checks with states, hardware and software
   inventory, pending updates, configuration drift, with history and charts.
 - **Notify** — Telegram, generic webhook, email, Matrix.

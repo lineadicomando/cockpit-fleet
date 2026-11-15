@@ -102,21 +102,6 @@ What each closed phase had to show, and how it was shown.
   drag with Ctrl that copies (Chrome on Linux tells the page of Ctrl only
   on the keys and at the start of a drag), the lists of uploads and
   downloads closed by the user rather than going by themselves.
-- **15, secret variables** (14 November): in a browser on Debian 13, as an
-  administrator, a set made on the Variables page with a plain variable
-  and two secret ones, then edited: a value replaced, a variable removed
-  (its encrypted file went with it), one added with no value, which the
-  list showed as not set. The set given to an inventory from its form; the
-  template's merged view showed the secrets hidden, where each came from,
-  and its own variable winning over the set's. Its launch stopped on the
-  secret with no value; once that was set, the run got the replaced value
-  as typed (`{{ 2 + 2 }}` not evaluated), masked in its output, and no
-  value was found in clear in the database, the files of the controller
-  or the journal. The check found, and fixed: the label of a row with no
-  name yet ("Valore di la variabile segreta"), a remove button named
-  otherwise than it reads, busy buttons announced in English, the merged
-  view not telling a secret with no value apart, and "i run" and
-  "inventory" in the Italian strings of runs in series.
 - **14, starters** (14 November): `files.sh`, `inventories.sh` and
   `negative.sh` in containers of the three distributions, AlmaLinux with
   ansible-core 2.16: the package's starters listed and usable, a project
@@ -136,3 +121,30 @@ What each closed phase had to show, and how it was shown.
   (done on 15 November, [decisions.md](../decisions.md), "YAML
   extension"): `make ct-test` on the three passed but the known failure
   in [tests.md](tests.md).
+- **15, secret variables** (14 November): in a browser on Debian 13, as an
+  administrator, a set made on the Variables page with a plain variable
+  and two secret ones, then edited: a value replaced, a variable removed
+  (its encrypted file went with it), one added with no value, which the
+  list showed as not set. The set given to an inventory from its form; the
+  template's merged view showed the secrets hidden, where each came from,
+  and its own variable winning over the set's. Its launch stopped on the
+  secret with no value; once that was set, the run got the replaced value
+  as typed (`{{ 2 + 2 }}` not evaluated), masked in its output, and no
+  value was found in clear in the database, the files of the controller
+  or the journal. The check found, and fixed: the label of a row with no
+  name yet ("Valore di la variabile segreta"), a remove button named
+  otherwise than it reads, busy buttons announced in English, the merged
+  view not telling a secret with no value apart, and "i run" and
+  "inventory" in the Italian strings of runs in series.
+- **16, the store over SFTP** (15 November): `store.sh` on containers of
+  the three distributions, OpenSSH's `sftp` over an SSH login through
+  `fleet store sftp`: an operator made a folder, put, renamed, got and
+  deleted a file of 5 MB, its digest the same, owned by the service, each
+  change in the audit trail through `sftp`; a viewer read and was refused
+  a write. `negative.sh` on the three, and every script on AlmaLinux. On
+  `deb13`, WinSCP 6.7.1 from `win11` as an operator with a key: 300 MB up
+  and down, the `.filepart` renamed and its time kept, a transfer killed
+  half way resumed, a file replaced; `sshfs` 3.17 on `deb13` copied,
+  moved, replaced and deleted, and was refused an append in place. The
+  section "With an SFTP client" of the Store page seen in Italian in a
+  browser; see [The store](store.md), "Over SFTP".
