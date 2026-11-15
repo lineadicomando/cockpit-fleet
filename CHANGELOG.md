@@ -8,6 +8,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Added
 
 - Each release is published on GitHub with its packages: the `.deb` for
@@ -486,6 +488,7 @@ alone. How to install it is in [docs/install.md](docs/install.md).
   going, purge on Debian removes the data.
 - The interface in English and Italian, accessible to screen readers.
 
-[Unreleased]: https://github.com/lineadicomando/cockpit-fleet/compare/v0.2.0...main
+[Unreleased]: https://github.com/lineadicomando/cockpit-fleet/compare/v0.3.0...main
+[0.3.0]: https://github.com/lineadicomando/cockpit-fleet/releases/tag/v0.3.0
 [0.2.0]: https://github.com/lineadicomando/cockpit-fleet/releases/tag/v0.2.0
 [0.1.0]: https://github.com/lineadicomando/cockpit-fleet/releases/tag/v0.1.0
