@@ -25,6 +25,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
   inventory so kept leave the list of hosts. The flag is reversible, and
   is carried by the export of the configuration.
 
+### Fixed
+
+- The selected text in the file editor is visible again on the line
+  of the cursor, which hid it.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

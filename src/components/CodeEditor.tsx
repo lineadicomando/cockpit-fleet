@@ -60,9 +60,12 @@ const look = EditorView.theme({
         backgroundColor: color("background--color--secondary--default"),
         borderRight: `${color("border--width--regular")} solid ${color("border--color--default")}`,
     },
-    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: color("background--color--primary--hover") },
+    ".cm-activeLineGutter": { backgroundColor: color("background--color--primary--hover") },
+    // The selection is drawn in a layer behind the text: an opaque active line
+    // would hide it, so the line only tints what lies under it.
+    ".cm-activeLine": { backgroundColor: `color-mix(in srgb, ${color("background--color--primary--hover")} 50%, transparent)` },
     "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
-        backgroundColor: color("background--color--action--plain--clicked"),
+        backgroundColor: `color-mix(in srgb, ${color("color--brand--default")} 35%, transparent)`,
     },
     ".cm-selectionMatch": { backgroundColor: color("background--color--secondary--hover") },
     ".cm-tooltip": {
