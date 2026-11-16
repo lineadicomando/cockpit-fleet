@@ -150,8 +150,8 @@ started stays as it is: once logged in, send the message again.
   modules in `[mcp] adhoc_modules`, which change nothing, without become;
   `autonomous` is as `assisted`, held by the backend since nobody confirms
   its calls: at most `[chat] autonomous_runs` launches in a session, none on
-  an inventory with a maintenance window open, no acknowledging a problem
-  and no maintenance window opened or closed, and with
+  an inventory with a maintenance window open, no acknowledging a problem,
+  no maintenance window opened or closed and no schedule turned on, and with
   `autonomous_dry_run` dry runs only; `administrator` gets whatever the
   role allows: ad-hoc commands, changes to templates, inventories and the
   rest, files, projects, credentials, deletes. Only `observer` and

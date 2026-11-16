@@ -64,6 +64,8 @@ not asked for.
 one needs no new collection and a node does not decide whether it is in
 trouble. Each metric may have a warning and a critical; when the critical is
 below the warning, lower is worse (the days before a certificate expires).
+With one of the two set, the direction is that of the catalog's defaults
+for the metric (`catalog.LOWER_IS_WORSE`), higher is worse for any other.
 A check sets only what differs from the catalog's defaults. The modules of
 the catalog report metrics and leave the state to the thresholds (they say
 `unknown` when they cannot measure); the clock's offset is computed here,

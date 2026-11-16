@@ -26,6 +26,8 @@ LAUNCHES = ("run.start", "run.adhoc", "workflow.launch", "workflow.resume", "sch
             "check.run")
 # What keeps a problem from being told.
 SILENCERS = ("state.ack", "state.unack", "maintenance.create", "maintenance.delete")
+# What launches for ever after, out of reach of the count of a session.
+UNBOUNDED = ("schedule.enable",)
 
 
 def _text(value: object) -> str:
@@ -72,6 +74,10 @@ def hold(ctx, name: str, params: dict) -> None:
     if name in SILENCERS:
         raise Forbidden("an agent acting without asking does not silence problems:"
                         " ask a person, or use a profile that asks")
+    if name in UNBOUNDED:
+        raise Forbidden("an agent acting without asking does not turn schedules on: what they"
+                        " launch would not count against its limits; ask a person, or use"
+                        " a profile that asks")
     if name not in LAUNCHES:
         return
     config = ctx.config

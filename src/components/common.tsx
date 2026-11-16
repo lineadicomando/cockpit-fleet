@@ -165,11 +165,12 @@ export function FormModal({ title, submitLabel, onSubmit, onClose, children, isD
     );
 }
 
-export function ConfirmDelete({ what, name, onDelete, onClose }: {
+export function ConfirmDelete({ what, name, onDelete, onClose, isDisabled }: {
     what: string;
     name: string;
     onDelete: () => Promise<void>;
     onClose: () => void;
+    isDisabled?: boolean;
 }) {
     const { t } = useTranslation();
     return (
@@ -179,6 +180,7 @@ export function ConfirmDelete({ what, name, onDelete, onClose }: {
             onSubmit={onDelete}
             onClose={onClose}
             isDanger
+            isDisabled={isDisabled}
             variant={ModalVariant.small}
         >
             <Content component="p">{what}</Content>

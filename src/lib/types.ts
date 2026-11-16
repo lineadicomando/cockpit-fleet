@@ -128,6 +128,8 @@ export interface Credential {
     // Which secret fields are set; values are never sent to the browser.
     secrets: Record<string, boolean>;
     secret_names: Record<string, string>;
+    // What uses it: it cannot be deleted until they are changed.
+    used_by: { kind: "project" | "inventory" | "template" | "check"; name: string }[];
 }
 
 // What project.files offers to choose a playbook or an inventory from.

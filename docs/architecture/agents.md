@@ -98,7 +98,8 @@ and a floor, not a control, since `_through` decides each call again.
 **Autonomy.** In a profile nobody confirms (`profiles.AUTONOMOUS`),
 `dispatch` hands the call, once the role allows it, to `autonomy.hold`:
 nothing that silences a problem (`state.ack`, `state.unack`,
-`maintenance.*`); launches (templates, ad-hoc, workflows and their resume,
+`maintenance.*`); no schedule turned on (`schedule.enable`), whose runs
+would go on after the session and outside its count; launches (templates, ad-hoc, workflows and their resume,
 schedules, checks) only with a session, at most `[chat] autonomous_runs` of
 them, none on an inventory with a maintenance window open, and with
 `autonomous_dry_run` a template's run in check mode and no workflow or

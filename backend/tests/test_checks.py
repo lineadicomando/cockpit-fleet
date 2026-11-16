@@ -118,6 +118,12 @@ class CatalogTest(CheckBase):
         self.assertEqual(catalog.evaluate(metric("days_left", 40), low)[0], catalog.OK)
         self.assertEqual(catalog.evaluate(metric("days_left", 20), low)[0], catalog.WARNING)
         self.assertEqual(catalog.evaluate(metric("days_left", 3), low)[0], catalog.CRITICAL)
+        # One threshold alone keeps the direction of the catalog's defaults.
+        for alone in ({"warning": None, "critical": 7}, {"warning": 30, "critical": None}):
+            state = catalog.evaluate(metric("days_left", 200), {"days_left": alone})[0]
+            self.assertEqual(state, catalog.OK, alone)
+            state = catalog.evaluate(metric("days_left", 3), {"days_left": alone})[0]
+            self.assertNotEqual(state, catalog.OK, alone)
         only = {"not_running": {"warning": None, "critical": 1}}
         self.assertEqual(catalog.evaluate(metric("not_running", 0), only)[0], catalog.OK)
         self.assertEqual(catalog.evaluate(metric("not_running", 2), only)[0], catalog.CRITICAL)
@@ -348,6 +354,24 @@ class CycleTest(CheckBase):
             run_id = self.tick(self.clock + 300)["queued"][0]
             self.answer(run_id, {"web01": {"disk": disk(used)}, "web02": {"disk": disk(10)}})
         self.assertEqual(len(self.ok("notification.list")["notifications"]), told)
+
+    def test_results_of_the_wrong_shape_are_no_results(self):
+        inventory = self.inventory()
+        self.check(inventory, group="web", max_attempts=1)
+        run_id = self.tick()["queued"][0]
+        lines = [{"event": "host_ok", "host": "web01", "ts": self.clock,
+                  "result": {"fleet_results": None}},
+                 {"event": "host_ok", "host": "web02", "ts": self.clock,
+                  "result": {"fleet_results": [{"id": []}, {"id": {"a": 1}}]}}]
+        (paths.RUNS_DIR / run_id / "events.jsonl").write_text(
+            "".join(json.dumps(line) + "\n" for line in lines))
+        self.finish(run_id)
+        self.ok("run.list")  # reconcile
+        self.assertEqual(self.ok("run.get", {"id": run_id})["status"], "successful")
+        states = self.states()
+        for host in ("web01", "web02"):
+            self.assertEqual(states[(host, "disk")]["summary"],
+                             "the node sent no result for this check")
 
     def test_a_task_that_fails_is_unknown(self):
         inventory = self.inventory()

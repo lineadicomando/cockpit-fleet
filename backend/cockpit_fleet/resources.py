@@ -41,7 +41,24 @@ CREDENTIAL_FIELDS = {
 
 # --- credentials ---------------------------------------------------------------
 
-def _credential(row) -> dict:
+# What may use a credential, by kind: one query each, of the credential's id.
+_CREDENTIAL_USERS = (
+    ("project", "SELECT name FROM projects WHERE credential_id = ?1"),
+    ("inventory", "SELECT name FROM inventories WHERE vault_credential_id = ?1"),
+    ("template", "SELECT name FROM templates WHERE machine_credential_id = ?1"
+     " OR vault_credential_id = ?1"
+     " OR id IN (SELECT template_id FROM template_vaults WHERE credential_id = ?1)"),
+    ("check", "SELECT name FROM checks WHERE machine_credential_id = ?1"),
+)
+
+
+def credential_users(conn, credential_id: str) -> list[dict]:
+    """What uses a credential, which keeps it from being deleted."""
+    return [{"kind": kind, "name": row["name"]} for kind, sql in _CREDENTIAL_USERS
+            for row in conn.execute(sql, (credential_id,))]
+
+
+def _credential(conn, row) -> dict:
     fields = CREDENTIAL_FIELDS[row["kind"]]
     return {
         "id": row["id"], "name": row["name"], "kind": row["kind"], "username": row["username"],
@@ -49,6 +66,8 @@ def _credential(row) -> dict:
         # Which secrets exist; their values are never available here.
         "secrets": {field: jobs.secret_file(row["id"], field).is_file() for field in fields},
         "secret_names": {field: jobs.secret_name(row["id"], field) for field in fields},
+        # A client deletes the secrets before the credential: it looks here first.
+        "used_by": credential_users(conn, row["id"]),
     }
 
 
@@ -65,7 +84,7 @@ def credential_of_kind(ctx: Context, credential_id: str | None, kind: str) -> st
 def credential_list(ctx: Context, params: Values) -> dict:
     """The credentials, with which of their secrets are set; never the values."""
     rows = ctx.conn.execute("SELECT * FROM credentials ORDER BY name COLLATE NOCASE")
-    return {"credentials": [_credential(row) for row in rows]}
+    return {"credentials": [_credential(ctx.conn, row) for row in rows]}
 
 
 _CREDENTIAL_PARAMS = {
@@ -96,7 +115,8 @@ def credential_create(ctx: Context, params: Values) -> dict:
     credential_id = store.new_id("c")
     store.insert(ctx.conn, "credentials", {"id": credential_id, "kind": kind,
                                            "created_at": store.now(), **values}, "credential")
-    return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
+    return _credential(ctx.conn, store.fetch(ctx.conn, "credentials", credential_id,
+                                             "credential"))
 
 
 @command("credential.update", role="admin", mutating=True, agent="code",
@@ -107,7 +127,8 @@ def credential_update(ctx: Context, params: Values) -> dict:
     row = store.fetch(ctx.conn, "credentials", credential_id, "credential")
     values = _credential_values(params, row["kind"])
     store.update(ctx.conn, "credentials", credential_id, values, "credential")
-    return _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
+    return _credential(ctx.conn, store.fetch(ctx.conn, "credentials", credential_id,
+                                             "credential"))
 
 
 @command("credential.delete", role="admin", mutating=True, agent="code",
@@ -115,9 +136,14 @@ def credential_update(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def credential_delete(ctx: Context, params: Values) -> dict:
-    """Delete a credential whose secrets have been deleted."""
+    """Delete a credential that nothing uses, once its secrets have been deleted."""
     credential_id = params["id"]
-    row = _credential(store.fetch(ctx.conn, "credentials", credential_id, "credential"))
+    row = _credential(ctx.conn, store.fetch(ctx.conn, "credentials", credential_id,
+                                            "credential"))
+    if row["used_by"]:
+        users = [f"{user['kind']} {user['name']}" for user in row["used_by"]]
+        raise Conflict("it is used by " + ", ".join(users[:5])
+                       + (" and others" if len(users) > 5 else ""))
     if any(row["secrets"].values()):
         raise Conflict("delete the secrets of this credential first")
     store.delete(ctx.conn, "credentials", credential_id, "credential")

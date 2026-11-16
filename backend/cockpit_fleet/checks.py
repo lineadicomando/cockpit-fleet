@@ -357,8 +357,9 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
             else:
                 # A playbook of the user says nothing of what the host is.
                 conn.execute("UPDATE hosts SET reachable = 1 WHERE id = ?", (host["id"],))
-            answers = {item.get("id"): item for item in result.get("fleet_results", [])
-                       if isinstance(item, dict)}
+            given = result.get("fleet_results")
+            answers = {item["id"]: item for item in (given if isinstance(given, list) else [])
+                       if isinstance(item, dict) and isinstance(item.get("id"), str)}
         else:
             conn.execute("UPDATE hosts SET reachable = ? WHERE id = ?",
                          (0 if status == "host_unreachable" else 1 if status else None,

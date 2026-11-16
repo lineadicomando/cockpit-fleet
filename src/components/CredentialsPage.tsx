@@ -133,9 +133,22 @@ export function CredentialsPage() {
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<Credential | null>(null);
     const [deleting, setDeleting] = useState<Credential | null>(null);
+    const userKinds: Record<Credential["used_by"][number]["kind"], string> = {
+        project: t("Project"), inventory: t("Inventory"), template: t("Job template"), check: t("Check"),
+    };
+
+    function usedBy(credential: Credential): string {
+        const users = credential.used_by.map(user => `${userKinds[user.kind]} «${user.name}»`);
+        return t("It is used by: {{users}}. Give them another credential first.", { users: users.join(", ") });
+    }
 
     async function remove(credential: Credential) {
         // Secrets first: the backend refuses to forget a credential that still has some.
+        // They cannot come back, so what uses it is read again right before.
+        const fresh = (await call<{ credentials: Credential[] }>("credential.list")).credentials
+                .find(one => one.id === credential.id);
+        if (fresh && fresh.used_by.length > 0)
+            throw new Error(usedBy(fresh));
         for (const [field, isSet] of Object.entries(credential.secrets)) {
             if (isSet) await deleteSecret(credential.secret_names[field]);
         }
@@ -190,7 +203,9 @@ export function CredentialsPage() {
             {creating && <CredentialModal onClose={() => setCreating(false)} onDone={list.reload} />}
             {editing && <CredentialModal credential={editing} onClose={() => setEditing(null)} onDone={list.reload} />}
             {deleting && (
-                <ConfirmDelete name={deleting.name} what={t("The credential and its secrets are deleted. This cannot be undone.")}
+                <ConfirmDelete name={deleting.name}
+                    what={deleting.used_by.length > 0 ? usedBy(deleting) : t("The credential and its secrets are deleted. This cannot be undone.")}
+                    isDisabled={deleting.used_by.length > 0}
                     onDelete={() => remove(deleting)} onClose={() => setDeleting(null)} />
             )}
         </>

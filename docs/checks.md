@@ -58,7 +58,9 @@ warning and a critical value; a check sets only those that differ from the
 defaults, and a threshold applies to every metric of its name (every
 filesystem, for `used_pct`). When the critical value is below the warning
 one, lower is worse, as with the days before a certificate expires. Leave a
-value empty to have no threshold of that level.
+value empty to have no threshold of that level: a metric whose defaults say
+lower is worse (`days_left`) keeps that direction with one value alone, any
+other is then worse when higher.
 
 ## A check as a playbook
 

@@ -684,6 +684,9 @@ msgstr "Task"
 msgid "Tasks"
 msgstr "Task"
 
+msgid "It is used by: {{users}}. Give them another credential first."
+msgstr "È usata da: {{users}}. Prima assegna loro un'altra credenziale."
+
 msgid "The credential and its secrets are deleted. This cannot be undone."
 msgstr "La credenziale e i suoi segreti vengono eliminati. L'operazione non è reversibile."
 
@@ -3279,8 +3282,8 @@ msgstr "Istruzioni date all'assistente"
 msgid "It may change templates, inventories, schedules and the rest, and run any ad-hoc command your role allows, once you confirm. A change you confirm is made in your name: read each question."
 msgstr "Può cambiare template, inventari, pianificazioni e il resto, ed eseguire qualunque comando ad-hoc il tuo ruolo consenta, dopo la tua conferma. Una modifica che confermi è fatta a tuo nome: leggi ogni domanda."
 
-msgid "It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, and it never silences a problem."
-msgstr "Legge e lancia ciò che è definito senza chiedere conferma. A limitarlo è Fleet: al massimo {{runs}} run in una sessione, nulla su un inventario in manutenzione, e non mette mai a tacere un problema."
+msgid "It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem."
+msgstr "Legge e lancia ciò che è definito senza chiedere conferma. A limitarlo è Fleet: al massimo {{runs}} run in una sessione, nulla su un inventario in manutenzione, nessuna pianificazione attivata, e non mette mai a tacere un problema."
 
 msgid "It reads what you may read, and launches and changes nothing: it asks you nothing."
 msgstr "Legge ciò che puoi leggere tu, non lancia né modifica nulla e quindi non chiede conferme."

@@ -83,6 +83,28 @@ entries go under `[Unreleased]`, under the heading of their kind.
   and of the configuration, `known_hosts`, and the downloads from the
   files of a project or an inventory. The policy of Cockpit's own page
   blocked them, which the fix of 0.2.0 did not reach.
+- A run whose result could not be collected (a check answered by a node
+  with results of the wrong shape, a `result.json` that a playbook
+  rewrote) no longer stops every run that follows: it ends in error, and
+  the runs, the Overview and the scheduler carry on. Before, they all
+  answered "internal error" until the database was repaired by hand.
+- Deleting a credential that a project, an inventory, a job template or a
+  check still uses deleted its secrets and then failed, leaving it in use
+  and empty. It is now refused before anything is deleted, and the page
+  says what uses it.
+- A check that sets only one threshold of `days_left` (certificates)
+  applied it the wrong way round: a certificate with 200 days left was
+  critical. One threshold alone now keeps the direction of the defaults.
+
+### Security
+
+- `fleet-mcp` started without `--profile` (as by an SSH key with a forced
+  command) let the agent name the profile of a call itself, and so leave
+  `autonomous` for a profile without its limits. The profile an agent
+  names is now ignored, as the session and the origin already were.
+- An agent in the `autonomous` profile may no longer turn schedules on:
+  what they launch would have run outside its count of runs, its dry runs
+  only and the maintenance windows.
 
 ## [0.3.0] - 2026-11-15
 

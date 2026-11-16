@@ -94,8 +94,10 @@ class Server:
         if name not in self._tools:
             raise ValueError(f"unknown tool: {name}")
         command, fixed = self._tools[name]
-        # What the tool fixes, where the call comes from and its profile are not
-        # the agent's to say.
+        # What the tool fixes, where the call comes from, its session and its
+        # profile are not the agent's to say, not even the default profile.
+        arguments = {key: value for key, value in arguments.items()
+                     if key not in ("via", "session", "profile")}
         answer = self._call(command, {**arguments, **fixed, **self._through()})
         if answer["ok"]:
             data = answer["data"]

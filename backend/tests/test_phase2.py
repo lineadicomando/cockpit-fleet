@@ -1,14 +1,26 @@
 """Projects, credentials, inventories, templates and the life cycle of runs,
 with the run unit replaced by a fake that just writes a result."""
 
+import dataclasses
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from cockpit_fleet import cli, jobs, journal, paths, resources, runner, runs, system  # noqa: F401
+from cockpit_fleet import (  # noqa: F401
+    cli,
+    jobs,
+    journal,
+    paths,
+    resources,
+    runner,
+    runs,
+    store,
+    system,
+)
 from cockpit_fleet.auth import Caller
 from cockpit_fleet.config import Config
 from cockpit_fleet.errors import BadRequest, Conflict, Unavailable
@@ -142,6 +154,24 @@ class ResourceTest(Base):
         (paths.SECRETS_DIR / f"{name}.cred").unlink()
         self.ok("credential.delete", {"id": credential["id"]})
 
+    def test_a_credential_says_what_uses_it_and_is_not_deleted_meanwhile(self):
+        machine = self.ok("credential.create", {"name": "ssh", "kind": "machine"})
+        vault = self.ok("credential.create", {"name": "v", "kind": "vault", "vault_id": "prod"})
+        self.assertEqual(machine["used_by"], [])
+        template = self.template(machine_credential_id=machine["id"],
+                                 vault_credential_ids=[vault["id"]])
+        self.ok("inventory.update", {"id": template["inventory_id"], "name": "inv",
+                                     "vault_credential_id": vault["id"]})
+        listed = {one["name"]: one["used_by"]
+                  for one in self.ok("credential.list", role="viewer")["credentials"]}
+        self.assertEqual(listed["ssh"], [{"kind": "template", "name": "deploy"}])
+        self.assertEqual(listed["v"], [{"kind": "inventory", "name": "inv"},
+                                       {"kind": "template", "name": "deploy"}])
+        # Refused for what uses it before its secrets, which a client deletes first.
+        answer = self.call("credential.delete", {"id": machine["id"]})
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("template deploy", answer["error"]["message"])
+
     def test_credential_kind_is_checked_where_it_is_used(self):
         vault = self.ok("credential.create", {"name": "v", "kind": "vault"})
         project = self.local_project()
@@ -253,6 +283,38 @@ class RunTest(Base):
         for bad in ({"tags": ["a b"]}, {"forks": 0}, {"forks": 10_000}, {"verbosity": 5}):
             self.assertEqual(self.code("run.start", {"template_id": template["id"], **bad}),
                              "bad_request", bad)
+
+    def test_a_run_that_leaves_garbage_does_not_keep_the_others_from_ending(self):
+        self.config = dataclasses.replace(self.config, max_concurrent_runs=5)
+        template = self.template()
+        odd, broken, fine = (self.ok("run.start", {"template_id": template["id"]})["id"]
+                             for _ in range(3))
+        # The run writes its own directory: a result of the wrong shape is not believed.
+        (paths.RUNS_DIR / odd / "result.json").write_text('{"rc": {}}')
+        self.active.discard(odd)
+        self.finish(broken)
+        self.finish(fine)
+        collect = jobs._collect
+
+        def failing(ctx, run):
+            if run["id"] == broken:
+                raise TypeError("what a node or a playbook left in the run's directory")
+            collect(ctx, run)
+
+        with mock.patch.object(jobs, "_collect", failing):
+            runs = {run["id"]: run for run in self.ok("run.list")["runs"]}
+        self.assertEqual(runs[odd]["status"], "failed")
+        self.assertEqual(runs[broken]["status"], "error")
+        self.assertEqual(runs[fine]["status"], "successful")
+        # Ended, so it is not tried again.
+        self.assertEqual(self.ok("run.get", {"id": broken})["status"], "error")
+
+        late = self.ok("run.start", {"template_id": template["id"]})["id"]
+        (paths.RUNS_DIR / late / "result.json").write_text("[]")
+        self.active.discard(late)
+        with mock.patch.object(store, "now", lambda: time.time() + 3600):
+            self.assertEqual(self.ok("run.get", {"id": late})["error"],
+                             "the run ended without a result")
 
     def test_outcome_is_collected_and_the_copy_removed(self):
         run = self.ok("run.start", {"template_id": self.template()["id"]})

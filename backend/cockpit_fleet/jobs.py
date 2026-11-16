@@ -620,6 +620,8 @@ def _collect(ctx, run) -> None:
         return
     try:
         result = json.loads(read_run_file(directory, "result.json", 1024 * 1024))
+        if not isinstance(result, dict):
+            raise ValueError("result.json is not an object")
     except (OSError, ValueError):
         if store.now() - (run["started_at"] or 0) < _START_GRACE:
             return  # the unit may not have started yet
@@ -630,6 +632,8 @@ def _collect(ctx, run) -> None:
         return
 
     rc = result.get("rc")
+    if type(rc) is not int:
+        rc = None  # written in the run's directory: believed only as far as its shape
     done = CHECK_RCS if run["kind"] == "check" else (0,)
     if run["cancel_requested"] and (rc != 0 or result.get("terminated")):
         status = "canceled"
@@ -835,6 +839,20 @@ def _store_collections(ctx, run, directory: Path) -> None:
                  {"collections_at": store.now(), "collections_error": ""}, "project")
 
 
+def _lost(ctx, run_id: str) -> None:
+    """End a run whose collection failed, so that it is not tried again for
+    ever: what it left is in its directory and the traceback in the journal."""
+    journal.send(f"run {run_id}: cannot collect it", 3, FLEET_RUN=run_id,
+                 FLEET_TRACEBACK=traceback.format_exc())
+    if ctx.conn.in_transaction:
+        ctx.conn.execute("ROLLBACK")
+    try:
+        _finish(ctx, run_id, "error", None, "what the run left could not be collected")
+    except Exception:  # noqa: BLE001
+        journal.send(f"run {run_id}: cannot record its end", 3, FLEET_RUN=run_id,
+                     FLEET_TRACEBACK=traceback.format_exc())
+
+
 def reconcile(ctx) -> None:
     # One at a time: the unit that ends and a page that reads the runs get here
     # together, and what a job left can be taken only once. The rows are read
@@ -844,7 +862,10 @@ def reconcile(ctx) -> None:
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'"
                                     " AND kind != 'workflow'").fetchall():
-            _collect(ctx, run)
+            try:
+                _collect(ctx, run)
+            except Exception:  # noqa: BLE001  (one run must not keep the others from ending)
+                _lost(ctx, run["id"])
     finally:
         os.close(descriptor)
     # A workflow whose step ended while nothing advanced it, after a crash.

@@ -44,7 +44,7 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
         autonomous: t("Autonomous"),
         administrator: t("Administrator"),
     };
-    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
+    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
     const what: Record<string, string> = {
         observer: t("It reads what you may read, and launches and changes nothing: it asks you nothing."),
         assisted: t("It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."),

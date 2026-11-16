@@ -446,6 +446,17 @@ class AutonomyTest(Base):
                                 "forbidden", name)
         self.assertEqual(self.ok("maintenance.list")["maintenances"], [])
 
+    def test_no_schedule_turned_on_whose_runs_would_not_be_counted(self):
+        schedule = self.ok("schedule.create", {"name": "s", "template_id": self.template()["id"],
+                                               "calendar": "hourly"})
+        self.assertTrue(self.via("schedule.disable", {"id": schedule["id"]})["ok"])
+        self.refused(self.via("schedule.enable", {"id": schedule["id"]}),
+                     "does not turn schedules on")
+        listed = self.ok("schedule.list")["schedules"]
+        self.assertFalse(listed[0]["enabled"])
+        self.assertTrue(self.via("schedule.enable", {"id": schedule["id"]},
+                                 profile="assisted")["ok"])
+
     def test_dry_runs_only(self):
         self.config = replace(self.config, chat_autonomous_dry_run=True, chat_autonomous_runs=9)
         template = self.template()
@@ -623,6 +634,12 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.calls, [
             ("mcp.tools", {"via": "mcp", "profile": "observer"}),
             ("run.start", {"template_id": "t1", "via": "mcp", "profile": "observer"})])
+
+    def test_without_a_profile_the_agent_cannot_name_one_either(self):
+        self.ask("tools/list")
+        self.ask("tools/call", {"name": "launch_deploy_abc123",
+                                "arguments": {"profile": "assisted"}})
+        self.assertNotIn("profile", self.calls[-1][1])
 
     def test_one_session_for_every_call_of_a_server(self):
         self.ask("tools/list")

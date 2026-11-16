@@ -659,9 +659,10 @@ class RoleTest(Fixture):
                                        enabled.mcp_adhoc_modules)
             for profile in profiles.PROFILES:
                 # Without a session an autonomous agent launches nothing, and it
-                # never silences a problem (autonomy.py, tested on its own).
-                held = profile in profiles.AUTONOMOUS and name in (*autonomy.LAUNCHES,
-                                                                   *autonomy.SILENCERS)
+                # never silences a problem nor turns a schedule on (autonomy.py,
+                # tested on its own).
+                held = profile in profiles.AUTONOMOUS and name in (
+                    *autonomy.LAUNCHES, *autonomy.SILENCERS, *autonomy.UNBOUNDED)
                 expected = tool and profiles.allows(profile, kind) and not held
                 self.assertEqual(self.reached(name, "admin", via="mcp:x", config=enabled,
                                               profile=profile), expected, (name, profile))

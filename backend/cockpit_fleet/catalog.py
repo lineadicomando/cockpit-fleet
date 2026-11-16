@@ -107,6 +107,18 @@ OWN_KINDS = (PLAYBOOK, COMPLIANCE)
 _COMPLIANCE_THRESHOLDS = {"changed": {"warning": 1, "critical": None}}
 
 
+def _lower_is_worse(limits: dict) -> bool:
+    warning, critical = limits.get("warning"), limits.get("critical")
+    return warning is not None and critical is not None and critical < warning
+
+
+# Metrics whose defaults say lower is worse: a check that sets only one of
+# their thresholds keeps that direction, which one value alone cannot say.
+LOWER_IS_WORSE = frozenset(metric for entry in CATALOG.values()
+                           for metric, limits in entry["thresholds"].items()
+                           if _lower_is_worse(limits))
+
+
 def slow(kind: str) -> bool:
     """Whether a kind goes in cycles of its own, with a longer time limit and
     a lane of the dispatch of its own, so as not to hold back the others."""
@@ -219,7 +231,10 @@ def evaluate(metrics: list[dict], thresholds: dict) -> tuple[int, list[str]]:
         if not limits:
             continue
         warning, critical = limits.get("warning"), limits.get("critical")
-        lower = warning is not None and critical is not None and critical < warning
+        if warning is not None and critical is not None:
+            lower = critical < warning
+        else:
+            lower = found["name"] in LOWER_IS_WORSE
         value = found["value"]
         where = f" on {found['instance']}" if found.get("instance") else ""
         unit = found.get("unit", "")
