@@ -119,7 +119,7 @@ answered() {
 out=$(assistant itadmin)
 expect_eq "fleet assistant runs the agent's program for a terminal, on the terminal" \
     "$(printf '%s' "$out" | grep -o 'servers=.*')" \
-    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin reads-unasked=True launches-unasked=False told=True rules=False"
+    "servers=cockpit-fleet role=operator tty=True no-tools=True user=itadmin sigint=default reads-unasked=True launches-unasked=False told=True rules=False"
 printf 'IT-RULE: never touch the inventory school.\n' > /etc/cockpit-fleet/assistant.md
 expect_eq "the instructions of the controller follow those of the package" \
     "$(assistant itadmin | grep -o 'told=.*')" "told=True rules=True"

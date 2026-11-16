@@ -25,8 +25,13 @@ for line in done.stdout.splitlines():
     if answer.get("id") == 1 and "result" in answer and not answer["result"]["isError"]:
         role = json.loads(answer["result"]["content"][0]["text"])["role"]
 allowed = args[args.index("--allowedTools") + 1].split(",") if "--allowedTools" in args else []
+# Whether ^C reaches it: a signal ignored by fleet-chat would stay ignored here.
+with open("/proc/self/status", encoding="ascii") as status:
+    ignored = int(next(line for line in status if line.startswith("SigIgn:")).split()[1], 16)
+sigint = "ignored" if ignored & (1 << 1) else "default"
 print(f"servers={','.join(servers)} role={role} tty={sys.stdin.isatty()}"
       f" no-tools={args[args.index('--tools') + 1] == ''} user={os.environ.get('USER')}"
+      f" sigint={sigint}"
       f" reads-unasked={'mcp__cockpit-fleet__run_list' in allowed}"
       f" launches-unasked={'mcp__cockpit-fleet__run_start' in allowed}"
       f" told={'cockpit-fleet' in args[-1]} rules={'IT-RULE' in args[-1]}")
