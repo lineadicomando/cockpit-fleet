@@ -78,24 +78,27 @@ function Figure({ title, value, children, section, tone }: {
     );
 }
 
-// The days of a chart as a table, for a screen reader.
+// The days of a chart as a table, for a screen reader. The class is on a
+// wrapper: Firefox does not clip the caption of a table that carries it.
 function DaysTable<T extends { start: number }>({ caption, days, columns }: {
     caption: string; days: T[]; columns: [keyof T & string, string][];
 }) {
     const { t, i18n } = useTranslation();
     return (
-        <table className="pf-v6-screen-reader">
-            <caption>{caption}</caption>
-            <thead><tr><th>{t("Day")}</th>{columns.map(([key, name]) => <th key={key}>{name}</th>)}</tr></thead>
-            <tbody>
-                {days.map(day => (
-                    <tr key={day.start}>
-                        <td>{dayLabel(day.start, i18n.language)}</td>
-                        {columns.map(([key]) => <td key={key}>{String(day[key])}</td>)}
-                    </tr>
-                ))}
-            </tbody>
-        </table>
+        <div className="pf-v6-screen-reader">
+            <table>
+                <caption>{caption}</caption>
+                <thead><tr><th>{t("Day")}</th>{columns.map(([key, name]) => <th key={key}>{name}</th>)}</tr></thead>
+                <tbody>
+                    {days.map(day => (
+                        <tr key={day.start}>
+                            <td>{dayLabel(day.start, i18n.language)}</td>
+                            {columns.map(([key]) => <td key={key}>{String(day[key])}</td>)}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     );
 }
 
