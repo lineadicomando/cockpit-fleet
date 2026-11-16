@@ -119,7 +119,7 @@ export function App() {
                 </PageSection>
                 <PageSection isFilled={filled} className={filled ? "fleet-fill" : undefined}>
                     <TabPanel panelId="fleet-section" active={section}>
-                        {section === "overview" && <OverviewPage session={data} onOpenSystem={() => go("system")} />}
+                        {section === "overview" && <OverviewPage session={data} />}
                         {section === "hosts" && (location.path[1]
                             ? <HostDetailPage key={location.path[1]} id={location.path[1]} />
                             : <HostsPage />)}

@@ -91,6 +91,7 @@ store.sftp viewer M
 starter.list admin -
 project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M
+overview.get viewer -
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()
@@ -106,7 +107,8 @@ RIGHTS = {"approval.approve": "approve", "approval.list": "approve",
 HOUSEKEEPING = {"run.reconcile", "scheduler.tick", "notification.deliver", "run.list",
                 "run.get", "run.result", "workflow.progress", "approval.list", "state.list",
                 "selfcheck", "system.health", "hostkey.scan", "module.list", "module.doc",
-                "module.help", "check.list", "host.list", "host.get", "run.log", "run.events"}
+                "module.help", "check.list", "host.list", "host.get", "run.log", "run.events",
+                "overview.get"}
 
 TARBALL = base64.b64encode(b"\x1f\x8b" + bytes(30)).decode()
 PUBLIC_KEY = base64.b64encode(b"\x00\x00\x00\x0bssh-ed25519" + bytes(36)).decode()

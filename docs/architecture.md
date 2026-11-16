@@ -22,6 +22,7 @@ hand.
 | [time-series.md](architecture/time-series.md) | Metrics and their aggregates |
 | [maintenance.md](architecture/maintenance.md) | Retention and `maintenance.tidy` |
 | [health.md](architecture/health.md) | `system.health` |
+| [dashboard.md](architecture/dashboard.md) | The Overview: `overview.get`, what it sums and how fast |
 | [export.md](architecture/export.md) | Export and import of the configuration |
 | [agents.md](architecture/agents.md) | `fleet-mcp`, classes of commands, profiles, questions by profile, autonomy, drafts |
 | [terminal.md](architecture/terminal.md) | The command `fleet`, projects at a terminal |

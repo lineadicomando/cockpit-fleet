@@ -928,7 +928,7 @@ def caught_up(ctx: Context, inventory_id: str, group: str, run, finished: float)
 
 # --- commands: checks -----------------------------------------------------------------
 
-def _counts(ctx: Context, where: str, args: tuple) -> dict:
+def state_counts(ctx: Context, where: str, args: tuple) -> dict:
     counts = {"ok": 0, "warning": 0, "critical": 0, "unknown": 0, "pending": 0}
     for row in ctx.conn.execute(
             f"SELECT s.state, count(*) AS n FROM check_states s JOIN checks c ON c.id = s.check_id"  # noqa: S608
@@ -948,7 +948,7 @@ def _check(ctx: Context, row) -> dict:
                 enabled=bool(row["enabled"]),
                 effective_thresholds=catalog.effective_thresholds(
                     row["kind"], store.loads(row["thresholds"], {})),
-                states=_counts(ctx, "s.check_id = ?", (row["id"],)))
+                states=state_counts(ctx, "s.check_id = ?", (row["id"],)))
     inventory = ctx.conn.execute("SELECT name FROM inventories WHERE id = ?",
                                  (row["inventory_id"],)).fetchone()
     data["inventory"] = inventory["name"] if inventory else ""
@@ -1159,7 +1159,7 @@ def state_list(ctx: Context, params: Values) -> dict:
             where.append(f"{column} = ?")
             args.append(params[name])
     # The counters are those of the whole selection, problems or not.
-    counts = _counts(ctx, " AND ".join(where) or "1 = 1", tuple(args))
+    counts = state_counts(ctx, " AND ".join(where) or "1 = 1", tuple(args))
     if params["problems"]:
         where.append("s.state IS NOT NULL AND s.state != 0")
     states = _states(ctx, "".join(f" AND {part}" for part in where), tuple(args))

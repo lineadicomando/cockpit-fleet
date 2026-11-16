@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import cockpit from "cockpit";
 
 export function useCockpitLocation() {
@@ -97,4 +97,20 @@ export function useStoredState<T>(key: string, read: (text: string | null) => T)
         }
     }, [key]);
     return [value, store];
+}
+
+// The width of the element, followed as the page is resized: a chart is
+// drawn at a size in pixels.
+export function useWidth(): [RefObject<HTMLDivElement>, number] {
+    const ref = useRef<HTMLDivElement>(null);
+    const [width, setWidth] = useState(0);
+    useLayoutEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        setWidth(element.clientWidth);
+        const observer = new ResizeObserver(entries => setWidth(Math.floor(entries[0].contentRect.width)));
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
+    return [ref, width];
 }

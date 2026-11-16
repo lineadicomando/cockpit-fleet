@@ -130,8 +130,14 @@ in [security.md](security.md); the decisions behind these limits in
   the lane of the other checks and makes them skip too.
 - Health: the last day only, no history; three column headers of the
   cycles cut short at 1400 px ("Inve…", "Interv…", "Durata, …").
-- Charts: on the page of a host only, per check; no zoom, no chosen dates,
-  no thresholds drawn; the labels of the axes faint on the dark theme.
+- Overview: no filter by inventory; no history of what is kept as it is
+  now (the number of hosts, updates, compliance), nor fleet-wide metrics;
+  days in the browser's offset of today, so a day across a change of
+  summer time is an hour off, and in UTC at a terminal; the hosts that
+  fail most count the runs they failed in, not out of how many; a host is
+  named, not linked, since a name may be in several inventories.
+- Charts: on the page of a host (per check) and the Overview only; no
+  zoom, no chosen dates, no thresholds drawn.
 - Interface (25 October): the summary a node writes for a check is English
   ("accounts 2 (warning 2)"), as are the backend's messages; the counts of
   the states on the page of hosts are headings; a page left open across an

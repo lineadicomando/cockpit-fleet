@@ -221,9 +221,6 @@ msgstr "Vedere lo stato della flotta, la cronologia delle run e i dati raccolti.
 msgid "Show older entries"
 msgstr "Mostra le voci precedenti"
 
-msgid "Show the checks"
-msgstr "Mostra i controlli"
-
 msgid "State directory"
 msgstr "Directory di stato"
 
@@ -302,9 +299,6 @@ msgstr "Quando"
 
 msgid "You have no role in Fleet"
 msgstr "Non hai un ruolo in Fleet"
-
-msgid "Your access"
-msgstr "Il tuo accesso"
 
 msgid "sshpass, for SSH logins with a password"
 msgstr "sshpass, per gli accessi SSH con password"
@@ -3993,3 +3987,241 @@ msgstr "Con un progetto o un inventario, solo i loro template possono essere pas
 
 msgid "This job template is not of the project or the inventory of the workflow: choose another one."
 msgstr "Questo template non è del progetto o dell'inventario del workflow: scegline un altro."
+
+msgid "All compliant"
+msgstr "Tutti conformi"
+
+msgid "all hosts"
+msgstr "tutti gli host"
+
+msgid "all reachable"
+msgstr "tutti raggiungibili"
+
+msgid "Checks by state"
+msgstr "Check per stato"
+
+msgid "Coming up"
+msgstr "In arrivo"
+
+msgid "Days shown"
+msgstr "Giorni mostrati"
+
+msgid "failed {{failed}} of {{runs}}"
+msgstr "falliti {{failed}} su {{runs}}"
+
+msgid "Failing most"
+msgstr "Falliscono più spesso"
+
+msgid "from {{start}} to {{end}}"
+msgstr "dal {{start}} al {{end}}"
+
+msgid "Go to the checks"
+msgstr "Vai ai check"
+
+msgid "Keeping up"
+msgstr "Al passo"
+
+msgid "Latest failures"
+msgstr "Ultimi fallimenti"
+
+msgid "Longest"
+msgstr "Il più lungo"
+
+msgid "Mean time to recover"
+msgstr "Tempo medio di ripristino"
+
+msgid "No check runs on the hosts yet."
+msgstr "Nessun check è ancora stato eseguito sugli host."
+
+msgid "No host yet: they come from the inventories that checks use."
+msgstr "Ancora nessun host: vengono dagli inventari usati dai check."
+
+msgid "No runs in these days."
+msgstr "Nessun run in questi giorni."
+
+msgid "No schedule is enabled."
+msgstr "Nessuna pianificazione è attiva."
+
+msgid "none"
+msgstr "nessuno"
+
+msgid "None open or to come."
+msgstr "Nessuna in corso o in programma."
+
+msgid "none yet"
+msgstr "ancora nessuno"
+
+msgid "not collected yet"
+msgstr "non ancora raccolti"
+
+msgid "Not collected yet"
+msgstr "Non ancora raccolti"
+
+msgid "Not restarted for {{days}} days"
+msgstr "Non riavviati da {{days}} giorni"
+
+msgid "Nothing failed in these days."
+msgstr "Niente è fallito in questi giorni."
+
+msgid "Open problems"
+msgstr "Problemi aperti"
+
+msgid "Open problems, the worst first"
+msgstr "Problemi aperti, i più gravi prima"
+
+msgid "Other systems"
+msgstr "Altri sistemi"
+
+msgid "Problems and recoveries"
+msgstr "Problemi e ripristini"
+
+msgid "Problems and recoveries by day"
+msgstr "Problemi e ripristini per giorno"
+
+msgid "Recoveries"
+msgstr "Ripristini"
+
+msgid "Runs by day and outcome"
+msgstr "Run per giorno ed esito"
+
+msgid "Show the assets"
+msgstr "Mostra gli asset"
+
+msgid "Show the checks of the system"
+msgstr "Mostra i controlli del sistema"
+
+msgid "Show the hosts"
+msgstr "Mostra gli host"
+
+msgid "Show the runs"
+msgstr "Mostra i run"
+
+msgid "since {{time}}"
+msgstr "dal {{time}}"
+
+msgid "State of the checks"
+msgstr "Stato dei check"
+
+msgid "Stopped"
+msgstr "Interrotti"
+
+msgid "Successful runs"
+msgstr "Run riusciti"
+
+msgid "Under way"
+msgstr "In corso"
+
+msgid "until {{time}}"
+msgstr "fino al {{time}}"
+
+msgid "Usual duration"
+msgstr "Durata abituale"
+
+msgid "What the hosts are"
+msgstr "Com'è fatta la flotta"
+
+msgid "Your access and the installation"
+msgstr "Il tuo accesso e l'installazione"
+
+msgid "awaiting_approval_count"
+msgid_plural "awaiting_approval_count_plural"
+msgstr[0] "{{count}} da approvare"
+msgstr[1] "{{count}} da approvare"
+
+msgid "checks_on_hosts"
+msgid_plural "checks_on_hosts_plural"
+msgstr[0] "check"
+msgstr[1] "check"
+
+msgid "cycles_behind_count"
+msgid_plural "cycles_behind_count_plural"
+msgstr[0] "{{count}} gruppo di check in ritardo"
+msgstr[1] "{{count}} gruppi di check in ritardo"
+
+msgid "cycles_unprepared_count"
+msgid_plural "cycles_unprepared_count_plural"
+msgstr[0] "{{count}} gruppo di check non preparato"
+msgstr[1] "{{count}} gruppi di check non preparati"
+
+msgid "days_count"
+msgid_plural "days_count_plural"
+msgstr[0] "{{count}} giorno"
+msgstr[1] "{{count}} giorni"
+
+msgid "failed_in_runs"
+msgid_plural "failed_in_runs_plural"
+msgstr[0] "fallito in {{count}} run"
+msgstr[1] "fallito in {{count}} run"
+
+msgid "failed_of_runs_in_days"
+msgid_plural "failed_of_runs_in_days_plural"
+msgstr[0] "{{failed}} falliti su {{count}} in {{days}} giorni"
+msgstr[1] "{{failed}} falliti su {{count}} in {{days}} giorni"
+
+msgid "hosts_drifted_count"
+msgid_plural "hosts_drifted_count_plural"
+msgstr[0] "{{count}} host non conforme"
+msgstr[1] "{{count}} host non conformi"
+
+msgid "hosts_of_known"
+msgid_plural "hosts_of_known_plural"
+msgstr[0] "{{count}} host su {{known}}"
+msgstr[1] "{{count}} host su {{known}}"
+
+msgid "in_maintenance_count"
+msgid_plural "in_maintenance_count_plural"
+msgstr[0] "{{count}} in manutenzione"
+msgstr[1] "{{count}} in manutenzione"
+
+msgid "no_alerts_in_days"
+msgid_plural "no_alerts_in_days_plural"
+msgstr[0] "Nessun problema è iniziato o finito nell'ultimo giorno."
+msgstr[1] "Nessun problema è iniziato o finito negli ultimi {{count}} giorni."
+
+msgid "not_acknowledged_of"
+msgid_plural "not_acknowledged_of_plural"
+msgstr[0] "non presi in carico, su {{count}} aperto"
+msgstr[1] "non presi in carico, su {{count}} aperti"
+
+msgid "notifications_failed_count"
+msgid_plural "notifications_failed_count_plural"
+msgstr[0] "{{count}} notifica non consegnata"
+msgstr[1] "{{count}} notifiche non consegnate"
+
+msgid "on_hosts_count"
+msgid_plural "on_hosts_count_plural"
+msgstr[0] "su {{count}} host"
+msgstr[1] "su {{count}} host"
+
+msgid "queued_count"
+msgid_plural "queued_count_plural"
+msgstr[0] "{{count}} in coda"
+msgstr[1] "{{count}} in coda"
+
+msgid "running_count"
+msgid_plural "running_count_plural"
+msgstr[0] "{{count}} in corso"
+msgstr[1] "{{count}} in corso"
+
+msgid "runs_of_last_days"
+msgid_plural "runs_of_last_days_plural"
+msgstr[0] "Run dell'ultimo giorno"
+msgstr[1] "Run degli ultimi {{count}} giorni"
+
+msgid "time_to_recover_over"
+msgid_plural "time_to_recover_over_plural"
+msgstr[0] "{{duration}}, su {{count}} ripristino"
+msgstr[1] "{{duration}}, su {{count}} ripristini"
+
+msgid "unreachable_count"
+msgid_plural "unreachable_count_plural"
+msgstr[0] "{{count}} irraggiungibile"
+msgstr[1] "{{count}} irraggiungibili"
+
+msgid "updates_on_hosts"
+msgid_plural "updates_on_hosts_plural"
+msgstr[0] "{{count}} aggiornamento su {{hosts}} host"
+msgstr[1] "{{count}} aggiornamenti su {{hosts}} host"
+
+msgid "Successes"
+msgstr "Riusciti"

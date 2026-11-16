@@ -48,7 +48,9 @@ into lines is in `src/lib/metrics.ts`, tested apart from the page.
 They use `@patternfly/react-charts` 8 (Victory 37), the major that goes with
 PatternFly 6. It costs about 380 kB of minified bundle, a quarter of the rest;
 the bundle is therefore split (`splitting` in `build.js`) and the charts are a
-chunk of their own, loaded the first time a check is opened. A page that shows
+chunk of their own (`charts.tsx`, with those of the [Overview](dashboard.md):
+one chunk, or each would carry the same styles, which rpmlint refuses),
+loaded the first time a check is opened. A page that shows
 no chart loads as before. `build.js` empties `dist/` before a build, since
 chunks are named by their hash and the package copies the whole directory. A
 page loaded before an upgrade asks for a chunk that is no longer there: it

@@ -10,6 +10,19 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Overview: the first tab shows the state of the fleet at a glance, read
+  again every 30 s. A row of figures (hosts and how many cannot be
+  reached, open problems not acknowledged, the share of successful runs,
+  the queue, security updates), each leading to its section; the checks
+  by state with the worst open problems; the runs of each day by outcome,
+  with their durations and the latest failures; problems and recoveries
+  of each day with the mean time to recover; the job templates and hosts
+  that fail most; the next schedules and maintenance windows; the systems
+  of the hosts, their updates and compliance, and those not restarted for
+  a month; at the bottom, your access, the version, the checks of the
+  installation and whether the controller keeps up. Over 7, 14 or 30
+  days, in the browser's time zone. Also `overview.get` for viewers, and
+  `fleet overview get` at a terminal.
 - Workflows: a workflow may name a project, an inventory or both, and then
   only their job templates can be its steps, so that a template alike on
   another inventory is not taken for one of them. Chosen in the form of
@@ -56,6 +69,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- Charts on the page of a host: the labels of their axes and legends are
+  readable on the dark theme.
 - The selected text in the file editor is visible again on the line
   of the cursor, which hid it.
 - Firefox saved none of the files made in the page: the exports of assets

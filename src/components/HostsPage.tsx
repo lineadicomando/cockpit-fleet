@@ -41,7 +41,7 @@ function ChartsMissing() {
 
 // The charts bring their own library, loaded the first time one is shown. A
 // page loaded before an upgrade asks for a chunk that is gone: say so.
-const MetricHistory = lazy(() => import("./MetricHistory.tsx").then(
+const MetricHistory = lazy(() => import("./charts.tsx").then(
     module => ({ default: module.MetricHistory }),
     () => ({ default: ChartsMissing }),
 ));
