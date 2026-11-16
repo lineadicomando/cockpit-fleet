@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AcpError, Connection, applyUpdate, fleetTool, permissionOutcome, type Item } from "../src/lib/acp.ts";
+import { AcpError, Connection, applyUpdate, fleetTool, namedByAgent, permissionOutcome, type Item } from "../src/lib/acp.ts";
 import { Chat, question, type ToolInfo, type Transport } from "../src/lib/chat.ts";
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -74,6 +74,8 @@ test("only a tool of fleet-mcp is recognised as one", () => {
     assert.equal(fleetTool({ title: "mcp__cockpit-fleet__run_log" }), "run_log");
     assert.equal(fleetTool({ _meta: { claudeCode: { toolName: "mcp__other__run_start" } }, title: "Bash" }), "");
     assert.equal(fleetTool(null), "");
+    assert.equal(namedByAgent({ _meta: { claudeCode: { toolName: "mcp__cockpit-fleet__run_start" } } }), true);
+    assert.equal(namedByAgent({ title: "mcp__cockpit-fleet__run_log" }), false);
 });
 
 const OPTIONS = [
@@ -217,6 +219,23 @@ test("the first message opens a session with fleet-mcp as the only server and no
     // The second message goes to the same session.
     await agent.chat.send("and now?");
     assert.equal(agent.methods().filter(method => method === "session/new").length, 1);
+});
+
+test("a call known only by its title is asked about, even one that reads", async () => {
+    const agent = new Agent();
+    await agent.ready();
+    agent.chat.send("look");
+    await tick();
+    agent.say({
+        jsonrpc: "2.0", id: 60, method: "session/request_permission",
+        params: { sessionId: "s1", options: OPTIONS, toolCall: { toolCallId: "c60", title: "mcp__cockpit-fleet__run_list", rawInput: {} } },
+    });
+    await tick();
+    assert.equal(agent.chat.getState().ask?.tool?.name, "run_list");
+    assert.equal(agent.answerTo(60), undefined);
+    agent.chat.answer("once");
+    await tick();
+    assert.deepEqual(agent.answerTo(60)!.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
 });
 
 test("reading is allowed without asking, a change waits for the person", async () => {

@@ -56,6 +56,14 @@ jobs:
       - name: Frontend tests
         run: npm test
 
+      # A string changed in the source and not in the catalogs, or a po not
+      # compiled: what the page shows would not be what po/it.po says.
+      - name: Translations up to date
+        run: |
+          npm run pot
+          npm run po-compile
+          git diff --exit-code src/locales
+
       - name: Lint backend
         run: ruff check --no-cache backend collection
 

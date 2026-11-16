@@ -103,6 +103,10 @@ def generate_config(project: Path) -> tuple[str, list[str]]:
         for key, value in source.items(section):
             if key not in allowed:
                 continue
+            if "\n" in value or "\r" in value:
+                # Continuation lines: written back, they would be sections
+                # and keys of their own, past the list above.
+                continue
             if key in _CONFIG_PATHS:
                 paths = _project_paths(project, value)
                 if key == "collections_path":

@@ -36,10 +36,12 @@ else. An administrator of the machine can, of course, do anything.
    command's code runs, and checks every parameter against the command's
    declaration. The page hides what a role cannot do, but that is a
    convenience: the backend decides.
-4. **Two programs run as root**, a few dozen lines each: `fleet-unit` starts
-   or stops one instance of the packaged run unit, and `fleet-secret`
-   encrypts a value read from its input. Each takes one identifier and
-   nothing else: no path, no option, no unit name.
+4. **Two programs run as root**, short ones: `fleet-unit` starts or stops
+   one instance of the packaged run unit, and `fleet-secret` encrypts a
+   value read from its input, deletes or lists secrets, and keeps an
+   operator's answer to a secret question for a run. Each takes a verb and
+   at most one identifier, which it checks: no path, no option, no unit
+   name.
 5. **Each run is a systemd unit**, under the service account, sandboxed.
    It sees its own directory, its own decrypted secrets and the network;
    not the database, the projects the backend keeps, other runs, the
@@ -207,5 +209,6 @@ distributions and on machines: what the service account can reach
 (`privileges.sh`), what a run can reach (`sandbox.sh`), roles and sudoers
 (`roles.sh`), and hostile input through sudo as each role
 (`negative.sh`). A review of the root helpers, the sandbox, sudoers,
-archives, git and bundles was done on 24 October 2026; what it fixed and
-what it left is in the TODO.
+archives, git and bundles was done on 24 October 2026, and a review of
+the whole project on 16 November 2026; what they left is in
+[limits.md](limits.md).

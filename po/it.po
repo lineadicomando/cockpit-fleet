@@ -4228,3 +4228,6 @@ msgstr[1] "{{count}} aggiornamenti su {{hosts}} host"
 
 msgid "Successes"
 msgstr "Riuscite"
+
+msgid "The set was deleted, but the values of {{names}} could not be: they stay in /etc/cockpit-fleet/secrets until removed with fleet-secret delete."
+msgstr "Il set è stato eliminato, ma i valori di {{names}} no: restano in /etc/cockpit-fleet/secrets finché non vengono rimossi con fleet-secret delete."

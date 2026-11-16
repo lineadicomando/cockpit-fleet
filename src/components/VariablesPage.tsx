@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Button, Content, ExpandableSection, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem,
@@ -77,23 +77,36 @@ function VariableSetModal({ set, onClose, onDone }: { set?: VariableSet; onClose
     const [secrets, setSecrets] = useState<SecretRow[]>(
         (set?.secrets ?? []).map((saved, key) => ({ key, name: saved.name, saved, value: "" })));
 
+    // Made by a first try whose secrets then failed: a second try updates it.
+    const made = useRef<VariableSet | undefined>(set);
+    // Values already deleted by a first try, which a second does not ask for again.
+    const deleted = useRef(new Set<string>());
+
     async function submit() {
         const variables = parseVariables(text);
         if (variables === null) throw new Error(t("The variables must be a JSON object, for example {\"domain\": \"school.edu\"}."));
         const rows = secrets.map(row => ({ ...row, name: row.name.trim() }));
         if (rows.some(row => !row.name)) throw new Error(t("Give each secret variable a name."));
         const params = { name, description, variables, secrets: rows.map(row => row.name) };
-        const saved = await call<VariableSet>(set ? "varset.update" : "varset.create", set ? { id: set.id, ...params } : params);
-        // The values go to fleet-secret once the set has made room for them.
-        for (const row of rows.filter(one => one.value)) {
-            const where = saved.secrets.find(one => one.name === row.name);
-            if (where) await setSecret(where.secret_name, row.value);
+        const before = made.current;
+        const saved = await call<VariableSet>(before ? "varset.update" : "varset.create", before ? { id: before.id, ...params } : params);
+        made.current = saved;
+        try {
+            // The values go to fleet-secret once the set has made room for them.
+            for (const row of rows.filter(one => one.value)) {
+                const where = saved.secrets.find(one => one.name === row.name);
+                if (where) await setSecret(where.secret_name, row.value);
+            }
+            // A secret variable taken out of the set, as it was when the form
+            // opened, loses its value.
+            for (const gone of (set?.secrets ?? []).filter(one => one.set && !rows.some(row => row.name === one.name))) {
+                if (deleted.current.has(gone.secret_name)) continue;
+                await deleteSecret(gone.secret_name);
+                deleted.current.add(gone.secret_name);
+            }
+        } finally {
+            onDone();
         }
-        // A secret variable taken out of the set loses its value.
-        for (const gone of (set?.secrets ?? []).filter(one => one.set && !rows.some(row => row.name === one.name))) {
-            await deleteSecret(gone.secret_name);
-        }
-        onDone();
         onClose();
     }
 
@@ -184,10 +197,21 @@ export function VariablesPage() {
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The set of variables is deleted. This cannot be undone.")}
                     onDelete={async () => {
+                        // The set first: one in use is refused, and its secrets must stay.
                         await call("varset.delete", { id: deleting.id });
-                        for (const secret of (deleting.secrets ?? []).filter(one => one.set)) await deleteSecret(secret.secret_name);
-                        setDeleting(null);
                         list.reload();
+                        const left = [];
+                        for (const secret of (deleting.secrets ?? []).filter(one => one.set)) {
+                            try {
+                                await deleteSecret(secret.secret_name);
+                            } catch {
+                                left.push(secret.name);
+                            }
+                        }
+                        // The set is gone, so Delete cannot be tried again: say what stayed.
+                        if (left.length > 0)
+                            throw new Error(t("The set was deleted, but the values of {{names}} could not be: they stay in /etc/cockpit-fleet/secrets until removed with fleet-secret delete.", { names: left.join(", ") }));
+                        setDeleting(null);
                     }}
                     onClose={() => setDeleting(null)} />
             )}

@@ -95,6 +95,8 @@ def terminal(name: str, call=fleetctl, run=subprocess.run, profile: str = "") ->
         print(f"fleet assistant: {answer['error']['message']}", file=sys.stderr)
         return 3
     directory = tempfile.mkdtemp(prefix="fleet-assistant-")
+    saved = {number: signal.getsignal(number)
+             for number in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM)}
     try:
         config = os.path.join(directory, "mcp.json")
         with open(config, "w", encoding="utf-8") as sink:
@@ -102,7 +104,12 @@ def terminal(name: str, call=fleetctl, run=subprocess.run, profile: str = "") ->
                                                  "command": str(LIBEXEC_DIR / "fleet-mcp"),
                                                  "args": mcp_args(answer)}}}, sink)
         # ^C is the agent's, which has the terminal: this one only waits for it.
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        # A handler that does nothing, not SIG_IGN: an ignored signal stays
+        # ignored across exec, and the agent could not be interrupted.
+        signal.signal(signal.SIGINT, _ignore)
+        # The terminal closed: the directory goes with this process.
+        signal.signal(signal.SIGHUP, _leave)
+        signal.signal(signal.SIGTERM, _leave)
         try:
             return run(terminal_argv(answer["data"]["command"], config,
                                      answer["data"]["instructions"],
@@ -113,6 +120,16 @@ def terminal(name: str, call=fleetctl, run=subprocess.run, profile: str = "") ->
             return 3
     finally:
         shutil.rmtree(directory, ignore_errors=True)
+        for number, handler in saved.items():
+            signal.signal(number, handler)
+
+
+def _ignore(_number, _frame) -> None:
+    pass
+
+
+def _leave(number, _frame) -> None:
+    raise SystemExit(128 + number)
 
 
 def _notify(sink, method: str, params: dict) -> None:

@@ -1,4 +1,4 @@
-.TH FLEET 1 "October 2026" "cockpit-fleet" "User Commands"
+.TH FLEET 1 "November 2026" "cockpit-fleet" "User Commands"
 .SH NAME
 fleet \- drive Ansible through cockpit-fleet from a terminal
 .SH SYNOPSIS
@@ -17,6 +17,14 @@ fleet \- drive Ansible through cockpit-fleet from a terminal
 .RB [ \-\-check ]
 .RB [ \-\-diff ]
 .RB [ \-\-serial ]
+.RB [ \-\-tags
+.IR tag ,...]
+.RB [ \-\-skip\-tags
+.IR tag ,...]
+.RB [ \-\-forks
+.IR n ]
+.RB [ \-\-verbosity
+.IR 0\-4 ]
 .RB [ \-\-detach ]
 .br
 .B fleet log
@@ -35,6 +43,13 @@ fleet \- drive Ansible through cockpit-fleet from a terminal
 .br
 .B fleet secret \-\-varset
 .I set variable
+.br
+.B fleet assistant
+.RB [ \-\-profile
+.IR profile ]
+.RI [ agent ]
+.br
+.B fleet store sftp
 .br
 .B fleet help
 .RI [ area " [" verb ]]
@@ -86,8 +101,8 @@ from the standard input with
 .BR @\- ;
 .B @@
 is a plain @. A command that takes an id also takes it alone, and the id of
-a template, project, inventory, credential, check, host, schedule, channel or
-rule may be given by its name.
+a template, project, inventory, credential, check, host, schedule, channel,
+rule or set of variables may be given by its name.
 .B project upload
 takes the archive from a file with
 .BI \-\-archive " path"\fR,
@@ -108,6 +123,11 @@ to
 by default to its name in the current directory, or to the standard output
 with
 .BR "\-\-output \-" .
+.B store sftp
+is an SFTP server of the store, for a client at the other end of the
+caller's own SSH login to the controller, named as the server to start
+(WinSCP, sftp \-s, sshfs \-o sftp_server=); viewers read, operators and
+administrators also write.
 The completion for bash offers commands and options, the choices of an
 option, and the names of what the backend lists for the caller's role.
 .SH PROJECTS AT A TERMINAL
@@ -173,6 +193,14 @@ With
 .BR \-\-serial ,
 the run waits in the queue while another run is running on its inventory or
 one launched before it is queued there, whatever their outcome.
+.BR \-\-tags ,
+.BR \-\-skip\-tags ,
+.B \-\-forks
+and
+.B \-\-verbosity
+take the place of the template's for this run only; an empty
+.B \-\-tags
+means none.
 .TP
 .B log
 Prints the output of a run;
@@ -196,8 +224,11 @@ read back.
 .B assistant
 Talks to the agent of the chat in this terminal, its only tools those of
 fleet\-mcp with the caller's role under the ceiling set for agents; with more
-than one agent, its name chooses. It needs an agent with a program for a
-terminal in config.toml.
+than one agent, its name chooses, and
+.B \-\-profile
+the profile of the assistant among those config.toml enables (by default
+the one it names). It needs an agent with a program for a terminal in
+config.toml.
 .SH OPTIONS
 .TP
 .B \-\-json

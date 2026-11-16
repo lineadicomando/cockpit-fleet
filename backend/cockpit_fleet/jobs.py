@@ -630,6 +630,20 @@ def _artifacts(directory: Path) -> str:
     return text if len(text) <= MAX_ARTIFACTS else "{}"
 
 
+def _tidy(directory: Path, kind: str, status: str) -> None:
+    """Remove what a run needed only while it ran: the copy of the project
+    and the ciphertext of its secrets above all."""
+    for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
+                     "collections", "galaxy", "scratch", "store", "download", "copy"):
+        # What a download that ended short brought is kept a week, to be taken up.
+        if leftover == "download" and kind == "download" and status != "successful":
+            continue
+        shutil.rmtree(directory / leftover, ignore_errors=True)
+    (directory / "archive").unlink(missing_ok=True)
+    # Taken by _store_inventory already: only hosts and groups, but no use kept.
+    (directory / "inventory.json").unlink(missing_ok=True)
+
+
 def _finish(ctx, run_id: str, status: str, rc: int | None, error: str = "",
             extra: dict | None = None) -> None:
     values = {"status": status, "rc": rc, "error": error, "finished_at": store.now(),
@@ -678,6 +692,11 @@ def _collect(ctx, run) -> None:
             _finish(ctx, run_id, "canceled", None)
         else:
             _finish(ctx, run_id, "error", None, "the run ended without a result")
+        # Lost (a reboot, killed): what was prepared for it goes as for any run,
+        # and its farm is not taken in.
+        _tidy(directory, run["kind"], "error")
+        from . import storage  # it builds on this module
+        storage.drop_farm(run_id)
         return
 
     rc = result.get("rc")
@@ -751,16 +770,7 @@ def _collect(ctx, run) -> None:
     if run["kind"] == "check":
         from . import checks
         checks.record_cycle(ctx, run, result, status)
-    # The copy of the project and the ciphertext are only needed while it runs.
-    for leftover in ("project", "creds", "checkout", "checkout.unpack", "inventory",
-                     "collections", "galaxy", "scratch", "store", "download", "copy"):
-        # What a download that ended short brought is kept a week, to be taken up.
-        if leftover == "download" and run["kind"] == "download" and status != "successful":
-            continue
-        shutil.rmtree(directory / leftover, ignore_errors=True)
-    (directory / "archive").unlink(missing_ok=True)
-    # Taken by _store_inventory already: only hosts and groups, but no use kept.
-    (directory / "inventory.json").unlink(missing_ok=True)
+    _tidy(directory, run["kind"], status)
 
     if status == "successful" and run["kind"] in ("sync", "unpack", "galaxy") and not imported:
         # New files may ask for collections that are not here: reconcile()
@@ -940,8 +950,15 @@ def cancel(ctx, run_id: str) -> str:
         from . import workflows
         return workflows.cancel(ctx, run_id)
     if run["status"] in ("queued", WAITING):
-        end_unstarted(ctx, run_id, "canceled")
-        return "canceled"
+        # Claimed first: dispatch or an approval may take it at the same time,
+        # and a run started must not be recorded as canceled.
+        claimed = ctx.conn.execute(
+            "UPDATE runs SET status = 'canceled', finished_at = ? WHERE id = ?"
+            " AND status IN ('queued', ?)", (store.now(), run_id, WAITING)).rowcount
+        if claimed:
+            end_unstarted(ctx, run_id, "canceled")
+            return "canceled"
+        run = store.fetch(ctx.conn, "runs", run_id, "run")
     if run["status"] != "running":
         raise BadRequest("this run has already ended")
     store.update(ctx.conn, "runs", run_id, {"cancel_requested": 1}, "run")

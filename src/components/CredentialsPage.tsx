@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, TextArea, TextInput } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
@@ -84,11 +84,15 @@ function CredentialModal({ credential, onClose, onDone }: { credential?: Credent
     const [vaultId, setVaultId] = useState(credential?.vault_id ?? "");
     const [secrets, setSecrets] = useState<Record<string, string>>({});
 
+    // Made by a first try whose secrets then failed: a second try updates it.
+    const made = useRef<Credential | undefined>(credential);
+
     async function submit() {
         const params = { name, username, vault_id: vaultId };
-        const saved = credential
-            ? await call<Credential>("credential.update", { id: credential.id, ...params })
+        const saved = made.current
+            ? await call<Credential>("credential.update", { id: made.current.id, ...params })
             : await call<Credential>("credential.create", { kind, ...params });
+        made.current = saved;
         try {
             await storeSecrets(saved, secrets);
         } finally {

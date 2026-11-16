@@ -1214,6 +1214,7 @@
   "The same for Windows hosts over SSH: a playbook for the group windows, one to see that they answer, a role, and the collection ansible.windows.": "The same for Windows hosts over SSH: a playbook for the group windows, one to see that they answer, a role, and the collection ansible.windows.",
   "The schedule is deleted. The runs it launched stay in the history.": "The schedule is deleted. The runs it launched stay in the history.",
   "The set of variables is deleted. This cannot be undone.": "The set of variables is deleted. This cannot be undone.",
+  "The set was deleted, but the values of {{names}} could not be: they stay in /etc/cockpit-fleet/secrets until removed with fleet-secret delete.": "The set was deleted, but the values of {{names}} could not be: they stay in /etc/cockpit-fleet/secrets until removed with fleet-secret delete.",
   "The store holds more than can be listed here: only part of it is shown.": "The store holds more than can be listed here: only part of it is shown.",
   "The store is empty": "The store is empty",
   "The syntax check failed": "The syntax check failed",

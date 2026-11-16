@@ -2,7 +2,7 @@
 // and the conversation with it. It lives outside the components, so that it
 // goes on while another tab of the plugin is shown; it ends with the page.
 
-import { AUTH_REQUIRED, AcpError, Connection, MCP_SERVER, applyUpdate, fleetTool, permissionOutcome, type Item } from "./acp.ts";
+import { AUTH_REQUIRED, AcpError, Connection, MCP_SERVER, applyUpdate, fleetTool, namedByAgent, permissionOutcome, type Item } from "./acp.ts";
 
 // A tool of fleet-mcp, as mcp.tools describes it.
 export interface ToolInfo {
@@ -304,7 +304,10 @@ export class Chat {
         // A template made after the chat began is a tool the page has not seen.
         if (name && !this.tools.has(name)) await this.reloadTools();
         const tool = this.tools.get(name) ?? null;
-        const kind = question(tool);
+        let kind = question(tool);
+        // Known only by its title: a call worded as one of ours is asked about,
+        // since what it really is was not said.
+        if (kind === "none" && !namedByAgent(params.toolCall)) kind = "ask";
         if (kind === "none" || (kind === "ask" && this.always.has(tool!.class))) return permissionOutcome(params.options, true);
         const call = isObject(params.toolCall) ? params.toolCall : {};
         const trusts = kind === "ask" ? tool!.class : "";

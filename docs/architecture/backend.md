@@ -5,8 +5,11 @@ backend. The command is a name from a registry; parameters are a JSON object
 on stdin; the answer is one JSON object, `{"ok": true, "data": …}` or
 `{"ok": false, "error": {"code", "message"}}`. The exit status is 0 whenever an
 answer was written, so a failed exit always means the backend was not reached.
-The input is at most 1 MB, for every command but two, which declare their
-own limit: `project.upload` and `config.import`. Two commands of the store
+The input is at most 1 MB, but for the commands that carry files, which
+declare their own limit (`max_input`): `file.write` (about 2 MB),
+`config.import` (8 MB), and about 67 MB for `project.upload`,
+`inventory.create`, `file.change`, `file.import` and `file.push`, an
+archive or a bundle of 50 MB in base64. Two commands of the store
 move files of any size and take other forms (see [The store](store.md)): `store.put`
 reads its parameters on the first line and the bytes after them;
 `store.read` writes the bytes instead of an answer, and may take its one

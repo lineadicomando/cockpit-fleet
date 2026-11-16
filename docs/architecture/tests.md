@@ -172,7 +172,8 @@ environment and working directory cannot bring into fleetctl.
 ## CI
 
 CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
-suites, ruff, and a native package build with lintian, which fails on errors
+suites, the catalogs of the translations regenerated and compared with those
+committed, ruff, and a native package build with lintian, which fails on errors
 and warnings, on a Debian 13 runner (label `cockpit-fleet`); and the `.rpm`
 built natively and checked with rpmlint on two more runners, Fedora 44 and
 AlmaLinux 10 (`cockpit-fleet-fedora`, `cockpit-fleet-alma`), one job each.

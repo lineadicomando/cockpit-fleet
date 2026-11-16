@@ -104,8 +104,8 @@ export function anyDay<T extends { start: number }>(days: T[], keys: (keyof T)[]
     return days.some(day => keys.some(key => Number(day[key]) > 0));
 }
 
-// The ticks of the days axis: every day up to a week, then about one in
-// four or one in seven, always the last (today) included.
+// The ticks of the days axis: every day up to a week, then one in two up
+// to a fortnight and one in five beyond, always the last (today) included.
 export function dayTicks(starts: number[]): number[] {
     const step = starts.length <= 7 ? 1 : starts.length <= 14 ? 2 : 5;
     const last = starts.length - 1;

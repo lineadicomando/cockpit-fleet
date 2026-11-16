@@ -136,6 +136,14 @@ const MAX_OUTPUT = 20000;
 export const MCP_SERVER = "cockpit-fleet";
 const TOOL_PREFIX = `mcp__${MCP_SERVER}__`;
 
+// Whether the agent said which tool a call is for (Claude's _meta), rather
+// than the page reading it from the title, which the model words.
+export function namedByAgent(toolCall: unknown): boolean {
+    if (!isObject(toolCall) || !isObject(toolCall._meta) || !isObject(toolCall._meta.claudeCode)) return false;
+    const name = toolCall._meta.claudeCode.toolName;
+    return typeof name === "string" && name.startsWith(TOOL_PREFIX);
+}
+
 // The tool of fleet-mcp a call is for, or "" when it is something else.
 export function fleetTool(toolCall: unknown): string {
     if (!isObject(toolCall)) return "";

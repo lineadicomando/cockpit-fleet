@@ -139,6 +139,9 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
     );
 }
 
+// How long the buttons of a question wait before they can be pressed.
+const ASK_PAUSE = 600;
+
 // A call that changes something, said in words before it is made.
 function AskModal({ ask, profile }: { ask: Ask; profile: string }) {
     const { t } = useTranslation();
@@ -148,6 +151,15 @@ function AskModal({ ask, profile }: { ask: Ask; profile: string }) {
         ? Object.entries(ask.input as Record<string, unknown>)
         : [];
     const explained = ask.tool?.inputSchema.properties ?? {};
+    // Another question takes the place of one just answered, under the same
+    // buttons: a second click, or one landing as it changes, must not allow
+    // it unread.
+    const [ready, setReady] = useState(false);
+    useEffect(() => {
+        setReady(false);
+        const timer = window.setTimeout(() => setReady(true), ASK_PAUSE);
+        return () => window.clearTimeout(timer);
+    }, [ask]);
     return (
         <Modal variant={ModalVariant.medium} isOpen onClose={() => chat.answer("refuse")}>
             <ModalHeader title={t("Allow this action?")} titleIconVariant="warning"
@@ -174,9 +186,9 @@ function AskModal({ ask, profile }: { ask: Ask; profile: string }) {
                 {fields.length === 0 && ask.input !== null && <pre className="fleet-log">{shown(ask.input)}</pre>}
             </ModalBody>
             <ModalFooter>
-                <Button variant="primary" onClick={() => chat.answer("once")}>{t("Allow once")}</Button>
+                <Button variant="primary" isDisabled={!ready} onClick={() => chat.answer("once")}>{t("Allow once")}</Button>
                 {ask.always && ask.tool && (
-                    <Button variant="secondary" onClick={() => chat.answer("always")}>
+                    <Button variant="secondary" isDisabled={!ready} onClick={() => chat.answer("always")}>
                         {t("Always allow {{kind}} in this conversation", { kind: kind(ask.tool.class) })}
                     </Button>
                 )}

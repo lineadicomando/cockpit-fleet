@@ -702,10 +702,23 @@ def _files_under(tree: Path, path: PurePosixPath) -> list[PurePosixPath]:
     return found
 
 
-def _write_file(target: Path, data: bytes) -> None:
+def _executable(path: Path) -> bool:
+    try:
+        return bool(os.lstat(path).st_mode & stat.S_IXUSR)
+    except OSError:
+        return False
+
+
+def _write_file(target: Path, data: bytes, executable: bool | None = None) -> None:
+    """Write a file whole. It stays executable if it was, or is made so with
+    EXECUTABLE: a script pushed as 100755 and saved in the editor keeps it."""
+    if executable is None:
+        executable = _executable(target)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    temporary = target.with_name(f".{target.name}.fleet-tmp")
+    # A name of its own whatever the length of TARGET's, which may be the longest.
+    temporary = target.parent / ".fleet-tmp"
     temporary.write_bytes(data)
+    temporary.chmod(0o700 if executable else 0o600)
     temporary.replace(target)
 
 
@@ -758,7 +771,8 @@ def _apply(tree: Path, operation: dict, changed: list[bool]) -> tuple[str, list[
         return f"Rename {path} to {to}", [str(path), str(to)]
     for relative in inside:
         origin = source / relative if relative.parts else source
-        _write_file(target / relative if relative.parts else target, _read(origin))
+        _write_file(target / relative if relative.parts else target, _read(origin),
+                    _executable(origin))
     return f"Copy {path} to {to}", [str(to)]
 
 

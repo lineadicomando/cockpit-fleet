@@ -203,6 +203,8 @@ export function StorePage({ directory }: { directory: string }) {
 
     // One upload at a time, in the order they were asked for.
     const uploadsLeft = useRef(0);
+    // Cancelled while it was being got ready, before it had anything to stop.
+    const cancelled = useRef(new Set<number>());
     uploadsLeft.current = uploads.filter(item => item.state === "waiting").length;
     const sending = uploads.some(item => item.state === "sending");
     const next = uploads.find(item => item.state === "waiting");
@@ -220,6 +222,7 @@ export function StorePage({ directory }: { directory: string }) {
             } catch {
                 offset = 0;
             }
+            if (cancelled.current.has(item.key)) return;
             const upload = uploadToStore(item.file, item.path, { offset, replace: item.replace, onProgress: sent => update(item.key, { sent }) });
             current.current = upload;
             try {
@@ -269,6 +272,7 @@ export function StorePage({ directory }: { directory: string }) {
     }
 
     function cancel(item: UploadItem) {
+        cancelled.current.add(item.key);
         update(item.key, { state: "cancelled" });
         if (item.state === "sending") current.current?.cancel();
     }

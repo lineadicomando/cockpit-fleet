@@ -124,6 +124,10 @@ export function CodeEditor({ value, onChange, path, label, readOnly = false, onS
     const view = useRef<EditorView | null>(null);
     const latest = useRef({ onChange, onSave });
     latest.current = { onChange, onSave };
+    // What the editor sent up and may come back as value: a value among them
+    // is an echo, older than the text when keys come faster than renders, and
+    // must not be written back over what was typed since.
+    const sent = useRef<string[]>([]);
     const parts = useRef({ language: new Compartment(), access: new Compartment(), completion: new Compartment() });
 
     const completion = (source?: CompletionSource) => (source ? EditorState.languageData.of(() => [{ autocomplete: source }]) : []);
@@ -160,7 +164,10 @@ export function CodeEditor({ value, onChange, path, label, readOnly = false, onS
                     }),
                     language.of(languageFor(path)), accessPart.of(access(readOnly)), completionPart.of(completion(complete)),
                     EditorView.updateListener.of(update => {
-                        if (update.docChanged) latest.current.onChange(update.state.doc.toString());
+                        if (!update.docChanged) return;
+                        const text = update.state.doc.toString();
+                        sent.current = [...sent.current.slice(-49), text];
+                        latest.current.onChange(text);
                     }),
                 ],
             }),
@@ -181,9 +188,13 @@ export function CodeEditor({ value, onChange, path, label, readOnly = false, onS
     // A value set from outside: a file loaded, changes given up.
     useEffect(() => {
         const current = view.current;
-        if (current && value !== current.state.doc.toString()) {
-            current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: value } });
+        if (!current || value === current.state.doc.toString()) {
+            sent.current = [];
+            return;
         }
+        if (sent.current.includes(value)) return;
+        sent.current = [];
+        current.dispatch({ changes: { from: 0, to: current.state.doc.length, insert: value } });
     }, [value]);
 
     return <div ref={host} className={`fleet-code${className ? ` ${className}` : ""}`} />;

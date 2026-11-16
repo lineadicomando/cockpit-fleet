@@ -56,6 +56,23 @@ class ManagedProjectTest(Managed):
         self.assertEqual((listed["files"], listed["editable"]), ([], True))
         self.assertEqual(self.ok("file.history", {"id": self.id})["commits"], [])
 
+    def test_a_script_saved_or_copied_stays_executable(self):
+        first = self.write("files/run.sh", "#!/bin/sh\n")
+        # Pushed as 100755: the editor has no way to say it, so it is kept.
+        (self.tree / "files/run.sh").chmod(0o755)
+        self.git("add", "files/run.sh")
+        saved = self.write("files/run.sh", "#!/bin/sh\necho hi\n", first["sha256"])
+        self.ok("file.change", {"id": self.id, "operations": [
+            {"op": "copy", "path": "files/run.sh", "to": "files/again.sh"}]})
+        for name in ("run.sh", "again.sh"):
+            self.assertTrue(os.access(self.tree / "files" / name, os.X_OK), name)
+            self.assertTrue(self.git("ls-files", "-s", f"files/{name}").startswith("100755 "))
+        self.write("files/plain.txt", "x")
+        self.assertFalse(os.access(self.tree / "files/plain.txt", os.X_OK))
+        # The longest name the editor takes.
+        self.write("files/" + "a" * 255, "x")
+        self.assertTrue(saved["revision"])
+
     def test_each_write_is_a_commit_by_the_caller(self):
         first = self.write("roles/web/tasks/main.yml", "- debug:\n")
         self.assertEqual(len(first["revision"]), 40)

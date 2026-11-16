@@ -316,6 +316,9 @@ class RunTest(Base):
         with mock.patch.object(store, "now", lambda: time.time() + 3600):
             self.assertEqual(self.ok("run.get", {"id": late})["error"],
                              "the run ended without a result")
+        # What was prepared for it goes, as for a run that ended.
+        self.assertTrue((paths.RUNS_DIR / late).is_dir())
+        self.assertFalse((paths.RUNS_DIR / late / "project").exists())
 
     def test_a_tree_being_changed_is_not_copied_for_a_run(self):
         home = paths.PROJECTS_DIR / "p-0123456789abcdef"
@@ -490,6 +493,31 @@ class RunTest(Base):
         self.assertEqual(self.stopped, [ids[0]])
         self.assertEqual(self.code("run.cancel", {"id": ids[0]}), "bad_request")
         self.assertEqual(self.code("run.cancel", {"id": ids[1]}, role="viewer"), "forbidden")
+
+    def test_a_queued_run_started_meanwhile_is_stopped_not_recorded_canceled(self):
+        template = self.template()
+        ids = [self.ok("run.start", {"template_id": template["id"]})["id"] for _ in range(3)]
+        queued = ids[2]
+        fetch = store.fetch
+
+        def started_meanwhile(conn, table, row_id, what):
+            # Read as queued, started by dispatch before the cancel is recorded.
+            row = fetch(conn, table, row_id, what)
+            if row_id == queued and row["status"] == "queued":
+                conn.execute("UPDATE runs SET status = 'running' WHERE id = ?", (queued,))
+                self.active.add(queued)
+            return row
+
+        def stop(verb, run_id):
+            self.stopped.append(run_id)
+            self.finish(run_id, rc=-15, terminated=True)
+
+        with mock.patch.object(store, "fetch", started_meanwhile), \
+                mock.patch.object(jobs, "_fleet_unit", stop):
+            self.assertEqual(self.ok("run.cancel", {"id": queued})["status"], "canceled")
+        # Its unit was stopped, and its directory left to the collection.
+        self.assertEqual(self.stopped, [queued])
+        self.assertTrue((paths.RUNS_DIR / queued).is_dir())
 
     def test_a_run_whose_unit_cannot_start_ends_and_leaves_nothing_behind(self):
         template = self.template()
@@ -967,6 +995,23 @@ class RunnerPhase2Test(unittest.TestCase):
         self.assertIn("become = True", text)
         for forbidden in ("vault_password_file", "callback_plugins", "host_key_checking",
                           "ssh_args", "inventory", "/usr/share/evil", "/etc", "outside"):
+            self.assertNotIn(forbidden, text)
+
+    def test_continuation_lines_do_not_smuggle_sections_or_keys(self):
+        (self.run / "project" / "ansible.cfg").write_text(
+            "[defaults]\n"
+            "timeout = 10\n"
+            "  [ssh_connection]\n"
+            "  ssh_args = -o ProxyCommand=x\n"
+            "  [defaults]\n"
+            "  callback_plugins = /somewhere\n"
+            "roles_path = roles\n  :/etc\n"
+            "gathering = smart\n"
+        )
+        text, _collections = runner.generate_config(self.run / "project")
+        self.assertIn("gathering = smart", text)
+        for forbidden in ("timeout", "ssh_connection", "ProxyCommand", "callback_plugins",
+                          "roles_path", "/etc"):
             self.assertNotIn(forbidden, text)
 
     def test_missing_or_broken_project_config_gives_an_empty_one(self):

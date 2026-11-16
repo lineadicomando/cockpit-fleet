@@ -36,6 +36,13 @@ class DispatchTest(unittest.TestCase):
         def crash(ctx, params):
             raise RuntimeError("secret detail")
 
+        @cli.command("test.half", role="operator", mutating=True, redact=("token",),
+                     params={"token": cli.Str(), "stop": cli.Str()})
+        def half(ctx, params):
+            # Changes something, then fails as no command does on purpose.
+            ctx.conn.execute("CREATE TABLE IF NOT EXISTS half (x)")
+            raise KeyboardInterrupt if params["stop"] == "interrupt" else OSError("disk")
+
     def ctx(self, role, user="anna"):
         root = Path(self.tmp.name)
         ctx = cli.Context(Caller(1000, user, role), root / "fleet.db", root / "config.toml")
@@ -94,6 +101,16 @@ class DispatchTest(unittest.TestCase):
         self.assertEqual(answer["error"]["code"], "internal")
         self.assertNotIn("secret detail", answer["error"]["message"])
         self.assertIn("secret detail", json.dumps(self.sent, default=str))
+
+    def test_a_mutating_command_that_crashes_or_is_interrupted_is_recorded(self):
+        answer = self.call("test.half", "operator", {"token": "s3cret", "stop": "crash"})
+        self.assertEqual(answer["error"]["code"], "internal")
+        with self.assertRaises(KeyboardInterrupt):
+            self.call("test.half", "operator", {"token": "s3cret", "stop": "interrupt"})
+        entries = [(entry["command"], entry["outcome"], entry["detail"]) for entry in self.audit()]
+        self.assertEqual(entries, [("test.half", "error", "internal error, see the journal"),
+                                   ("test.half", "error", "interrupted")])
+        self.assertNotIn("s3cret", json.dumps(self.audit()))
 
     def test_bad_input(self):
         for raw in (b"[1]", b"{", b'"x"', b"\xff\xfe", b"x" * (cli.MAX_INPUT + 1)):

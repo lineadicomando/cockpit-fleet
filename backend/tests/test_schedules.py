@@ -276,6 +276,18 @@ class TickTest(ScheduleBase):
         self.assertIn("an answer is required", listed[broken["id"]]["last_error"])
         self.assertEqual(listed[broken["id"]]["next_at"], START + 2 * HOUR)
 
+    def test_a_full_disk_fails_the_schedule_not_the_tick(self):
+        schedule = self.schedule()
+
+        def full(tree, destination, *args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        with mock.patch.object(jobs, "snapshot", full):
+            outcomes = {row["id"]: row["outcome"] for row in self.tick(START + HOUR + 1)}
+        self.assertEqual(outcomes, {schedule["id"]: "error"})
+        listed = self.ok("schedule.list")["schedules"][0]
+        self.assertIn("No space left on device", listed["last_error"])
+
     def test_a_schedule_changed_meanwhile_is_left_to_the_change(self):
         schedule = self.schedule()
         row = self.ctx().conn.execute("SELECT * FROM schedules").fetchone()

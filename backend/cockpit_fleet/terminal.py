@@ -567,7 +567,8 @@ def _shortcut_candidates(before: list[str], current: str, areas: list[str],
                           if name.startswith(f"{given[0]}."))
         return []
     if current.startswith("-"):
-        return {"launch": ["--answer", "--limit", "--check", "--diff", "--detach"],
+        return {"launch": ["--answer", "--limit", "--check", "--diff", "--serial", "--tags",
+                           "--skip-tags", "--forks", "--verbosity", "--detach"],
                 "log": ["--follow"], "result": ["--wait"], "secret": ["--channel", "--varset"],
                 "assistant": ["--profile"]}.get(name, [])
     if name == "assistant" and given and given[-1] == "--profile":
@@ -575,8 +576,10 @@ def _shortcut_candidates(before: list[str], current: str, areas: list[str],
             return list(lookup("chat.agents", {})["profiles"]) if lookup is not None else []
         except (Failure, KeyError, TypeError):
             return []
-    if given and given[-1] in ("--answer", "-a", "--limit"):
+    if given and given[-1] in ("--answer", "-a", "--limit", "--tags", "--skip-tags", "--forks"):
         return []
+    if name == "launch" and given and given[-1] == "--verbosity":
+        return [str(level) for level in range(5)]
     if name == "launch" and not positional:
         return _names(lookup, "template")
     if name in ("log", "result") and not positional:

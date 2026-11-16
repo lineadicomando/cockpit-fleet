@@ -414,7 +414,7 @@ export function TemplatesPage() {
                                     <Flex gap={{ default: "gapXs" }} style={{ display: "inline-flex", marginInlineStart: "0.5rem" }}>
                                         <ApprovalModeLabel mode={template.approval} />
                                         {template.survey.length > 0 && <Label isCompact color="blue">{t("Questions")}</Label>}
-                                        {template.become && <Label isCompact color="grey">become</Label>}
+                                        {template.become && <Label isCompact color="grey">{t("become")}</Label>}
                                     </Flex>
                                 </Td>
                                 <Td dataLabel={t("Project")}>{names.project(template.project_id)}</Td>

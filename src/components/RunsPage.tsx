@@ -38,6 +38,13 @@ import { Alert, Button, TabPanel, Tabs } from "./pf.tsx";
 const isActive = isActiveRun;
 // Past this, only the end of the output is drawn; the whole log stays on the server.
 const MAX_SHOWN = 400_000;
+// What the page keeps of it: the end, and a margin so that the cut is not
+// made again at each chunk. A run of hundreds of MB would fill the tab.
+const MAX_KEPT = 2 * MAX_SHOWN;
+
+function keepEnd(text: string): string {
+    return text.length > MAX_KEPT ? text.slice(text.length - MAX_SHOWN - 1) : text;
+}
 
 function useKinds() {
     const { t } = useTranslation();
@@ -281,7 +288,7 @@ export function RunDetailPage({ id }: { id: string }) {
     const [tab, setTab] = useState("output");
     const [error, setError] = useState<string | null>(null);
     const [canceling, setCanceling] = useState(false);
-    const position = useRef({ log: 0, events: 0, play: "", busy: false, done: false });
+    const position = useRef({ log: 0, events: 0, play: "", busy: false, again: false, done: false });
     const active = run.data ? isActive(run.data.status) : true;
     const mayRead = can("run.log");
     const origin = originPath(useCockpitLocation().options.from);
@@ -290,13 +297,20 @@ export function RunDetailPage({ id }: { id: string }) {
     // run has ended, to pick up its last lines.
     async function fetchOutput() {
         const state = position.current;
-        if (!mayRead || state.busy) return;
+        if (!mayRead) return;
+        if (state.busy) {
+            // Asked while a fetch is under way, after the run ended say: what
+            // was written after that fetch read the log is fetched once it ends.
+            state.again = true;
+            return;
+        }
         state.busy = true;
+        state.again = false;
         try {
             for (let more = true; more;) {
                 const chunk = await call<Chunk>("run.log", { id, offset: state.log });
                 state.log = chunk.offset;
-                if (chunk.text) setLog(current => current + chunk.text);
+                if (chunk.text) setLog(current => keepEnd(current + chunk.text));
                 more = chunk.more;
             }
             for (let more = true; more;) {
@@ -317,6 +331,7 @@ export function RunDetailPage({ id }: { id: string }) {
         } finally {
             state.busy = false;
         }
+        if (state.again) await fetchOutput();
     }
 
     usePolling(async () => { run.reload(); await fetchOutput(); }, 1500, active);

@@ -85,6 +85,8 @@ class Server:
 
     def _tool(self, params: dict) -> dict:
         name, arguments = params.get("name"), params.get("arguments")
+        if not isinstance(name, str):
+            raise ValueError("name must be the name of a tool")
         if arguments is None:
             arguments = {}
         if not isinstance(arguments, dict):
@@ -150,19 +152,31 @@ class Server:
 
 
 def serve(source=sys.stdin, sink=sys.stdout, server: Server | None = None) -> int:
+    """Answer each line until the input ends. Whatever a line holds, the
+    server answers it and goes on: a client that started it again would get
+    a new session, and with it a new count of the runs of an agent."""
     server = server or Server()
-    for line in source:
+    # Read as bytes where there are some, so that a line that is not UTF-8
+    # is one bad line, not the end of the input.
+    for line in getattr(source, "buffer", source):
         if not line.strip():
             continue
         try:
-            message = json.loads(line)
+            text = line.decode() if isinstance(line, bytes) else line
+            message = json.loads(text)
             if not isinstance(message, dict):
                 raise ValueError("not an object")
-        except ValueError:
+        except (ValueError, RecursionError):
             answer = {"jsonrpc": "2.0", "id": None,
                       "error": {"code": -32700, "message": "parse error"}}
         else:
-            answer = server.handle(message)
+            try:
+                answer = server.handle(message)
+            except Exception:  # noqa: BLE001  (one request, not the session)
+                ident = message.get("id")
+                answer = None if ident is None else {
+                    "jsonrpc": "2.0", "id": ident,
+                    "error": {"code": -32603, "message": "internal error"}}
         if answer is not None:
             sink.write(json.dumps(answer, ensure_ascii=False) + "\n")
             sink.flush()

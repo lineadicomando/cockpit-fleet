@@ -16,7 +16,9 @@ export function shellLine(words: string[]): string {
 // fleet launch, with the answers a person may type: never those of secret
 // questions, which fleet asks for at the terminal.
 export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean, serial = false, overrides: Overrides = {}): string {
-    const words = ["fleet", "launch", template];
+    // A name that begins with "-" would be read as an option: it goes last, after "--".
+    const dashed = template.startsWith("-");
+    const words = dashed ? ["fleet", "launch"] : ["fleet", "launch", template];
     for (const [name, value] of Object.entries(answers)) {
         if (value === undefined || value === null || value === "") continue;
         words.push("-a", `${name}=${Array.isArray(value) ? value.join(",") : String(value)}`);
@@ -28,6 +30,7 @@ export function launchCommand(template: string, answers: Record<string, unknown>
     if (overrides.skip_tags) words.push("--skip-tags", overrides.skip_tags.join(","));
     if (overrides.forks !== undefined) words.push("--forks", String(overrides.forks));
     if (overrides.verbosity !== undefined) words.push("--verbosity", String(overrides.verbosity));
+    if (dashed) words.push("--", template);
     return shellLine(words);
 }
 

@@ -445,6 +445,10 @@ def _fire(ctx: Context, row, now: float) -> dict:
                 run_id = _launch(ctx, row, f"schedule:{row['name']}")["id"]
             except FleetError as failure:
                 outcome, error = "error", str(failure)
+            except OSError as failure:
+                # A full disk while the project is copied, say: this schedule
+                # fails, the rest of the tick (pruning first) goes on.
+                outcome, error = "error", f"cannot prepare the run: {failure.strerror or failure}"
 
     ctx.conn.execute(
         "UPDATE schedules SET last_outcome = ?, last_error = ?, last_run_id = ? WHERE id = ?",

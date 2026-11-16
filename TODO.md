@@ -10,8 +10,8 @@ Phases 0–17 closed, phase 18 under way (below). Last release 0.3.0 (15
 November, packages on GitHub); `make release` only when asked.
 
 To resume: `git status`; `git log origin/main..` for what is not pushed
-(push only when asked: `git push origin main`); `make check` (720 backend,
-184 frontend tests). Each backend module's docstring says what it is;
+(push only when asked: `git push origin main`); `make check` (727 backend,
+185 frontend tests). Each backend module's docstring says what it is;
 `cli.py` is the registry of commands, `db.py` the schema (32 migrations).
 
 Integration: every script on AlmaLinux and `files`, `negative`, `checks`

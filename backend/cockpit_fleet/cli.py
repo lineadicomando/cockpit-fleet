@@ -446,6 +446,21 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
                          f"{name} ({kind}) is not allowed to an agent in the profile {profile}")
 
 
+def _record_failure(ctx: Context, spec: Command | None, name: str, params: dict,
+                    detail: str) -> None:
+    """The record of a mutating command that ended in what no command raises
+    on purpose: it may have changed something before."""
+    if spec is None or not spec.mutating:
+        return
+    try:
+        if ctx.conn_or_none() is not None and ctx.conn.in_transaction:
+            ctx.conn.execute("ROLLBACK")
+        _record(ctx, name, params, "error", detail, spec.redact)
+    except Exception:  # noqa: BLE001  (the journal has it already)
+        journal.send(f"{name}: cannot record its failure", 3, FLEET_COMMAND=name,
+                     FLEET_TRACEBACK=traceback.format_exc())
+
+
 def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
     """Run one command and return the answer. Never raises."""
     params: dict = {}
@@ -477,8 +492,13 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         # The details go to the journal, not to the browser.
         journal.send(f"{name} failed", 3, FLEET_COMMAND=name,
                      FLEET_TRACEBACK=traceback.format_exc())
+        _record_failure(ctx, spec, name, params, "internal error, see the journal")
         message = "internal error, see the journal"
         return {"ok": False, "error": {"code": "internal", "message": message}}
+    except KeyboardInterrupt:
+        # ^C at a terminal: what was done before it stays, and is recorded.
+        _record_failure(ctx, spec, name, params, "interrupted")
+        raise
     finally:
         ctx.close()
 

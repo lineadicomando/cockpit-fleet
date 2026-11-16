@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Button,
@@ -165,11 +165,15 @@ function ChannelModal({ channel, onClose, onDone }: { channel?: Channel; onClose
     const [perHour, setPerHour] = useState(channel?.max_per_hour ?? 20);
     const [secret, setSecretValue] = useState("");
 
+    // Made by a first try whose secret then failed: a second try updates it.
+    const made = useRef<Channel | undefined>(channel);
+
     async function submit() {
         const params = { name, settings: settingsOf(kind, form), language, enabled, window: windowMinutes * 60, max_per_hour: perHour };
-        const saved = channel
-            ? await call<Channel>("channel.update", { id: channel.id, ...params })
+        const saved = made.current
+            ? await call<Channel>("channel.update", { id: made.current.id, ...params })
             : await call<Channel>("channel.create", { kind, ...params });
+        made.current = saved;
         try {
             if (secret) await setSecret(saved.secret_name, secret);
         } finally {

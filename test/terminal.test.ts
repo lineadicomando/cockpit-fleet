@@ -26,4 +26,6 @@ test("a run is followed while it goes on, read once it ended", () => {
     assert.equal(runCommand("r1", false), "fleet result r1");
     assert.equal(uploadCommand("shipped", "site v2.tar.gz"), "fleet project upload shipped --archive 'site v2.tar.gz'");
     assert.equal(uploadCommand("shipped", ""), "fleet project upload shipped --archive ARCHIVE.tar.gz");
+    // A name that begins with a dash is not read as an option.
+    assert.equal(launchCommand("-deploy", {}, "web", false), "fleet launch --limit web -- -deploy");
 });

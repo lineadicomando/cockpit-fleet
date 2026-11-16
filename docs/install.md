@@ -102,7 +102,7 @@ commented out. An unknown key is an error, which the System tab and
   written in the interface, or are uploaded as an archive. `man fleet`,
   "Projects at a terminal", says how to make such a directory that
   administrators write and the service only reads. Not under `/home`,
-  `/root`, `/tmp` or `/var/tmp`: the scheduler does not see them, so such
+  `/root`, `/run/user`, `/tmp` or `/var/tmp`: the scheduler does not see them, so such
   projects are refused; to keep one in a home, bind-mount it under a root
   (the manual says how). A run works on a copy of its project, but the
   roots themselves stay readable in its sandbox, so a playbook of any

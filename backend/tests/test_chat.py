@@ -390,6 +390,33 @@ class TerminalLauncherTest(unittest.TestCase):
         self.assertEqual(again, seen["cwd"])
         self.assertEqual(Path(seen["cwd"]).stat().st_mode & 0o777, 0o700)
 
+    def test_at_a_terminal_the_agent_can_be_interrupted_and_a_hangup_tidies(self):
+        import signal
+
+        def call(name, params):
+            return {"ok": True, "data": {"agent": "claude", "profile": "observer",
+                                         "command": ["claude", "{mcp_config}", "{instructions}"],
+                                         "instructions": "", "layers": []}}
+
+        seen = {}
+
+        def run(argv, env, cwd, check):
+            # What the agent inherits: an ignored SIGINT would stay ignored after exec.
+            seen["sigint"] = signal.getsignal(signal.SIGINT)
+            seen["directory"] = Path(argv[1]).parent
+            signal.getsignal(signal.SIGHUP)(signal.SIGHUP, None)
+
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        before = signal.getsignal(signal.SIGINT)
+        with mock.patch.dict(os.environ, {"HOME": home, "XDG_STATE_HOME": ""}), \
+                self.assertRaises(SystemExit) as ended:
+            chat_agent.main(["fleet-chat", "--terminal", "claude"], call=call, run=run)
+        self.assertEqual(ended.exception.code, 128 + signal.SIGHUP)
+        self.assertNotIn(seen["sigint"], (signal.SIG_IGN, signal.SIG_DFL))
+        self.assertFalse(seen["directory"].exists())
+        self.assertEqual(signal.getsignal(signal.SIGINT), before)
+
     def test_a_refusal_is_said_and_nothing_runs(self):
         def run(argv, env, check):
             raise AssertionError("started")

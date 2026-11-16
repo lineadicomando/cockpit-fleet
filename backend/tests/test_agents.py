@@ -668,6 +668,18 @@ class ServerTest(unittest.TestCase):
                          ["fleet-mcp", "x"]):
                 self.assertEqual(mcp.main(argv, source, sink, self.server._call), 2, argv)
 
+    def test_bad_lines_are_answered_and_the_session_goes_on(self):
+        lines = [b'{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": []}}',
+                 b"[" * 100_000, b"\xff\xfe not utf-8",
+                 b'{"jsonrpc": "2.0", "id": 2, "method": "ping"}']
+        source = io.TextIOWrapper(io.BytesIO(b"\n".join(lines) + b"\n"))
+        sink = io.StringIO()
+        self.assertEqual(mcp.serve(source, sink, self.server), 0)
+        answers = [json.loads(line) for line in sink.getvalue().splitlines()]
+        self.assertEqual([answer.get("error", {}).get("code") for answer in answers],
+                         [-32602, -32700, -32700, None])
+        self.assertEqual(answers[-1], {"jsonrpc": "2.0", "id": 2, "result": {}})
+
     def test_a_refusal_is_a_tool_error_not_a_protocol_error(self):
         result = self.ask("tools/call", {"name": "run_get", "arguments": {"id": "x"}})["result"]
         self.assertTrue(result["isError"])

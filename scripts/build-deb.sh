@@ -40,7 +40,9 @@ if [ "${1:-}" = "--native" ]; then
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
     mkdir "$work/cockpit-fleet"
-    tar --exclude=./node_modules --exclude=./.git --exclude=./deb --exclude=./.env -cf - . |
+    # Makefile.local is not part of the project, and debian/rules runs make.
+    tar --exclude=./node_modules --exclude=./.git --exclude=./deb --exclude=./rpm \
+        --exclude=./Makefile.local --exclude=./.env -cf - . |
         tar -C "$work/cockpit-fleet" -xf -
     stamp_version "$work/cockpit-fleet"
     (cd "$work/cockpit-fleet" && dpkg-buildpackage -b --no-sign)

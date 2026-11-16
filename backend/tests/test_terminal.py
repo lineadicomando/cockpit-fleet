@@ -75,6 +75,11 @@ class CompleteTest(unittest.TestCase):
         self.assertEqual(complete(COMMANDS, ["run", "start", "--t"]), ["--template-id", "--tags"])
         self.assertIn("--json", complete(COMMANDS, ["run", "list", "--"]))
         self.assertIn("--detach", complete(COMMANDS, ["launch", "x", "--"]))
+        for option in ("--serial", "--tags", "--skip-tags", "--forks", "--verbosity"):
+            self.assertIn(option, complete(COMMANDS, ["launch", "x", "--"]))
+        self.assertEqual(complete(COMMANDS, ["launch", "x", "--verbosity", ""]),
+                         ["0", "1", "2", "3", "4"])
+        self.assertEqual(complete(COMMANDS, ["launch", "x", "--tags", ""]), [])
         self.assertEqual(complete(COMMANDS, ["help", "temp"]), ["template"])
 
     def test_names_and_choices_come_from_the_backend(self):

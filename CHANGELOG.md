@@ -116,6 +116,41 @@ entries go under `[Unreleased]`, under the heading of their kind.
   path taken) could not be resumed: the server answered 416 every time.
 - Purging the `.deb` failed when `/var/lib/cockpit-fleet` is a mount point,
   as `docs/install.md` suggests for the store: it is now emptied and left.
+- A command that changes something and failed in a way no command expects,
+  or was interrupted with ^C at a terminal, left no record in the audit
+  trail: it now leaves one, as an error.
+- A run canceled while still queued could be started at the same moment
+  and recorded as canceled while it ran; it is now stopped as a running
+  run is.
+- A schedule whose run could not be prepared for a reason of the system (a
+  full disk) stopped the whole tick, pruning included; that schedule now
+  records the error and the others go on.
+- A run lost without a result (a reboot, a unit killed) kept the copy of
+  its project and the encrypted secrets until its directory was removed.
+- A script saved in the file editor, or copied, lost its executable bit.
+- A setting of a project's `ansible.cfg` spread over several lines is
+  left out: written back, its lines could add settings the list of those
+  allowed leaves out.
+- Credentials, channels and sets of variables: when a secret could not be
+  saved after the thing itself was created, trying again created it a
+  second time; it now saves the one made. A set of variables whose secret
+  values could not all be deleted with it says which stay.
+- Store: an upload canceled just as it started was sent all the same.
+- The output of a run is kept in the page up to twice what it shows, and
+  its last lines are not missed when the run ends during a read.
+- The file editor could lose a key typed while a large file was being
+  drawn again.
+- `fleet-mcp` stopped on a request it could not read (a name that is not
+  text, a line that is not UTF-8, JSON nested too deep); it now answers it
+  with an error and goes on.
+- `fleet assistant` at a terminal: the agent could not be interrupted with
+  ^C if it relied on the default handling of the signal, and closing the
+  terminal left a temporary directory behind.
+- The command shown to launch a job template whose name begins with `-` was
+  read by `fleet launch` as an option; the name now goes after `--`.
+- `man fleet` and the completion for bash had not caught up with `fleet
+  launch` (`--tags`, `--skip-tags`, `--forks`, `--verbosity`, `--serial`),
+  `fleet assistant --profile` and `fleet store sftp`.
 
 ### Security
 
@@ -131,6 +166,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   in them (`{{ lookup('pipe', ...) }}`) ran a command on the controller.
   Arguments with a template now make it an ordinary ad-hoc command, which
   that profile does not allow.
+- The chat page: a question of the assistant that took the place of one
+  just answered could be allowed by the same click; its buttons now wait
+  a moment. A call the page knows only by its title, which the model
+  words, is asked about even when it would only read.
 
 ## [0.3.0] - 2026-11-15
 
