@@ -31,7 +31,7 @@ import { useCan } from "../lib/session.tsx";
 import type { Chunk, Commit, FileContent, Inventory, Project, ProjectFiles, Run, Starter } from "../lib/types.ts";
 import { fileBase64, importArchive } from "../lib/upload.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ConfirmDelete, FormModal, ListState, SectionHeader, message, openRun } from "./common.tsx";
 import { FileTree } from "./FileTree.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
@@ -117,7 +117,7 @@ function CheckResult({ id }: { id: string }) {
     if (active || !run.data) return <Alert variant="info" isInline customIcon={<Spinner size="md" aria-hidden />} title={t("Checking the syntax…")} />;
 
     const { status, options, error } = run.data;
-    const open = <AlertActionLink onClick={() => cockpit.location.go(["runs", id])}>{t("Open the run")}</AlertActionLink>;
+    const open = <AlertActionLink onClick={() => openRun(id)}>{t("Open the run")}</AlertActionLink>;
     if (status === "successful" && options.lint !== "findings") {
         return <Alert variant="success" isInline title={options.lint === "clean" ? t("The syntax is correct, and ansible-lint has no remarks") : t("The syntax is correct")} />;
     }
@@ -137,7 +137,7 @@ function ImportResult({ id, onDone }: { id: string; onDone: () => void }) {
     useEffect(() => { if (!active) onDone(); }, [active]);
     if (run.error) return <Alert variant="danger" isInline title={run.error.message} />;
     if (active || !run.data) return <Alert variant="info" isInline customIcon={<Spinner size="md" aria-hidden />} title={t("Importing the archive…")} />;
-    const open = <AlertActionLink onClick={() => cockpit.location.go(["runs", id])}>{t("Open the run")}</AlertActionLink>;
+    const open = <AlertActionLink onClick={() => openRun(id)}>{t("Open the run")}</AlertActionLink>;
     if (run.data.status === "successful") return <Alert variant="success" isInline title={t("The archive was imported")} />;
     return <Alert variant="danger" isInline title={run.data.error || t("The archive could not be imported")} actionLinks={open} />;
 }

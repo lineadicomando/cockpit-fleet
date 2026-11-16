@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { GROUPS, SECTIONS, groupOf, visibleGroups } from "../src/lib/sections.ts";
+import { GROUPS, SECTIONS, groupOf, originPath, runLocation, visibleGroups } from "../src/lib/sections.ts";
 
 test("every section is in exactly one group", () => {
     assert.equal(new Set(SECTIONS).size, SECTIONS.length);
@@ -43,4 +43,22 @@ test("the manifest's keywords lead to sections that exist", () => {
         // Without a leading slash a goto is the hash of the page: #runs.
         if (keyword.goto !== undefined) assert.ok(SECTIONS.includes(keyword.goto), keyword.goto);
     }
+});
+
+test("a run's page knows where it was opened from", () => {
+    assert.deepEqual(runLocation("r1", ["templates"]), { path: ["runs", "r1"], options: { from: "templates" } });
+    assert.deepEqual(runLocation("r1", ["hosts", "h1"]), { path: ["runs", "r1"], options: { from: "hosts/h1" } });
+    assert.deepEqual(runLocation("r1", []), { path: ["runs", "r1"], options: { from: "overview" } });
+    assert.deepEqual(runLocation("r1", ["runs"]), { path: ["runs", "r1"], options: {} });
+});
+
+test("only a known section is gone back to", () => {
+    assert.deepEqual(originPath("templates"), ["templates"]);
+    assert.deepEqual(originPath("projects/p1/drafts/d1"), ["projects", "p1", "drafts", "d1"]);
+    assert.deepEqual(originPath("runs/r0"), ["runs", "r0"]);
+    assert.deepEqual(originPath("overview"), []);
+    assert.equal(originPath("runs"), null);
+    assert.equal(originPath(undefined), null);
+    assert.equal(originPath(""), null);
+    assert.equal(originPath("elsewhere"), null);
 });

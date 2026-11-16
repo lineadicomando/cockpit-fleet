@@ -1334,5 +1334,8 @@
   "It is offered when a project is created, and its files are edited as before, but no template, check or command can use it. It cannot be done while something uses it.": "Viene proposto quando si crea un progetto e i suoi file si modificano come prima, ma nessun template, check o comando può usarlo. Non si può fare mentre qualcosa lo usa.",
   "It is offered when an inventory is created, and its files are edited as before, but no template, check or command can use it, and its hosts leave the list of hosts, with what was gathered of them. It cannot be done while something uses it.": "Viene proposto quando si crea un inventario e i suoi file si modificano come prima, ma nessun template, check o comando può usarlo, e i suoi host escono dall'elenco degli host, con quanto raccolto su di loro. Non si può fare mentre qualcosa lo usa.",
   "Templates and checks can use it again, and it is no longer offered when a project is created.": "Template e check possono usarlo di nuovo, e non viene più proposto quando si crea un progetto.",
-  "Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read.": "Template, check e comandi possono usarlo di nuovo, e non viene più proposto quando si crea un inventario. I suoi host tornano nell'elenco degli host una volta letto."
+  "Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read.": "Template, check e comandi possono usarlo di nuovo, e non viene più proposto quando si crea un inventario. I suoi host tornano nell'elenco degli host una volta letto.",
+  "Back": "Indietro",
+  "Started: {{title}}": "Avviata: {{title}}",
+  "The run was started": "La run è stata avviata"
 }

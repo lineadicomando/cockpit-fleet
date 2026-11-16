@@ -43,6 +43,15 @@ slash would be another page; the shell gives no translation of a package's
 keywords without a `po.manifest` of Cockpit's kind, so the Italian words are
 among the English ones.
 
+**Runs started and opened.** Launching a template, a workflow, a schedule,
+an ad-hoc command, a sync or an upload does not open the run: the page
+stays where it is, and a notice in a corner (`StartedRuns` in
+`common.tsx`) links to it for a few seconds. A link to a run (`openRun`)
+carries the page it was followed from in the URL
+(`#/runs/ID?from=templates`), and the run's page offers "Back" to it;
+`originPath` takes only a known section, since the URL can be typed. The
+list of runs needs no such button: "All runs" is there anyway.
+
 **Long lists.** Checks and job templates are filtered, grouped and sorted
 in the browser, from what their `list` command returns: neither is paged,
 and at the sizes measured (hundreds of each) there is no reason to ask the

@@ -4,13 +4,12 @@ import {
     Button, Content, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, ModalVariant, TextInput,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan, useSession } from "../lib/session.tsx";
 import type { ApprovalEntry, ApprovalMode } from "../lib/types.ts";
-import { FormModal, ListState, SectionHeader } from "./common.tsx";
+import { FormModal, ListState, SectionHeader, openRun } from "./common.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 
 type Decision = "approve" | "reject";
@@ -130,7 +129,7 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
                     <Tr key={entry.id}>
                         <Td dataLabel={t("Run")}>
                             {mayOpen
-                                ? <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", entry.id])}>{entry.title}</Button>
+                                ? <Button variant="link" isInline onClick={() => openRun(entry.id)}>{entry.title}</Button>
                                 : entry.title}
                             {entry.options.check && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Dry run")}</Label>}
                             {entry.approval.mode === "confirm" && <Label isCompact color="purple" style={{ marginInlineStart: "0.5rem" }}>{t("Confirmation")}</Label>}

@@ -3958,3 +3958,12 @@ msgstr "Template e check possono usarlo di nuovo, e non viene più proposto quan
 
 msgid "Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read."
 msgstr "Template, check e comandi possono usarlo di nuovo, e non viene più proposto quando si crea un inventario. I suoi host tornano nell'elenco degli host una volta letto."
+
+msgid "Back"
+msgstr "Indietro"
+
+msgid "Started: {{title}}"
+msgstr "Avviata: {{title}}"
+
+msgid "The run was started"
+msgstr "La run è stata avviata"

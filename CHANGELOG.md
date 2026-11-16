@@ -25,6 +25,18 @@ entries go under `[Unreleased]`, under the heading of their kind.
   inventory so kept leave the list of hosts. The flag is reversible, and
   is carried by the export of the configuration.
 
+### Changed
+
+- Launching a template, a workflow, a schedule or an ad-hoc command, and
+  syncing or uploading a project, no longer opens the run: the page stays
+  where it is, and a notice links to the run. A run opened from another
+  page has a "Back" button to that page.
+- The last run of job templates, workflows and schedules shows a run
+  just launched, and follows it until it is over, without reloading the
+  page.
+- Under Automation, Runs is the last tab, after Schedules: the tab
+  Automation now opens Job templates.
+
 ### Fixed
 
 - The selected text in the file editor is visible again on the line

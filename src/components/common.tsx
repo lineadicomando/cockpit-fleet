@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import cockpit from "cockpit";
 import {
+    AlertActionLink,
+    AlertGroup,
     Content,
     EmptyState,
     EmptyStateBody,
@@ -19,14 +21,63 @@ import {
 } from "@patternfly/react-core";
 import { ExternalLinkAltIcon } from "@patternfly/react-icons";
 import type { Loaded } from "../lib/hooks.ts";
+import { runLocation } from "../lib/sections.ts";
 import { shellPage } from "../lib/shell.ts";
 import type { RunStatus } from "../lib/types.ts";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { Label } from "@patternfly/react-core";
-import { Alert, Button, ClipboardCopy, Modal, Spinner } from "./pf.tsx";
+import { Alert, AlertActionCloseButton, Button, ClipboardCopy, Modal, Spinner } from "./pf.tsx";
 
 export function message(ex: unknown): string {
     return ex instanceof Error ? ex.message : String(ex);
+}
+
+// A run not over yet: what shows it is polled until it is.
+export function isActiveRun(status: RunStatus | ""): boolean {
+    return status === "pending_approval" || status === "queued" || status === "running";
+}
+
+// Opens a run's page, which then offers to go back to the page it came from.
+export function openRun(id: string) {
+    const { path, options } = runLocation(id, cockpit.location.path);
+    cockpit.location.go(path, options);
+}
+
+// A run that was just started is announced, not opened: the page stays where
+// it is, and the notice links to the run.
+interface StartedRun { key: number; id: string; title: string }
+let started: StartedRun[] = [];
+let nextKey = 0;
+const listeners = new Set<(runs: StartedRun[]) => void>();
+
+function setStarted(runs: StartedRun[]) {
+    started = runs;
+    for (const listener of listeners) listener(runs);
+}
+
+export function announceRun(id: string, title = "") {
+    setStarted([...started, { key: nextKey++, id, title }]);
+}
+
+export function StartedRuns() {
+    const { t } = useTranslation();
+    const [runs, setRuns] = useState(started);
+    useEffect(() => {
+        listeners.add(setRuns);
+        return () => { listeners.delete(setRuns); };
+    }, []);
+    const dismiss = (key: number) => setStarted(started.filter(run => run.key !== key));
+
+    return (
+        <AlertGroup isToast isLiveRegion>
+            {runs.map(run => (
+                <Alert key={run.key} variant="info" timeout={8000} onTimeout={() => dismiss(run.key)}
+                    title={run.title ? t("Started: {{title}}", { title: run.title }) : t("The run was started")}
+                    actionClose={<AlertActionCloseButton onClose={() => dismiss(run.key)} />}
+                    actionLinks={<AlertActionLink onClick={() => { dismiss(run.key); openRun(run.id); }}>{t("Open the run")}</AlertActionLink>} />
+            ))}
+        </AlertGroup>
+    );
 }
 
 export function SectionHeader({ title, children }: { title: string; children?: React.ReactNode }) {

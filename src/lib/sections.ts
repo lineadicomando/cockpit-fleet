@@ -5,7 +5,7 @@
 export const GROUPS: { key: string; sections: string[] }[] = [
     { key: "overview", sections: ["overview"] },
     { key: "nodes", sections: ["hosts", "assets", "checks", "hostkeys"] },
-    { key: "automation", sections: ["runs", "templates", "workflows", "schedules"] },
+    { key: "automation", sections: ["templates", "workflows", "schedules", "runs"] },
     { key: "resources", sections: ["projects", "inventories", "store", "variables", "credentials"] },
     { key: "administration", sections: ["notifications", "system", "audit"] },
     { key: "chat", sections: ["chat"] },
@@ -23,4 +23,21 @@ export function visibleGroups(visible: (section: string) => boolean): { key: str
 
 export function groupOf(groups: { key: string; sections: string[] }[], section: string): { key: string; sections: string[] } {
     return groups.find(group => group.sections.includes(section)) ?? groups[0];
+}
+
+// A run's page carries the page it was opened from (#/runs/ID?from=templates),
+// for a button that goes back there. The list of runs needs none: the page
+// has a button to it anyway.
+export function runLocation(id: string, from: string[]): { path: string[]; options: Record<string, string> } {
+    const origin = from.length === 0 ? "overview" : from.join("/");
+    return { path: ["runs", id], options: origin === "runs" ? {} : { from: origin } };
+}
+
+// The path a run's page goes back to, or null when there is none to offer.
+// It is read from the URL, so only a known section is taken.
+export function originPath(from: string | undefined): string[] | null {
+    const path = (from ?? "").split("/").filter(part => part !== "");
+    if (path.length === 0 || !SECTIONS.includes(path[0])) return null;
+    if (path.length === 1 && path[0] === "runs") return null;
+    return path[0] === "overview" ? [] : path;
 }

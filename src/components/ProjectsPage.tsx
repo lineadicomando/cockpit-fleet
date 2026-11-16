@@ -9,7 +9,7 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Credential, Project, Starter } from "../lib/types.ts";
 import { uploadArchive } from "../lib/upload.ts";
-import { AtTerminal, ConfirmDelete, DuplicateModal, FormModal, StarterLabel, StarterModal, ListState, SectionHeader, message } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, DuplicateModal, FormModal, StarterLabel, StarterModal, ListState, SectionHeader, message, announceRun } from "./common.tsx";
 import { uploadCommand } from "../lib/terminal.ts";
 import { ActionsColumn, Alert, FileUpload } from "./pf.tsx";
 import { StarterSelect } from "./StarterSelect.tsx";
@@ -30,7 +30,7 @@ function UploadModal({ project, maxMb, onClose }: { project: Project; maxMb: num
         if (!file) return;
         const { run_id } = await uploadArchive(project.id, file);
         onClose();
-        cockpit.location.go(["runs", run_id]);
+        announceRun(run_id);
     }
 
     return (
@@ -169,7 +169,8 @@ export function ProjectsPage() {
         setError(null);
         try {
             const { run_id } = await call<{ run_id: string }>(command, { id: project.id });
-            cockpit.location.go(["runs", run_id]);
+            announceRun(run_id);
+            list.reload();
         } catch (ex) {
             setError(message(ex));
         }

@@ -23,10 +23,11 @@ import { parseAnsi } from "../lib/ansi.ts";
 import { addEvents, changesByHost, countOutcomes, diffLines, type HostChanges, type TaskView } from "../lib/events.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime, runDuration } from "../lib/format.ts";
-import { useLoad, usePolling } from "../lib/hooks.ts";
+import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
+import { originPath } from "../lib/sections.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Chunk, HostStats, Run, RunStatus } from "../lib/types.ts";
-import { AtTerminal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { AtTerminal, ListState, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
 import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
 import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
@@ -34,7 +35,7 @@ import { WorkflowSteps } from "./WorkflowsPage.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 import { Alert, Button, TabPanel, Tabs } from "./pf.tsx";
 
-const isActive = (status: RunStatus) => status === "pending_approval" || status === "queued" || status === "running";
+const isActive = isActiveRun;
 // Past this, only the end of the output is drawn; the whole log stays on the server.
 const MAX_SHOWN = 400_000;
 
@@ -82,9 +83,9 @@ export function RunsPage() {
                             </Thead>
                             <Tbody>
                                 {data.runs.map(run => (
-                                    <Tr key={run.id} isClickable onRowClick={() => cockpit.location.go(["runs", run.id])}>
+                                    <Tr key={run.id} isClickable onRowClick={() => openRun(run.id)}>
                                         <Td dataLabel={t("Run")}>
-                                            <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", run.id])}>{run.title}</Button>
+                                            <Button variant="link" isInline onClick={() => openRun(run.id)}>{run.title}</Button>
                                             {run.options.check && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Dry run")}</Label>}
                                         </Td>
                                         <Td dataLabel={t("Status")}>
@@ -267,6 +268,7 @@ export function RunDetailPage({ id }: { id: string }) {
     const position = useRef({ log: 0, events: 0, play: "", busy: false, done: false });
     const active = run.data ? isActive(run.data.status) : true;
     const mayRead = can("run.log");
+    const origin = originPath(useCockpitLocation().options.from);
 
     // Fetches what was written since the last call. Also called once after the
     // run has ended, to pick up its last lines.
@@ -334,6 +336,7 @@ export function RunDetailPage({ id }: { id: string }) {
                 {active && can("run.cancel") && (
                     <Button variant="danger" onClick={cancel} isLoading={canceling} isDisabled={canceling}>{t("Cancel run")}</Button>
                 )}
+                {origin && <Button variant="secondary" onClick={() => cockpit.location.go(origin)}>{t("Back")}</Button>}
                 <Button variant="secondary" onClick={() => cockpit.location.go(["runs"])}>{t("All runs")}</Button>
             </SectionHeader>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
@@ -420,7 +423,7 @@ export function RunDetailPage({ id }: { id: string }) {
                                 <DescriptionListTerm>{t("In series")}</DescriptionListTerm>
                                 <DescriptionListDescription>
                                     {data.waiting_for
-                                        ? <>{t("Waits for")} <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", data.waiting_for!.id])}>{data.waiting_for.title}</Button></>
+                                        ? <>{t("Waits for")} <Button variant="link" isInline onClick={() => openRun(data.waiting_for!.id)}>{data.waiting_for.title}</Button></>
                                         : t("After the runs launched before it on its inventory")}
                                 </DescriptionListDescription>
                             </DescriptionListGroup>
@@ -429,7 +432,7 @@ export function RunDetailPage({ id }: { id: string }) {
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{t("Step of")}</DescriptionListTerm>
                                 <DescriptionListDescription>
-                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", data.workflow_run_id!])}>{t("a workflow run")}</Button>
+                                    <Button variant="link" isInline onClick={() => openRun(data.workflow_run_id!)}>{t("a workflow run")}</Button>
                                 </DescriptionListDescription>
                             </DescriptionListGroup>
                         )}

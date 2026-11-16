@@ -37,7 +37,7 @@ import {
     type Clash, type Dropped, type PendingUpload, type StoreDownload, type StoreEntry, type StoreList, type StoreSortKey, type StoreUnchanged, type Upload,
 } from "../lib/store.ts";
 import { shellLine } from "../lib/terminal.ts";
-import { AtTerminal, ConfirmDelete, ListState, SectionHeader, message } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, ListState, SectionHeader, message, openRun } from "./common.tsx";
 import { ContextMenu, type MenuEntry } from "./ContextMenu.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
 import { ConflictModal, FetchModal, NewFolderModal, Origin, RenameModal, StoreDetails } from "./StoreDialogs.tsx";
@@ -884,7 +884,7 @@ export function StorePage({ directory }: { directory: string }) {
                         {shownDownloads.map(item => (
                             <Tr key={item.run_id}>
                                 <Td dataLabel={t("Into the store")}>
-                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", item.run_id])}>{item.path}</Button>
+                                    <Button variant="link" isInline onClick={() => openRun(item.run_id)}>{item.path}</Button>
                                 </Td>
                                 <Td dataLabel={t("Origin")} modifier="truncate">
                                     {item.kind === "copy"

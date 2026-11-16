@@ -22,7 +22,6 @@ import {
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { TimesIcon } from "@patternfly/react-icons";
-import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
@@ -31,7 +30,7 @@ import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../l
 import { layers, nextStepId } from "../lib/workflow.ts";
 import type { ApprovalMode, Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
-import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
 import { ActionsColumn, Alert } from "./pf.tsx";
@@ -208,12 +207,14 @@ export function WorkflowsPage() {
     const [deleting, setDeleting] = useState<Workflow | null>(null);
     const [error, setError] = useState<string | null>(null);
     const names = new Map((templates.data?.templates ?? []).map(item => [item.id, item.name]));
+    usePolling(list.reload, 3000, list.data?.workflows.some(item => !!item.last_run && isActiveRun(item.last_run.status)) ?? false);
 
     async function launch(workflow: Workflow) {
         setError(null);
         try {
             const run = await call<Run>("workflow.launch", { id: workflow.id });
-            cockpit.location.go(["runs", run.id]);
+            announceRun(run.id, run.title);
+            list.reload();
         } catch (ex) {
             setError(message(ex));
         }
@@ -242,7 +243,7 @@ export function WorkflowsPage() {
                                     <Td dataLabel={t("Steps")}>{workflow.nodes.map(node => node.name || names.get(node.template_id) || node.id).join(" → ")}</Td>
                                     <Td dataLabel={t("Last run")}>
                                         {workflow.last_run
-                                            ? <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", workflow.last_run!.id])}>
+                                            ? <Button variant="link" isInline onClick={() => openRun(workflow.last_run!.id)}>
                                                 <RunStatusLabel status={workflow.last_run.status} /> {formatTime(workflow.last_run.created_at, i18n.language)}
                                             </Button>
                                             : "—"}
@@ -314,7 +315,7 @@ export function WorkflowSteps({ id }: { id: string }) {
         setError(null);
         try {
             const run = await call<Run>("workflow.resume", { id });
-            cockpit.location.go(["runs", run.id]);
+            announceRun(run.id, run.title);
         } catch (ex) {
             setError(message(ex));
         }
@@ -325,7 +326,7 @@ export function WorkflowSteps({ id }: { id: string }) {
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             {data.resumed_from && (
                 <Content component="p">
-                    {t("Resumed from")} <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", data.resumed_from!])}>{data.resumed_from}</Button>
+                    {t("Resumed from")} <Button variant="link" isInline onClick={() => openRun(data.resumed_from!)}>{data.resumed_from}</Button>
                 </Content>
             )}
             <Flex gap={{ default: "gapLg" }} alignItems={{ default: "alignItemsFlexStart" }} flexWrap={{ default: "nowrap" }} style={{ overflowX: "auto" }}>
@@ -338,7 +339,7 @@ export function WorkflowSteps({ id }: { id: string }) {
                                 <Card key={nodeId} isCompact>
                                     <CardTitle>
                                         {node.run
-                                            ? <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", node.run!.id])}>{name(node)}</Button>
+                                            ? <Button variant="link" isInline onClick={() => openRun(node.run!.id)}>{name(node)}</Button>
                                             : name(node)}
                                     </CardTitle>
                                     <CardBody>

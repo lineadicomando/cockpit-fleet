@@ -27,20 +27,19 @@ import {
     TextInput,
     Title,
 } from "@patternfly/react-core";
-import cockpit from "cockpit";
 import { formatBytes } from "../lib/checks.ts";
 import { basename, dirname, type PathChoice } from "../lib/files.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { EVERY, joinPath, nameFromUrl, playbookPath, sizeOf, type Clash, type Every, type StoreDownload, type StoreFile, type StoreList } from "../lib/store.ts";
-import { FormModal } from "./common.tsx";
+import { FormModal, openRun } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ClipboardCopy } from "./pf.tsx";
 
 export function Origin({ file }: { file: StoreFile }) {
     const { t } = useTranslation();
     if (file.origin === "run") {
-        return <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", file.source])}>{t("Run {{id}}", { id: file.source })}</Button>;
+        return <Button variant="link" isInline onClick={() => openRun(file.source)}>{t("Run {{id}}", { id: file.source })}</Button>;
     }
     if (file.origin === "upload") return <>{t("Uploaded")}</>;
     if (file.origin === "url") return <span title={file.source}>{t("Downloaded")}</span>;

@@ -34,6 +34,7 @@ import { SchedulesPage } from "./components/SchedulesPage.tsx";
 import { TemplatesPage } from "./components/TemplatesPage.tsx";
 import { WorkflowsPage } from "./components/WorkflowsPage.tsx";
 import { SessionContext } from "./lib/session.tsx";
+import { StartedRuns } from "./components/common.tsx";
 import { SECTIONS, groupOf, visibleGroups } from "./lib/sections.ts";
 import { Spinner, TabPanel, Tabs } from "./components/pf.tsx";
 
@@ -160,6 +161,7 @@ export function App() {
                 <Title headingLevel="h1" size="2xl">Fleet</Title>
             </PageSection>
             {body()}
+            <StartedRuns />
         </Page>
     );
 }

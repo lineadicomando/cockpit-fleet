@@ -18,7 +18,7 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { DraftChange, DraftDiff, DraftInfo } from "../lib/types.ts";
-import { FormModal, RunStatusLabel, message } from "./common.tsx";
+import { FormModal, RunStatusLabel, message, openRun } from "./common.tsx";
 import { Diff } from "./RunsPage.tsx";
 import { Alert, Button, Modal, Spinner } from "./pf.tsx";
 
@@ -133,7 +133,7 @@ export function DraftReview({ id, draft, onDone, onClose }: {
                                                 {check.lint === "findings" && <FlexItem><Label isCompact color="orange">{t("ansible-lint has remarks")}</Label></FlexItem>}
                                                 {!check.current && <FlexItem><Label isCompact color="grey">{t("Of an earlier version")}</Label></FlexItem>}
                                                 <FlexItem>
-                                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", check.run_id])}>{t("Open the run")}</Button>
+                                                    <Button variant="link" isInline onClick={() => openRun(check.run_id)}>{t("Open the run")}</Button>
                                                 </FlexItem>
                                             </Flex>
                                         </Content>

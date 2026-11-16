@@ -23,7 +23,7 @@ import { usePolling, useLoad } from "../lib/hooks.ts";
 import { EMPTY_FORM, destination, formOf, settingsOf, type ChannelForm } from "../lib/notify.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Channel, ChannelKind, CheckDef, CheckEvent, FleetHost, Inventory, Notification, NotifyEvent, NotifyRule, Project, RuleScope, RunEvent, Schedule, SystemEvent, Template } from "../lib/types.ts";
-import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { ConfirmDelete, FormModal, ListState, SectionHeader, message, openRun } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { ActionsColumn, Alert, NumberInput } from "./pf.tsx";
 
@@ -394,7 +394,7 @@ function Outbox({ reloadKey }: { reloadKey: number }) {
                                     <Td dataLabel={t("Channel")}>{item.channel}</Td>
                                     <Td dataLabel={t("Event")}>{labels.events[item.event]}</Td>
                                     <Td dataLabel={t("About")}>
-                                        {item.run_id && <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", item.run_id!])}>{item.title || item.run_id}</Button>}
+                                        {item.run_id && <Button variant="link" isInline onClick={() => openRun(item.run_id!)}>{item.title || item.run_id}</Button>}
                                         {item.host_id && <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", item.host_id!])}>{item.title}</Button>}
                                         {!item.run_id && !item.host_id && item.title}
                                     </Td>

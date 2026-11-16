@@ -4,7 +4,7 @@ import { Button, Checkbox, Flex, FlexItem, FormGroup, FormHelperText, FormSelect
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
 import { answerSecret, call } from "../lib/fleet.ts";
-import { useLoad } from "../lib/hooks.ts";
+import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers, secretAnswers, toDraft } from "../lib/survey.ts";
 import { playbookChoices } from "../lib/files.ts";
@@ -18,7 +18,7 @@ import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { parseVariables } from "../lib/variables.ts";
 import { VariableSetsField } from "./VariablesPage.tsx";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { AtTerminal, ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 import { PathInput } from "./PathInput.tsx";
@@ -193,7 +193,8 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
 }
 
 // limit: what the hosts are narrowed to at first, such as the host whose updates are applied.
-export function LaunchModal({ template, limit: initialLimit = "", onClose }: { template: Template; limit?: string; onClose: () => void }) {
+// onLaunched: what shows the template's last run, to load again.
+export function LaunchModal({ template, limit: initialLimit = "", onClose, onLaunched }: { template: Template; limit?: string; onClose: () => void; onLaunched?: () => void }) {
     const { t } = useTranslation();
     const [limit, setLimit] = useState(initialLimit);
     const [check, setCheck] = useState(false);
@@ -206,7 +207,9 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose }: { t
         for (const [name, value] of Object.entries(secretAnswers(template.survey, answers)))
             given[name] = await answerSecret(value);
         const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given, serial });
-        cockpit.location.go(["runs", run.id]);
+        announceRun(run.id, run.title);
+        onLaunched?.();
+        onClose();
     }
 
     return (
@@ -350,6 +353,8 @@ export function TemplatesPage() {
     function reload() {
         list.reload();
     }
+    // A last run not over yet is followed, so that its outcome shows.
+    usePolling(list.reload, 3000, list.data?.templates.some(item => !!item.last_run && isActiveRun(item.last_run.status)) ?? false);
 
     return (
         <>
@@ -414,7 +419,7 @@ export function TemplatesPage() {
                                 <Td dataLabel={t("Last run")}>
                                     {template.last_run
                                         ? (
-                                            <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", template.last_run!.id])}>
+                                            <Button variant="link" isInline onClick={() => openRun(template.last_run!.id)}>
                                                 <RunStatusLabel status={template.last_run.status} /> {formatTime(template.last_run.created_at, i18n.language)}
                                             </Button>
                                         )
@@ -472,7 +477,7 @@ export function TemplatesPage() {
             </ListState>
             {creating && choices.data && <TemplateModal choices={choices.data} onClose={() => setCreating(false)} onDone={reload} />}
             {editing && choices.data && <TemplateModal template={editing} choices={choices.data} onClose={() => setEditing(null)} onDone={reload} />}
-            {launching && <LaunchModal template={launching} onClose={() => setLaunching(null)} />}
+            {launching && <LaunchModal template={launching} onClose={() => setLaunching(null)} onLaunched={reload} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The job template is deleted. Its past runs stay in the history.")}
                     onDelete={async () => { await call("template.delete", { id: deleting.id }); setDeleting(null); reload(); }}

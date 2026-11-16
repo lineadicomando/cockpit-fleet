@@ -1,11 +1,10 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Checkbox, FormGroup, FormHelperText, FormSelect, FormSelectOption, Grid, GridItem, HelperText, HelperTextItem, TextInput } from "@patternfly/react-core";
-import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { useLoad } from "../lib/hooks.ts";
 import type { Credential, Inventory, Project, Run } from "../lib/types.ts";
-import { FormModal } from "./common.tsx";
+import { FormModal, announceRun } from "./common.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { Alert, Spinner } from "./pf.tsx";
 
@@ -57,7 +56,8 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
             module: chosenModule, free_form: freeForm.trim(),
             machine_credential_id: machineId, vault_credential_ids: vaultIds, become, check, serial,
         });
-        cockpit.location.go(["runs", run.id]);
+        announceRun(run.id, run.title);
+        onClose();
     }
 
     return (

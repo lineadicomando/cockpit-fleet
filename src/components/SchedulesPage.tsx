@@ -19,15 +19,14 @@ import {
     TextInput,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
-import { useLoad } from "../lib/hooks.ts";
+import { useLoad, usePolling } from "../lib/hooks.ts";
 import { DEFAULT_SHAPE, EVERY_MINUTES, WEEKDAYS, calendarOf, shapeOf, type Repeat, type Shape } from "../lib/schedule.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
 import type { Overlap, Run, Schedule, SchedulePreview, Template } from "../lib/types.ts";
-import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message } from "./common.tsx";
+import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
 import { ActionsColumn, Alert } from "./pf.tsx";
@@ -276,7 +275,7 @@ function LastTime({ schedule }: { schedule: Schedule }) {
     let outcome: React.ReactNode;
     if (schedule.last_outcome === "launched" && schedule.last_run_id) {
         outcome = (
-            <Button variant="link" isInline onClick={() => cockpit.location.go(["runs", schedule.last_run_id!])}>
+            <Button variant="link" isInline onClick={() => openRun(schedule.last_run_id!)}>
                 {schedule.last_status ? <RunStatusLabel status={schedule.last_status} /> : t("Run")}
             </Button>
         );
@@ -305,6 +304,7 @@ export function SchedulesPage() {
     const [editing, setEditing] = useState<Schedule | null>(null);
     const [deleting, setDeleting] = useState<Schedule | null>(null);
     const [error, setError] = useState<string | null>(null);
+    usePolling(list.reload, 3000, list.data?.schedules.some(item => isActiveRun(item.last_status)) ?? false);
 
     async function act(action: () => Promise<unknown>) {
         setError(null);
@@ -320,10 +320,11 @@ export function SchedulesPage() {
         setError(null);
         try {
             const run = await call<Run>("schedule.run", { id: schedule.id });
-            cockpit.location.go(["runs", run.id]);
+            announceRun(run.id, run.title);
         } catch (ex) {
             setError(message(ex));
         }
+        list.reload();
     }
 
     return (
