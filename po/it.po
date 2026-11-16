@@ -4118,7 +4118,7 @@ msgid "Usual duration"
 msgstr "Durata abituale"
 
 msgid "What the hosts are"
-msgstr "Com'è fatta la flotta"
+msgstr "Composizione dei nodi"
 
 msgid "Your access and the installation"
 msgstr "Il tuo accesso e l'installazione"
