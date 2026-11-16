@@ -132,6 +132,15 @@ def unified_diff(diff, context=3):
     return "".join(parts)
 
 
+def open_events(path):
+    """The file of the events, for appending. Ansible carries bytes of a node's
+    output that are not UTF-8 as lone surrogates, which strict UTF-8 cannot
+    write: the whole event would be lost, so each is written as "?", as
+    Ansible shows them. Escaped instead, JSON would read them back as
+    surrogates, which the database refuses in turn."""
+    return open(path, "a", encoding="utf-8", errors="replace")  # noqa: SIM115
+
+
 def read_secrets(directory):
     """The values to mask, longest first."""
     found = set()
@@ -195,7 +204,7 @@ class CallbackModule(CallbackBase):
         self._max_diff = self.get_option("max_diff")
         self._keep_facts = self.get_option("keep_facts")
         self._secrets = read_secrets(self.get_option("secrets_dir"))
-        self._out = open(self.get_option("path"), "a", encoding="utf-8")  # noqa: SIM115
+        self._out = open_events(self.get_option("path"))
 
     def _emit(self, event, **fields):
         fields.update(event=event, ts=round(time.time(), 3))

@@ -147,7 +147,8 @@ started stays as it is: once logged in, send the message again.
   `default_profile`): `observer` reads; `assisted`, the default, also
   launches and cancels what is defined (templates, workflows, checks,
   schedules turned on or off); `diagnostic` also runs ad-hoc commands of the
-  modules in `[mcp] adhoc_modules`, which change nothing, without become;
+  modules in `[mcp] adhoc_modules`, which change nothing, without become
+  and with no template (`{{ }}`) in their arguments;
   `autonomous` is as `assisted`, held by the backend since nobody confirms
   its calls: at most `[chat] autonomous_runs` launches in a session, none on
   an inventory with a maintenance window open, no acknowledging a problem,

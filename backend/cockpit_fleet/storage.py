@@ -214,14 +214,18 @@ def _usage(conn) -> int:
     return conn.execute("SELECT coalesce(sum(size), 0) FROM store_files").fetchone()[0]
 
 
+def _within_limit(ctx: Context, adding: int, replacing: int = 0, when: str = "") -> None:
+    """Refuse a file that would take the store beyond its limit."""
+    limit = ctx.config.store_max_gb * 1024 ** 3
+    if limit and _usage(ctx.conn) - replacing + adding > limit:
+        raise Conflict(f"the store would exceed its limit of {ctx.config.store_max_gb} GB"
+                       f" ([store] max_gb){when}")
+
+
 def _room(ctx: Context, adding: int, replacing: int = 0) -> None:
     """Refuse a file that would take the store beyond its limit, or leave
     the disk with less than MIN_FREE."""
-    limit = ctx.config.store_max_gb * 1024 ** 3
-    used = _usage(ctx.conn)
-    if limit and used - replacing + adding > limit:
-        raise Conflict(f"the store would exceed its limit of {ctx.config.store_max_gb} GB"
-                       " ([store] max_gb)")
+    _within_limit(ctx, adding, replacing)
     _mkdirs()
     disk = shutil.disk_usage(paths.STORE_DIR)
     if disk.free - adding < MIN_FREE:
@@ -561,17 +565,30 @@ def store_put(ctx: Context, params: Values) -> dict:
     key = _upload_key(ctx.caller.user, str(path))
     part = paths.STORE_UPLOADS / f"{key}.part"
     meta = paths.STORE_UPLOADS / f"{key}.json"
-    if offset == 0:
-        fd = os.open(part, os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC,
-                     0o600)
-        meta.write_text(json.dumps({"path": str(path), "size": size, "user": ctx.caller.user,
-                                    "started_at": time.time()}))
-    else:
-        try:
-            fd = os.open(part, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
-        except FileNotFoundError:
-            raise Conflict("there is no upload of this file to resume") from None
     try:
+        fd = os.open(part, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC
+                     | (os.O_CREAT if offset == 0 else 0), 0o600)
+    except FileNotFoundError:
+        raise Conflict("there is no upload of this file to resume") from None
+    try:
+        # Two uploads of one file by one person (two tabs, a retry) would
+        # write the same part: the second is refused, not interleaved.
+        busy = Conflict(f"{path} is being uploaded already: wait for it, or stop it")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise busy from None
+        # The one before may have ended meanwhile, its part now a file of the
+        # store, which runs may share: never written in place.
+        try:
+            if os.stat(part, follow_symlinks=False).st_ino != os.fstat(fd).st_ino:
+                raise busy
+        except FileNotFoundError:
+            raise busy from None
+        if offset == 0:
+            os.ftruncate(fd, 0)
+            meta.write_text(json.dumps({"path": str(path), "size": size,
+                                        "user": ctx.caller.user, "started_at": time.time()}))
         received = os.fstat(fd).st_size
         if received != offset:
             raise Conflict(f"the upload to resume has {received} bytes, not {offset}")
@@ -602,20 +619,26 @@ def store_put(ctx: Context, params: Values) -> dict:
         if expected and found != expected:
             _drop_upload(key)
             raise BadRequest(f"the file that arrived has the digest {found}, not {expected}")
+
+        with _locked():
+            # Checked again now that it is here: uploads that began together
+            # each found room for themselves alone.
+            row = ctx.conn.execute("SELECT size FROM store_files WHERE path = ?",
+                                   (str(path),)).fetchone()
+            _within_limit(ctx, size, row["size"] if row is not None else 0,
+                          " once it arrived; it can be resumed when there is room")
+            uploads = os.open(paths.STORE_UPLOADS, _DIR_FLAGS)
+            try:
+                target = _place(uploads, part.name, path, params["replace"])
+            finally:
+                os.close(uploads)
+            try:
+                status = os.stat(path.name, dir_fd=target, follow_symlinks=False)
+            finally:
+                os.close(target)
+            _record(ctx.conn, str(path), status, "upload", path.name, ctx.caller.user, found)
     finally:
         os.close(fd)
-
-    with _locked():
-        uploads = os.open(paths.STORE_UPLOADS, _DIR_FLAGS)
-        try:
-            target = _place(uploads, part.name, path, params["replace"])
-        finally:
-            os.close(uploads)
-        try:
-            status = os.stat(path.name, dir_fd=target, follow_symlinks=False)
-        finally:
-            os.close(target)
-        _record(ctx.conn, str(path), status, "upload", path.name, ctx.caller.user, found)
     meta.unlink(missing_ok=True)
     return {"path": str(path), "size": size, "sha256": found}
 

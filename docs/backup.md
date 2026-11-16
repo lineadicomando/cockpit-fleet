@@ -13,6 +13,7 @@ for the administrator of the machine; every command runs as root.
 | The store: files that playbooks copy to nodes, what runs fetched | `/var/lib/cockpit-fleet/store/` (what each file is and who put it there is in the database) | if its files cannot be downloaded again; it may be large. `store-uploads/` and `store-farms/` beside it are not needed |
 | The output and events of runs | `/var/lib/cockpit-fleet/runs/` | if the output of past runs matters; it is deleted after `[runs] keep_days` anyway |
 | The configuration | `/etc/cockpit-fleet/config.toml` | yes |
+| Starters of your own: projects and inventories offered when one is created | `/etc/cockpit-fleet/starters/` | yes, if you made some |
 | Local projects | the directories of `[projects] local_roots` | with the rest of the machine's data |
 | Secrets, encrypted | `/etc/cockpit-fleet/secrets/` | only for this same machine (below) |
 
@@ -31,9 +32,9 @@ leaks gives away no secret.
 
 So keep the secrets themselves where you keep passwords, and after a
 restore elsewhere type them again: in **Credentials** for keys, passwords
-and vault passwords, in **Notifications** for the token of each channel.
-The list of credentials says which secrets each one should have and which
-are missing.
+and vault passwords, in **Notifications** for the token of each channel,
+and in **Variables** for the secret variables of each set. The list of
+credentials says which secrets each one should have and which are missing.
 
 ## Copying the database
 
@@ -59,7 +60,8 @@ where backups go:
 ```sh
 tar -C / -czf /root/cockpit-fleet-$(date +%F).tar.gz \
     var/backups/cockpit-fleet/fleet.db var/lib/cockpit-fleet/projects \
-    var/lib/cockpit-fleet/inventories etc/cockpit-fleet/config.toml
+    var/lib/cockpit-fleet/inventories etc/cockpit-fleet/config.toml \
+    $(test -d /etc/cockpit-fleet/starters && echo etc/cockpit-fleet/starters)
 ```
 
 Add `etc/cockpit-fleet/secrets` for a restore on this same machine, and
@@ -111,6 +113,7 @@ Add `etc/cockpit-fleet/secrets` for a restore on this same machine, and
 
 **System**, "Export", writes one JSON document with the credentials (names,
 users, vault identifiers, never a secret), projects, inventories, host keys,
+sets of variables (the names of their secret variables, not their values),
 templates, workflows, schedules, checks, channels and rules, each named by
 its name. "Import" on another controller creates what it does not have yet
 and leaves alone what has the same name; it reports each item. It carries

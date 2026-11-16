@@ -20,7 +20,7 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 | Entry | Content |
 |---|---|
 | `spec.json` | what to run; validated again by `fleet-run` |
-| `project/` | a copy of the project (symbolic links copied, never followed; `.git` left out) |
+| `project/` | a copy of the project (symbolic links copied, never followed; `.git` left out), taken under a shared lock of its tree, which a change or the end of a sync holds exclusive: never files half changed |
 | `creds/` | ciphertext of the secrets this job may use, named by purpose |
 | `known_hosts` | the host keys an administrator has trusted |
 | `inventory/` | a copy of the tree of the inventory, when it is written in the interface rather than a project file |

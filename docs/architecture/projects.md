@@ -24,7 +24,7 @@ records the commit it ran.
 ```
 /var/lib/cockpit-fleet/projects/<id>/tree/       the files, what a run copies
 /var/lib/cockpit-fleet/projects/<id>/repo.git/   the repository, beside the tree
-/var/lib/cockpit-fleet/projects/<id>/lock        one change at a time (flock)
+/var/lib/cockpit-fleet/projects/<id>/lock        one change at a time (flock); a copy for a run shares it
 ```
 
 The repository is not inside the tree, so nothing in the tree is git's own and

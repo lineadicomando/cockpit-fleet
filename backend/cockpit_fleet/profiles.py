@@ -8,8 +8,9 @@ its session to every call, beside "via"; an agent that leaves it out gets
 already do by hand.
 
 The classes are those of cli.AGENT_CLASSES, and one more: adhoc-diagnostic,
-an ad-hoc command of a module in [mcp] adhoc_modules, without become. It is
-not a class of a command but of a call, decided by its parameters.
+an ad-hoc command of a module in [mcp] adhoc_modules, without become and
+with no template in its arguments. It is not a class of a command but of a
+call, decided by its parameters.
 """
 
 DIAGNOSTIC = "adhoc-diagnostic"
@@ -39,9 +40,28 @@ DIAGNOSTIC_MODULES = (
 )
 
 
+# What makes Ansible read a string as a template, which a lookup in it would
+# turn into a command run on the controller.
+_TEMPLATE_MARKS = ("{{", "{%", "{#")
+
+
+def _templated(value: object) -> bool:
+    if isinstance(value, str):
+        return any(mark in value for mark in _TEMPLATE_MARKS)
+    if isinstance(value, dict):
+        return any(_templated(key) or _templated(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(_templated(item) for item in value)
+    return False
+
+
 def is_diagnostic(params: dict, modules: tuple[str, ...]) -> bool:
-    """Whether the parameters of run.adhoc make it a diagnostic command."""
-    return params.get("module") in modules and params.get("become", False) is False
+    """Whether the parameters of run.adhoc make it a diagnostic command: a
+    module that changes nothing, without become, and arguments that are no
+    templates."""
+    return (params.get("module") in modules and params.get("become", False) is False
+            and not _templated(params.get("free_form", ""))
+            and not _templated(params.get("args", {})))
 
 
 def call_class(name: str, kind: str, params: dict, modules: tuple[str, ...]) -> str:

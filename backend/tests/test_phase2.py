@@ -12,6 +12,7 @@ from unittest import mock
 
 from cockpit_fleet import (  # noqa: F401
     cli,
+    files,
     jobs,
     journal,
     paths,
@@ -315,6 +316,24 @@ class RunTest(Base):
         with mock.patch.object(store, "now", lambda: time.time() + 3600):
             self.assertEqual(self.ok("run.get", {"id": late})["error"],
                              "the run ended without a result")
+
+    def test_a_tree_being_changed_is_not_copied_for_a_run(self):
+        home = paths.PROJECTS_DIR / "p-0123456789abcdef"
+        (home / "tree" / "roles").mkdir(parents=True)
+        (home / "tree" / "site.yml").write_text("- hosts: all\n")
+        self.assertEqual(jobs._tree_home(home / "tree" / "roles"), home.resolve())
+        self.assertIsNone(jobs._tree_home(self.root / "src"))
+        with mock.patch.object(jobs, "TREE_LOCK_WAIT", 0.2):
+            with files.locked(home.name):
+                with self.assertRaises(Unavailable):
+                    jobs.snapshot(home / "tree", self.root / "copy")
+            # Copies share the lock; a change waits for them.
+            with jobs.tree_locked(home, exclusive=False):
+                jobs.snapshot(home / "tree", self.root / "copy")
+                with self.assertRaises(Unavailable):
+                    with jobs.tree_locked(home, exclusive=True):
+                        pass
+        self.assertTrue((self.root / "copy" / "site.yml").is_file())
 
     def test_outcome_is_collected_and_the_copy_removed(self):
         run = self.ok("run.start", {"template_id": self.template()["id"]})

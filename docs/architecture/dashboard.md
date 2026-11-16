@@ -24,7 +24,10 @@ the browser is, from `tz_offset`):
   what waits now (running, queued, waiting for approval);
 - problems and recoveries by day, from `state_changes` (hard changes only):
   a problem begins when a hard state that was ok, or none, becomes a
-  problem; it ends at the next hard ok. The mean time to recover is over
+  problem; it ends at the next hard ok. The hard state is the one each
+  change kept (`hard_state`, schema 32): an unknown suppressed because the
+  host could not be reached is no problem (rows of before take the state).
+  The mean time to recover is over
   the problems that ended in the window, timed from when they began, before
   the window if need be;
 - updates the hosts lack (security ones apart) and how many hosts have

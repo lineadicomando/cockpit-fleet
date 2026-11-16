@@ -253,7 +253,8 @@ sudo dnf remove cockpit-fleet           # Fedora, AlmaLinux
 ```
 
 To remove everything on Debian, purge it: the database, the projects, the
-runs, the configuration and the encrypted secrets go too.
+runs, the configuration and the encrypted secrets go too. A disk mounted on
+`/var/lib/cockpit-fleet` is emptied, and stays mounted.
 
 ```sh
 sudo apt-get purge cockpit-fleet

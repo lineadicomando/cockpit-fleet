@@ -95,6 +95,27 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - A check that sets only one threshold of `days_left` (certificates)
   applied it the wrong way round: a certificate with 200 days left was
   critical. One threshold alone now keeps the direction of the defaults.
+- Overview: a host that could not be reached made each of its checks a
+  problem, and a recovery when it came back, though nothing was told and
+  their states were not problems. Counted from now on (schema 32); what
+  was recorded before stays as it was.
+- An event of a run whose output had bytes that are not UTF-8 (a file in
+  Latin-1 read by `command`) was lost whole, and the task of that host
+  showed nothing. Those bytes are now written as `?`.
+- A run launched while the files of a project or an inventory were being
+  changed (a restore, a change of several files, the end of a sync) could
+  take them half changed. It now waits for the change to end, a minute at
+  most, and otherwise is refused.
+- Store: two uploads of the same file by the same person (two tabs, a
+  retry) wrote into each other and could leave a corrupt file with a
+  verified digest; the second is now refused. Uploads that began together
+  could take the store past `[store] max_gb`: the limit is checked again
+  when a file has arrived, and one refused then can be resumed when there
+  is room.
+- A download that arrived whole but was refused by the store (no room, the
+  path taken) could not be resumed: the server answered 416 every time.
+- Purging the `.deb` failed when `/var/lib/cockpit-fleet` is a mount point,
+  as `docs/install.md` suggests for the store: it is now emptied and left.
 
 ### Security
 
@@ -105,6 +126,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - An agent in the `autonomous` profile may no longer turn schedules on:
   what they launch would have run outside its count of runs, its dry runs
   only and the maintenance windows.
+- An ad-hoc command of an agent in the `diagnostic` profile ran without a
+  question when its module only reads, whatever its arguments: a template
+  in them (`{{ lookup('pipe', ...) }}`) ran a command on the controller.
+  Arguments with a template now make it an ordinary ad-hoc command, which
+  that profile does not allow.
 
 ## [0.3.0] - 2026-11-15
 

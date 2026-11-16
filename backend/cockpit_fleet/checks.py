@@ -163,9 +163,9 @@ def apply(ctx: Context, row, state: int, summary: str, metrics: list, details: d
         values.update(ack_by="", ack_at=None, ack_comment="")
     if state != row["state"] or hard != row["hard_state"] or kind != row["state_type"]:
         ctx.conn.execute(
-            "INSERT INTO state_changes (host_id, check_id, ts, state, state_type, summary)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (row["host_id"], row["check_id"], now, state, kind, summary[:500]))
+            "INSERT INTO state_changes (host_id, check_id, ts, state, state_type, summary,"
+            " hard_state) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (row["host_id"], row["check_id"], now, state, kind, summary[:500], hard))
     marks = ", ".join(f"{column} = ?" for column in values)
     ctx.conn.execute(f"UPDATE check_states SET {marks} WHERE host_id = ? AND check_id = ?",  # noqa: S608
                      (*values.values(), row["host_id"], row["check_id"]))

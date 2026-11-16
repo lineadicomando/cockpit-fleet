@@ -71,6 +71,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ranged = None
         if ranged and not server.ignore_range:
             start = int(ranged.split("=")[1].rstrip("-"))
+            if start >= len(DATA):
+                # As a server answers a range past the end: the size, nothing else.
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{len(DATA)}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             self.send_response(206)
             self.send_header("Content-Range", f"bytes {start}-{len(DATA) - 1}/{len(DATA)}")
         else:
@@ -127,6 +134,18 @@ class DownloadTest(unittest.TestCase):
         result = self.download()
         self.assertEqual(result["sha256"], hashlib.sha256(DATA).hexdigest())
         self.assertEqual((self.run_dir / fetch.TARGET).read_bytes(), DATA)
+
+    def test_a_file_whole_already_is_taken_up_as_it_is(self):
+        # It arrived whole, and the store refused it: once there is room, it is resumed.
+        (self.run_dir / fetch.TARGET).parent.mkdir(parents=True)
+        (self.run_dir / fetch.TARGET).write_bytes(DATA)
+        result = self.download(partial={"etag": self.server.etag})
+        self.assertEqual((result["size"], result["sha256"]),
+                         (len(DATA), hashlib.sha256(DATA).hexdigest()))
+        self.assertEqual(self.server.requests[-1]["range"], f"bytes={len(DATA)}-")
+        # One that says no size, or another, still fails.
+        self.assertIsNone(fetch._unsatisfied_total(mock.Mock(headers={})))
+        self.assertIsNone(fetch._unsatisfied_total(mock.Mock(headers={"Content-Range": "x"})))
 
     def test_redirects_are_followed_within_http(self):
         self.assertEqual(self.download("/moved")["url"], self.server.base + "/data")

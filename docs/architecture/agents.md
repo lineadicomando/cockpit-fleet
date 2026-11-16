@@ -71,7 +71,9 @@ class is a decision.
 (`profiles.py`): `observer` reads, `assisted` and `autonomous` also run,
 `diagnostic` also `adhoc-diagnostic`, which is not the class of a command
 but of a call (`run.adhoc` with a module of `[mcp] adhoc_modules`, without
-become), `administrator` has them all. `fleet-chat --profile` asks
+become, and no `{{`, `{%` or `{#` in its arguments: Ansible would read them
+as templates, and a lookup in one runs a command on the controller, in the
+run), `administrator` has them all. `fleet-chat --profile` asks
 `chat.start` whether the profile is enabled (`[chat] profiles`) and starts
 `fleet-mcp --profile`, which adds it to every call beside `via`. In
 `_through`, after the ceiling lowers the role, a call whose class the

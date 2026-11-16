@@ -4,8 +4,16 @@ set -e
 # Purge takes what the controller kept: the database, projects, runs, the
 # configuration and the encrypted secrets. The account and its groups stay:
 # files elsewhere (a directory of local projects) may belong to them.
+# A disk mounted on /var/lib/cockpit-fleet (docs/install.md, for the
+# store) is emptied and stays: rm cannot remove a mount point, and a purge
+# must not fail on it.
 if [ "$1" = purge ]; then
-    rm -rf /var/lib/cockpit-fleet /etc/cockpit-fleet /run/cockpit-fleet
+    for path in /var/lib/cockpit-fleet /etc/cockpit-fleet /run/cockpit-fleet; do
+        if ! rm -rf "$path"; then
+            echo "cockpit-fleet: $path could not be removed whole (a mount point?):" \
+                "what is left in it is yours to remove" >&2
+        fi
+    done
 fi
 
 #DEBHELPER#

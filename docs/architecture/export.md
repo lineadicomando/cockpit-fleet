@@ -2,7 +2,7 @@
 
 `config.export` returns the configuration as one JSON document: credentials,
 projects, inventories, trusted host keys, sets of variables, job templates
-(with the names of their sets), schedules, checks,
+(with the names of their sets), workflows, schedules, checks,
 notification channels and rules. Things refer to
 each other by name, since identifiers differ between two installations. It
 holds no secret: a credential is its name, its kind, its user name and its

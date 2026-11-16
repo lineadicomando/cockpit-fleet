@@ -834,6 +834,12 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE workflows ADD COLUMN project_id TEXT REFERENCES projects (id)",
         "ALTER TABLE workflows ADD COLUMN inventory_id TEXT REFERENCES inventories (id)",
     ],
+    [
+        # The hard state in force after a change: a result suppressed because
+        # the host could not be reached is unknown, but changes no hard
+        # state. Rows written before have none (the Overview takes state).
+        "ALTER TABLE state_changes ADD COLUMN hard_state INTEGER",
+    ],
 ]
 
 

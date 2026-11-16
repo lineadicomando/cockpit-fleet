@@ -36,7 +36,10 @@ in [security.md](security.md); the decisions behind these limits in
   only with a strong ETag or a Last-Modified, and for a week; a source is
   checked at most daily, by the tick, at no set time, and a server with no
   validator sends the whole file at each check (the digest then says
-  whether it changed). Downloads to the browser: one that fails half way
+  whether it changed); each download is given the room left when it is
+  queued, so downloads queued together may each take it, and the free disk
+  with it (the limit of `[store] max_gb` is checked again when one is
+  taken into the store). Downloads to the browser: one that fails half way
   leaves a short file (compare the digest shown); an archive of many
   entries is bounded by the length of its link (hundreds go through their
   folder), and one whose file shrinks meanwhile ends short; one upload of

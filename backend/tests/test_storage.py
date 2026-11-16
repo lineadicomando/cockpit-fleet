@@ -1,5 +1,6 @@
 """The store: files put there from the browser or by hand, and the farm a run gets."""
 
+import fcntl
 import hashlib
 import io
 import json
@@ -180,6 +181,32 @@ class StoreTest(StoreBase):
         self.assertFalse((paths.STORE_DIR / "apps").exists())
         self.assertEqual(self.code("store.delete", {"path": "apps"}, role="operator"),
                          "not_found")
+
+    def test_a_second_upload_of_the_same_file_does_not_write_into_the_first(self):
+        storage._mkdirs()
+        part = paths.STORE_UPLOADS / f"{storage._upload_key('anna', 'a.bin')}.part"
+        part.write_bytes(b"first half")
+        with open(part, "rb") as first:
+            fcntl.flock(first, fcntl.LOCK_EX)
+            answer = self.put("a.bin", b"another file")
+            self.assertEqual(answer["error"]["code"], "conflict")
+            self.assertIn("being uploaded already", answer["error"]["message"])
+        self.assertEqual(part.read_bytes(), b"first half")
+        self.assertTrue(self.put("a.bin", b"another file")["ok"])
+
+    def test_the_limit_is_checked_again_once_the_file_arrived(self):
+        self.config = self.config.__class__(**{**self.config.as_dict(), "store_max_gb": 1})
+        # Room when it began; others filled the store while it arrived.
+        usage = iter([0, 1024 ** 3])
+        with mock.patch.object(storage, "_usage", lambda conn: next(usage)):
+            answer = self.put("late.bin", b"0123456789")
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("once it arrived", answer["error"]["message"])
+        self.assertFalse((paths.STORE_DIR / "late.bin").exists())
+        pending = self.ok("store.uploads", role="operator")["uploads"]
+        self.assertEqual([(u["path"], u["received"]) for u in pending], [("late.bin", 10)])
+        # Taken up when there is room: nothing more to send.
+        self.assertTrue(self.put("late.bin", b"0123456789", sent=b"", offset=10)["ok"])
 
     def test_a_full_disk_or_the_limit_refuses_a_file(self):
         Usage = namedtuple("Usage", "total used free")

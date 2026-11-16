@@ -79,7 +79,7 @@ recovery. The next time is counted from when the cycle was planned, on the
 tick, with 10 s of slack: counted from when the result arrived, it slipped
 to the following tick every time (177 s instead of two intervals of 60).
 Every change of the last state or of the hard one is kept in
-`state_changes`. A check that changed in at least half of its last 20
+`state_changes`, with the hard state after it. A check that changed in at least half of its last 20
 results, with 10 at least, flaps, and stops flapping under a quarter.
 
 **Unreachable hosts.** A host Ansible cannot reach has its `reachability`

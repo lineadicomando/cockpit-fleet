@@ -181,6 +181,15 @@ def _total(response, received: int) -> int | None:
     return int(length) + (received if response.status == 206 else 0) if length.isdigit() else None
 
 
+def _unsatisfied_total(error) -> int | None:
+    """The size of the whole file in a 416 answer: Content-Range: bytes */N."""
+    ranged = (error.headers.get("Content-Range", "") if error.headers else "").strip()
+    if ranged.startswith("bytes */"):
+        tail = ranged[len("bytes */"):].strip()
+        return int(tail) if tail.isdigit() else None
+    return None
+
+
 def _progress(run_dir: Path, received: int, total: int | None,
               validators: dict | None = None) -> None:
     temporary = run_dir / f"{PROGRESS}.tmp"
@@ -301,7 +310,10 @@ def download(spec: dict, run_dir: Path, say: Callable[[str], None],
                     return {"rc": 0, "unchanged": True, "url": final,
                             **{name: value for name, value in _validators(error).items()
                                if value}}
-                if error.code == 416 and total is not None and received == total:
+                if error.code == 416 and received and received == (
+                        total if total is not None else _unsatisfied_total(error)):
+                    # All of it was here already: a download taken up after it
+                    # arrived whole, then was refused by the store.
                     break
                 if error.code not in (408, 429, 500, 502, 503, 504) or failures >= _RETRIES:
                     out.flush()

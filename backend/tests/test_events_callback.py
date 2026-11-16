@@ -100,3 +100,20 @@ class TrimTest(unittest.TestCase):
         plugin._max_string = 10
         self.assertEqual(plugin._trim("abcdefhunter2-secret"), "abcdef****…")
         self.assertNotIn("hunt", plugin._trim(["xxxxxxxhunter2-secret"])[0])
+
+
+@unittest.skipIf(events is None, "ansible is not installed")
+class OutputTest(unittest.TestCase):
+    def test_output_that_is_not_utf8_is_written_replaced_not_lost(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "events.jsonl"
+            plugin = events.CallbackModule()
+            plugin._secrets = []
+            plugin._out = events.open_events(path)
+            # How Ansible carries the byte 0xe8 of a file in Latin-1.
+            plugin._emit("host_ok", host="web01", result={"stdout": "caff\udce8"})
+            plugin._out.close()
+            [line] = path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(json.loads(line)["result"]["stdout"], "caff?")

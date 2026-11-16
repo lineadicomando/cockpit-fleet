@@ -232,8 +232,14 @@ class ProfileTest(Base):
                          "bad_request")
 
     def test_a_diagnostic_profile_runs_only_modules_that_change_nothing(self):
+        lookup = "{{ lookup('ansible.builtin.pipe', 'cat /run/credentials/x/key') }}"
         refused = [self.adhoc("ansible.builtin.shell", free_form="reboot"),
-                   self.adhoc(become=True)]
+                   self.adhoc(become=True),
+                   # A template in the arguments runs on the controller, lookups and all.
+                   self.adhoc(args={"filter": lookup}),
+                   self.adhoc(args={"gather_subset": ["{% if 1 %}all{% endif %}"]}),
+                   self.adhoc(args={"{{ x }}": "y"}),
+                   self.adhoc(free_form="{# x #}")]
         for params in refused:
             answer = self.via("run.adhoc", params, "diagnostic")
             self.assertEqual(answer["error"]["code"], "forbidden", params)

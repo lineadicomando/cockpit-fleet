@@ -169,14 +169,18 @@ def _runs(ctx: Context, days: _Days) -> dict:
     }
 
 
+# The hard state after a change; rows of before schema 32 have only the state.
+_HARD = "coalesce(hard_state, state)"
+
+
 def _problem_began(ctx: Context, host_id: str, check_id: str, before: float) -> float | None:
     """When the hard problem under way at a time began: its first hard change
     after the last hard ok."""
     row = ctx.conn.execute(
-        "SELECT min(ts) AS ts FROM state_changes WHERE host_id = ? AND check_id = ?"
-        " AND state_type = 'hard' AND state != 0 AND ts < ? AND ts > coalesce("
+        "SELECT min(ts) AS ts FROM state_changes WHERE host_id = ? AND check_id = ?"  # noqa: S608
+        f" AND state_type = 'hard' AND {_HARD} != 0 AND ts < ? AND ts > coalesce("
         "(SELECT max(ts) FROM state_changes WHERE host_id = ? AND check_id = ?"
-        " AND state_type = 'hard' AND state = 0 AND ts < ?), 0)",
+        f" AND state_type = 'hard' AND {_HARD} = 0 AND ts < ?), 0)",
         (host_id, check_id, before, host_id, check_id, before)).fetchone()
     return row["ts"]
 
@@ -190,13 +194,13 @@ def _alerts(ctx: Context, days: _Days) -> dict:
     cursor = conn.cursor()
     cursor.row_factory = None
     for host_id, check_id, ts, state in cursor.execute(
-            "SELECT host_id, check_id, ts, state FROM state_changes"
+            f"SELECT host_id, check_id, ts, {_HARD} FROM state_changes"  # noqa: S608
             " WHERE ts >= ? AND state_type = 'hard' ORDER BY ts, id", (days.since,)):
         changes[(host_id, check_id)].append((ts, state))
     took = []
     for (host_id, check_id), rows in changes.items():
         before = cursor.execute(
-            "SELECT state FROM state_changes WHERE host_id = ? AND check_id = ?"
+            f"SELECT {_HARD} FROM state_changes WHERE host_id = ? AND check_id = ?"  # noqa: S608
             " AND state_type = 'hard' AND ts < ? ORDER BY ts DESC, id DESC LIMIT 1",
             (host_id, check_id, days.since)).fetchone()
         problem = before is not None and before[0] != 0

@@ -14,7 +14,10 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 import traceback
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import journal, notify, paths, store
@@ -182,6 +185,51 @@ def open_tree(tree: Path) -> int:
     return fd
 
 
+# How long a copy for a run waits for a change of the files to end.
+TREE_LOCK_WAIT = 60
+
+
+def _tree_home(tree: Path) -> Path | None:
+    """The home of the managed tree that TREE is in, or is: a project's or a
+    managed inventory's, whose lock files.locked() takes to change it."""
+    try:
+        tree = tree.resolve()
+    except OSError:
+        return None
+    for root in (paths.PROJECTS_DIR, paths.INVENTORIES_DIR):
+        root = root.resolve()
+        if tree.is_relative_to(root):
+            parts = tree.relative_to(root).parts
+            if len(parts) >= 2 and parts[1] == "tree":
+                return root / parts[0]
+    return None
+
+
+@contextmanager
+def tree_locked(home: Path | None, exclusive: bool) -> Iterator[None]:
+    """The lock of a managed tree: shared to copy it, exclusive to change it,
+    so that a run never takes files half changed. The same lock as
+    files.locked(), on another descriptor: never taken by who holds that."""
+    if home is None or not home.is_dir():
+        yield
+        return
+    fd = os.open(home / "lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        deadline = time.monotonic() + TREE_LOCK_WAIT
+        while True:
+            try:
+                fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > deadline:
+                    message = "the files are being changed: try again in a while"
+                    raise Unavailable(message) from None
+                time.sleep(0.1)
+        yield
+    finally:
+        os.close(fd)
+
+
 def snapshot(tree: Path, destination: Path, what: str = "project",
              run_directory: Path | None = None) -> list[str]:
     """Copy a project for one run. Symbolic links are copied, never followed:
@@ -195,14 +243,15 @@ def snapshot(tree: Path, destination: Path, what: str = "project",
     out, relative to the tree."""
     counts = [0, 0]
     skipped: list[str] = []
-    try:
-        fd = open_tree(tree)
-    except OSError as error:
-        raise Conflict(f"cannot read the {what}: {error.strerror}") from None
-    try:
-        _copy_tree(fd, destination, counts, skipped, "")
-    finally:
-        os.close(fd)
+    with tree_locked(_tree_home(tree), exclusive=False):
+        try:
+            fd = open_tree(tree)
+        except OSError as error:
+            raise Conflict(f"cannot read the {what}: {error.strerror}") from None
+        try:
+            _copy_tree(fd, destination, counts, skipped, "")
+        finally:
+            os.close(fd)
     if skipped:
         _tell_skipped(run_directory or destination.parent, skipped, what)
     return skipped
@@ -800,10 +849,11 @@ def _store_checkout(ctx, run, directory: Path, revision: str) -> str:
     home = paths.PROJECTS_DIR / check_id(run["project_id"], "project id")
     home.mkdir(mode=0o700, exist_ok=True)
     old = home / "tree.old"
-    shutil.rmtree(old, ignore_errors=True)
-    if (home / "tree").exists():
-        (home / "tree").rename(old)
-    (directory / "checkout").rename(home / "tree")
+    with tree_locked(home, exclusive=True):
+        shutil.rmtree(old, ignore_errors=True)
+        if (home / "tree").exists():
+            (home / "tree").rename(old)
+        (directory / "checkout").rename(home / "tree")
     shutil.rmtree(old, ignore_errors=True)
     store.update(ctx.conn, "projects", run["project_id"],
                  {"revision": revision, "synced_at": store.now(), "sync_error": ""}, "project")

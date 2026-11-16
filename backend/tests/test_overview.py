@@ -82,6 +82,22 @@ class OverviewTest(CheckBase):
         self.assertEqual(sum(d["recoveries"] for d in alerts["days"]), 1)
         self.assertEqual(self.overview()["problems"]["open"], 0)
 
+    def test_a_host_that_cannot_be_reached_is_no_problem_of_its_checks(self):
+        inventory = self.inventory()
+        self.check(inventory, group="web", max_attempts=1)
+        run_id = self.tick()["queued"][0]
+        self.answer(run_id, {"web01": {"disk": disk(10)}, "web02": {"disk": disk(10)}})
+        # Off for the night: its disk is unknown, but no hard problem began.
+        run_id = self.tick(self.clock + 3600)["queued"][0]
+        self.answer(run_id, {"web01": "unreachable", "web02": {"disk": disk(10)}})
+        self.assertEqual(self.states()[("web01", "disk")]["state"], "unknown")
+        run_id = self.tick(self.clock + 8 * 3600)["queued"][0]
+        self.answer(run_id, {"web01": {"disk": disk(10)}, "web02": {"disk": disk(10)}})
+        alerts = self.overview()["alerts"]
+        self.assertEqual(sum(d["problems"] for d in alerts["days"]), 0)
+        self.assertEqual(sum(d["recoveries"] for d in alerts["days"]), 0)
+        self.assertIsNone(alerts["time_to_recover"])
+
     def test_a_problem_begun_before_the_window_is_timed_from_its_start(self):
         inventory = self.inventory()
         self.check(inventory, group="web", max_attempts=1)
