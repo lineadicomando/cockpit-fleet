@@ -8,7 +8,9 @@ its own directory and drops `.git`; the result replaces the project's tree
 only if the fetch succeeded. Hooks are disabled, submodules are not followed,
 and `GIT_ALLOW_PROTOCOL` leaves only https and ssh. A token is handed to git by
 an askpass helper that reads it from the credentials directory, so it is in
-neither argv nor the environment.
+neither argv nor the environment. The git commands are quiet, so the job
+ends by writing what it fetched (the reference, the revision, the date and
+the subject of the commit): the output of a sync that succeeded is not empty.
 
 **Projects written in the interface.** A third kind of project, `managed`,
 has no source elsewhere: its files are written in the "Files" page by

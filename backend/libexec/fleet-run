@@ -81,6 +81,8 @@ def run_job(spec: dict, run_dir: Path, runtime_dir: Path, credentials: Path | No
             if rc != 0:
                 return {"rc": rc}
         checkout = run_dir / "checkout"
+        # Feedback only: what it returns does not decide the result.
+        execute(runner.build_sync_report(spec, run_dir), env, run_dir, log)
         revision = subprocess.run(
             ["/usr/bin/git", "-C", str(checkout), "rev-parse", "HEAD"],
             env=env, capture_output=True, text=True, check=True,

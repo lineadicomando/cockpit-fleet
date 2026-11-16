@@ -50,6 +50,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   page.
 - Under Automation, Runs is the last tab, after Schedules: the tab
   Automation now opens Job templates.
+- The run that updates a git project ends its output with what it
+  fetched: the reference, the revision, and the date and subject of the
+  commit. Its output was empty when the update succeeded.
 
 ### Fixed
 

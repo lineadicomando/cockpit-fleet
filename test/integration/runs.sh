@@ -341,8 +341,13 @@ if [ -n "${IT_GIT_URL:-}" ]; then
     git=$(admin project.create "{\"name\": \"git\", \"kind\": \"git\", \"url\": \"$IT_GIT_URL\", \"ref\": \"${IT_GIT_REF:-main}\"}")
     git_id=$(get "$git" 'a["data"]["id"]')
     sync=$(admin project.sync "{\"id\": \"$git_id\"}")
-    expect_eq "git sync job succeeds" "$(wait_status "$(get "$sync" 'a["data"]["run_id"]')" 180)" successful
-    expect_eq "revision is a commit id" "$(get "$(admin project.list)" 'len([p for p in a["data"]["projects"] if p["id"]=="'"$git_id"'"][0]["revision"])')" 40
+    sync_id=$(get "$sync" 'a["data"]["run_id"]')
+    expect_eq "git sync job succeeds" "$(wait_status "$sync_id" 180)" successful
+    revision=$(get "$(admin project.list)" '[p for p in a["data"]["projects"] if p["id"]=="'"$git_id"'"][0]["revision"]')
+    expect_eq "revision is a commit id" "${#revision}" 40
+    expect_eq "its output says what was fetched" \
+        "$(get "$(admin run.log "{\"id\": \"$sync_id\"}")" 'a["data"]["text"].splitlines()[0]')" \
+        "Fetched ${IT_GIT_REF:-main}: revision $revision"
     expect_ok "fetched tree has files and no .git" sh -c "ls /var/lib/cockpit-fleet/projects/$git_id/tree | grep -q . && ! test -e /var/lib/cockpit-fleet/projects/$git_id/tree/.git"
     expect_eq "file URLs are refused" "$(get "$(admin project.create '{"name": "f", "kind": "git", "url": "file:///etc"}')" 'a["error"]["code"]')" bad_request
 else

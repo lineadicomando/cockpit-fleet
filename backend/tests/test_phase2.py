@@ -908,6 +908,15 @@ class RunnerPhase2Test(unittest.TestCase):
             with self.assertRaises(BadRequest, msg=bad):
                 runner.build_sync({**spec, **bad}, self.run, self.runtime, None)
 
+    def test_sync_report_names_the_reference_and_the_commit(self):
+        spec = {"kind": "sync", "url": "https://example.org/a.git", "ref": "main"}
+        report = runner.build_sync_report(spec, self.run)
+        self.assertEqual(report[-1], "--format=Fetched main: revision %H%n%cd  %s")
+        self.assertIn(str(self.run / "checkout"), report)
+        self.assertIn("core.hooksPath=/dev/null", report)
+        with self.assertRaises(BadRequest):
+            runner.build_sync_report({**spec, "ref": "--x"}, self.run)
+
     def test_sync_token_is_read_by_a_helper_never_put_in_argv_or_env(self):
         creds = Path(self.tmp.name) / "creds"
         creds.mkdir()

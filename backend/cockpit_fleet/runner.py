@@ -875,6 +875,16 @@ def build_sync(
     return commands, env
 
 
+def build_sync_report(spec: dict, run_dir: Path) -> list[str]:
+    """The git command that says what a "sync" job fetched: the reference
+    and the commit it stands at. The commands of the fetch are quiet, so
+    without it a sync that succeeds leaves an empty output."""
+    ref = check_git_ref(spec.get("ref")).replace("%", "%%")
+    return ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "-C", str(run_dir / "checkout"),
+            "log", "-1", "--no-color", "--date=iso",
+            f"--format=Fetched {ref}: revision %H%n%cd  %s"]
+
+
 def usage(cgroup_file: Path = Path("/proc/self/cgroup"),
           root: Path = Path("/sys/fs/cgroup")) -> dict[str, int]:
     """What the unit has used so far: the peak of its memory, in bytes, and
