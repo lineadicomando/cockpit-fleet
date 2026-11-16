@@ -210,5 +210,6 @@ distributions and on machines: what the service account can reach
 (`roles.sh`), and hostile input through sudo as each role
 (`negative.sh`). A review of the root helpers, the sandbox, sudoers,
 archives, git and bundles was done on 24 October 2026, and a review of
-the whole project on 16 November 2026; what they left is in
-[limits.md](limits.md).
+the whole project on 16 November 2026; what they left as it is, is in
+[limits.md](limits.md), and what the second left to fix, in the plan of
+the repository (`TODO.md`).
