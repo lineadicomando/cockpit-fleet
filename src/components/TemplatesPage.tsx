@@ -10,10 +10,10 @@ import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers,
 import { playbookChoices } from "../lib/files.ts";
 import { formatTime } from "../lib/format.ts";
 import {
-    filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, readTemplatesView, sortTemplates, withoutTemplateFilters, withTemplateGroupsOpen,
-    type Outcome, type TemplateGroup, type TemplateNames, type TemplateSort, type TemplatesView, type Trait,
+    filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, overrideFields, overridesOf, readTemplatesView, sortTemplates, withoutTemplateFilters,
+    withTemplateGroupsOpen, type Outcome, type TemplateGroup, type TemplateNames, type TemplateSort, type TemplatesView, type Trait,
 } from "../lib/templates.ts";
-import type { ApprovalMode, Credential, Inventory, Project, ProjectPaths, Run, Schedule, Template, VariableSet } from "../lib/types.ts";
+import type { ApprovalMode, Credential, Inventory, Overrides, Project, ProjectPaths, Run, Schedule, Template, VariableSet } from "../lib/types.ts";
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { parseVariables } from "../lib/variables.ts";
 import { VariableSetsField } from "./VariablesPage.tsx";
@@ -22,6 +22,7 @@ import { AtTerminal, ConfirmDelete, FormModal, ListState, RunStatusLabel, Sectio
 import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 import { PathInput } from "./PathInput.tsx";
+import { OverridesSection } from "./Overrides.tsx";
 import { FilterChips, GroupByChoice, GroupRow, NothingMatches, useStoredView } from "./ListView.tsx";
 import { ActionsColumn, SearchInput } from "./pf.tsx";
 
@@ -200,13 +201,15 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose, onLau
     const [check, setCheck] = useState(false);
     const [serial, setSerial] = useState(true);
     const [answers, setAnswers] = useState(() => initialAnswers(template.survey));
+    const [fields, setFields] = useState(() => overrideFields(template));
+    const overrides: Overrides = overridesOf(template, fields);
 
     async function submit() {
         const given: Record<string, unknown> = collectAnswers(template.survey, answers);
         // A secret goes to the helper that encrypts it; the launch carries a ticket.
         for (const [name, value] of Object.entries(secretAnswers(template.survey, answers)))
             given[name] = await answerSecret(value);
-        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given, serial });
+        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given, serial, ...overrides });
         announceRun(run.id, run.title);
         onLaunched?.();
         onClose();
@@ -235,7 +238,8 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose, onLau
                 <Checkbox id="launch-serial" label={t("Start after the runs already launched on this inventory")} isChecked={serial} onChange={(_e, value) => setSerial(value)}
                     description={t("It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome.")} />
             </FormGroup>
-            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check, serial)} />
+            <OverridesSection id="launch" template={template} fields={fields} onChange={setFields} />
+            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check, serial, overrides)} />
         </FormModal>
     );
 }

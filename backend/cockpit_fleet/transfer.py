@@ -105,7 +105,8 @@ def config_export(ctx: Context, params: Values) -> dict:
          "check": bool(row["check_mode"]), "diff": bool(row["diff"]),
          "answers": store.loads(row["answers"], {}), "overlap": row["overlap"],
          "catch_up": bool(row["catch_up"]), "priority": row["priority"],
-         "random_delay": row["random_delay"]}
+         "random_delay": row["random_delay"],
+         **store.loads(row["overrides"], {})}
         for row in conn.execute("SELECT * FROM schedules ORDER BY name COLLATE NOCASE")]
     document["checks"] = [
         {"name": row["name"], "kind": row["kind"],
@@ -290,7 +291,8 @@ class _Importer:
         params = {"name": item.get("name"), "calendar": item.get("calendar"),
                   "template_id": self._id("templates", item.get("template"), "template", True)}
         for key in ("timezone", "enabled", "limit", "check", "diff", "answers", "overlap",
-                    "catch_up", "priority", "random_delay"):
+                    "catch_up", "priority", "random_delay", "tags", "skip_tags", "forks",
+                    "verbosity"):
             if key in item:
                 params[key] = item[key]
         self._create("schedule.create", params)

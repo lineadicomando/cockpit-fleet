@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { byGroupOrder, groupItems, isOpen, readOpen, withOpen } from "../src/lib/listview.ts";
 import {
-    DEFAULT_TEMPLATES_VIEW, filterTemplates, groupTemplates, isTemplateGroupOpen, outcomeOf, readTemplatesView, sortTemplates,
+    DEFAULT_TEMPLATES_VIEW, filterTemplates, groupTemplates, isTemplateGroupOpen, outcomeOf, overrideFields, overridesOf, readTemplatesView, sortTemplates,
     withoutTemplateFilters, withTemplateGroupsOpen, type TemplatesView,
 } from "../src/lib/templates.ts";
 import type { RunStatus, Template } from "../src/lib/types.ts";
@@ -87,4 +87,19 @@ test("groups of any list keep the order asked for and what was opened by hand", 
     assert.deepEqual([isOpen(open, "kind", "a", true), isOpen(open, "kind", "c", true), isOpen(open, "state", "a", true)], [false, true, true]);
     assert.deepEqual(readOpen({ "kind:a": true, "kind:b": "no" }), { "kind:a": true });
     assert.deepEqual(readOpen(["kind:a"]), {});
+});
+
+test("a launch replaces only the values of its template that differ", () => {
+    const tpl = template("Deploy", "p1", "i1", { tags: ["web", "db"], skip_tags: ["slow"], forks: 5, verbosity: 1 });
+    const fields = overrideFields(tpl);
+    assert.deepEqual(fields, { tags: "web, db", skipTags: "slow", forks: "5", verbosity: "1" });
+    assert.deepEqual(overridesOf(tpl, fields), {});
+    assert.deepEqual(overridesOf(tpl, { ...fields, tags: "web,db " }), {});
+    assert.deepEqual(overridesOf(tpl, { tags: "db", skipTags: "", forks: "20", verbosity: "3" }),
+        { tags: ["db"], skip_tags: [], forks: 20, verbosity: 3 });
+    // Forks left empty keep the template's, or the controller's default.
+    assert.deepEqual(overridesOf(tpl, { ...fields, forks: "" }), {});
+    assert.deepEqual(overridesOf(template("x", "p1", "i1"), { tags: "", skipTags: "", forks: "", verbosity: "0" }), {});
+    // A schedule shows what it replaced.
+    assert.deepEqual(overrideFields(tpl, { tags: [], verbosity: 3 }), { tags: "", skipTags: "slow", forks: "5", verbosity: "3" });
 });

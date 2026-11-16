@@ -6,7 +6,7 @@
 #max_concurrent = 4
 # Hosts Ansible works on in parallel within one run.
 #default_forks = 5
-# Upper bound a job template may ask for.
+# Upper bound a job template, a launch or a schedule may ask for.
 #max_forks = 50
 # Days the output of a run is kept once it ended (its outcome stays); 0 keeps
 # it for ever.

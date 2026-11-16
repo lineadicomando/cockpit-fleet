@@ -750,14 +750,27 @@ def _launch(term: Terminal, args: list[str]) -> int:
     parser.add_argument("--serial", action="store_true",
                         help="wait while another run is running on its inventory, or one"
                         " launched before it is queued there")
+    parser.add_argument("--tags", metavar="TAG,...",
+                        help="in place of the template's tags; empty for none")
+    parser.add_argument("--skip-tags", metavar="TAG,...",
+                        help="in place of the template's tags to skip; empty for none")
+    parser.add_argument("--forks", type=int, help="hosts in parallel, in place of the template's")
+    parser.add_argument("--verbosity", type=int, choices=range(5), metavar="0-4",
+                        help="output detail, in place of the template's")
     parser.add_argument("--detach", action="store_true", help="do not follow the run")
     options = parser.parse_args(args)
     template = _one(term("template.list")["templates"], options.template, "template",
                     "fleet template list")
     answers = _answers(term, template, options.answer)
-    run = term("run.start", {"template_id": template["id"], "limit": options.limit,
-                             "check": options.check, "diff": options.diff, "answers": answers,
-                             "serial": options.serial})
+    params = {"template_id": template["id"], "limit": options.limit, "check": options.check,
+              "diff": options.diff, "answers": answers, "serial": options.serial}
+    for key in ("tags", "skip_tags"):
+        if getattr(options, key) is not None:
+            params[key] = [tag for tag in re.split(r"[\s,]+", getattr(options, key)) if tag]
+    for key in ("forks", "verbosity"):
+        if getattr(options, key) is not None:
+            params[key] = getattr(options, key)
+    run = term("run.start", params)
     if options.detach:
         term.show(run)
         return OK

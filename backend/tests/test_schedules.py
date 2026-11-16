@@ -3,6 +3,7 @@ clock that elapses every hour on the hour."""
 
 import dataclasses
 import fcntl
+import json
 import os
 import subprocess
 from unittest import mock
@@ -140,6 +141,20 @@ class ScheduleTest(ScheduleBase):
 
 
 class TickTest(ScheduleBase):
+    def test_a_schedule_keeps_what_replaces_the_values_of_its_template(self):
+        template = self.template(tags=["deploy"], forks=5)
+        schedule = self.schedule(template, tags=[], forks=12)
+        self.assertEqual(schedule["overrides"], {"tags": [], "forks": 12})
+        run = self.ok("run.get", {"id": self.ok("schedule.run", {"id": schedule["id"]})["id"]})
+        spec = json.loads((paths.RUNS_DIR / run["id"] / "spec.json").read_text())
+        self.assertEqual((spec["tags"], spec["forks"], spec["verbosity"]), ([], 12, 0))
+        self.assertEqual(run["options"]["overrides"], {"tags": [], "forks": 12})
+        # An update without them gives the template's back.
+        updated = self.ok("schedule.update", {"id": schedule["id"], "name": "hourly",
+                                              "template_id": template["id"],
+                                              "calendar": "hourly"})
+        self.assertEqual(updated["overrides"], {})
+
     def test_a_due_schedule_is_launched_as_itself_and_planned_again(self):
         schedule = self.schedule(limit="a", priority=3)
         self.assertEqual(self.tick(START + HOUR - 1), [])

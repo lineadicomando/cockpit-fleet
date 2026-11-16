@@ -17,6 +17,8 @@ test("a launch says what the form says, secrets left to the terminal", () => {
         "fleet launch 'Say hello' -a 'greeting=ciao a tutti' -a count=3 -a hosts=a,b --limit web01 --check");
     assert.equal(launchCommand("deploy", {}, "", false), "fleet launch deploy");
     assert.equal(launchCommand("deploy", {}, "", false, true), "fleet launch deploy --serial");
+    assert.equal(launchCommand("deploy", {}, "", false, false, { tags: ["db", "web"], skip_tags: [], forks: 8, verbosity: 2 }),
+        "fleet launch deploy --tags db,web --skip-tags '' --forks 8 --verbosity 2");
 });
 
 test("a run is followed while it goes on, read once it ended", () => {

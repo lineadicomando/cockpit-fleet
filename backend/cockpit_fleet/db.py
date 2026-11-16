@@ -823,6 +823,11 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE projects ADD COLUMN starter INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE inventories ADD COLUMN starter INTEGER NOT NULL DEFAULT 0",
     ],
+    [
+        # What a schedule sets in place of its template's tags, tags to
+        # skip, forks and verbosity (runs.OVERRIDES): only what it gave.
+        "ALTER TABLE schedules ADD COLUMN overrides TEXT NOT NULL DEFAULT '{}'",
+    ],
 ]
 
 

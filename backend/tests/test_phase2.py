@@ -226,6 +226,34 @@ class RunTest(Base):
         self.assertEqual(argv[argv.index("--limit") + 1], f"@{limit}")
         self.assertIn("--check", argv)
 
+    def test_a_launch_may_replace_tags_forks_and_verbosity_of_its_template(self):
+        template = self.template(tags=["deploy"], skip_tags=["slow"], forks=5, verbosity=1)
+
+        def spec_of(run):
+            return json.loads((paths.RUNS_DIR / run["id"] / "spec.json").read_text())
+
+        kept = self.ok("run.start", {"template_id": template["id"]}, role="operator")
+        self.assertEqual({key: spec_of(kept)[key] for key in ("tags", "skip_tags", "forks",
+                                                              "verbosity")},
+                         {"tags": ["deploy"], "skip_tags": ["slow"], "forks": 5, "verbosity": 1})
+        self.assertNotIn("overrides", kept["options"])
+
+        changed = self.ok("run.start", {"template_id": template["id"], "tags": ["db", "web"],
+                                        "skip_tags": [], "forks": 20, "verbosity": 3},
+                          role="operator")
+        spec = spec_of(changed)
+        self.assertEqual((spec["tags"], spec["skip_tags"], spec["forks"], spec["verbosity"]),
+                         (["db", "web"], [], 20, 3))
+        self.assertEqual(changed["options"]["overrides"], {"tags": ["db", "web"], "skip_tags": [],
+                                                           "forks": 20, "verbosity": 3})
+        # Only what is given replaces the template's.
+        some = self.ok("run.start", {"template_id": template["id"], "verbosity": 0})
+        self.assertEqual((spec_of(some)["tags"], spec_of(some)["verbosity"]), (["deploy"], 0))
+
+        for bad in ({"tags": ["a b"]}, {"forks": 0}, {"forks": 10_000}, {"verbosity": 5}):
+            self.assertEqual(self.code("run.start", {"template_id": template["id"], **bad}),
+                             "bad_request", bad)
+
     def test_outcome_is_collected_and_the_copy_removed(self):
         run = self.ok("run.start", {"template_id": self.template()["id"]})
         directory = paths.RUNS_DIR / run["id"]

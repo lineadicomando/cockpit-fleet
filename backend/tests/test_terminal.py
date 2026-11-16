@@ -72,7 +72,7 @@ class CompleteTest(unittest.TestCase):
         self.assertEqual(complete(COMMANDS, ["r"]), ["result", "rule", "run"])
         self.assertIn("start", complete(COMMANDS, ["run", ""]))
         self.assertNotIn("reconcile", complete(COMMANDS, ["run", ""]))
-        self.assertEqual(complete(COMMANDS, ["run", "start", "--t"]), ["--template-id"])
+        self.assertEqual(complete(COMMANDS, ["run", "start", "--t"]), ["--template-id", "--tags"])
         self.assertIn("--json", complete(COMMANDS, ["run", "list", "--"]))
         self.assertIn("--detach", complete(COMMANDS, ["launch", "x", "--"]))
         self.assertEqual(complete(COMMANDS, ["help", "temp"]), ["template"])
@@ -258,6 +258,17 @@ class LaunchTest(unittest.TestCase):
         terminal.run(t, COMMANDS, ["launch", "t1", "--serial"])
         self.assertTrue(fake.calls[1][1]["serial"])
         self.assertIn("It waits for run r0 (backup) on the same inventory", t.err.getvalue())
+
+    def test_a_launch_may_replace_tags_forks_and_verbosity(self):
+        fake = Fake({"template.list": {"templates": [{**TEMPLATE, "survey": []}]},
+                     "run.start": RUN})
+        terminal.run(term(fake), COMMANDS, ["launch", "t1", "--detach"])
+        self.assertNotIn("tags", fake.calls[-1][1])
+        terminal.run(term(fake), COMMANDS, ["launch", "t1", "--detach", "--tags", "db, web",
+                                            "--skip-tags", "", "--forks", "8", "--verbosity", "2"])
+        params = fake.calls[-1][1]
+        self.assertEqual((params["tags"], params["skip_tags"], params["forks"], params["verbosity"]),
+                         (["db", "web"], [], 8, 2))
 
     def test_a_launch_that_waits_says_who_decides(self):
         for approval, said in (({"mode": "confirm", "can_decide": True},

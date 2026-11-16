@@ -26,7 +26,7 @@ import { formatTime, runDuration } from "../lib/format.ts";
 import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
 import { originPath } from "../lib/sections.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Chunk, HostStats, Run, RunStatus } from "../lib/types.ts";
+import type { Chunk, HostStats, Overrides, Run, RunStatus } from "../lib/types.ts";
 import { AtTerminal, ListState, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
 import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
@@ -255,6 +255,22 @@ function Recap({ stats }: { stats: Record<string, HostStats> }) {
     );
 }
 
+// What a launch or a schedule set in place of the template's values.
+function Replaced({ overrides }: { overrides: Overrides }) {
+    const { t } = useTranslation();
+    const tags = (list: string[]) => list.length ? <code>{list.join(", ")}</code> : t("None");
+    return (
+        <Content component="ul" isPlainList>
+            {overrides.tags && <Content component="li">{t("Tags")}: {tags(overrides.tags)}</Content>}
+            {overrides.skip_tags && <Content component="li">{t("Skip tags")}: {tags(overrides.skip_tags)}</Content>}
+            {overrides.forks !== undefined && <Content component="li">{t("Hosts in parallel (forks)")}: {overrides.forks}</Content>}
+            {overrides.verbosity !== undefined && (
+                <Content component="li">{t("Output detail")}: {overrides.verbosity ? "-" + "v".repeat(overrides.verbosity) : t("Normal")}</Content>
+            )}
+        </Content>
+    );
+}
+
 export function RunDetailPage({ id }: { id: string }) {
     const { t, i18n } = useTranslation();
     const can = useCan();
@@ -404,6 +420,12 @@ export function RunDetailPage({ id }: { id: string }) {
                             <DescriptionListGroup>
                                 <DescriptionListTerm>{data.kind === "adhoc" ? t("Hosts") : t("Limit to hosts")}</DescriptionListTerm>
                                 <DescriptionListDescription><code>{data.options.limit}</code></DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
+                        {data.options.overrides && Object.keys(data.options.overrides).length > 0 && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("In place of the template's")}</DescriptionListTerm>
+                                <DescriptionListDescription><Replaced overrides={data.options.overrides} /></DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
                         {(data.options.variable_sets ?? []).length > 0 && (

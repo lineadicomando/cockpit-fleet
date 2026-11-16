@@ -49,7 +49,8 @@ class TransferTest(Base):
             self.ok("schedule.create", {
                 "name": "nightly", "template_id": template["id"], "calendar": "02:00",
                 "timezone": "Europe/Rome", "limit": "web01", "answers": {"version": "2"},
-                "overlap": "queue", "catch_up": True, "priority": 2, "random_delay": 60})
+                "overlap": "queue", "catch_up": True, "priority": 2, "random_delay": 60,
+                "skip_tags": ["slow"], "verbosity": 2})
         self.ok("check.create", {"name": "space", "kind": "disk", "inventory_id": managed["id"],
                                  "interval": 600, "machine_credential_id": machine["id"],
                                  "params": {"mounts": ["/var"]},

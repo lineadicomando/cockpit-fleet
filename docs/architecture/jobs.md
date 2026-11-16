@@ -192,6 +192,17 @@ their names. A name that a limit file would read as a pattern (a group's,
 `all`, one with `*` or `[`) stops the run rather than widen it; so does an
 empty intersection. It costs one reading of the inventory per limit.
 
+An operator may also replace, for one launch, the template's tags, tags to
+skip, forks and verbosity (`runs.OVERRIDES`; `--tags`, `--skip-tags`,
+`--forks`, `--verbosity` of `fleet launch`). Only what is given replaces the
+template's, and tags given empty run every task; forks stay within `[runs]
+max_forks`. Tags decide which tasks run, so an operator can run tasks the
+template leaves out by them: tags are not a control of what a role may do
+(16 November). What was replaced is kept in `options.overrides`, shown with
+the run and carried by its audit record; a template that needs approval
+still waits for it. A schedule stores the same values (`overrides`, schema
+30) and its runs take them; the steps of a workflow take the template's.
+
 **Ad-hoc commands.** `run.adhoc` runs one module on hosts of an inventory,
 with no template: an inventory, a host pattern, a module, its arguments, and
 optionally a machine credential, vault credentials, `become` and a dry run.

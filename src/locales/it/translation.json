@@ -1337,5 +1337,11 @@
   "Templates, checks and commands can use it again, and it is no longer offered when an inventory is created. Its hosts come back in the list of hosts once it is read.": "Template, check e comandi possono usarlo di nuovo, e non viene più proposto quando si crea un inventario. I suoi host tornano nell'elenco degli host una volta letto.",
   "Back": "Indietro",
   "Started: {{title}}": "Avviata: {{title}}",
-  "The run was started": "La run è stata avviata"
+  "The run was started": "La run è stata avviata",
+  "Values of the template": "Valori del template",
+  "replaced_values_count_one": "Valori del template ({{count}} sostituito)",
+  "replaced_values_count_many": "Valori del template ({{count}} sostituiti)",
+  "replaced_values_count_other": "Valori del template ({{count}} sostituiti)",
+  "They start as the template's: what you change replaces them here only, and the template stays as it is.": "Partono da quelli del template: ciò che cambi li sostituisce solo qui, e il template resta com'è.",
+  "In place of the template's": "Al posto di quelli del template"
 }

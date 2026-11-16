@@ -220,7 +220,8 @@ def _schedule(ctx: Context, row) -> dict:
                                       "created_by", "created_at", "updated_at")}
     data.update(enabled=bool(row["enabled"]), limit=row["limit_hosts"],
                 check=bool(row["check_mode"]), diff=bool(row["diff"]),
-                catch_up=bool(row["catch_up"]), answers=store.loads(row["answers"], {}))
+                catch_up=bool(row["catch_up"]), answers=store.loads(row["answers"], {}),
+                overrides=store.loads(row["overrides"], {}))
     template = ctx.conn.execute("SELECT name FROM templates WHERE id = ?",
                                 (row["template_id"],)).fetchone()
     data["template"] = template["name"] if template else ""
@@ -255,6 +256,7 @@ _SCHEDULE_PARAMS = {
     "priority": Int(-10, 10, "Queued runs of a higher priority start first", default=0),
     "random_delay": Int(0, MAX_RANDOM_DELAY, "Up to this many seconds later, chosen at random,"
                         " to spread the load", default=0),
+    **runs.OVERRIDES,
 }
 
 
@@ -279,6 +281,7 @@ def _values(ctx: Context, params: Values) -> dict:
         "catch_up": int(params["catch_up"]),
         "priority": params["priority"],
         "random_delay": params["random_delay"],
+        "overrides": json.dumps(runs.overrides(ctx, params)),
         "updated_at": store.now(),
     }
 
@@ -367,7 +370,7 @@ def schedule_disable(ctx: Context, params: Values) -> dict:
 def _launch(ctx: Context, row, created_by: str | None = None) -> dict:
     return runs.launch(ctx, row["template_id"], row["limit_hosts"], bool(row["check_mode"]),
                        bool(row["diff"]), store.loads(row["answers"], {}), schedule=row,
-                       created_by=created_by)
+                       created_by=created_by, given=store.loads(row["overrides"], {}))
 
 
 @command("schedule.run", role="operator", mutating=True,

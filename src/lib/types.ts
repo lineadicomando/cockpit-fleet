@@ -309,6 +309,15 @@ export interface Template {
     last_run: { id: string; status: RunStatus; created_at: number; finished_at: number | null } | null;
 }
 
+// What a launch or a schedule sets in place of its template's values: only
+// what it gave. Tags given empty run every task, skip_tags given empty skip none.
+export interface Overrides {
+    tags?: string[];
+    skip_tags?: string[];
+    forks?: number;
+    verbosity?: number;
+}
+
 export type StepCondition = "success" | "failure" | "always";
 
 // None; confirm, which who launched the run may give too; other, another person.
@@ -371,6 +380,7 @@ export interface Schedule {
     catch_up: boolean;
     priority: number;
     random_delay: number;
+    overrides: Overrides;
     next_at: number | null;
     last_at: number | null;
     last_outcome: "" | "launched" | "skipped" | "missed" | "error";
@@ -461,6 +471,8 @@ export interface Run {
         module?: string; free_form?: string; args?: Record<string, unknown>; become?: boolean;
         // Launched in series: it waits for the runs on its inventory before it.
         serial?: boolean;
+        // What replaced the template's values for this run.
+        overrides?: Overrides;
     };
     stats: Record<string, HostStats>;
     cursor?: number;

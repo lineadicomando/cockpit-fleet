@@ -1,6 +1,8 @@
 // The fleet command that does at a terminal what a page does, to be copied:
 // built from what the page knows, quoted for a POSIX shell.
 
+import type { Overrides } from "./types.ts";
+
 // One word for the shell: as it is when it needs no quoting, else in single quotes.
 export function shellWord(word: string): string {
     if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(word)) return word;
@@ -13,7 +15,7 @@ export function shellLine(words: string[]): string {
 
 // fleet launch, with the answers a person may type: never those of secret
 // questions, which fleet asks for at the terminal.
-export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean, serial = false): string {
+export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean, serial = false, overrides: Overrides = {}): string {
     const words = ["fleet", "launch", template];
     for (const [name, value] of Object.entries(answers)) {
         if (value === undefined || value === null || value === "") continue;
@@ -22,6 +24,10 @@ export function launchCommand(template: string, answers: Record<string, unknown>
     if (limit.trim()) words.push("--limit", limit.trim());
     if (check) words.push("--check");
     if (serial) words.push("--serial");
+    if (overrides.tags) words.push("--tags", overrides.tags.join(","));
+    if (overrides.skip_tags) words.push("--skip-tags", overrides.skip_tags.join(","));
+    if (overrides.forks !== undefined) words.push("--forks", String(overrides.forks));
+    if (overrides.verbosity !== undefined) words.push("--verbosity", String(overrides.verbosity));
     return shellLine(words);
 }
 

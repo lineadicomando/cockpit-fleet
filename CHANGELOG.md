@@ -24,6 +24,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
   check, ad-hoc command or maintenance window can use it. The hosts of an
   inventory so kept leave the list of hosts. The flag is reversible, and
   is carried by the export of the configuration.
+- Launching a template, its tags, tags to skip, hosts in parallel (forks)
+  and output detail can be changed for that run only, under "Values of the
+  template" in the launch form and in the form of a schedule, or with
+  `--tags`, `--skip-tags`, `--forks` and `--verbosity` of `fleet launch`.
+  What was changed is shown with the run; the template stays as it is.
 
 ### Changed
 

@@ -3967,3 +3967,17 @@ msgstr "Avviata: {{title}}"
 
 msgid "The run was started"
 msgstr "La run è stata avviata"
+
+msgid "Values of the template"
+msgstr "Valori del template"
+
+msgid "replaced_values_count"
+msgid_plural "replaced_values_count_plural"
+msgstr[0] "Valori del template ({{count}} sostituito)"
+msgstr[1] "Valori del template ({{count}} sostituiti)"
+
+msgid "They start as the template's: what you change replaces them here only, and the template stays as it is."
+msgstr "Partono da quelli del template: ciò che cambi li sostituisce solo qui, e il template resta com'è."
+
+msgid "In place of the template's"
+msgstr "Al posto di quelli del template"

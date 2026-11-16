@@ -2,7 +2,7 @@
 // template.list and schedule.list return.
 
 import { byGroupName, byGroupOrder, groupItems, isOpen, oneOf, readObject, readOpen, readText, withOpen, type Group } from "./listview.ts";
-import type { RunStatus, Template } from "./types.ts";
+import type { Overrides, RunStatus, Template } from "./types.ts";
 
 // How the last run of a template went, in the order its groups are shown.
 export type Outcome = "failed" | "active" | "canceled" | "successful" | "never";
@@ -116,4 +116,41 @@ export function isTemplateGroupOpen(view: TemplatesView, group: TemplateGroup): 
 
 export function withTemplateGroupsOpen(view: TemplatesView, groups: TemplateGroup[], open: boolean): TemplatesView {
     return { ...view, open: withOpen(view.open, view.groupBy, groups.map(group => group.key), open) };
+}
+
+// The values of a template a launch may replace, as the fields of a form show
+// them: those of the template, or what replaced them.
+export interface OverrideFields {
+    tags: string;
+    skipTags: string;
+    forks: string;
+    verbosity: string;
+}
+
+const tagWords = (text: string) => text.split(/[\s,]+/).filter(Boolean);
+const sameWords = (a: string[], b: string[]) => a.length === b.length && a.every((word, index) => word === b[index]);
+
+export function overrideFields(template: Template | undefined, overrides: Overrides = {}): OverrideFields {
+    const forks = overrides.forks ?? template?.forks;
+    return {
+        tags: (overrides.tags ?? template?.tags ?? []).join(", "),
+        skipTags: (overrides.skip_tags ?? template?.skip_tags ?? []).join(", "),
+        forks: forks ? String(forks) : "",
+        verbosity: String(overrides.verbosity ?? template?.verbosity ?? 0),
+    };
+}
+
+// What the fields replace of the template: what differs from it. Forks left
+// empty keep the template's.
+export function overridesOf(template: Template | undefined, fields: OverrideFields): Overrides {
+    const out: Overrides = {};
+    const tags = tagWords(fields.tags);
+    const skipTags = tagWords(fields.skipTags);
+    if (!sameWords(tags, template?.tags ?? [])) out.tags = tags;
+    if (!sameWords(skipTags, template?.skip_tags ?? [])) out.skip_tags = skipTags;
+    const forks = Number(fields.forks);
+    if (fields.forks.trim() && forks !== (template?.forks ?? null)) out.forks = forks;
+    const verbosity = Number(fields.verbosity);
+    if (verbosity !== (template?.verbosity ?? 0)) out.verbosity = verbosity;
+    return out;
 }

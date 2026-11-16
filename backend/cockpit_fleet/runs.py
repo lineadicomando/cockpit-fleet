@@ -8,11 +8,38 @@ from . import variables as varsets
 from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command, is_agent
 from .errors import BadRequest, Conflict, Forbidden
 from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
-from .validators import check_limit, check_module
+from .validators import check_limit, check_module, check_tag
 
 _CHUNK = 256 * 1024
 STATUSES = ("pending_approval", "queued", "running", "successful", "failed", "canceled", "error",
             "rejected", "expired")
+
+
+# What a launch may set in place of its template's values. One left out keeps
+# the template's; tags given empty run every task, skip_tags given empty skip none.
+OVERRIDES = {
+    "tags": Strs("Tags that replace the template's; given empty, every task runs"),
+    "skip_tags": Strs("Tags to skip that replace the template's; given empty, none is skipped"),
+    "forks": Int(1, 200, "Hosts in parallel, in place of the template's"),
+    "verbosity": Int(0, 4, "Output detail, 0 (normal) to 4 (-vvvv), in place of the"
+                     " template's"),
+}
+
+
+def overrides(ctx: Context, params: Values) -> dict:
+    """What a call sets in place of the template's values, checked: only what it gave."""
+    given: dict = {}
+    for key in ("tags", "skip_tags"):
+        if key in params.given:
+            given[key] = [check_tag(tag) for tag in params[key]]
+    forks = params["forks"]
+    if forks is not None:
+        if forks > ctx.config.max_forks:
+            raise BadRequest(f"forks cannot exceed {ctx.config.max_forks} (config.toml)")
+        given["forks"] = forks
+    if params["verbosity"] is not None:
+        given["verbosity"] = params["verbosity"]
+    return given
 
 
 def run_row(row) -> dict:
@@ -36,22 +63,27 @@ def run_row(row) -> dict:
              "serial": Bool("Wait in the queue while another run is running on the same"
                             " inventory, or one launched before it is queued there,"
                             " whatever their outcome"),
+             **OVERRIDES,
          })
 def run_start(ctx: Context, params: Values) -> dict:
     """Launch a job template. The caller may narrow it, not widen it. A run of a
     template that needs approval waits, as pending_approval, until another user
     approves it. One launched in series waits in the queue while another run is
-    running on its inventory, or one launched before it is queued there."""
+    running on its inventory, or one launched before it is queued there. Tags,
+    tags to skip, forks and verbosity, when given, replace the template's for
+    this run only."""
     return launch(ctx, params["template_id"], params["limit"], params["check"], params["diff"],
-                  params["answers"], serial=params["serial"])
+                  params["answers"], serial=params["serial"], given=overrides(ctx, params))
 
 
 def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, answers: dict,
            schedule=None, created_by: str | None = None, workflow: dict | None = None,
-           serial: bool = False) -> dict:
+           serial: bool = False, given: dict | None = None) -> dict:
     """Queue a run of a template: what run.start does, what a schedule does
     at its time, with the answers stored with it, and what a workflow does for
-    one of its steps, with what the steps before it passed on."""
+    one of its steps, with what the steps before it passed on. given: the
+    values that replace the template's (overrides())."""
+    given = given or {}
     template = store.fetch(ctx.conn, "templates", template_id, "template")
     project = store.usable(store.fetch(ctx.conn, "projects", template["project_id"], "project"),
                            "project")
@@ -72,10 +104,11 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         "check": check,
         "diff": diff or check,
         "become": bool(template["become"]),
-        "forks": template["forks"] or ctx.config.default_forks,
-        "verbosity": template["verbosity"],
-        "tags": store.loads(template["tags"], []),
-        "skip_tags": store.loads(template["skip_tags"], []),
+        "forks": given.get("forks") or template["forks"] or ctx.config.default_forks,
+        "verbosity": given.get("verbosity", template["verbosity"]),
+        "tags": given["tags"] if "tags" in given else store.loads(template["tags"], []),
+        "skip_tags": (given["skip_tags"] if "skip_tags" in given
+                      else store.loads(template["skip_tags"], [])),
         "extra_vars": effective.variables,
         "survey_vars": variables,
         "survey_secrets": {},
@@ -121,6 +154,9 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         options["secret_vars"] = sorted(effective.secrets)
     if serial:
         options["serial"] = True
+    if given:
+        # What replaced the template's values, for whoever reads the run.
+        options["overrides"] = given
     run = {"id": run_id, "kind": "playbook", "title": template["name"],
            "template_id": template_id, "project_id": project["id"],
            "inventory_id": inventory["id"], "revision": project["revision"],

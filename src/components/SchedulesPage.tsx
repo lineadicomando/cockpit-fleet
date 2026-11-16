@@ -25,10 +25,12 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { DEFAULT_SHAPE, EVERY_MINUTES, WEEKDAYS, calendarOf, shapeOf, type Repeat, type Shape } from "../lib/schedule.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
+import { overrideFields, overridesOf } from "../lib/templates.ts";
 import type { Overlap, Run, Schedule, SchedulePreview, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
+import { OverridesSection } from "./Overrides.tsx";
 import { ActionsColumn, Alert } from "./pf.tsx";
 
 // The time zones the browser knows, to pick from; the backend checks the name.
@@ -189,6 +191,7 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
     const [delay, setDelay] = useState(String((schedule?.random_delay ?? 0) / 60));
     const template = templates.find(item => item.id === templateId);
     const [answers, setAnswers] = useState<Answers>(() => storedAnswers(template, schedule?.answers ?? {}));
+    const [fields, setFields] = useState(() => overrideFields(template, schedule?.overrides));
 
     // A secret is never stored with a schedule: the questions that ask for one are left out.
     const survey = (template?.survey ?? []).filter(field => field.type !== "secret");
@@ -199,6 +202,7 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
             name, template_id: templateId, calendar: calendar.trim(), timezone: timezone.trim(), enabled,
             limit: limit.trim(), check, answers: collectAnswers(survey, answers), overlap, catch_up: catchUp,
             priority: Number(priority), random_delay: Math.round(Number(delay) * 60),
+            ...overridesOf(template, fields),
         };
         await call(schedule ? "schedule.update" : "schedule.create", schedule ? { id: schedule.id, ...params } : params);
         onDone();
@@ -217,7 +221,12 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
                 <GridItem>
                     <FormGroup label={t("Job template")} isRequired fieldId="sch-template">
                         <FormSelect id="sch-template" value={templateId}
-                            onChange={(_e, value) => { setTemplateId(value); setAnswers(storedAnswers(templates.find(item => item.id === value), {})); }}>
+                            onChange={(_e, value) => {
+                                const chosen = templates.find(item => item.id === value);
+                                setTemplateId(value);
+                                setAnswers(storedAnswers(chosen, {}));
+                                setFields(overrideFields(chosen));
+                            }}>
                             <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
                             {templates.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
                         </FormSelect>
@@ -238,6 +247,7 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
                 <TextInput id="sch-limit" value={limit} onChange={(_e, value) => setLimit(value)} placeholder={template?.limit_hosts || "web01,web02"} />
                 <FormHelperText><HelperText><HelperTextItem>{t("Narrows the template's own limit; it cannot widen it.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
+            {template && <OverridesSection key={template.id} id="sch" template={template} fields={fields} onChange={setFields} />}
             <Grid hasGutter md={4}>
                 <GridItem>
                     <FormGroup label={t("If the previous run is not over")} fieldId="sch-overlap">
