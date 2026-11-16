@@ -84,15 +84,15 @@ _WORDS = {
         "test_text": "Il canale {channel} di Fleet su {host} funziona.",
         "several": "{count} run terminate", "several_events": "{count} eventi",
         "template": "Template", "project": "Progetto",
-        "schedule": "Pianificazione", "by": "Lanciata da", "check": "prova",
+        "schedule": "Pianificazione", "by": "Lanciata da", "check": "dry run",
         "hosts": "Host: {ok} ok, {changed} modificati, {failed} falliti,"
                  " {unreachable} irraggiungibili",
         "failed_hosts": "Falliti", "error": "Errore", "more": "e altre {count}",
-        "problem": "Problema", "recovery": "Risolto", "reminder": "Ancora un problema",
+        "problem": "Problema", "recovery": "Ripristinato", "reminder": "Problema ancora aperto",
         "ok": "OK", "warning": "AVVISO", "critical": "CRITICO", "unknown": "SCONOSCIUTO",
         "inventory": "Inventario", "since": "Dal",
         "late": "In ritardo", "caught_up": "Di nuovo in orario",
-        "unprepared": "Controlli bloccati", "prepared": "Controlli ripartiti",
+        "unprepared": "Check bloccati", "prepared": "Check ripartiti",
     },
 }
 

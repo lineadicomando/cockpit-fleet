@@ -313,7 +313,7 @@ class ComposeTest(unittest.TestCase):
 
     def test_one_event_in_italian(self):
         message = notify.compose("it", [self.EVENT], "https://fleet.example.org:9090")
-        self.assertEqual(message.title, "Fleet: Run fallita: deploy (prova)")
+        self.assertEqual(message.title, "Fleet: Run fallita: deploy (dry run)")
         self.assertIn("Pianificazione: nightly", message.text)
         self.assertIn("Host: 1 ok, 0 modificati, 1 falliti, 1 irraggiungibili", message.text)
         self.assertTrue(message.text.endswith("https://fleet.example.org:9090/fleet#/runs/r1"))

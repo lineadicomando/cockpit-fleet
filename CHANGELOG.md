@@ -66,6 +66,12 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - The run that updates a git project ends its output with what it
   fetched: the reference, the revision, and the date and subject of the
   commit. Its output was empty when the update succeeded.
+- The Italian interface and the Italian notifications are reworded: one
+  word for each thing throughout ("run", "template", "check",
+  "pianificazione", "dry run"), and sentences that read as Italian. In
+  the messages of a channel, a recovery is "Ripristinato", a reminder
+  "Problema ancora aperto" and a dry run "(dry run)": a filter on the
+  old words needs changing.
 
 ### Fixed
 

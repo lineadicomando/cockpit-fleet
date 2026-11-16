@@ -884,7 +884,7 @@ class UnpreparedTest(CheckBase):
             "SELECT payload FROM notifications").fetchone()["payload"])
         from cockpit_fleet import notify
         message = notify.compose("it", [payload], "https://fleet:9090")
-        self.assertEqual(message.title, "Fleet: Controlli bloccati: check cycles of lab")
+        self.assertEqual(message.title, "Fleet: Check bloccati: check cycles of lab")
         self.assertIn("/home/x is not a directory", message.text)
         # It can again: told, and the page says nothing more of it.
         self.assertEqual(len(self.tick(self.clock + 60)["queued"]), 1)
