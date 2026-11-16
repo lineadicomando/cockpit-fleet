@@ -27,8 +27,8 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
-import { layers, nextStepId } from "../lib/workflow.ts";
-import type { ApprovalMode, Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
+import { inScope, layers, nextStepId, type StepScope } from "../lib/workflow.ts";
+import type { ApprovalMode, Inventory, Project, Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
@@ -62,10 +62,18 @@ function useConditions() {
     return { success: t("succeeds"), failure: t("fails"), always: t("ends, either way") } as Record<StepCondition, string>;
 }
 
-function StepEditor({ step, steps, templates, onChange, onRemove }: {
+interface Choices {
+    templates: Template[];
+    projects: Project[];
+    inventories: Inventory[];
+}
+
+function StepEditor({ step, steps, templates, scope, inventories, onChange, onRemove }: {
     step: StepDraft;
     steps: StepDraft[];
     templates: Template[];
+    scope: StepScope;
+    inventories: Map<string, string>;
     onChange: (step: StepDraft) => void;
     onRemove?: () => void;
 }) {
@@ -75,6 +83,11 @@ function StepEditor({ step, steps, templates, onChange, onRemove }: {
     const others = steps.filter(other => other.id !== step.id);
     const label = (other: StepDraft) => other.name || templates.find(item => item.id === other.template_id)?.name || other.id;
     const needsSecret = (template?.survey ?? []).some(field => field.type === "secret" && field.required);
+    const outside = !!template && !inScope(template, scope);
+    // The one chosen stays in the list when it no longer fits, to be seen and changed.
+    const offered = templates.filter(item => inScope(item, scope) || item.id === step.template_id);
+    // Templates alike on several inventories are told apart by theirs, unless all are on one.
+    const option = (item: Template) => scope.inventory_id ? item.name : `${item.name} — ${inventories.get(item.inventory_id) ?? ""}`;
 
     return (
         <Card isCompact>
@@ -92,7 +105,7 @@ function StepEditor({ step, steps, templates, onChange, onRemove }: {
                             <FormSelect id={`wf-${step.id}-template`} value={step.template_id}
                                 onChange={(_e, value) => onChange({ ...step, template_id: value, answers: storedAnswers(templates.find(item => item.id === value), {}) })}>
                                 <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
-                                {templates.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                                {offered.map(item => <FormSelectOption key={item.id} value={item.id} label={option(item)} />)}
                             </FormSelect>
                         </FormGroup>
                     </GridItem>
@@ -102,6 +115,7 @@ function StepEditor({ step, steps, templates, onChange, onRemove }: {
                         </FormGroup>
                     </GridItem>
                 </Grid>
+                {outside && <Alert variant="danger" isInline title={t("This job template is not of the project or the inventory of the workflow: choose another one.")} />}
                 {needsSecret && <Alert variant="warning" isInline title={t("This job template asks for a secret at launch, so it cannot be a step: a workflow never stores a secret.")} />}
                 <FormGroup label={t("Limit to hosts")} fieldId={`wf-${step.id}-limit`}>
                     <TextInput id={`wf-${step.id}-limit`} value={step.limit} placeholder={template?.limit_hosts || "web01,web02"} onChange={(_e, value) => onChange({ ...step, limit: value })} />
@@ -143,15 +157,18 @@ function StepEditor({ step, steps, templates, onChange, onRemove }: {
     );
 }
 
-function WorkflowModal({ workflow, templates, onClose, onDone }: { workflow?: Workflow; templates: Template[]; onClose: () => void; onDone: () => void }) {
+function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Workflow; choices: Choices; onClose: () => void; onDone: () => void }) {
     const { t } = useTranslation();
+    const templates = choices.templates;
     const [name, setName] = useState(workflow?.name ?? "");
     const [description, setDescription] = useState(workflow?.description ?? "");
+    const [scope, setScope] = useState<StepScope>({ project_id: workflow?.project_id ?? "", inventory_id: workflow?.inventory_id ?? "" });
+    const inventories = new Map(choices.inventories.map(item => [item.id, item.name]));
     const [steps, setSteps] = useState<StepDraft[]>(() => toDrafts(workflow, templates));
 
     const invalid = !name.trim() || steps.some(step => {
         const template = templates.find(item => item.id === step.template_id);
-        return !template || step.after.some(link => !link.from)
+        return !template || !inScope(template, scope) || step.after.some(link => !link.from)
             || surveyOf(template).some(field => answerProblem(field, step.answers[field.name]))
             || (template.survey ?? []).some(field => field.type === "secret" && field.required);
     });
@@ -163,7 +180,7 @@ function WorkflowModal({ workflow, templates, onClose, onDone }: { workflow?: Wo
             answers: collectAnswers(surveyOf(templates.find(item => item.id === step.template_id)), step.answers),
         }));
         const edges: WorkflowEdge[] = steps.flatMap(step => step.after.map(link => ({ from: link.from, to: step.id, condition: link.condition })));
-        const params = { name, description, nodes, edges };
+        const params = { name, description, project_id: scope.project_id || null, inventory_id: scope.inventory_id || null, nodes, edges };
         await call(workflow ? "workflow.update" : "workflow.create", workflow ? { id: workflow.id, ...params } : params);
         onDone();
         onClose();
@@ -181,9 +198,30 @@ function WorkflowModal({ workflow, templates, onClose, onDone }: { workflow?: Wo
             <FormGroup label={t("Description")} fieldId="wf-description">
                 <TextArea id="wf-description" value={description} onChange={(_e, value) => setDescription(value)} rows={2} />
             </FormGroup>
+            <Grid hasGutter md={6}>
+                <GridItem>
+                    <FormGroup label={t("Project")} fieldId="wf-project">
+                        <FormSelect id="wf-project" value={scope.project_id} onChange={(_e, value) => setScope({ ...scope, project_id: value })}>
+                            <FormSelectOption value="" label={t("Any project")} />
+                            {choices.projects.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FormGroup>
+                </GridItem>
+                <GridItem>
+                    <FormGroup label={t("Inventory")} fieldId="wf-inventory">
+                        <FormSelect id="wf-inventory" value={scope.inventory_id} onChange={(_e, value) => setScope({ ...scope, inventory_id: value })}>
+                            <FormSelectOption value="" label={t("Any inventory")} />
+                            {choices.inventories.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FormGroup>
+                </GridItem>
+            </Grid>
+            <FormHelperText><HelperText><HelperTextItem>
+                {t("With a project or an inventory, only their job templates can be steps: one alike elsewhere is not taken for one of them.")}
+            </HelperTextItem></HelperText></FormHelperText>
             <Content component="small">{t("Each step passes on to the steps after it the variables its playbook sets with set_stats (with per_host: false). They are kept in clear with the run: not for secrets.")}</Content>
             {steps.map(step => (
-                <StepEditor key={step.id} step={step} steps={steps} templates={templates}
+                <StepEditor key={step.id} step={step} steps={steps} templates={templates} scope={scope} inventories={inventories}
                     onChange={changed => setSteps(steps.map(item => item.id === step.id ? changed : item))}
                     onRemove={steps.length > 1 ? () => remove(step.id) : undefined} />
             ))}
@@ -203,10 +241,22 @@ export function WorkflowsPage() {
     const can = useCan();
     const list = useLoad(() => call<{ workflows: Workflow[] }>("workflow.list"));
     const templates = useLoad(() => call<{ templates: Template[] }>("template.list"));
+    const places = useLoad(() => Promise.all([
+        call<{ projects: Project[] }>("project.list"),
+        call<{ inventories: Inventory[] }>("inventory.list"),
+    ]).then(([p, i]) => ({ projects: p.projects, inventories: i.inventories })));
     const [editing, setEditing] = useState<Workflow | "new" | null>(null);
     const [deleting, setDeleting] = useState<Workflow | null>(null);
     const [error, setError] = useState<string | null>(null);
     const names = new Map((templates.data?.templates ?? []).map(item => [item.id, item.name]));
+    const projectNames = new Map((places.data?.projects ?? []).map(item => [item.id, item.name]));
+    const inventoryNames = new Map((places.data?.inventories ?? []).map(item => [item.id, item.name]));
+    // A starter is used by no run: it is not offered.
+    const choices: Choices | null = templates.data && places.data ? {
+        templates: templates.data.templates,
+        projects: places.data.projects.filter(one => !one.starter),
+        inventories: places.data.inventories.filter(one => !one.starter),
+    } : null;
     usePolling(list.reload, 3000, list.data?.workflows.some(item => !!item.last_run && isActiveRun(item.last_run.status)) ?? false);
 
     async function launch(workflow: Workflow) {
@@ -224,7 +274,7 @@ export function WorkflowsPage() {
         <>
             <SectionHeader title={t("Workflows")}>
                 <Button variant="secondary" onClick={list.reload}>{t("Refresh")}</Button>
-                {can("workflow.create") && <Button variant="primary" onClick={() => setEditing("new")} isDisabled={!templates.data}>{t("New workflow")}</Button>}
+                {can("workflow.create") && <Button variant="primary" onClick={() => setEditing("new")} isDisabled={!choices}>{t("New workflow")}</Button>}
             </SectionHeader>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             <ListState loaded={list} isEmpty={data => data.workflows.length === 0}
@@ -239,6 +289,12 @@ export function WorkflowsPage() {
                                     <Td dataLabel={t("Name")}>
                                         {workflow.name}
                                         {workflow.description && <Content component="small" style={{ display: "block" }}>{workflow.description}</Content>}
+                                        {(workflow.project_id || workflow.inventory_id) && (
+                                            <Flex gap={{ default: "gapSm" }} style={{ marginBlockStart: "0.25rem" }}>
+                                                {workflow.project_id && <Label isCompact color="blue">{t("Project")}: {projectNames.get(workflow.project_id) ?? ""}</Label>}
+                                                {workflow.inventory_id && <Label isCompact color="teal">{t("Inventory")}: {inventoryNames.get(workflow.inventory_id) ?? ""}</Label>}
+                                            </Flex>
+                                        )}
                                     </Td>
                                     <Td dataLabel={t("Steps")}>{workflow.nodes.map(node => node.name || names.get(node.template_id) || node.id).join(" → ")}</Td>
                                     <Td dataLabel={t("Last run")}>
@@ -253,7 +309,7 @@ export function WorkflowsPage() {
                                             {can("workflow.launch") && <Button variant="secondary" size="sm" onClick={() => launch(workflow)}>{t("Launch")}</Button>}
                                             {can("workflow.update") && (
                                                 <ActionsColumn items={[
-                                                    { title: t("Edit"), onClick: () => setEditing(workflow), isDisabled: !templates.data },
+                                                    { title: t("Edit"), onClick: () => setEditing(workflow), isDisabled: !choices },
                                                     { title: t("Delete"), onClick: () => setDeleting(workflow) },
                                                 ]} />
                                             )}
@@ -265,8 +321,8 @@ export function WorkflowsPage() {
                     </Table>
                 )}
             </ListState>
-            {editing && templates.data && (
-                <WorkflowModal workflow={editing === "new" ? undefined : editing} templates={templates.data.templates}
+            {editing && choices && (
+                <WorkflowModal workflow={editing === "new" ? undefined : editing} choices={choices}
                     onClose={() => setEditing(null)} onDone={list.reload} />
             )}
             {deleting && (

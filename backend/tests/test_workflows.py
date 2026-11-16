@@ -256,6 +256,85 @@ class WorkflowTest(WorkflowBase):
         self.ok("workflow.delete", {"id": workflow["id"]})
         self.ok("template.delete", {"id": self.third["id"]})
 
+    def elsewhere(self):
+        """A template alike, of another project on another inventory."""
+        project = self.ok("project.create", {"name": "other", "kind": "managed"})
+        inventory = self.ok("inventory.create", {"name": "other", "kind": "managed",
+                                                 "content": "all:\n  hosts:\n    a:\n"})
+        return self.ok("template.create", {
+            "name": "deploy there", "project_id": project["id"], "playbook": "site.yml",
+            "inventory_id": inventory["id"]})
+
+    def test_a_workflow_of_a_project_or_an_inventory_takes_its_steps_from_them(self):
+        other = self.elsewhere()
+        here = {"project_id": self.first["project_id"],
+                "inventory_id": self.first["inventory_id"]}
+        # Same project, another inventory.
+        mixed = self.ok("template.create", {
+            "name": "mixed", "project_id": here["project_id"], "playbook": "site.yml",
+            "inventory_id": other["inventory_id"]})
+        steps = lambda *templates: {"nodes": [  # noqa: E731
+            {"id": f"s{at}", "template_id": template["id"]}
+            for at, template in enumerate(templates)], "edges": []}
+        for scope in (here, {"project_id": here["project_id"]},
+                      {"inventory_id": here["inventory_id"]}):
+            self.assertEqual(self.code("workflow.create", {
+                "name": "w", **scope, **steps(self.first, other)}), "bad_request", scope)
+        self.assertEqual(self.code("workflow.create", {
+            "name": "w", **here, **steps(self.first, mixed)}), "bad_request")
+        self.assertEqual(self.code("workflow.create", {
+            "name": "w", "project_id": "p-nope", **steps(self.first)}), "not_found")
+        workflow = self.ok("workflow.create", {
+            "name": "w", "project_id": here["project_id"], **steps(self.first, mixed)})
+        self.assertEqual((workflow["project_id"], workflow["inventory_id"]),
+                         (here["project_id"], None))
+        self.assertEqual(self.code("workflow.update", {
+            "id": workflow["id"], "name": "w", **here, **steps(self.first, mixed)}),
+            "bad_request")
+        # Left out, a workflow takes its steps from anywhere, as before.
+        workflow = self.ok("workflow.update", {"id": workflow["id"], "name": "w",
+                                               **steps(self.first, other)})
+        self.assertEqual((workflow["project_id"], workflow["inventory_id"]), (None, None))
+
+    def test_a_template_stays_where_a_workflow_takes_its_steps_from(self):
+        other = self.elsewhere()
+        workflow = self.ok("workflow.create", {
+            "name": "w", "inventory_id": self.first["inventory_id"],
+            "nodes": [{"id": "a", "template_id": self.third["id"]}], "edges": []})
+        change = {"id": self.third["id"], "name": "notify", "playbook": "site.yml",
+                  "project_id": self.third["project_id"],
+                  "inventory_id": self.third["inventory_id"]}
+        self.assertEqual(self.code("template.update",
+                                   {**change, "inventory_id": other["inventory_id"]}),
+                         "conflict")
+        # The project is free: this workflow names an inventory only.
+        self.ok("template.update", {**change, "project_id": other["project_id"]})
+        self.ok("workflow.delete", {"id": workflow["id"]})
+        self.ok("template.update", {**change, "inventory_id": other["inventory_id"]})
+
+    def test_a_run_checks_where_its_steps_are_from(self):
+        other = self.elsewhere()
+        workflow = self.ok("workflow.create", {
+            "name": "w", "inventory_id": self.first["inventory_id"], "nodes": [
+                {"id": "a", "template_id": self.first["id"]},
+                {"id": "b", "template_id": self.third["id"]}],
+            "edges": [{"from": "a", "to": "b", "condition": "success"}]})
+        run = self.ok("workflow.launch", {"id": workflow["id"]}, role="operator")
+        # The workflow no longer uses the template, which then moves: the run still does.
+        self.ok("workflow.update", {"id": workflow["id"], "name": "w", "nodes": [
+            {"id": "a", "template_id": self.first["id"]}], "edges": []})
+        self.ok("template.update", {
+            "id": self.third["id"], "name": "notify", "playbook": "site.yml",
+            "project_id": self.third["project_id"], "inventory_id": other["inventory_id"]})
+        self.end(self.steps(run["id"])["a"][1])
+        nodes = {node["id"]: node for node in
+                 self.ok("workflow.progress", {"id": run["id"]})["nodes"]}
+        self.assertEqual(nodes["b"]["state"], "failure")
+        self.assertIn("inventory", nodes["b"]["error"])
+        self.assertEqual(self.ok("run.get", {"id": run["id"]})["status"], "failed")
+        again = self.ok("workflow.resume", {"id": run["id"]}, role="operator")
+        self.assertEqual(self.steps(again["id"])["b"][0], "failure")
+
     def test_a_running_workflow_keeps_its_steps_when_changed(self):
         workflow = self.chain()
         run = self.ok("workflow.launch", {"id": workflow["id"]}, role="operator")
@@ -288,6 +367,27 @@ class WorkflowTransferTest(WorkflowBase):
         self.assertEqual(result["failed"], 0, result)
         again = self.ok("config.export")
         self.assertEqual(again["workflows"], document["workflows"])
+
+    def test_a_workflow_is_exported_with_where_its_steps_are_from(self):
+        self.ok("workflow.create", {
+            "name": "w", "project_id": self.first["project_id"],
+            "inventory_id": self.first["inventory_id"],
+            "nodes": [{"id": "a", "template_id": self.first["id"]}], "edges": []})
+        document = self.ok("config.export")
+        exported = document["workflows"][0]
+        self.assertEqual((exported["project"], exported["inventory"]), ("site", "inv"))
+        self.ok("workflow.delete", {"id": self.ok("workflow.list")["workflows"][0]["id"]})
+        self.assertEqual(self.ok("config.import", {"document": document})["failed"], 0)
+        again = self.ok("workflow.list")["workflows"][0]
+        self.assertEqual((again["project_id"], again["inventory_id"]),
+                         (self.first["project_id"], self.first["inventory_id"]))
+        # A document from before names neither.
+        del exported["project"], exported["inventory"]
+        exported["name"] = "old"
+        self.ok("config.import", {"document": document})
+        old = self.ok("workflow.list")["workflows"][0]
+        self.assertEqual((old["name"], old["project_id"], old["inventory_id"]),
+                         ("old", None, None))
 
 
 class PlanTest(unittest.TestCase):

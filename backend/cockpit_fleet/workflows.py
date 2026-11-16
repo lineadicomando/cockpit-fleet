@@ -18,6 +18,11 @@ What a step passes on: the variables a playbook set with set_stats
 run and _collect keeps as the run's artifacts. A step gets those of the
 steps before it in the graph, the latest last, as extra variables tagged
 unsafe: above the template's variables and the answers of its node.
+
+A workflow may name a project, an inventory or both: its steps are then
+templates of those, so that a template alike on another inventory is not
+taken for one of them. A run holds a copy of that too, and checks each step
+again as it starts it.
 """
 
 import fcntl
@@ -39,6 +44,8 @@ _ENDED_BADLY = ("failed", "error", "rejected", "expired", "canceled")
 _ACTIVE = (jobs.WAITING, *jobs.ACTIVE)
 # Statuses a workflow run may be resumed from.
 RESUMABLE = ("failed", "error", "canceled")
+# What a workflow may take all its steps from: column, table, what it is.
+_SCOPE = (("project_id", "projects", "project"), ("inventory_id", "inventories", "inventory"))
 
 # Workflow runs being advanced by this process: a step that ends while one is
 # (its unit could not start) asks for another pass instead of waiting for a
@@ -49,7 +56,20 @@ _AGAIN: set[str] = set()
 
 # --- the graph -------------------------------------------------------------------
 
-def _check_nodes(ctx: Context, nodes: list[dict]) -> list[dict]:
+def scope_of(row) -> dict:
+    """The project and the inventory a workflow takes its steps from, those it has."""
+    return {column: row[column] for column, _, _ in _SCOPE if row[column]}
+
+
+def check_scope(template, scope: dict) -> None:
+    """Refuse a template that is not of the project or of the inventory of a workflow."""
+    for column, _, what in _SCOPE:
+        if scope.get(column) and template[column] != scope[column]:
+            raise BadRequest(f"the job template {template['name']} is not of the {what}"
+                             " this workflow takes its steps from")
+
+
+def _check_nodes(ctx: Context, nodes: list[dict], scope: dict) -> list[dict]:
     if not nodes:
         raise BadRequest("a workflow needs at least one step")
     if len(nodes) > MAX_NODES:
@@ -80,6 +100,7 @@ def _check_nodes(ctx: Context, nodes: list[dict]) -> list[dict]:
         if not isinstance(answers, dict):
             raise BadRequest("the answers of a step are an object")
         template = store.fetch(ctx.conn, "templates", template_id, "template")
+        check_scope(template, scope)
         checked.append({
             "id": node_id, "name": name.strip(), "template_id": template_id,
             "limit": check_limit(limit) if limit.strip() else "",
@@ -149,6 +170,7 @@ def _workflow(ctx: Context, row) -> dict:
         "SELECT id, status, created_at FROM runs WHERE workflow_id = ? AND kind = 'workflow'"
         " ORDER BY created_at DESC LIMIT 1", (row["id"],)).fetchone()
     return {"id": row["id"], "name": row["name"], "description": row["description"],
+            "project_id": row["project_id"], "inventory_id": row["inventory_id"],
             "nodes": [node_out(node) for node in store.loads(row["nodes"], [])],
             "edges": store.loads(row["edges"], []), "created_at": row["created_at"],
             "updated_at": row["updated_at"], "last_run": dict(last) if last else None}
@@ -157,6 +179,10 @@ def _workflow(ctx: Context, row) -> dict:
 _WORKFLOW_PARAMS = {
     "name": Str(required=True, max_length=200),
     "description": Str(default="", max_length=2000),
+    "project_id": Id("If given, every step is a job template of this project",
+                     required=False),
+    "inventory_id": Id("If given, every step is a job template on this inventory",
+                       required=False),
     "nodes": Objs("The steps: id (a-z, 0-9, - and _), name, template_id, limit (a host"
                   " pattern that narrows the template's), answers (to its survey, no secret),"
                   " approval (none, confirm or other: the step waits for an approval in"
@@ -170,10 +196,15 @@ _WORKFLOW_PARAMS = {
 
 
 def _values(ctx: Context, params: Values) -> dict:
-    nodes = _check_nodes(ctx, params["nodes"])
+    scope = {}
+    for column, table, what in _SCOPE:
+        scope[column] = params[column] or None
+        if scope[column]:
+            store.usable(store.fetch(ctx.conn, table, scope[column], what), what)
+    nodes = _check_nodes(ctx, params["nodes"], scope)
     edges = _check_edges(nodes, params["edges"])
     return {"name": store.check_name(params["name"]),
-            "description": params["description"].strip(),
+            "description": params["description"].strip(), **scope,
             "nodes": json.dumps(nodes), "edges": json.dumps(edges), "updated_at": store.now()}
 
 
@@ -186,7 +217,8 @@ def workflow_list(ctx: Context, params: Values) -> dict:
 
 @command("workflow.create", role="admin", mutating=True, params=_WORKFLOW_PARAMS)
 def workflow_create(ctx: Context, params: Values) -> dict:
-    """Create a workflow: job templates run one after the other, by how each ends."""
+    """Create a workflow: job templates run one after the other, by how each
+    ends. With a project, an inventory or both, only their templates are steps."""
     workflow_id = store.new_id("w")
     store.insert(ctx.conn, "workflows", {"id": workflow_id, "created_at": store.now(),
                                          **_values(ctx, params)}, "workflow")
@@ -247,7 +279,8 @@ def workflow_launch(ctx: Context, params: Values) -> dict:
     before them end. A step whose template needs approval waits for it."""
     workflow = store.fetch(ctx.conn, "workflows", params["id"], "workflow")
     return _start(ctx, workflow, {"nodes": store.loads(workflow["nodes"], []),
-                                  "edges": store.loads(workflow["edges"], [])})
+                                  "edges": store.loads(workflow["edges"], []),
+                                  "scope": scope_of(workflow)})
 
 
 @command("workflow.resume", role="operator", mutating=True,
@@ -271,6 +304,7 @@ def workflow_resume(ctx: Context, params: Values) -> dict:
             if row["status"] in _ENDED_WELL}
     return _start(ctx, workflow, {"nodes": options.get("nodes", []),
                                   "edges": options.get("edges", []),
+                                  "scope": options.get("scope", {}),
                                   "resumed_from": old["id"], "carried": done})
 
 
@@ -382,7 +416,8 @@ def _advance(ctx: Context, run_id: str) -> None:
             break
         for node in ready:
             try:
-                _launch_step(ctx, run, nodes[node], _artifacts(options, steps, node))
+                _launch_step(ctx, run, nodes[node], _artifacts(options, steps, node),
+                             options.get("scope", {}))
             except FleetError as error:
                 # It could not start: as if it had failed, for the links after it.
                 failures[node] = str(error)
@@ -414,7 +449,10 @@ def _label(node: dict, step) -> str:
     return node["name"] or (step["title"] if step is not None else node["id"])
 
 
-def _launch_step(ctx: Context, run, node: dict, artifacts: dict) -> None:
+def _launch_step(ctx: Context, run, node: dict, artifacts: dict, scope: dict) -> None:
+    if scope:
+        # Its template may have changed since: the run checks for itself.
+        check_scope(store.fetch(ctx.conn, "templates", node["template_id"], "template"), scope)
     runs.launch(ctx, node["template_id"], node["limit"], False, False, node["answers"],
                 created_by=run["created_by"],
                 workflow={"run_id": run["id"], "node": node["id"], "title": node["name"],

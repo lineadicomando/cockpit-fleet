@@ -92,6 +92,8 @@ def config_export(ctx: Context, params: Values) -> dict:
     templates = _names(ctx, "templates")
     document["workflows"] = [
         {"name": row["name"], "description": row["description"],
+         "project": projects.get(row["project_id"], ""),
+         "inventory": inventories.get(row["inventory_id"], ""),
          "nodes": [{**{key: value for key, value in workflows.node_out(node).items()
                        if key != "template_id"},
                     "template": templates.get(node["template_id"], "")}
@@ -285,6 +287,10 @@ class _Importer:
                  for node in nodes]
         self._create("workflow.create", {"name": item.get("name"), "nodes": steps,
                                          "edges": item.get("edges") or [],
+                                         "project_id": self._id("projects", item.get("project"),
+                                                                "project"),
+                                         "inventory_id": self._id(
+                                             "inventories", item.get("inventory"), "inventory"),
                                          "description": item.get("description") or ""})
 
     def schedule(self, item: dict) -> None:

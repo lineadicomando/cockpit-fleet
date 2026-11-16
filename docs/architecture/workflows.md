@@ -10,9 +10,23 @@ steps before it have ended, then runs if one of its links holds, or is
 skipped, and so are those that only follow it. Loops are refused, so a step
 runs at most once.
 
+**Where its steps are from.** A workflow may name a project, an inventory
+or both (`project_id`, `inventory_id`, each null for any): its steps are
+then templates of that project and on that inventory, both when both are
+named. It is there so that a template alike on another inventory is not
+taken for one of them, and it is checked three times: when the workflow is
+saved (`bad_request`); when a template that is a step of it is moved to
+another project or inventory (`template.update` answers `conflict`: another
+template is made instead, as a template in use is not deleted); and when a
+run starts a step, against the copy the run holds (`options.scope`), since a
+run may outlive the workflow's use of a template: the step then counts as
+one that could not start. A starter is not named. The run of the workflow
+itself keeps `project_id` and `inventory_id` empty: runs in series wait by
+inventory, and its own steps would wait for it.
+
 **Runs.** `workflow.launch` (operator) records a run of kind `workflow`.
 It has no unit and no place in the queue (the lanes of `dispatch` leave it
-out); it holds a copy of the steps and links, so that changing the workflow
+out); it holds a copy of the steps and links (and of where they are from), so that changing the workflow
 does not change a run under way. Its steps are runs of their templates,
 launched through `runs.launch` as the user who launched the workflow, with
 `workflow_run_id` and `workflow_node`; they queue, wait for approvals and
@@ -62,4 +76,6 @@ the others run. The run it resumes stays as it ended.
 operator launches, cancels and resumes; a viewer sees the workflows and the
 progress of their runs (`workflow.progress`). A template used by a workflow
 cannot be deleted (table `workflow_templates`). Workflows are in the
-exported document, their steps naming templates by name. Schema 17.
+exported document, their steps naming templates by name, and the project
+and the inventory they take them from too. Schema 17; the project and the
+inventory, schema 31.

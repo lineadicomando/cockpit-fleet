@@ -3981,3 +3981,15 @@ msgstr "Partono da quelli del template: ciò che cambi li sostituisce solo qui, 
 
 msgid "In place of the template's"
 msgstr "Al posto di quelli del template"
+
+msgid "Any project"
+msgstr "Qualsiasi progetto"
+
+msgid "Any inventory"
+msgstr "Qualsiasi inventario"
+
+msgid "With a project or an inventory, only their job templates can be steps: one alike elsewhere is not taken for one of them."
+msgstr "Con un progetto o un inventario, solo i loro template possono essere passi: uno simile altrove non viene scambiato per uno di loro."
+
+msgid "This job template is not of the project or the inventory of the workflow: choose another one."
+msgstr "Questo template non è del progetto o dell'inventario del workflow: scegline un altro."

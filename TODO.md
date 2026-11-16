@@ -14,9 +14,9 @@ Future. 0.3.0 released on 15 November (its packages on GitHub, published
 by the job "release" at the tag); `make release` only when asked.
 
 To resume: `git status`; `git log origin/main..` for what is not pushed
-(push only when asked: `git push origin main`); `make check` (697 backend,
-175 frontend tests). Each backend module's docstring says what it is;
-`cli.py` is the registry of commands, `db.py` the schema (30 migrations).
+(push only when asked: `git push origin main`); `make check` (701 backend,
+176 frontend tests). Each backend module's docstring says what it is;
+`cli.py` is the registry of commands, `db.py` the schema (31 migrations).
 Integration last run on 15 November, at phase 17: `files` and
 `ct-lifecycle` on AlmaLinux, `files`, `negative` and `checks` on Debian
 and Fedora, all passed (every script on AlmaLinux before it); the known

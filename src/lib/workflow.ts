@@ -28,3 +28,15 @@ export function nextStepId(taken: string[]): string {
         if (!taken.includes(id)) return id;
     }
 }
+
+// The project and the inventory a workflow takes its steps from: "" is any.
+export interface StepScope {
+    project_id: string;
+    inventory_id: string;
+}
+
+// Whether a template may be a step of a workflow of this project and inventory.
+export function inScope(template: { project_id: string; inventory_id: string }, scope: StepScope): boolean {
+    return (!scope.project_id || template.project_id === scope.project_id)
+        && (!scope.inventory_id || template.inventory_id === scope.inventory_id);
+}

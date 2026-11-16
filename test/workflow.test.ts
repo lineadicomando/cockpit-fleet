@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { layers, nextStepId } from "../src/lib/workflow.ts";
+import { inScope, layers, nextStepId } from "../src/lib/workflow.ts";
 
 test("steps go in columns after the longest chain they follow", () => {
     const edges = [
@@ -16,4 +16,13 @@ test("steps go in columns after the longest chain they follow", () => {
 test("a new step takes the first id not taken", () => {
     assert.equal(nextStepId([]), "s1");
     assert.equal(nextStepId(["s1", "s3"]), "s2");
+});
+
+test("a workflow of a project or an inventory takes only their templates", () => {
+    const template = { project_id: "p1", inventory_id: "i1" };
+    assert.ok(inScope(template, { project_id: "", inventory_id: "" }));
+    assert.ok(inScope(template, { project_id: "p1", inventory_id: "" }));
+    assert.ok(inScope(template, { project_id: "p1", inventory_id: "i1" }));
+    assert.ok(!inScope(template, { project_id: "p1", inventory_id: "i2" }));
+    assert.ok(!inScope(template, { project_id: "p2", inventory_id: "" }));
 });

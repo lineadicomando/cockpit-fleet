@@ -343,6 +343,9 @@ export interface Workflow {
     id: string;
     name: string;
     description: string;
+    // What it takes all its steps from, each if it has one: null is anywhere.
+    project_id: string | null;
+    inventory_id: string | null;
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     created_at: number;

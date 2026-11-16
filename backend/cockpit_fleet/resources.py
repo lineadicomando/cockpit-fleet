@@ -1176,6 +1176,19 @@ def template_update(ctx: Context, params: Values) -> dict:
     template_id = params["id"]
     store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
+    # A workflow that takes its steps from one project or inventory keeps them there.
+    held = ctx.conn.execute(
+        "SELECT workflows.name FROM workflows JOIN workflow_templates"
+        " ON workflow_templates.workflow_id = workflows.id"
+        " WHERE workflow_templates.template_id = ?"
+        " AND (workflows.project_id IS NOT NULL AND workflows.project_id != ?"
+        " OR workflows.inventory_id IS NOT NULL AND workflows.inventory_id != ?)"
+        " ORDER BY workflows.name COLLATE NOCASE LIMIT 1",
+        (template_id, values["project_id"], values["inventory_id"])).fetchone()
+    if held is not None:
+        raise Conflict(f"this job template is a step of the workflow {held['name']}, which"
+                       " takes its steps from one project or inventory: make another"
+                       " job template instead")
     vaults = vault_ids(ctx, params)
     sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"])
     return _save_template(ctx, template_id, values, vaults, create=False, sets=sets)

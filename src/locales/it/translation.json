@@ -1343,5 +1343,9 @@
   "replaced_values_count_many": "Valori del template ({{count}} sostituiti)",
   "replaced_values_count_other": "Valori del template ({{count}} sostituiti)",
   "They start as the template's: what you change replaces them here only, and the template stays as it is.": "Partono da quelli del template: ciò che cambi li sostituisce solo qui, e il template resta com'è.",
-  "In place of the template's": "Al posto di quelli del template"
+  "In place of the template's": "Al posto di quelli del template",
+  "Any project": "Qualsiasi progetto",
+  "Any inventory": "Qualsiasi inventario",
+  "With a project or an inventory, only their job templates can be steps: one alike elsewhere is not taken for one of them.": "Con un progetto o un inventario, solo i loro template possono essere passi: uno simile altrove non viene scambiato per uno di loro.",
+  "This job template is not of the project or the inventory of the workflow: choose another one.": "Questo template non è del progetto o dell'inventario del workflow: scegline un altro."
 }

@@ -828,6 +828,12 @@ MIGRATIONS: list[list[str]] = [
         # skip, forks and verbosity (runs.OVERRIDES): only what it gave.
         "ALTER TABLE schedules ADD COLUMN overrides TEXT NOT NULL DEFAULT '{}'",
     ],
+    [
+        # The project and the inventory a workflow takes its steps from, each
+        # if it has one: a step is then a template of that one.
+        "ALTER TABLE workflows ADD COLUMN project_id TEXT REFERENCES projects (id)",
+        "ALTER TABLE workflows ADD COLUMN inventory_id TEXT REFERENCES inventories (id)",
+    ],
 ]
 
 

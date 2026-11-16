@@ -10,6 +10,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Workflows: a workflow may name a project, an inventory or both, and then
+  only their job templates can be its steps, so that a template alike on
+  another inventory is not taken for one of them. Chosen in the form of
+  the workflow (which now also names the inventory beside each template
+  when none is chosen), or with `project_id` and `inventory_id` of
+  `workflow.create` and `workflow.update`. A job template that is a step
+  of such a workflow cannot be moved to another project or inventory:
+  make another one. Workflows made before name neither, and are as they
+  were.
 - Duplicate: a project or an inventory written in the interface can be
   copied under a new name, from the menu of its row or with `fleet
   project duplicate` and `fleet inventory duplicate`. The copy begins with
