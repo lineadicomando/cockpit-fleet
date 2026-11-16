@@ -60,16 +60,33 @@ export function hostRows(hosts: CmdbHost[]): unknown[][] {
     })];
 }
 
-// Save text as a file the browser downloads. Firefox checks a download in
-// the page's iframe against frame-src, hence blob: in the manifest's policy;
-// it also reads the URL after click() returns, so it is revoked later.
-export function download(text: string, name: string, type: string): void {
-    const link = window.document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([text], { type }));
+// The document a download starts from. Firefox takes the click on a blob:
+// link for a navigation of the page's iframe and checks it against the
+// frame-src of Cockpit's shell, which a package cannot widen: started from
+// the shell's own document, the same link is no frame's navigation.
+function downloadDocument(): Document {
+    try {
+        return window.parent.document;
+    } catch {
+        return window.document;
+    }
+}
+
+// Save a blob as a file the browser downloads. Firefox reads the URL after
+// click() returns, so it is revoked later.
+export function saveBlob(blob: Blob, name: string): void {
+    const target = downloadDocument();
+    const url = URL.createObjectURL(blob);
+    const link = target.createElement("a");
+    link.href = url;
     link.download = name;
     link.style.display = "none";
-    window.document.body.appendChild(link);
+    target.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export function download(text: string, name: string, type: string): void {
+    saveBlob(new Blob([text], { type }), name);
 }

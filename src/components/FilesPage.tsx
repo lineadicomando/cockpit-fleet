@@ -24,6 +24,7 @@ import { ansibleSource } from "../lib/ansible-source.ts";
 import {
     ancestors, basename, dirname, filterFiles, isInside, isUsablePath, isYaml, relocate, renamed, topmost, type FileNode,
 } from "../lib/files.ts";
+import { saveBlob } from "../lib/cmdb.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
@@ -71,14 +72,7 @@ function saveDownload(name: string, data: string) {
     const binary = atob(data);
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-    const url = URL.createObjectURL(new Blob([bytes]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    saveBlob(new Blob([bytes]), name);
 }
 
 // A job that follows a change (a syntax check, an import), until it ends.

@@ -66,9 +66,12 @@ administrators, as the output of runs.
 updates and compliance, filtered by any word and counted by system, exported
 as CSV (a cell that would start a formula is opened by an apostrophe) or
 JSON, and a search of a package across hosts. An export is made in the
-browser as a `blob:` link; Firefox checks such a download against the
-`frame-src` of the page's policy, which Cockpit sets to `'self'` by default,
-so the manifest adds `frame-src 'self' blob:`. The page of a host has what it
+browser as a `blob:` link (`saveBlob` in `src/lib/cmdb.ts`, also behind the
+other files the interface saves), clicked in the document of Cockpit's
+shell rather than in the page's own: Firefox takes the click for a
+navigation of the page's iframe and checks it against the `frame-src` of
+the shell's policy, `'self'`, which the manifest of a package does not
+reach (seen with Firefox 160 on Cockpit 369 and 370). The page of a host has what it
 is made of: hardware, packages, services, updates, changes and, for an
 operator, drift. From its updates an operator launches a template of the
 same inventory, narrowed to that host, through the usual launch (survey and

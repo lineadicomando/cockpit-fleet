@@ -58,6 +58,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 - The selected text in the file editor is visible again on the line
   of the cursor, which hid it.
+- Firefox saved none of the files made in the page: the exports of assets
+  and of the configuration, `known_hosts`, and the downloads from the
+  files of a project or an inventory. The policy of Cockpit's own page
+  blocked them, which the fix of 0.2.0 did not reach.
 
 ## [0.3.0] - 2026-11-15
 
