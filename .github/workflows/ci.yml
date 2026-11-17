@@ -52,6 +52,12 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
 
+      # The workspace belongs to the runner's user, not to root in the
+      # container: without this git refuses it ("dubious ownership"), so
+      # git diff fails and the packages miss their version from git describe.
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Setup Node.js and ruff
         run: |
           scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"
@@ -127,6 +133,12 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
+
+      # The workspace belongs to the runner's user, not to root in the
+      # container: without this git refuses it ("dubious ownership"), so
+      # git diff fails and the packages miss their version from git describe.
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Setup Node.js
         run: scripts/ci-tool.sh node "$NODE_VERSION" >> "$GITHUB_PATH"
