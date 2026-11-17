@@ -63,6 +63,7 @@ test("groups start open and remember being closed", () => {
 
 test("a stored view not understood falls back to the default", () => {
     assert.deepEqual(readHostsView(null), DEFAULT_HOSTS_VIEW);
+    assert.equal(readHostsView(null).groupBy, "inventory");
     assert.deepEqual(readHostsView("not json"), DEFAULT_HOSTS_VIEW);
     assert.deepEqual(readHostsView(JSON.stringify({ search: 5, groupBy: "host", show: "map", open: { "inventory:a": "yes" } })), DEFAULT_HOSTS_VIEW);
     assert.deepEqual(readHostsView(JSON.stringify({ search: "web", groupBy: "inventory", show: "grid", open: { "inventory:a": false } })),

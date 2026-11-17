@@ -71,7 +71,7 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
 The hosts of Hosts (its three views) and Assets share `src/lib/hosts.ts`
 and, in `ListView.tsx`, a toolbar (`HostListToolbar`) and the bodies of a
 table in groups or not (`GroupedRows`): a text of which every word must be
-found, and groups by inventory, open at first, offered only when there is
+found, and groups by inventory (the default), open at first, offered only when there is
 more than one inventory. A host of two inventories is a row of each. The
 inventory chosen in the header stays a parameter of `host.list`,
 `state.list` and `cmdb.list`, so that the grid of a large fleet loads only

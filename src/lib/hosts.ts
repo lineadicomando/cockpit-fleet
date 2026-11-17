@@ -18,7 +18,7 @@ export interface HostsView extends HostListView {
     show: HostsShow;
 }
 
-export const DEFAULT_HOST_LIST_VIEW: HostListView = { search: "", groupBy: "none", open: {} };
+export const DEFAULT_HOST_LIST_VIEW: HostListView = { search: "", groupBy: "inventory", open: {} };
 export const DEFAULT_HOSTS_VIEW: HostsView = { ...DEFAULT_HOST_LIST_VIEW, show: "problems" };
 
 export function readHostListView(text: string | null): HostListView {
