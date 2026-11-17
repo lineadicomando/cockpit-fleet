@@ -23,9 +23,11 @@ import { bySystem, download, hostRows, matches, toCsv } from "../lib/cmdb.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad } from "../lib/hooks.ts";
+import { hostGroups, isHostGroupOpen, readHostListView, withHostGroupsOpen } from "../lib/hosts.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CmdbChange, CmdbDetail, CmdbHost, Drift, Inventory, PackageHit, Template } from "../lib/types.ts";
 import { ListState, SectionHeader, message } from "./common.tsx";
+import { GroupedRows, HostListToolbar, NothingMatches, useStoredView } from "./ListView.tsx";
 import { LaunchModal } from "./TemplatesPage.tsx";
 import { Alert, SearchInput, TabPanel, Tabs } from "./pf.tsx";
 
@@ -118,18 +120,22 @@ function PackageSearch({ inventoryId }: { inventoryId: string }) {
 export function AssetsPage() {
     const { t, i18n } = useTranslation();
     const [inventoryId, setInventoryId] = useState("");
-    const [filter, setFilter] = useState("");
+    const [view, setView] = useStoredView("assets-view", readHostListView);
     const [tab, setTab] = useState<string | number>("hosts");
     const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
     const data = useLoad(() => call<{ hosts: CmdbHost[] }>("cmdb.list", inventoryId ? { inventory_id: inventoryId } : {}), [inventoryId]);
 
-    const shown = (data.data?.hosts ?? []).filter(host => matches(host, filter));
+    const shown = (data.data?.hosts ?? []).filter(host => matches(host, view.search));
+    const many = (inventories.data?.inventories.length ?? 0) > 1;
+    const grouped = many && view.groupBy === "inventory";
+    const groups = hostGroups(shown, grouped, host => host.inventory);
+    const allOpen = groups.every(group => isHostGroupOpen(view, group));
     const stamp = new Date().toISOString().slice(0, 10);
 
     return (
         <>
             <SectionHeader title={t("Assets")}>
-                {(inventories.data?.inventories.length ?? 0) > 1 && (
+                {many && (
                     <FormSelect aria-label={t("Inventory")} value={inventoryId} style={{ minWidth: "12rem" }}
                         onChange={(_e, value) => setInventoryId(value)}>
                         <FormSelectOption value="" label={t("Every inventory")} />
@@ -157,11 +163,13 @@ export function AssetsPage() {
                         emptyBody={t("The hosts of an inventory are listed here once it has been read. What they are made of comes from a check of the kind Hardware and software, their updates from one of the kind Updates.")}>
                         {loaded => (
                             <>
+                                <HostListToolbar view={view} onChange={setView} placeholder={t("Name, system, model, address…")}
+                                    canGroup={many} groups={grouped ? groups : []} allOpen={allOpen}
+                                    onToggleAll={() => setView(withHostGroupsOpen(view, groups, !allOpen))}
+                                    shown={shown.length} total={loaded.hosts.length} />
                                 <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} style={{ marginBlockEnd: "1rem" }}>
-                                    <SearchInput aria-label={t("Filter")} placeholder={t("Name, system, model, address…")} value={filter}
-                                        style={{ minWidth: "20rem" }} onChange={(_e, value) => setFilter(value)} onClear={() => setFilter("")} />
                                     {bySystem(loaded.hosts).map(([system, count]) => (
-                                        <Label key={system} isCompact color={system ? "blue" : "grey"} onClick={() => setFilter(system)}>
+                                        <Label key={system} isCompact color={system ? "blue" : "grey"} onClick={() => setView({ ...view, search: system })}>
                                             {`${system || t("Not known yet")}: ${count}`}
                                         </Label>
                                     ))}
@@ -170,32 +178,40 @@ export function AssetsPage() {
                                     <Alert variant="info" isInline isPlain style={{ marginBlockEnd: "1rem" }}
                                         title={t("Nothing collected yet: apply a check of the kind Hardware and software to the hosts, in Checks.")} />
                                 )}
-                                <Table variant="compact" aria-label={t("Assets")}>
-                                    <Thead>
-                                        <Tr>
-                                            {[t("Host"), t("System"), t("Hardware"), t("CPUs"), t("Memory"), t("Packages"), t("Updates"), t("Compliance"), t("Collected")]
-                                                .map(name => <Th key={name} modifier="wrap">{name}</Th>)}
-                                        </Tr>
-                                    </Thead>
-                                    <Tbody>
-                                        {shown.map(host => (
-                                            <Tr key={host.id}>
-                                                <Td dataLabel={t("Host")}>
-                                                    <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
-                                                    {(inventories.data?.inventories.length ?? 0) > 1 && <Content component="small"> ({host.inventory})</Content>}
-                                                </Td>
-                                                <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>
-                                                <Td dataLabel={t("Hardware")}><Hardware host={host} /></Td>
-                                                <Td dataLabel={t("CPUs")}>{host.hardware.cpus ?? ""}</Td>
-                                                <Td dataLabel={t("Memory")}>{host.hardware.memory ? formatBytes(host.hardware.memory) : ""}</Td>
-                                                <Td dataLabel={t("Packages")}>{host.hardware.collected_at ? host.packages : ""}</Td>
-                                                <Td dataLabel={t("Updates")}><Updates host={host} /></Td>
-                                                <Td dataLabel={t("Compliance")}><Compliance compliant={host.compliant} /></Td>
-                                                <Td dataLabel={t("Collected")}>{formatTime(host.hardware.collected_at, i18n.language)}</Td>
+                                {shown.length === 0 ? (
+                                    <NothingMatches title={t("No host matches the filters")} onClearAll={() => setView({ ...view, search: "" })} />
+                                ) : (
+                                    <Table variant="compact" aria-label={t("Assets")}>
+                                        <Thead>
+                                            <Tr>
+                                                {grouped && <Th screenReaderText={t("Group")} />}
+                                                {[t("Host"), t("System"), t("Hardware"), t("CPUs"), t("Memory"), t("Packages"), t("Updates"), t("Compliance"), t("Collected")]
+                                                    .map(name => <Th key={name} modifier="wrap">{name}</Th>)}
                                             </Tr>
-                                        ))}
-                                    </Tbody>
-                                </Table>
+                                        </Thead>
+                                        <GroupedRows groups={groups} grouped={grouped} width={grouped ? 10 : 9}
+                                            isOpen={group => isHostGroupOpen(view, group)}
+                                            onToggle={group => setView(withHostGroupsOpen(view, [group], !isHostGroupOpen(view, group)))}
+                                            title={group => group.name || group.key} count={group => t("hosts_count", { count: group.items.length })}
+                                            row={(host, open) => (
+                                                <Tr key={host.id} isExpanded={grouped ? open : undefined}>
+                                                    {grouped && <Td />}
+                                                    <Td dataLabel={t("Host")}>
+                                                        <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
+                                                        {many && !grouped && <Content component="small"> ({host.inventory})</Content>}
+                                                    </Td>
+                                                    <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>
+                                                    <Td dataLabel={t("Hardware")}><Hardware host={host} /></Td>
+                                                    <Td dataLabel={t("CPUs")}>{host.hardware.cpus ?? ""}</Td>
+                                                    <Td dataLabel={t("Memory")}>{host.hardware.memory ? formatBytes(host.hardware.memory) : ""}</Td>
+                                                    <Td dataLabel={t("Packages")}>{host.hardware.collected_at ? host.packages : ""}</Td>
+                                                    <Td dataLabel={t("Updates")}><Updates host={host} /></Td>
+                                                    <Td dataLabel={t("Compliance")}><Compliance compliant={host.compliant} /></Td>
+                                                    <Td dataLabel={t("Collected")}>{formatTime(host.hardware.collected_at, i18n.language)}</Td>
+                                                </Tr>
+                                            )} />
+                                    </Table>
+                                )}
                             </>
                         )}
                     </ListState>

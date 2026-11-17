@@ -25,11 +25,14 @@ import { bySeverity, formatMetric, worstState } from "../lib/checks.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
+import { hostGroups, hostMatches, isHostGroupOpen, readHostsView, stateMatches, withHostGroupsOpen, type HostsView } from "../lib/hosts.ts";
+import type { Group } from "../lib/listview.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CheckState, FleetHost, HostDetail, Inventory, StateCounts } from "../lib/types.ts";
 import { HostInventory } from "./AssetsPage.tsx";
 import { MaintenanceModal, StateCountLabels, StateLabel, useStateNames } from "./ChecksPage.tsx";
 import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { GroupedRows, HostListToolbar, NothingMatches, useStoredView } from "./ListView.tsx";
 import { Alert, AlertActionCloseButton, ExpandCell, Spinner } from "./pf.tsx";
 
 const POLL = 15_000;
@@ -149,20 +152,43 @@ function Counters({ counts }: { counts: StateCounts }) {
     );
 }
 
-function Problems({ states, onChanged, onError }: { states: CheckState[]; onChanged: () => void; onError: (text: string) => void }) {
+// How the rows of a list of hosts are grouped, and the view that keeps it.
+interface Grouping {
+    grouped: boolean;
+    view: HostsView;
+    onView: (view: HostsView) => void;
+}
+
+function groupProps<T>(grouping: Grouping) {
+    return {
+        grouped: grouping.grouped,
+        isOpen: (group: Group<T>) => isHostGroupOpen(grouping.view, group),
+        onToggle: (group: Group<T>) => grouping.onView(withHostGroupsOpen(grouping.view, [group], !isHostGroupOpen(grouping.view, group))),
+        title: (group: Group<T>) => group.name || group.key,
+    };
+}
+
+function Problems({ groups, grouping, onChanged, onError }: {
+    groups: Group<CheckState>[];
+    grouping: Grouping;
+    onChanged: () => void;
+    onError: (text: string) => void;
+}) {
     const { t } = useTranslation();
-    const problems = bySeverity(states.filter(state => state.state !== null && state.state !== "ok"));
-    if (problems.length === 0) {
-        return <Alert variant="success" isInline isPlain title={t("No problems: every check is OK, or not checked yet.")} />;
-    }
+    const grouped = grouping.grouped;
     return (
         <Table variant="compact" aria-label={t("Problems")}>
             <Thead>
-                <Tr><Th>{t("State")}</Th><Th>{t("Host")}</Th><Th>{t("Which check")}</Th><Th>{t("What it found")}</Th><Th>{t("Since")}</Th><Th screenReaderText={t("Actions")} /></Tr>
+                <Tr>
+                    {grouped && <Th screenReaderText={t("Group")} />}
+                    <Th>{t("State")}</Th><Th>{t("Host")}</Th><Th>{t("Which check")}</Th><Th>{t("What it found")}</Th><Th>{t("Since")}</Th><Th screenReaderText={t("Actions")} />
+                </Tr>
             </Thead>
-            <Tbody>
-                {problems.map(state => (
-                    <Tr key={`${state.host_id}-${state.check_id}`}>
+            <GroupedRows groups={groups} width={grouped ? 7 : 6} {...groupProps<CheckState>(grouping)}
+                count={group => t("checks_failed_count", { count: group.items.length })}
+                row={(state, open) => (
+                    <Tr key={`${state.host_id}-${state.check_id}`} isExpanded={grouped ? open : undefined}>
+                        {grouped && <Td />}
                         <Td dataLabel={t("State")}><StateLabel state={state.state} /><Flags state={state} /></Td>
                         <Td dataLabel={t("Host")}>
                             <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", state.host_id])}>{state.host}</Button>
@@ -172,56 +198,69 @@ function Problems({ states, onChanged, onError }: { states: CheckState[]; onChan
                         <Td dataLabel={t("Since")}><Since seconds={state.changed_at ?? state.checked_at} /></Td>
                         <Td isActionCell><StateActions state={state} onChanged={onChanged} onError={onError} /></Td>
                     </Tr>
-                ))}
-            </Tbody>
+                )} />
         </Table>
     );
 }
 
-function HostList({ hosts }: { hosts: FleetHost[] }) {
+// The worst first, then by name.
+function bySeverityOfHost(hosts: FleetHost[]): FleetHost[] {
+    const rank = (host: FleetHost) => ["ok", "warning", "unknown", "critical"].indexOf(worstState(host.states) ?? "ok");
+    return [...hosts].sort((a, b) => rank(b) - rank(a) || a.name.localeCompare(b.name));
+}
+
+function HostList({ groups, grouping, many }: { groups: Group<FleetHost>[]; grouping: Grouping; many: boolean }) {
     const { t } = useTranslation();
-    const sorted = [...hosts].sort((a, b) => {
-        const rank = (host: FleetHost) => ["ok", "warning", "unknown", "critical"].indexOf(worstState(host.states) ?? "ok");
-        return rank(b) - rank(a) || a.name.localeCompare(b.name);
-    });
+    const grouped = grouping.grouped;
+    // The inventory is the group's name when grouped by it.
+    const inventory = many && !grouped;
     return (
         <Table variant="compact" aria-label={t("Hosts")}>
             <Thead>
-                <Tr><Th>{t("Host")}</Th><Th>{t("Inventory")}</Th><Th>{t("Groups")}</Th><Th>{t("System")}</Th><Th>{t("Checks")}</Th></Tr>
+                <Tr>
+                    {grouped && <Th screenReaderText={t("Group")} />}
+                    <Th>{t("Host")}</Th>{inventory && <Th>{t("Inventory")}</Th>}<Th>{t("Groups")}</Th><Th>{t("System")}</Th><Th>{t("Checks")}</Th>
+                </Tr>
             </Thead>
-            <Tbody>
-                {sorted.map(host => (
-                    <Tr key={host.id}>
+            <GroupedRows groups={groups} width={grouped ? 5 : 4 + (inventory ? 1 : 0)} {...groupProps<FleetHost>(grouping)}
+                count={group => t("hosts_count", { count: group.items.length })}
+                row={(host, open) => (
+                    <Tr key={host.id} isExpanded={grouped ? open : undefined}>
+                        {grouped && <Td />}
                         <Td dataLabel={t("Host")}>
                             <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
                             {host.reachable === false && <Label isCompact color="red" style={{ marginInlineStart: "0.5rem" }}>{t("Not reachable")}</Label>}
                         </Td>
-                        <Td dataLabel={t("Inventory")}>{host.inventory}</Td>
+                        {inventory && <Td dataLabel={t("Inventory")}>{host.inventory}</Td>}
                         <Td dataLabel={t("Groups")}>{host.groups.join(", ")}</Td>
                         <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>
                         <Td dataLabel={t("Checks")}><StateCountLabels counts={host.states} /></Td>
                     </Tr>
-                ))}
-            </Tbody>
+                )} />
         </Table>
     );
 }
 
 // Hosts down, checks across: one cell per state.
-function Grid({ hosts, states }: { hosts: FleetHost[]; states: CheckState[] }) {
+function Grid({ groups, grouping, states }: { groups: Group<FleetHost>[]; grouping: Grouping; states: CheckState[] }) {
     const { t } = useTranslation();
+    const grouped = grouping.grouped;
     const checks = [...new Map(states.map(state => [state.check_id, state.check])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
     const cell = new Map(states.map(state => [`${state.host_id} ${state.check_id}`, state]));
-    const rows = hosts.filter(host => states.some(state => state.host_id === host.id));
     return (
         <div style={{ overflowX: "auto" }}>
             <Table variant="compact" aria-label={t("Hosts and checks")}>
                 <Thead>
-                    <Tr><Th>{t("Host")}</Th>{checks.map(([id, name]) => <Th key={id}>{name}</Th>)}</Tr>
+                    <Tr>
+                        {grouped && <Th screenReaderText={t("Group")} />}
+                        <Th>{t("Host")}</Th>{checks.map(([id, name]) => <Th key={id}>{name}</Th>)}
+                    </Tr>
                 </Thead>
-                <Tbody>
-                    {rows.map(host => (
-                        <Tr key={host.id}>
+                <GroupedRows groups={groups} width={checks.length + (grouped ? 2 : 1)} {...groupProps<FleetHost>(grouping)}
+                    count={group => t("hosts_count", { count: group.items.length })}
+                    row={(host, open) => (
+                        <Tr key={host.id} isExpanded={grouped ? open : undefined}>
+                            {grouped && <Td />}
                             <Td dataLabel={t("Host")}>
                                 <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
                             </Td>
@@ -238,36 +277,54 @@ function Grid({ hosts, states }: { hosts: FleetHost[]; states: CheckState[] }) {
                                 );
                             })}
                         </Tr>
-                    ))}
-                </Tbody>
+                    )} />
             </Table>
         </div>
     );
 }
 
-type View = "problems" | "hosts" | "grid";
-
 export function HostsPage() {
     const { t } = useTranslation();
-    const [view, setView] = useState<View>("problems");
+    const [view, setView] = useStoredView("hosts-view", readHostsView);
     const [inventoryId, setInventoryId] = useState("");
     const [error, setError] = useState<string | null>(null);
     const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
+    const show = view.show;
     const data = useLoad(async () => {
         const filter = inventoryId ? { inventory_id: inventoryId } : {};
         // Only the grid shows every state: at hundreds of hosts they are thousands.
         const [states, hosts] = await Promise.all([
-            call<{ states: CheckState[]; counts: StateCounts }>("state.list", { ...filter, problems: view !== "grid" }),
+            call<{ states: CheckState[]; counts: StateCounts }>("state.list", { ...filter, problems: show !== "grid" }),
             call<{ hosts: FleetHost[] }>("host.list", filter),
         ]);
-        return { ...states, hosts: hosts.hosts, every: view === "grid" };
-    }, [inventoryId, view]);
+        return { ...states, hosts: hosts.hosts, every: show === "grid" };
+    }, [inventoryId, show]);
     usePolling(() => data.reload(), POLL, true);
+
+    const many = (inventories.data?.inventories.length ?? 0) > 1;
+    const grouping: Grouping = { grouped: many && view.groupBy === "inventory", view, onView: setView };
+    const inventoryNames = new Map((inventories.data?.inventories ?? []).map(item => [item.id, item.name]));
+
+    // What is shown of what was loaded, in groups.
+    function lists(loaded: { states: CheckState[]; hosts: FleetHost[] }) {
+        const byId = new Map(loaded.hosts.map(host => [host.id, host]));
+        const hosts = bySeverityOfHost(loaded.hosts.filter(host => hostMatches(host, view.search)));
+        if (show === "problems") {
+            const all = bySeverity(loaded.states.filter(state => state.state !== null && state.state !== "ok"));
+            const shown = all.filter(state => stateMatches(state, byId.get(state.host_id), view.search));
+            const nameOf = (state: CheckState) => byId.get(state.host_id)?.inventory ?? inventoryNames.get(state.inventory_id) ?? "";
+            return { total: all.length, shown: shown.length, states: hostGroups(shown, grouping.grouped, nameOf), hosts: [] };
+        }
+        // The grid has a row for a host with some check only.
+        const rows = show === "grid" ? loaded.hosts.filter(host => loaded.states.some(state => state.host_id === host.id)) : loaded.hosts;
+        const shown = show === "grid" ? hosts.filter(host => loaded.states.some(state => state.host_id === host.id)) : hosts;
+        return { total: rows.length, shown: shown.length, states: [], hosts: hostGroups(shown, grouping.grouped, (host: FleetHost) => host.inventory) };
+    }
 
     return (
         <>
             <SectionHeader title={t("Hosts")}>
-                {(inventories.data?.inventories.length ?? 0) > 1 && (
+                {many && (
                     <FormSelect aria-label={t("Inventory")} value={inventoryId} style={{ minWidth: "12rem" }}
                         onChange={(_e, value) => setInventoryId(value)}>
                         <FormSelectOption value="" label={t("Every inventory")} />
@@ -275,23 +332,41 @@ export function HostsPage() {
                     </FormSelect>
                 )}
                 <ToggleGroup aria-label={t("View")}>
-                    <ToggleGroupItem text={t("Problems")} isSelected={view === "problems"} onChange={() => setView("problems")} />
-                    <ToggleGroupItem text={t("Hosts")} isSelected={view === "hosts"} onChange={() => setView("hosts")} />
-                    <ToggleGroupItem text={t("Grid")} isSelected={view === "grid"} onChange={() => setView("grid")} />
+                    <ToggleGroupItem text={t("Problems")} isSelected={show === "problems"} onChange={() => setView({ ...view, show: "problems" })} />
+                    <ToggleGroupItem text={t("Hosts")} isSelected={show === "hosts"} onChange={() => setView({ ...view, show: "hosts" })} />
+                    <ToggleGroupItem text={t("Grid")} isSelected={show === "grid"} onChange={() => setView({ ...view, show: "grid" })} />
                 </ToggleGroup>
             </SectionHeader>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} actionClose={<AlertActionCloseButton onClose={() => setError(null)} />} />}
             <ListState loaded={data} isEmpty={loaded => loaded.hosts.length === 0}
                 emptyTitle={t("No hosts yet")}
                 emptyBody={t("The hosts of an inventory are listed here once it has been read. Configure what to check on them in Checks.")}>
-                {loaded => (
-                    <>
-                        <Counters counts={loaded.counts} />
-                        {view === "problems" && <Problems states={loaded.states} onChanged={data.reload} onError={setError} />}
-                        {view === "hosts" && <HostList hosts={loaded.hosts} />}
-                        {view === "grid" && loaded.every && <Grid hosts={loaded.hosts} states={loaded.states} />}
-                    </>
-                )}
+                {loaded => {
+                    // Until the grid's states arrive, those loaded are the problems of the view before.
+                    if (show === "grid" && !loaded.every) return <Counters counts={loaded.counts} />;
+                    const shown = lists(loaded);
+                    const groups: Group<unknown>[] = show === "problems" ? shown.states : shown.hosts;
+                    const allOpen = groups.every(group => isHostGroupOpen(view, group));
+                    const nothing = shown.total > 0 && shown.shown === 0;
+                    return (
+                        <>
+                            <Counters counts={loaded.counts} />
+                            {(shown.total > 0 || view.search) && (
+                                <HostListToolbar view={view} onChange={setView} placeholder={t("Name, address, group, system…")}
+                                    canGroup={many} groups={grouping.grouped ? groups : []} allOpen={allOpen}
+                                    onToggleAll={() => setView(withHostGroupsOpen(view, groups, !allOpen))}
+                                    shown={shown.shown} total={shown.total} />
+                            )}
+                            {nothing && <NothingMatches title={t("No host matches the filters")} onClearAll={() => setView({ ...view, search: "" })} />}
+                            {show === "problems" && shown.total === 0 && (
+                                <Alert variant="success" isInline isPlain title={t("No problems: every check is OK, or not checked yet.")} />
+                            )}
+                            {show === "problems" && shown.shown > 0 && <Problems groups={shown.states} grouping={grouping} onChanged={data.reload} onError={setError} />}
+                            {show === "hosts" && shown.shown > 0 && <HostList groups={shown.hosts} grouping={grouping} many={many} />}
+                            {show === "grid" && shown.shown > 0 && <Grid groups={shown.hosts} grouping={grouping} states={loaded.states} />}
+                        </>
+                    );
+                }}
             </ListState>
         </>
     );

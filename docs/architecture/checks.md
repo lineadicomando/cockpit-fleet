@@ -272,7 +272,11 @@ document, maintenance windows are not.
 **The interface.** "Hosts" has the counters, the problems with what can be
 done about each, the hosts, and a grid of hosts and checks; the page of a
 host (`#/hosts/ID`) has what it is, its checks with their metrics, and its
-last changes. "Checks" has the checks and the maintenance windows.
+last changes. The three lists of "Hosts" are filtered by text and grouped
+by inventory in the browser, as "Assets" is (see "Long lists" in
+[the interface](interface.md)); the counters are what `state.list` counts
+for the inventory chosen, not for the text, since the problems alone are
+loaded outside the grid. "Checks" has the checks and the maintenance windows.
 
 The list of checks is filtered, grouped and sorted in the browser, from
 what `check.list` already returns (see "Long lists" in [the interface](interface.md)):

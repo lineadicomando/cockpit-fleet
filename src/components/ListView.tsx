@@ -4,10 +4,12 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Content, EmptyState, EmptyStateFooter, Flex, FlexItem, Label, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
-import { Td, Tr } from "@patternfly/react-table";
+import { Tbody, Td, Tr } from "@patternfly/react-table";
 import { useStoredState } from "../lib/hooks.ts";
+import type { HostListView } from "../lib/hosts.ts";
+import type { Group } from "../lib/listview.ts";
 import { useSession } from "../lib/session.tsx";
-import { ExpandCell } from "./pf.tsx";
+import { ExpandCell, SearchInput } from "./pf.tsx";
 
 // A view of a list kept per user of Cockpit, so that it outlives a change of tab.
 export function useStoredView<T>(name: string, read: (text: string | null) => T): [T, (view: T) => void] {
@@ -96,6 +98,70 @@ export function GroupRow({ title, count, open, onToggle, width, children }: {
                 </Flex>
             </Td>
         </Tr>
+    );
+}
+
+// The filter of a list of hosts, and its grouping by inventory when there is
+// more than one to group by.
+export function HostListToolbar<V extends HostListView>({ view, onChange, placeholder, canGroup, groups, allOpen, onToggleAll, shown, total }: {
+    view: V;
+    onChange: (view: V) => void;
+    placeholder: string;
+    canGroup: boolean;
+    groups: Group<unknown>[];
+    allOpen: boolean;
+    onToggleAll: () => void;
+    shown: number;
+    total: number;
+}) {
+    const { t } = useTranslation();
+    const search = view.search.trim();
+    const chips = search ? [{ key: "search", text: t("Text: {{text}}", { text: search }), onClear: () => onChange({ ...view, search: "" }) }] : [];
+    return (
+        <div style={{ marginBlockEnd: "1rem" }}>
+            <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
+                <FlexItem style={{ width: "20rem" }}>
+                    <SearchInput aria-label={t("Filter hosts")} placeholder={placeholder} value={view.search}
+                        onChange={(_e, value) => onChange({ ...view, search: value })} onClear={() => onChange({ ...view, search: "" })} />
+                </FlexItem>
+                {canGroup && (
+                    <GroupByChoice id="host-list-group-by" value={view.groupBy} onChange={groupBy => onChange({ ...view, groupBy })}
+                        options={[["inventory", t("Inventory")], ["none", t("Nothing")]]}
+                        groups={groups.length} allOpen={allOpen} onToggleAll={onToggleAll} />
+                )}
+            </Flex>
+            <FilterChips chips={chips} onClearAll={() => onChange({ ...view, search: "" })} shown={shown} total={total} />
+        </div>
+    );
+}
+
+// The bodies of a table whose rows may be in groups: one body per group, led by
+// its GroupRow, or a single body. A row of a group starts with an empty cell,
+// under the group's toggle.
+export function GroupedRows<T>({ groups, grouped, width, isOpen, onToggle, title, count, row }: {
+    groups: Group<T>[];
+    grouped: boolean;
+    // The columns of the table, the toggle's included when grouped.
+    width: number;
+    isOpen: (group: Group<T>) => boolean;
+    onToggle: (group: Group<T>) => void;
+    title: (group: Group<T>) => string;
+    count: (group: Group<T>) => string;
+    row: (item: T, open: boolean) => React.ReactNode;
+}) {
+    if (!grouped) return <Tbody>{groups.flatMap(group => group.items).map(item => row(item, true))}</Tbody>;
+    return (
+        <>
+            {groups.map(group => {
+                const open = isOpen(group);
+                return (
+                    <Tbody key={group.key} isExpanded={open}>
+                        <GroupRow title={title(group)} count={count(group)} open={open} onToggle={() => onToggle(group)} width={width} />
+                        {group.items.map(item => row(item, open))}
+                    </Tbody>
+                );
+            })}
+        </>
     );
 }
 

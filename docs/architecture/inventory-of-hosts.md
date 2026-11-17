@@ -63,7 +63,7 @@ drift may hold the content of files: `drift.get` is for operators and
 administrators, as the output of runs.
 
 **The interface.** "Assets" has the hosts with their system, hardware,
-updates and compliance, filtered by any word and counted by system, exported
+updates and compliance, filtered by any word, grouped by inventory and counted by system, exported
 as CSV (a cell that would start a formula is opened by an apostrophe) or
 JSON, and a search of a package across hosts. An export is made in the
 browser as a `blob:` link (`saveBlob` in `src/lib/cmdb.ts`, also behind the

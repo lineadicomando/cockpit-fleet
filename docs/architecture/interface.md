@@ -52,8 +52,9 @@ carries the page it was followed from in the URL
 `originPath` takes only a known section, since the URL can be typed. The
 list of runs needs no such button: "All runs" is there anyway.
 
-**Long lists.** Checks and job templates are filtered, grouped and sorted
-in the browser, from what their `list` command returns: neither is paged,
+**Long lists.** Checks, job templates, host keys and the hosts of Hosts
+and Assets are filtered and grouped (checks and templates also sorted) in
+the browser, from what their `list` command returns: none is paged,
 and at the sizes measured (hundreds of each) there is no reason to ask the
 backend again for each change of a filter. The pieces they share are in
 `src/lib/listview.ts` (groups, the stored view read back defensively) and
@@ -66,6 +67,15 @@ change of tab and a reload; a link carries none of them, and a stored
 value that is not understood (an older version, an edit by hand) falls
 back to the default. PatternFly's toolbar filters are not used: their
 labels ("Show Filters", "Close …") are English that cannot be translated.
+
+The hosts of Hosts (its three views) and Assets share `src/lib/hosts.ts`
+and, in `ListView.tsx`, a toolbar (`HostListToolbar`) and the bodies of a
+table in groups or not (`GroupedRows`): a text of which every word must be
+found, and groups by inventory, open at first, offered only when there is
+more than one inventory. A host of two inventories is a row of each. The
+inventory chosen in the header stays a parameter of `host.list`,
+`state.list` and `cmdb.list`, so that the grid of a large fleet loads only
+the states of one.
 
 Job templates are grouped by project (the default), inventory, outcome of
 the last run or not at all, every group open at first; filtered by text

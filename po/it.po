@@ -2206,6 +2206,9 @@ msgstr "Nome di un pacchetto, o una sua parte"
 msgid "Name, system, model, address…"
 msgstr "Nome, sistema, modello, indirizzo…"
 
+msgid "Name, address, group, system…"
+msgstr "Nome, indirizzo, gruppo, sistema…"
+
 msgid "Network"
 msgstr "Rete"
 

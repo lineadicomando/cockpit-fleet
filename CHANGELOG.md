@@ -10,6 +10,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Hosts and Assets: a filter by any word (name, address, inventory,
+  groups, system; in Problems also the check and what it found, in Assets
+  also the hardware), and the hosts grouped by inventory when there is
+  more than one. The filter, the grouping and, in Hosts, the view chosen
+  are kept in the browser for each user.
 - Overview: the first tab shows the state of the fleet at a glance, read
   again every 30 s. A row of figures (hosts and how many cannot be
   reached, open problems not acknowledged, the share of successful runs,

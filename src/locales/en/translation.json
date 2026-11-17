@@ -709,6 +709,7 @@
   "Name of a metric": "Name of a metric",
   "Name of a package, or part of it": "Name of a package, or part of it",
   "Name of the secret variable": "Name of the secret variable",
+  "Name, address, group, system…": "Name, address, group, system…",
   "Name, kind, inventory, group…": "Name, kind, inventory, group…",
   "Name, playbook, project, inventory, tag…": "Name, playbook, project, inventory, tag…",
   "Name, system, model, address…": "Name, system, model, address…",
