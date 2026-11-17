@@ -37,6 +37,7 @@ test("the last run says how a template went", () => {
 
 test("a stored view of templates that is not understood falls back to the default", () => {
     assert.deepEqual(readTemplatesView(null), DEFAULT_TEMPLATES_VIEW);
+    assert.equal(readTemplatesView(null).groupBy, "inventory");
     assert.deepEqual(readTemplatesView("{"), DEFAULT_TEMPLATES_VIEW);
     const stored = readTemplatesView(JSON.stringify({ groupBy: "outcome", trait: "magic", outcome: "failed", sort: "last_run", project: 7 }));
     assert.deepEqual([stored.groupBy, stored.trait, stored.outcome, stored.sort, stored.project], ["outcome", "", "failed", "last_run", ""]);
@@ -72,7 +73,7 @@ test("templates group by project, inventory or outcome, every group open at firs
     assert.deepEqual(groupTemplates(TEMPLATES, "inventory", NAMES).map(group => group.name), ["lab", "prod"]);
     assert.deepEqual(groupTemplates(TEMPLATES, "outcome", NAMES).map(group => group.key), ["failed", "active", "canceled", "successful", "never"]);
     assert.deepEqual(groupTemplates(TEMPLATES, "none", NAMES).map(group => group.items.length), [5]);
-    const shown = view();
+    const shown = view({ groupBy: "project" });
     assert.deepEqual(projects.map(group => isTemplateGroupOpen(shown, group)), [true, true]);
     const closed = withTemplateGroupsOpen(shown, projects, false);
     assert.deepEqual(projects.map(group => isTemplateGroupOpen(closed, group)), [false, false]);

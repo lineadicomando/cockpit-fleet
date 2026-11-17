@@ -37,7 +37,7 @@ export interface TemplatesView {
 }
 
 export const DEFAULT_TEMPLATES_VIEW: TemplatesView = {
-    search: "", project: "", inventory: "", trait: "", outcome: "", groupBy: "project", sort: "name", descending: false, open: {},
+    search: "", project: "", inventory: "", trait: "", outcome: "", groupBy: "inventory", sort: "name", descending: false, open: {},
 };
 
 export function readTemplatesView(text: string | null): TemplatesView {

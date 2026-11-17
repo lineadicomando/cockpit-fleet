@@ -77,7 +77,7 @@ inventory chosen in the header stays a parameter of `host.list`,
 `state.list` and `cmdb.list`, so that the grid of a large fleet loads only
 the states of one.
 
-Job templates are grouped by project (the default), inventory, outcome of
+Job templates are grouped by inventory (the default), project, outcome of
 the last run or not at all, every group open at first; filtered by text
 (name, playbook, project, inventory, tags), project, inventory, a feature
 (an approval, questions, scheduled or not, from `schedule.list`) and the

@@ -59,6 +59,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Job templates are grouped by inventory by default, no longer by
+  project; a browser that already keeps a view of the list keeps its
+  grouping.
 - Launching a template, a workflow, a schedule or an ad-hoc command, and
   syncing or uploading a project, no longer opens the run: the page stays
   where it is, and a notice links to the run. A run opened from another
