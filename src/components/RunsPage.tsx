@@ -94,7 +94,8 @@ export function RunsPage() {
                                 {data.runs.map(run => (
                                     <Tr key={run.id} isClickable onRowClick={() => openRun(run.id)}>
                                         <Td dataLabel={t("Run")}>
-                                            <Button variant="link" isInline onClick={() => openRun(run.id)}>{run.title}</Button>
+                                            {/* The row opens it too: once is enough. */}
+                                            <Button variant="link" isInline onClick={event => { event.stopPropagation(); openRun(run.id); }}>{run.title}</Button>
                                             {run.options.check && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Dry run")}</Label>}
                                         </Td>
                                         <Td dataLabel={t("Status")}>

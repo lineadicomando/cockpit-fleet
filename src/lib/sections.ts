@@ -30,7 +30,9 @@ export function groupOf(groups: { key: string; sections: string[] }[], section: 
 // list needs none: the page has a link to it anyway.
 export function detailLocation(section: string, id: string, from: string[]): { path: string[]; options: Record<string, string> } {
     const origin = from.length === 0 ? "overview" : from.join("/");
-    return { path: [section, id], options: origin === section ? {} : { from: origin } };
+    // Its own list, or the page itself when it is opened twice in a row.
+    const none = origin === section || origin === `${section}/${id}`;
+    return { path: [section, id], options: none ? {} : { from: origin } };
 }
 
 export function runLocation(id: string, from: string[]): { path: string[]; options: Record<string, string> } {

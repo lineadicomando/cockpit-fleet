@@ -50,6 +50,8 @@ test("a run's page knows where it was opened from", () => {
     assert.deepEqual(runLocation("r1", ["hosts", "h1"]), { path: ["runs", "r1"], options: { from: "hosts/h1" } });
     assert.deepEqual(runLocation("r1", []), { path: ["runs", "r1"], options: { from: "overview" } });
     assert.deepEqual(runLocation("r1", ["runs"]), { path: ["runs", "r1"], options: {} });
+    assert.deepEqual(runLocation("r1", ["runs", "r1"]), { path: ["runs", "r1"], options: {} });
+    assert.deepEqual(runLocation("r2", ["runs", "r1"]), { path: ["runs", "r2"], options: { from: "runs/r1" } });
 });
 
 test("a host's page knows where it was opened from", () => {
