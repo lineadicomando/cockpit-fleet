@@ -68,7 +68,7 @@ class Config:
     adhoc_modules: tuple[str, ...] = ADHOC_MODULES
     inventory_scripts: bool = False
     mcp_enabled: bool = False
-    mcp_max_role: str = "operator"
+    mcp_max_role: str = "admin"
     # Modules of an ad-hoc command an agent may run in a profile that only
     # diagnoses; always among adhoc_modules.
     mcp_adhoc_modules: tuple[str, ...] = DIAGNOSTIC_MODULES
@@ -76,7 +76,8 @@ class Config:
     chat_max_sessions: int = 2
     # The profiles of the assistant a user may pick, and the one an agent
     # gets when it names none (profiles.py).
-    chat_profiles: tuple[str, ...] = ("observer", "assisted")
+    chat_profiles: tuple[str, ...] = ("observer", "assisted", "diagnostic", "autonomous",
+                                      "administrator")
     chat_default_profile: str = "assisted"
     # What holds an agent of an autonomous profile: the runs it may launch in
     # one session, and whether they must all be dry runs (autonomy.py).

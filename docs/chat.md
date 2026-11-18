@@ -43,7 +43,7 @@ steps are these:
    ```toml
    [mcp]
    enabled = true          # as the user who starts them
-   #max_role = "operator"  # and never with more than this role
+   #max_role = "admin"     # and never with more than this role
    ```
 
 2. Each user logs in to the model, once, as their own user and without
@@ -140,9 +140,10 @@ started stays as it is: once logged in, send the message again.
 
 ## What a user gets
 
-- The role they have in Fleet, lowered to `[mcp] max_role`: with the default,
-  an administrator's assistant is an operator's. The reason is in
-  `config.toml`: the output of a run is written by the nodes.
+- The role they have in Fleet, lowered to `[mcp] max_role`, `admin` by
+  default: set it to `operator` for an administrator's assistant to be an
+  operator's. The reason to lower it is in `config.toml`: the output of a
+  run is written by the nodes.
 - Within that, what the profile of the assistant allows (`[chat] profiles`,
   `default_profile`): `observer` reads; `assisted`, the default, also
   launches and cancels what is defined (templates, workflows, checks,
@@ -155,8 +156,10 @@ started stays as it is: once logged in, send the message again.
   no maintenance window opened or closed and no schedule turned on, and with
   `autonomous_dry_run` dry runs only; `administrator` gets whatever the
   role allows: ad-hoc commands, changes to templates, inventories and the
-  rest, files, projects, credentials, deletes. Only `observer` and
-  `assisted` are enabled as installed. The backend refuses what is outside
+  rest, files, projects, credentials, deletes. All five are enabled
+  as installed, `assisted` the default; list fewer in `profiles` to keep
+  the others from users, who otherwise accept the risks of `diagnostic`,
+  `autonomous` and `administrator` once each before using them. The backend refuses what is outside
   the profile, and `fleet-mcp` started by hand gets the default one.
 - The user picks the profile when starting a session, among those enabled.
   Before the first session in `diagnostic`, `autonomous` or `administrator`

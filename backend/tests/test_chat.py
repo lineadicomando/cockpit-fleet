@@ -92,7 +92,8 @@ class CommandsTest(Base):
     def setUp(self):
         super().setUp()
         self.config = replace(self.config, mcp_enabled=True, chat_agents=(AGENT,),
-                              chat_max_sessions=2)
+                              chat_max_sessions=2, mcp_max_role="operator",
+                              chat_profiles=("observer", "assisted"))
         self.open = 1
         self.rules = self.root / "assistant.md"
         for patch in (mock.patch.object(chat, "open_sessions", lambda: self.open),

@@ -70,6 +70,11 @@ export interface ChatState {
     loading: boolean;
     ask: Ask | null;
     sessions: SessionInfo[];
+    // A message prepared elsewhere in the interface, for the composer to take
+    // and the user to edit and send; and the profile suggested with it, for a
+    // session not started yet.
+    draft: string;
+    suggested: string;
 }
 
 export interface Transport {
@@ -84,7 +89,7 @@ export type Spawn = (agent: string, profile: string, onData: (text: string) => v
 export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 
 const IDLE: ChatState = {
-    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [],
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "",
 };
 
 interface Waiting {
@@ -134,7 +139,8 @@ export class Chat {
 
     start(agent: string, profile: string): void {
         if (this.state.phase === "starting" || this.state.phase === "ready") return;
-        this.state = IDLE;
+        // A draft waits for the session it was prepared for.
+        this.state = { ...IDLE, draft: this.state.draft };
         this.set({ phase: "starting", agent, profile });
         this.always.clear();
         this.tools = new Map();
@@ -154,6 +160,19 @@ export class Chat {
         } catch {
             // A tool not known is asked about every time.
         }
+    }
+
+    // A message for the composer, never sent by itself: in the conversation
+    // open, if there is one, or the first of the session the user starts.
+    prepare(text: string, suggested = ""): void {
+        this.set({ draft: text, suggested });
+    }
+
+    // The draft, taken by the composer.
+    takeDraft(): string {
+        const text = this.state.draft;
+        if (text) this.set({ draft: "" });
+        return text;
     }
 
     // Ends the agent. The conversation stays where the agent keeps it.

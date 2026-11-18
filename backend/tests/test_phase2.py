@@ -549,6 +549,50 @@ class RunTest(Base):
         self.assertEqual(self.code("run.log", {"id": run["id"]}, role="viewer"), "forbidden")
         self.assertEqual(self.code("run.log", {"id": "../../etc"}), "bad_request")
 
+    def test_an_agent_reads_the_log_in_small_chunks_of_whole_lines_and_searches_it(self):
+        run = self.ok("run.start", {"template_id": self.template()["id"]})
+        lines = [f"\x1b[0;32mok: [pc{n:03}] => {{}}\x1b[0m\n" for n in range(1000)]
+        lines[500] = "\x1b[0;31mfatal: [pc215]: UNREACHABLE! => {}\x1b[0m\n"
+        log = "".join(lines).encode()
+        (paths.RUNS_DIR / run["id"] / "stdout.log").write_bytes(log)
+        # The page gets it as it is, the codes of colours included.
+        self.assertEqual(self.ok("run.log", {"id": run["id"]})["text"], log.decode())
+        self.config = dataclasses.replace(self.config, mcp_enabled=True)
+        agent = {"id": run["id"], "via": "mcp:test"}
+        first = self.ok("run.log", agent, role="operator")
+        self.assertLessEqual(first["offset"], runs._AGENT_CHUNK)
+        self.assertTrue(first["text"].startswith("ok: [pc000] => {}\n"))
+        self.assertTrue(first["text"].endswith("\n"))
+        self.assertNotIn("\x1b", first["text"])
+        self.assertEqual((first["size"], first["more"]), (len(log), True))
+        offset, text = 0, ""
+        while True:
+            chunk = self.ok("run.log", {**agent, "offset": offset}, role="operator")
+            text += chunk["text"]
+            offset = chunk["offset"]
+            if not chunk["more"]:
+                break
+        self.assertEqual(text, "".join(lines).replace("\x1b[0;32m", "").replace(
+            "\x1b[0;31m", "").replace("\x1b[0m", ""))
+        # A search: the lines that match, numbered, with those around them.
+        found = self.ok("run.log", {**agent, "match": "FATAL", "context": 1}, role="operator")
+        self.assertEqual(found["text"], "500: ok: [pc499] => {}\n"
+                         "501: fatal: [pc215]: UNREACHABLE! => {}\n502: ok: [pc501] => {}")
+        self.assertEqual((found["matches"], found["more"], found["offset"]), (1, False, len(log)))
+        # Bounded, and going on from where it stopped.
+        found = self.ok("run.log", {**agent, "match": "ok:", "context": 0}, role="operator")
+        self.assertEqual((found["matches"], found["more"]), (runs._MATCHES, True))
+        self.assertEqual(found["text"].splitlines()[-1], "100: ok: [pc099] => {}")
+        again = self.ok("run.log", {**agent, "match": "ok:", "context": 0,
+                                    "offset": found["offset"]}, role="operator")
+        self.assertEqual(again["text"].splitlines()[0], "1: ok: [pc100] => {}")
+        # Groups apart are told apart.
+        found = self.ok("run.log", {"id": run["id"], "match": "[pc00", "context": 0})
+        self.assertNotIn("--", found["text"])
+        found = self.ok("run.log", {"id": run["id"], "match": "05]", "context": 0})
+        self.assertTrue(found["text"].startswith("6: ok: [pc005] => {}\n--\n106: ok: [pc105] => {}\n--\n"))
+        self.assertEqual(self.code("run.log", {**agent, "match": "x"}, role="viewer"), "forbidden")
+
     def test_a_link_or_a_fifo_the_run_left_is_read_as_missing(self):
         run = self.ok("run.start", {"template_id": self.template()["id"]})
         directory = paths.RUNS_DIR / run["id"]

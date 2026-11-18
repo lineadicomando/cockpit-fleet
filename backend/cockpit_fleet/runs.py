@@ -1,6 +1,8 @@
 """Commands to launch, follow and cancel runs."""
 
 import json
+import os
+import re
 import shutil
 
 from . import approvals, jobs, profiles, store, survey
@@ -11,6 +13,14 @@ from .resources import credential_of_kind, place_inventory, template_vaults, vau
 from .validators import check_limit, check_module, check_tag
 
 _CHUNK = 256 * 1024
+# What an agent is given of the output at a time: a chunk of the page's would
+# not fit what its program takes from a tool (about 25,000 tokens for Claude).
+_AGENT_CHUNK = 16 * 1024
+# A search of the output answers with at most so many lines that match, each
+# cut to so many characters, and that many lines around each.
+_MATCHES = 100
+_MATCH_LINE = 500
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 STATUSES = ("pending_approval", "queued", "running", "successful", "failed", "canceled", "error",
             "rejected", "expired")
 
@@ -343,15 +353,20 @@ def run_get(ctx: Context, params: Values) -> dict:
     return run
 
 
-def _read_from(ctx: Context, params: Values, name: str) -> dict:
-    """A chunk of one of the run's files, from a byte offset, for polling."""
-    run_id = params["id"]
-    offset = params["offset"]
+def _readable(ctx: Context, run_id: str) -> None:
+    """Refuses the output of a run the caller may not read."""
     run = store.fetch(ctx.conn, "runs", run_id, "run")
     if (run["kind"] == "inventory" or run["kind"] == "syntax" and run["inventory_id"]) \
             and ctx.caller.role != "admin":
         # Ansible quotes the lines it could not read, and they may hold passwords.
         raise Forbidden("the output of reading an inventory is for administrators")
+
+
+def _read_from(ctx: Context, params: Values, name: str) -> dict:
+    """A chunk of one of the run's files, from a byte offset, for polling."""
+    run_id = params["id"]
+    offset = params["offset"]
+    _readable(ctx, run_id)
     try:
         with jobs.open_run_file(jobs.run_dir(run_id), name) as source:
             source.seek(offset)
@@ -368,10 +383,93 @@ def _read_from(ctx: Context, params: Values, name: str) -> dict:
 _CHUNK_PARAMS = {"id": Id(), "offset": Int(0, 2**62, default=0)}
 
 
-@command("run.log", role="operator", params=_CHUNK_PARAMS)
+def _agent_chunk(ctx: Context, params: Values) -> dict:
+    """A chunk of the output small enough for an agent, in whole lines when it
+    can be, without the codes of colours, and how long the output is."""
+    run_id = params["id"]
+    offset = params["offset"]
+    _readable(ctx, run_id)
+    try:
+        with jobs.open_run_file(jobs.run_dir(run_id), "stdout.log") as source:
+            size = os.fstat(source.fileno()).st_size
+            source.seek(offset)
+            data = source.read(_AGENT_CHUNK)
+    except FileNotFoundError:
+        size, data = 0, b""
+    if len(data) == _AGENT_CHUNK and b"\n" in data:
+        data = data[: data.rfind(b"\n") + 1]
+    end = offset + len(data)
+    return {"text": _ANSI.sub("", data.decode(errors="replace")), "offset": end,
+            "size": size, "more": end < size}
+
+
+def _search(ctx: Context, params: Values) -> dict:
+    """The lines of the output that hold a text, from a byte offset, with the
+    lines around them; offset says where to go on when there are more."""
+    run_id = params["id"]
+    _readable(ctx, run_id)
+    wanted = params["match"].casefold()
+    around = params["context"]
+    out: list[str] = []
+    found = 0
+    offset = params["offset"]
+    before: list[tuple[int, str]] = []
+    after = 0
+    last = 0
+    more = False
+    try:
+        source = jobs.open_run_file(jobs.run_dir(run_id), "stdout.log")
+    except FileNotFoundError:
+        return {"text": "", "offset": offset, "matches": 0, "more": False}
+    with source:
+        size = os.fstat(source.fileno()).st_size
+        source.seek(offset)
+        number = 0
+        for raw in source:
+            if found >= _MATCHES and after == 0:
+                more = True
+                break
+            offset += len(raw)
+            number += 1
+            line = _ANSI.sub("", raw.decode(errors="replace").rstrip("\r\n"))
+            if len(line) > _MATCH_LINE:
+                line = line[:_MATCH_LINE] + "…"
+            if found < _MATCHES and wanted in line.casefold():
+                first = before[0][0] if before else number
+                if last and first > last + 1:
+                    out.append("--")
+                out.extend(f"{n}: {text}" for n, text in before)
+                out.append(f"{number}: {line}")
+                before = []
+                found += 1
+                after = around
+                last = number
+            elif after:
+                out.append(f"{number}: {line}")
+                after -= 1
+                last = number
+            elif around:
+                before = [*before, (number, line)][-around:]
+    return {"text": "\n".join(out), "offset": offset, "size": size, "matches": found,
+            "more": more}
+
+
+@command("run.log", role="operator", params={
+    **_CHUNK_PARAMS,
+    "match": Str("Only the lines that hold this text, whatever its case, with the lines"
+                 " around them, numbered from offset.", default="", max_length=200),
+    "context": Int(0, 10, "Lines shown before and after each that matches.", default=2),
+})
 def run_log(ctx: Context, params: Values) -> dict:
-    """The raw output of a run, in chunks from a byte offset. It is written by the
-    nodes and may be long: prefer run.result, and read this only when asked."""
+    """The output of a run, written by the nodes. Read run.result first: it says
+    task by task where hosts failed and why. Then look for what you need with
+    match (a host, "fatal", "FAILED", "WARNING"), whose answer goes on from
+    offset when "more" says so. Without match, the output in chunks from a byte
+    offset, with "size" its whole length: read it all only when asked."""
+    if params["match"]:
+        return _search(ctx, params)
+    if is_agent(ctx.via):
+        return _agent_chunk(ctx, params)
     return _read_from(ctx, params, "stdout.log")
 
 

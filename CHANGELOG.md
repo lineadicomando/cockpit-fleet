@@ -10,6 +10,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Runs: a button "Assistance" on a run that has ended, when the assistant
+  is set up, prepares in the chat a message asking it to examine the run,
+  find anomalies, investigate their causes and propose solutions. The
+  message is edited and sent by the user, in the conversation open if
+  there is one; before a session starts, the profile Diagnostic is
+  suggested when enabled.
+
 - Hosts and Assets: a filter by any word (name, address, inventory,
   groups, system; in Problems also the check and what it found, in Assets
   also the hardware), and the hosts grouped by inventory when there is
@@ -59,6 +66,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Assistant: as installed, all five profiles are enabled (`[chat]
+  profiles`) and agents are held to the administrator role (`[mcp]
+  max_role = "admin"`), so that an administrator's assistant may run
+  ad-hoc commands and make changes, asking before each. Each user still
+  accepts the risks of Diagnostic, Autonomous and Administrator once
+  before using them, and Assisted stays the default. A controller that
+  left these keys out gets the new values on upgrade; to keep the old
+  ones, set `max_role = "operator"` in `[mcp]` and `profiles =
+  ["observer", "assisted"]` in `[chat]`.
 - A run's page asks for confirmation before canceling the run. Its links
   back (to the page it was opened from, and to all runs) are above the
   title, apart from the button that cancels it. The store asks too
@@ -87,6 +103,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- Assistant: the output of a run reaches it in chunks of 16 KiB without
+  the codes of colours, which its program takes whole: a chunk of the
+  page's size was put in a file the assistant could not read. It can also
+  search the output for a text (`match` of `run.log`), with the lines
+  around each line found.
 - Charts on the page of a host: the labels of their axes and legends are
   readable on the dark theme.
 - The selected text in the file editor is visible again on the line

@@ -114,6 +114,11 @@ class FormsTest(Base):
 
 
 class CeilingTest(Base):
+    def setUp(self):
+        super().setUp()
+        # A ceiling below the role, to see it hold.
+        self.config = replace(self.config, mcp_max_role="operator")
+
     def via(self, name, params=None, role="admin", **config):
         self.config = replace(self.config, **config)
         return self.call(name, {**(params or {}), "via": "mcp:test-client"}, role)

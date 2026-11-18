@@ -203,7 +203,15 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
     const { t } = useTranslation();
     const profiles = useProfiles(info);
     const [name, setName] = useState(state.agent || info.agents[0].name);
-    const [profile, setProfile] = useState(info.profiles.includes(state.profile) ? state.profile : info.default_profile);
+    const session = useSession();
+    // Diagnostic adds ad-hoc commands, which only an administrator under a
+    // ceiling of admin has: below that it would be assisted under another name.
+    const suggested = info.profiles.includes(state.suggested)
+        && (state.suggested !== "diagnostic" || session.role === "admin" && info.max_role === "admin")
+        ? state.suggested : "";
+    // A profile suggested with a prepared message comes first, then that of the last session.
+    const [profile, setProfile] = useState(suggested
+        || (info.profiles.includes(state.profile) ? state.profile : info.default_profile));
     const [accepted, setAccepted] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [starting, setStarting] = useState(false);
@@ -232,6 +240,12 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
         <>
             {state.error && <Alert variant="danger" isInline title={t("The assistant ended")} style={{ marginBlockEnd: "1rem" }}><pre>{state.error}</pre></Alert>}
             {problem && <Alert variant="danger" isInline title={problem} style={{ marginBlockEnd: "1rem" }} />}
+            {state.draft && (
+                <Alert variant="info" isInline title={t("A message is ready for the assistant")} style={{ marginBlockEnd: "1rem" }}>
+                    {t("It will be in the message box once the assistant has started, for you to edit and send.")}
+                    {suggested && <> {t("The profile {{profile}} is suggested for it; you may choose another.", { profile: profiles.name(state.suggested) })}</>}
+                </Alert>
+            )}
             <Content component="p">{t("An assistant that works on this controller through Fleet, within what you may do and what its profile allows.")}</Content>
             <Content component="ul">
                 <Content component="li">{t("What you write, and what Fleet answers to the assistant (inventories, job templates, the outcome of runs and, when asked, their output), is sent to the provider of the model.")}</Content>
@@ -323,7 +337,16 @@ function Instructions({ state }: { state: ChatState }) {
 function Composer({ state }: { state: ChatState }) {
     const { t } = useTranslation();
     const [text, setText] = useState("");
+    const box = useRef<HTMLTextAreaElement>(null);
     const idle = !state.busy && !state.loading;
+
+    // A message prepared on another page (the help of a run) replaces what
+    // was being written, to be read, edited and sent by the user.
+    useEffect(() => {
+        if (!state.draft) return;
+        setText(chat.takeDraft());
+        box.current?.focus();
+    }, [state.draft]);
 
     function send() {
         if (!idle || !text.trim()) return;
@@ -334,7 +357,7 @@ function Composer({ state }: { state: ChatState }) {
     return (
         <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsFlexEnd" }} flexWrap={{ default: "nowrap" }}>
             <FlexItem grow={{ default: "grow" }}>
-                <TextArea value={text} onChange={(_event, value) => setText(value)} rows={2} resizeOrientation="vertical"
+                <TextArea ref={box} value={text} onChange={(_event, value) => setText(value)} rows={2} resizeOrientation="vertical"
                     aria-label={t("Message")} placeholder={t("Write a message; Enter sends it, Shift+Enter goes to a new line")}
                     onKeyDown={event => {
                         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {

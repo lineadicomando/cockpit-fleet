@@ -413,3 +413,26 @@ test("ending the chat closes the channel, and so the agent", async () => {
     agent.exit("cancelled");
     assert.equal(agent.chat.getState().error, "");
 });
+
+test("a prepared message waits for the session and is never sent by itself", async () => {
+    const agent = new Agent();
+    agent.chat.prepare("examine the run r1", "diagnostic");
+    assert.equal(agent.chat.getState().suggested, "diagnostic");
+    await agent.ready("diagnostic");
+    let state = agent.chat.getState();
+    assert.equal(state.draft, "examine the run r1");
+    assert.equal(state.suggested, "");
+    assert.equal(agent.chat.takeDraft(), "examine the run r1");
+    assert.equal(agent.chat.getState().draft, "");
+    assert.equal(agent.chat.takeDraft(), "");
+    assert.ok(!agent.methods().includes("session/new"));
+    assert.ok(!agent.methods().includes("session/prompt"));
+    // In a conversation open, it goes to the composer of that one.
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("hello");
+    agent.chat.prepare("examine the run r2");
+    state = agent.chat.getState();
+    assert.equal(state.draft, "examine the run r2");
+    assert.equal(state.sessionId, "s1");
+    assert.equal(agent.methods().filter(method => method === "session/prompt").length, 1);
+});

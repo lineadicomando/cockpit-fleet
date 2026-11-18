@@ -27,7 +27,8 @@ import { call } from "../lib/fleet.ts";
 import { formatTime, runDuration } from "../lib/format.ts";
 import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
 import { originPath } from "../lib/sections.ts";
-import { useCan } from "../lib/session.tsx";
+import { useCan, useSession } from "../lib/session.tsx";
+import { chat } from "../lib/chat-agent.ts";
 import type { Chunk, HostStats, Overrides, Run, RunStatus } from "../lib/types.ts";
 import { AtTerminal, FormModal, ListState, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
 import { runCommand } from "../lib/terminal.ts";
@@ -293,6 +294,7 @@ export function RunDetailPage({ id }: { id: string }) {
     const position = useRef({ log: 0, events: 0, play: "", busy: false, again: false, done: false });
     const active = run.data ? isActive(run.data.status) : true;
     const mayRead = can("run.log");
+    const session = useSession();
     const origin = originPath(useCockpitLocation().options.from);
 
     // Fetches what was written since the last call. Also called once after the
@@ -356,6 +358,16 @@ export function RunDetailPage({ id }: { id: string }) {
     const data = run.data;
     const hasTasks = data.kind === "playbook" || data.kind === "adhoc";
     const isWorkflow = data.kind === "workflow";
+    // The assistant reads a run with the caller's role: its output, as on this
+    // page, and that of reading an inventory only for administrators.
+    const helped = session.chat && mayRead && !active && data.status !== "rejected" && data.status !== "expired"
+        && (session.role === "admin" || !(data.kind === "inventory" || data.kind === "syntax" && data.inventory_id));
+
+    // Prepares the request in the composer of the chat, never sends it.
+    function askForHelp() {
+        chat.prepare(t("Examine the run {{id}} ({{title}}): read how it went with run_result, then search its output with run_log and match (a host, fatal, FAILED, WARNING) where it helps. Find any anomalies (failed or unreachable hosts, unexpected changes, warnings, tasks that took long), investigate their causes, and propose solutions.", { id: data.id, title: data.title }), "diagnostic");
+        cockpit.location.go(["chat"]);
+    }
 
     return (
         <>
@@ -371,6 +383,7 @@ export function RunDetailPage({ id }: { id: string }) {
             </Flex>
             <SectionHeader title={data.title}>
                 {data.approval?.can_decide && <DecideButtons runId={data.id} title={data.title} onDone={run.reload} />}
+                {helped && <Button variant="secondary" onClick={askForHelp}>{t("Assistance")}</Button>}
                 {active && can("run.cancel") && (
                     <Button variant="secondary" isDanger onClick={() => setConfirmCancel(true)}>{t("Cancel run")}</Button>
                 )}

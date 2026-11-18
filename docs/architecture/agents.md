@@ -17,11 +17,12 @@ agent ── JSON-RPC on stdio ──▶ fleet-mcp          (the user, e.g. over
 ```
 
 **The ceiling.** `[mcp]` in `config.toml` has `enabled`, off by default, and
-`max_role`, `operator` by default. `fleet-mcp` adds `via` to the JSON of every
+`max_role`, `admin` by default (`operator` until 18 November). `fleet-mcp` adds `via` to the JSON of every
 call. When `fleetctl` finds it, it refuses everything while agents are not
 enabled, and lowers the caller's role to the ceiling for that call, never
 raises it; the audit record and the journal (`FLEET_VIA`) say where the call
-came from. The reason for a ceiling below what the person may do: the output
+came from. The reason for a ceiling below what the person may do, which an
+administrator may set: the output
 of a run is written by the nodes, and an agent that reads it and may also
 write files and launch anything can be steered by what a node prints.
 
@@ -185,8 +186,18 @@ per host and, task by task, how many hosts went each way and what was said
 where one failed, cut to 500 characters; with `wait` it answers when the run
 ends or after at most 50 seconds, so an agent follows a run with one call at
 a time and no polling loop of its own. It is built from the events, not from
-the output. The raw output stays a separate tool, `run_log`, in chunks, whose
-description says to read it only when asked.
+the output. The output stays a separate tool, `run_log`, whose description says to read
+`run_result` first, then search, and to read it all only when asked. Called
+by an agent it answers in chunks of 16 KiB, cut at the end of a line, without
+the codes of colours, with `size`, the whole length: the page's chunk of
+256 KiB, with its colours, came to some 61,000 characters for a log of
+54 KB, past what Claude Code takes from a tool (about 25,000 tokens), which
+then put it in a file the agent had no tool to read (18 November). Giving
+it one was ruled out: its `Read` reads any file of the user's. With `match`
+(any caller) it answers the lines that hold a text, whatever its case,
+numbered from `offset`, with `context` lines around each (2 by default, at
+most 10), groups apart split by `--`, at most 100 that match, each cut to
+500 characters; `more` and `offset` say where to go on.
 
 Checked on Debian 13 (`mcp.sh`), with a client written for the test, and
 from Claude Code 2.1 over ssh with a forced-command key: five turns to launch

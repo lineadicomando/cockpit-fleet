@@ -1466,5 +1466,10 @@
   "updates_on_hosts_many": "{{count}} aggiornamenti su {{hosts}} host",
   "updates_on_hosts_other": "{{count}} aggiornamenti su {{hosts}} host",
   "Successes": "Riuscite",
-  "The set was deleted, but the values of {{names}} could not be: they stay in /etc/cockpit-fleet/secrets until removed with fleet-secret delete.": "Il set è stato eliminato, ma i valori di {{names}} no: restano in /etc/cockpit-fleet/secrets finché non vengono rimossi con fleet-secret delete."
+  "The set was deleted, but the values of {{names}} could not be: they stay in /etc/cockpit-fleet/secrets until removed with fleet-secret delete.": "Il set è stato eliminato, ma i valori di {{names}} no: restano in /etc/cockpit-fleet/secrets finché non vengono rimossi con fleet-secret delete.",
+  "Assistance": "Assistenza",
+  "A message is ready for the assistant": "Un messaggio è pronto per l'assistente",
+  "It will be in the message box once the assistant has started, for you to edit and send.": "Sarà nella casella del messaggio una volta avviato l'assistente, da modificare e inviare.",
+  "The profile {{profile}} is suggested for it; you may choose another.": "Per questo è suggerito il profilo {{profile}}; puoi sceglierne un altro.",
+  "Examine the run {{id}} ({{title}}): read how it went with run_result, then search its output with run_log and match (a host, fatal, FAILED, WARNING) where it helps. Find any anomalies (failed or unreachable hosts, unexpected changes, warnings, tasks that took long), investigate their causes, and propose solutions.": "Esamina la run {{id}} ({{title}}): leggi com'è andata con run_result, poi cerca nel suo output con run_log e match (un host, fatal, FAILED, WARNING) dove serve. Individua eventuali anomalie (host falliti o irraggiungibili, cambiamenti inattesi, avvisi, task lenti), indagane le cause e proponi soluzioni."
 }

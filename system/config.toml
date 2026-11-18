@@ -101,7 +101,7 @@
 # (viewer, operator or admin). The output of a run is written by the nodes:
 # an agent that reads it and may also change things can be steered by it.
 #enabled = false
-#max_role = "operator"
+#max_role = "admin"
 # Modules of an ad-hoc command an agent may run in the profile diagnostic
 # (see [chat] profiles), without become: modules that change nothing, among
 # those of [adhoc] modules. By default these, less those [adhoc] leaves out:
@@ -141,7 +141,7 @@
 # default_profile (by default assisted, or the first of profiles when assisted
 # is not among them). Giving agents ad-hoc commands or changes takes a profile that
 # allows them, max_role = "admin", and a user who is an administrator.
-#profiles = ["observer", "assisted"]
+#profiles = ["observer", "assisted", "diagnostic", "autonomous", "administrator"]
 #default_profile = "assisted"
 # An agent in the profile autonomous launches at most this many runs (of
 # templates, workflows, schedules, checks) in one session of fleet-mcp,

@@ -81,7 +81,7 @@ out=$(ctl itviewer chat.agents)
 expect_eq "but the chat needs agents enabled" "$(get "$out" '"[mcp]" in a["data"]["unavailable"]')" True
 out=$(chat itoperator fake "$INIT")
 expect_eq "and nothing starts without them" "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" unavailable
-printf '[mcp]\nenabled = true\n' >> "$CONFIG"
+printf '[mcp]\nenabled = true\nmax_role = "operator"\n' >> "$CONFIG"
 
 # --- what the page learns, and what it starts -------------------------------------------
 out=$(ctl itviewer chat.agents)

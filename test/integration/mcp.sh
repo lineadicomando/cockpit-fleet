@@ -77,7 +77,7 @@ expect_eq "the attempt is in the audit log, with where it came from" \
     "$(get "$(admin audit.list)" '[(e["command"], e["outcome"], e["via"]) for e in a["data"]["entries"] if e["via"]][0]')" "('mcp.tools', 'denied', 'mcp:it-client')"
 
 # --- enabled, with the ceiling at operator -----------------------------------------
-printf '[mcp]\nenabled = true\n' >> "$CONFIG"
+printf '[mcp]\nenabled = true\nmax_role = "operator"\n' >> "$CONFIG"
 out=$(mcp itoperator "$LIST")
 names=$(answer "$out" 1 '" ".join(sorted(t["name"] for t in a["result"]["tools"]))')
 case " $names " in *" run_result run_start "*) pass "an operator's agent gets the operator's tools" ;; *) fail "an operator's agent gets the operator's tools: $names" ;; esac
@@ -120,7 +120,7 @@ if printf '%s' "$out" | grep -qi 'ciphertext\|BEGIN OPENSSH\|\.cred"'; then fail
 expect_eq "there is no tool for secrets" "$(answer "$out" 1 'any("secret" in t["name"] for t in a["result"]["tools"])')" False
 
 # --- raising the ceiling, and the profiles of the assistant ------------------------
-sed -i 's/^\[mcp\]$/[mcp]\nmax_role = "admin"/' "$CONFIG"
+sed -i 's/^max_role = "operator"$/max_role = "admin"/' "$CONFIG"
 ADHOC="{\"inventory_id\": \"$inventory_id\", \"limit\": \"all\", \"module\": \"ansible.builtin.command\", \"free_form\": \"id -un\"}"
 PING="{\"inventory_id\": \"$inventory_id\", \"limit\": \"all\", \"module\": \"ansible.builtin.ping\"}"
 out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")")

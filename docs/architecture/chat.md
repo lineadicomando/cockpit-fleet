@@ -202,6 +202,23 @@ plain text. The page takes the height left in the window and the
 conversation scrolls inside it, so that the message box stays in sight
 (measured, not a fixed share of the window: what is above it changes).
 
+**Help with a run.** The page of a run that has ended (not one rejected
+or expired, which never ran) has a button "Assistance" when an agent is
+named and the caller may read its output (`run.log`; that of reading an
+inventory only for administrators, as on the page). It prepares a message
+asking the assistant to examine the run with `run_result` and `run_log`,
+find anomalies, investigate their causes and propose solutions, in the
+language of the interface, and goes to the chat. Nothing is sent by
+itself: the message is a draft in the session's state (`chat.prepare`),
+which the composer takes and the user edits and sends, in the
+conversation open if there is one. Before a session starts, the page says
+a message is waiting and preselects the profile `diagnostic`, when enabled,
+which may look at the nodes with commands that only read; the user may
+pick another. No command is added: the tools were there, of the class
+`read`, so the profile and the ceiling hold the assistant as for any other
+question, and what it reads of the run goes to the provider as already
+said before a session starts.
+
 **No login to the model.** The adapter says so (`_auth/status_update`, and
 error -32000 to a prompt): the page shows the command `config.toml` gives
 for the login, to be run once by the user in a terminal, with the same button
