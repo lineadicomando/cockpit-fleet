@@ -7,7 +7,7 @@ workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 ## Status (18 November 2026)
 
 Phases 0–18 closed; the user picks the next (see "Future"). Last
-release 0.3.0 (15 November); `make next-version` says 0.4.0. `make
+release 0.4.0 (18 November), with the Overview of phase 18. `make
 release` only when asked.
 
 To resume: `git status`, `git log origin/main..`; `make check` (729
