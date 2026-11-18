@@ -4306,3 +4306,18 @@ msgstr "Quanto detto finora prosegue con il nuovo profilo, compreso l'output di 
 
 msgid "What you allowed always in this conversation is asked again."
 msgstr "Ciò che hai consentito sempre in questa conversazione verrà chiesto di nuovo."
+
+msgid "Investigate the state {{state}} of the check {{check}} ({{check_id}}) on the host {{host}} ({{host_id}}), which found: {{summary}}"
+msgstr "Indaga sullo stato {{state}} del check {{check}} ({{check_id}}) sull'host {{host}} ({{host_id}}), che ha trovato: {{summary}}"
+
+msgid "Read the check and the host's state and recent changes with check_list and host_get."
+msgstr "Leggi il check, lo stato dell'host e i suoi cambiamenti recenti con check_list e host_get."
+
+msgid "Look at the latest check cycles with run_list of kind check, and search their output for this host with run_log and match."
+msgstr "Guarda gli ultimi cicli dei check con run_list di tipo check e cerca nel loro output questo host con run_log e match."
+
+msgid "Where your profile allows it, look at the node itself with ad-hoc commands that only read (system logs, services, configuration)."
+msgstr "Dove il tuo profilo lo consente, guarda il nodo stesso con comandi ad-hoc che si limitano a leggere (log di sistema, servizi, configurazione)."
+
+msgid "Say whether it is a real problem or an expected change, find its cause, and propose solutions."
+msgstr "Di' se è un problema reale o un cambiamento atteso, trovane la causa e proponi soluzioni."

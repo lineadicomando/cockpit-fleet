@@ -238,6 +238,19 @@ pick another. No command is added: the tools were there, of the class
 question, and what it reads of the run goes to the provider as already
 said before a session starts.
 
+**Help with a check.** In the checks of a host and in Problems, a check
+whose last result is not ok (soft or confirmed) has the same button, for
+anyone when an agent is named. The message names the check and the host
+with their ids and what was found, and asks to read them with
+`check_list` and `host_get`, the output of the check cycles for that host
+(`run_list` of kind `check`, `run_log` with `match`: only in the message of
+those who may read a run's output), and the node itself with ad-hoc
+commands that only read where the profile allows them; then to say
+whether it is a real problem or an expected change, its cause and
+solutions. A check's state does not keep the run of its last result, so
+the assistant finds the cycle by time. The draft, the suggestion of
+`diagnostic` and what holds the assistant are those of a run.
+
 **No login to the model.** The adapter says so (`_auth/status_update`, and
 error -32000 to a prompt): the page shows the command `config.toml` gives
 for the login, to be run once by the user in a terminal, with the same button

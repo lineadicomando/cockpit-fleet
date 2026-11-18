@@ -1478,5 +1478,10 @@
   "Now {{profile}}. The assistant is started again in the profile you choose, and the conversation goes on.": "Ora {{profile}}. L'assistente viene riavviato nel profilo che scegli e la conversazione prosegue.",
   "The conversation goes on in the profile {{profile}}.": "La conversazione prosegue nel profilo {{profile}}.",
   "What has been said so far goes on with it: the output of runs and commands read in this conversation, written by the nodes, included.": "Quanto detto finora prosegue con il nuovo profilo, compreso l'output di run e comandi letto in questa conversazione, scritto dai nodi.",
-  "What you allowed always in this conversation is asked again.": "Ciò che hai consentito sempre in questa conversazione verrà chiesto di nuovo."
+  "What you allowed always in this conversation is asked again.": "Ciò che hai consentito sempre in questa conversazione verrà chiesto di nuovo.",
+  "Investigate the state {{state}} of the check {{check}} ({{check_id}}) on the host {{host}} ({{host_id}}), which found: {{summary}}": "Indaga sullo stato {{state}} del check {{check}} ({{check_id}}) sull'host {{host}} ({{host_id}}), che ha trovato: {{summary}}",
+  "Read the check and the host's state and recent changes with check_list and host_get.": "Leggi il check, lo stato dell'host e i suoi cambiamenti recenti con check_list e host_get.",
+  "Look at the latest check cycles with run_list of kind check, and search their output for this host with run_log and match.": "Guarda gli ultimi cicli dei check con run_list di tipo check e cerca nel loro output questo host con run_log e match.",
+  "Where your profile allows it, look at the node itself with ad-hoc commands that only read (system logs, services, configuration).": "Dove il tuo profilo lo consente, guarda il nodo stesso con comandi ad-hoc che si limitano a leggere (log di sistema, servizi, configurazione).",
+  "Say whether it is a real problem or an expected change, find its cause, and propose solutions.": "Di' se è un problema reale o un cambiamento atteso, trovane la causa e proponi soluzioni."
 }

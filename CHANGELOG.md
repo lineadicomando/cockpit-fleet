@@ -15,6 +15,12 @@ entries go under `[Unreleased]`, under the heading of their kind.
   assistant is started again in it, its risks told first when not
   accepted yet; what was allowed always in the conversation is asked
   again.
+- Hosts and Problems: a button "Assistance" on a check whose result is not
+  ok, when the assistant is set up, prepares in the chat a message asking it
+  to investigate it: the check and its host, the output of the check cycles
+  (for operators and administrators), and the node itself with commands
+  that only read when the profile allows them (Diagnostic is suggested).
+
 - Runs: a button "Assistance" on a run that has ended, when the assistant
   is set up, prepares in the chat a message asking it to examine the run,
   find anomalies, investigate their causes and propose solutions. The

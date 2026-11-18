@@ -28,7 +28,8 @@ import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
 import { originPath } from "../lib/sections.ts";
 import { hostGroups, hostMatches, isHostGroupOpen, readHostsView, stateMatches, withHostGroupsOpen, type HostsView } from "../lib/hosts.ts";
 import type { Group } from "../lib/listview.ts";
-import { useCan } from "../lib/session.tsx";
+import { useCan, useSession } from "../lib/session.tsx";
+import { chat } from "../lib/chat-agent.ts";
 import type { CheckState, FleetHost, HostDetail, Inventory, StateCounts } from "../lib/types.ts";
 import { HostInventory } from "./AssetsPage.tsx";
 import { MaintenanceModal, StateCountLabels, StateLabel, useStateNames } from "./ChecksPage.tsx";
@@ -99,6 +100,8 @@ function AckModal({ state, onClose, onDone }: { state: CheckState; onClose: () =
 function StateActions({ state, onChanged, onError }: { state: CheckState; onChanged: () => void; onError: (text: string) => void }) {
     const { t } = useTranslation();
     const can = useCan();
+    const session = useSession();
+    const names = useStateNames();
     const [acking, setAcking] = useState(false);
 
     async function act(command: string, params: Record<string, unknown>) {
@@ -111,6 +114,24 @@ function StateActions({ state, onChanged, onError }: { state: CheckState; onChan
     }
 
     const problem = state.hard_state !== "ok";
+    // A result that is not ok, soft or confirmed, may be asked about.
+    const helped = session.chat && state.state !== null && state.state !== "ok";
+
+    // Prepares the request in the composer of the chat, never sends it. The
+    // output of check cycles is read only by those who may read a run's.
+    function askForHelp() {
+        const values = { state: names[state.state ?? "pending"], check: state.check, host: state.host, summary: state.summary, check_id: state.check_id, host_id: state.host_id };
+        const parts = [
+            t("Investigate the state {{state}} of the check {{check}} ({{check_id}}) on the host {{host}} ({{host_id}}), which found: {{summary}}", values),
+            t("Read the check and the host's state and recent changes with check_list and host_get."),
+            can("run.log") && t("Look at the latest check cycles with run_list of kind check, and search their output for this host with run_log and match."),
+            t("Where your profile allows it, look at the node itself with ad-hoc commands that only read (system logs, services, configuration)."),
+            t("Say whether it is a real problem or an expected change, find its cause, and propose solutions."),
+        ];
+        chat.prepare(parts.filter(Boolean).join(" "), "diagnostic");
+        cockpit.location.go(["chat"]);
+    }
+
     return (
         <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "nowrap" }}>
             {problem && !state.acknowledged && can("state.ack") && (
@@ -118,6 +139,9 @@ function StateActions({ state, onChanged, onError }: { state: CheckState; onChan
             )}
             {state.acknowledged && can("state.unack") && (
                 <Button variant="link" size="sm" onClick={() => act("state.unack", { host_id: state.host_id, check_id: state.check_id })}>{t("Take back")}</Button>
+            )}
+            {helped && (
+                <Button variant="link" size="sm" onClick={askForHelp}>{t("Assistance")}</Button>
             )}
             {can("check.run") && !state.running && (
                 <Button variant="link" size="sm" onClick={() => act("check.run", { id: state.check_id, host_id: state.host_id })}>{t("Check now")}</Button>
