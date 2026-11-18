@@ -8,6 +8,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+### Changed
+
+- Nodes: its sections are in the order Assets, Checks, Hosts, Host keys,
+  and the tab opens on Assets.
+
 ## [0.4.0] - 2026-11-18
 
 ### Added

@@ -4,7 +4,7 @@
 // of one section is keyed by it: its tab then names the section's panel.
 export const GROUPS: { key: string; sections: string[] }[] = [
     { key: "overview", sections: ["overview"] },
-    { key: "nodes", sections: ["hosts", "assets", "checks", "hostkeys"] },
+    { key: "nodes", sections: ["assets", "checks", "hosts", "hostkeys"] },
     { key: "automation", sections: ["templates", "workflows", "schedules", "runs"] },
     { key: "resources", sections: ["projects", "inventories", "store", "variables", "credentials"] },
     { key: "administration", sections: ["notifications", "system", "audit"] },
