@@ -59,6 +59,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- A run's page asks for confirmation before canceling the run. Its links
+  back (to the page it was opened from, and to all runs) are above the
+  title, apart from the button that cancels it. The store asks too
+  before canceling a download or a copy into it.
 - Job templates are grouped by inventory by default, no longer by
   project; a browser that already keeps a view of the list keeps its
   grouping.

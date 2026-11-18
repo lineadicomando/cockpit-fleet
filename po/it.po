@@ -348,6 +348,42 @@ msgstr "Annulla"
 msgid "Cancel run"
 msgstr "Annulla la run"
 
+msgid "Cancel the run {{name}}?"
+msgstr "Annullare la run {{name}}?"
+
+msgid "Cancel the copy into {{path}}?"
+msgstr "Annullare la copia in {{path}}?"
+
+msgid "Cancel the download into {{path}}?"
+msgstr "Annullare il download in {{path}}?"
+
+msgid "Cancel the copy"
+msgstr "Annulla la copia"
+
+msgid "Cancel the download"
+msgstr "Annulla il download"
+
+msgid "The copy has not started yet: it will not start."
+msgstr "La copia non è ancora partita: non partirà."
+
+msgid "The download has not started yet: it will not start."
+msgstr "Il download non è ancora partito: non partirà."
+
+msgid "The copy stops, and nothing of it reaches the store."
+msgstr "La copia si ferma, e niente di essa arriva nello store."
+
+msgid "The download stops. What has arrived is kept for a week, and \"Resume\" goes on from there when the server allows it."
+msgstr "Il download si ferma. Ciò che è arrivato resta per una settimana, e «Riprendi» continua da lì quando il server lo consente."
+
+msgid "Keep running"
+msgstr "Lascia proseguire"
+
+msgid "Ansible is stopped where it is: a task under way on a host may be left half done, and what the run has already changed stays changed."
+msgstr "Ansible viene fermato dove si trova: un task in corso su un host può restare a metà, e ciò che la run ha già modificato resta modificato."
+
+msgid "The run has not started yet: it will not start."
+msgstr "La run non è ancora partita: non partirà."
+
 msgid "Canceled"
 msgstr "Annullata"
 

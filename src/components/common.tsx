@@ -121,11 +121,13 @@ interface FormModalProps {
     isDanger?: boolean;
     isDisabled?: boolean;
     variant?: ModalVariant;
+    // In place of "Cancel", when the action itself is a cancellation.
+    cancelLabel?: string;
 }
 
 // A dialog that runs one action: keeps the button busy, shows the error and
 // stays open when the action fails.
-export function FormModal({ title, submitLabel, onSubmit, onClose, children, isDanger, isDisabled, variant }: FormModalProps) {
+export function FormModal({ title, submitLabel, onSubmit, onClose, children, isDanger, isDisabled, variant, cancelLabel }: FormModalProps) {
     const { t } = useTranslation();
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -159,7 +161,7 @@ export function FormModal({ title, submitLabel, onSubmit, onClose, children, isD
                 >
                     {submitLabel}
                 </Button>
-                <Button variant="link" onClick={onClose}>{t("Cancel")}</Button>
+                <Button variant="link" onClick={onClose}>{cancelLabel ?? t("Cancel")}</Button>
             </ModalFooter>
         </Modal>
     );

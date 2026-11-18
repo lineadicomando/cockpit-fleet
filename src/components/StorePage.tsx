@@ -14,6 +14,7 @@ import {
     Flex,
     FlexItem,
     Label,
+    ModalVariant,
     Progress,
     ProgressMeasureLocation,
     Toolbar,
@@ -37,7 +38,7 @@ import {
     type Clash, type Dropped, type PendingUpload, type StoreDownload, type StoreEntry, type StoreList, type StoreSortKey, type StoreUnchanged, type Upload,
 } from "../lib/store.ts";
 import { shellLine } from "../lib/terminal.ts";
-import { AtTerminal, ConfirmDelete, ListState, SectionHeader, message, openRun } from "./common.tsx";
+import { AtTerminal, ConfirmDelete, FormModal, ListState, SectionHeader, message, openRun } from "./common.tsx";
 import { ContextMenu, type MenuEntry } from "./ContextMenu.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
 import { ConflictModal, FetchModal, NewFolderModal, Origin, RenameModal, StoreDetails } from "./StoreDialogs.tsx";
@@ -63,6 +64,7 @@ interface Move {
 type Dialog =
     | { kind: "new-folder" }
     | { kind: "fetch"; again: StoreDownload | null }
+    | { kind: "cancel-download"; item: StoreDownload }
     | { kind: "move"; paths: string[] }
     | { kind: "copy"; paths: string[] }
     | { kind: "rename"; path: string }
@@ -912,7 +914,7 @@ export function StorePage({ directory }: { directory: string }) {
                                 </Td>
                                 <Td isActionCell>
                                     {ACTIVE.includes(item.status) && can("run.cancel") && (
-                                        <Button variant="link" onClick={() => act(() => call("run.cancel", { id: item.run_id }).then(downloads.reload))}>{t("Cancel")}</Button>
+                                        <Button variant="link" onClick={() => setDialog({ kind: "cancel-download", item })}>{t("Cancel")}</Button>
                                     )}
                                     {!ACTIVE.includes(item.status) && item.status !== "successful" && item.kind !== "copy" && can("store.fetch") && (
                                         <Button variant="link" onClick={() => setDialog({ kind: "fetch", again: item })}>{item.partial ? t("Resume") : t("Try again")}</Button>
@@ -986,6 +988,14 @@ export function StorePage({ directory }: { directory: string }) {
             )}
             {dialog?.kind === "fetch" && (
                 <FetchModal directory={directory} again={dialog.again} list={data} onClose={() => setDialog(null)} onQueued={downloads.reload} />
+            )}
+            {dialog?.kind === "cancel-download" && (
+                <CancelDownload item={dialog.item} onClose={() => setDialog(null)}
+                    onCancel={async () => {
+                        await call("run.cancel", { id: dialog.item.run_id });
+                        setDialog(null);
+                        downloads.reload();
+                    }} />
             )}
             {dialog?.kind === "new-folder" && (
                 <NewFolderModal directory={directory} onClose={() => setDialog(null)}
@@ -1067,5 +1077,30 @@ function SftpAccess({ writes }: { writes: boolean }) {
                     : t("You can read and download the files there; writing needs the operator role.")}
             </Content>
         </ExpandableSection>
+    );
+}
+
+// Asks before stopping a download or a copy into the store.
+function CancelDownload({ item, onCancel, onClose }: { item: StoreDownload; onCancel: () => Promise<void>; onClose: () => void }) {
+    const { t } = useTranslation();
+    const copy = item.kind === "copy";
+    return (
+        <FormModal
+            title={copy ? t("Cancel the copy into {{path}}?", { path: item.path }) : t("Cancel the download into {{path}}?", { path: item.path })}
+            submitLabel={copy ? t("Cancel the copy") : t("Cancel the download")}
+            cancelLabel={t("Keep running")}
+            onSubmit={onCancel}
+            onClose={onClose}
+            isDanger
+            variant={ModalVariant.small}
+        >
+            <Content component="p">
+                {item.status === "queued"
+                    ? copy ? t("The copy has not started yet: it will not start.") : t("The download has not started yet: it will not start.")
+                    : copy
+                        ? t("The copy stops, and nothing of it reaches the store.")
+                        : t("The download stops. What has arrived is kept for a week, and \"Resume\" goes on from there when the server allows it.")}
+            </Content>
+        </FormModal>
     );
 }

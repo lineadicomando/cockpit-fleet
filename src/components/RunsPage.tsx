@@ -14,10 +14,12 @@ import {
     FormSelect,
     FormSelectOption,
     Label,
+    ModalVariant,
     Tab,
     TabTitleText,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { AngleLeftIcon } from "@patternfly/react-icons";
 import cockpit from "cockpit";
 import { parseAnsi } from "../lib/ansi.ts";
 import { addEvents, changesByHost, countOutcomes, diffLines, type HostChanges, type TaskView } from "../lib/events.ts";
@@ -27,7 +29,7 @@ import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
 import { originPath } from "../lib/sections.ts";
 import { useCan } from "../lib/session.tsx";
 import type { Chunk, HostStats, Overrides, Run, RunStatus } from "../lib/types.ts";
-import { AtTerminal, ListState, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
+import { AtTerminal, FormModal, ListState, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
 import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
 import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
@@ -287,7 +289,7 @@ export function RunDetailPage({ id }: { id: string }) {
     const [tasks, setTasks] = useState<TaskView[]>([]);
     const [tab, setTab] = useState("output");
     const [error, setError] = useState<string | null>(null);
-    const [canceling, setCanceling] = useState(false);
+    const [confirmCancel, setConfirmCancel] = useState(false);
     const position = useRef({ log: 0, events: 0, play: "", busy: false, again: false, done: false });
     const active = run.data ? isActive(run.data.status) : true;
     const mayRead = can("run.log");
@@ -342,16 +344,11 @@ export function RunDetailPage({ id }: { id: string }) {
         }
     }, [run.data, active]);
 
+    // FormModal shows the error and stays open when this throws.
     async function cancel() {
-        setCanceling(true);
-        setError(null);
-        try {
-            await call("run.cancel", { id });
-            run.reload();
-        } catch (ex) {
-            setError(message(ex));
-        }
-        setCanceling(false);
+        await call("run.cancel", { id });
+        setConfirmCancel(false);
+        run.reload();
     }
 
     if (run.error) return <Alert variant="danger" isInline title={run.error.message} />;
@@ -362,14 +359,40 @@ export function RunDetailPage({ id }: { id: string }) {
 
     return (
         <>
+            {/* Navigation stays apart from the run's actions, on the other
+                side of the page, so that a click meant to leave cannot stop a run. */}
+            <Flex gap={{ default: "gapMd" }} style={{ marginBlockEnd: "0.5rem" }}>
+                {origin && (
+                    <Button variant="link" isInline icon={<AngleLeftIcon />} onClick={() => cockpit.location.go(origin)}>{t("Back")}</Button>
+                )}
+                <Button variant="link" isInline icon={origin ? undefined : <AngleLeftIcon />} onClick={() => cockpit.location.go(["runs"])}>
+                    {t("All runs")}
+                </Button>
+            </Flex>
             <SectionHeader title={data.title}>
                 {data.approval?.can_decide && <DecideButtons runId={data.id} title={data.title} onDone={run.reload} />}
                 {active && can("run.cancel") && (
-                    <Button variant="danger" onClick={cancel} isLoading={canceling} isDisabled={canceling}>{t("Cancel run")}</Button>
+                    <Button variant="secondary" isDanger onClick={() => setConfirmCancel(true)}>{t("Cancel run")}</Button>
                 )}
-                {origin && <Button variant="secondary" onClick={() => cockpit.location.go(origin)}>{t("Back")}</Button>}
-                <Button variant="secondary" onClick={() => cockpit.location.go(["runs"])}>{t("All runs")}</Button>
             </SectionHeader>
+            {/* Gone by itself if the run ends while it is open. */}
+            {confirmCancel && active && (
+                <FormModal
+                    title={t("Cancel the run {{name}}?", { name: data.title })}
+                    submitLabel={t("Cancel run")}
+                    cancelLabel={t("Keep running")}
+                    onSubmit={cancel}
+                    onClose={() => setConfirmCancel(false)}
+                    isDanger
+                    variant={ModalVariant.small}
+                >
+                    <Content component="p">
+                        {data.status === "running"
+                            ? t("Ansible is stopped where it is: a task under way on a host may be left half done, and what the run has already changed stays changed.")
+                            : t("The run has not started yet: it will not start.")}
+                    </Content>
+                </FormModal>
+            )}
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             {data.error && <Alert variant="danger" isInline title={data.error} style={{ marginBottom: "1rem" }} />}
             <Flex direction={{ default: "column" }} gap={{ default: "gapLg" }}>
