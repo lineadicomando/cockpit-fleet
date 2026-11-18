@@ -52,6 +52,13 @@ class NotAccepted(Conflict):
     code = "not_accepted"
 
 
+class SessionsFull(Conflict):
+    """As many chat sessions are open as the controller allows; a page that
+    is changing the profile of its own may ask again once the old has gone."""
+
+    code = "sessions_full"
+
+
 class Unavailable(FleetError):
     """Something the command needs is missing or broken on this machine."""
 

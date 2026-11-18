@@ -132,7 +132,8 @@
 #   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules
 #   autonomous     as assisted, without being asked, within the limits below
 #   administrator  everything the role allows: ad-hoc commands, changes to
-#                  templates and the rest, files, projects, credentials
+#                  templates and the rest, files, projects, credentials;
+#                  only for administrators of Fleet, with max_role = "admin"
 # Each user accepts the risks of diagnostic, autonomous and administrator
 # once, on the chat page or in fleet assistant, before a session in them;
 # the acceptance is in the audit log.

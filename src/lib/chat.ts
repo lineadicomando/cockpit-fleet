@@ -75,6 +75,8 @@ export interface ChatState {
     // session not started yet.
     draft: string;
     suggested: string;
+    // The profile the session is being restarted in, keeping its conversation.
+    changing: string;
 }
 
 export interface Transport {
@@ -89,7 +91,7 @@ export type Spawn = (agent: string, profile: string, onData: (text: string) => v
 export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 
 const IDLE: ChatState = {
-    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "",
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "",
 };
 
 interface Waiting {
@@ -119,6 +121,10 @@ export class Chat {
     // The classes of tools trusted for the conversation.
     private always = new Set<string>();
     private waiting: Waiting[] = [];
+    // A change of profile under way: the conversation to open again in it,
+    // whether the agent that ends next is one the change is waiting for, and
+    // how many times its start found the sessions full.
+    private change: { profile: string; sessionId: string; expected: boolean; full: number } | null = null;
 
     constructor(spawn: Spawn, loadTools: LoadTools) {
         this.spawn = spawn;
@@ -141,6 +147,11 @@ export class Chat {
         if (this.state.phase === "starting" || this.state.phase === "ready") return;
         // A draft waits for the session it was prepared for.
         this.state = { ...IDLE, draft: this.state.draft };
+        this.change = null;
+        this.launch(agent, profile);
+    }
+
+    private launch(agent: string, profile: string): void {
         this.set({ phase: "starting", agent, profile });
         this.always.clear();
         this.tools = new Map();
@@ -175,10 +186,28 @@ export class Chat {
         return text;
     }
 
+    // Goes on with the conversation in another profile: the agent is ended,
+    // started again by fleet-chat in that profile (chat.start says whether it
+    // may be, and tells the agent its instructions), and told to open the
+    // conversation again. What was trusted for it is trusted no more.
+    changeProfile(profile: string): void {
+        const transport = this.transport;
+        if (!transport || this.state.phase !== "ready" || this.state.busy || this.state.loading || this.state.ask
+            || this.change || !profile || profile === this.state.profile) return;
+        this.change = { profile, sessionId: this.state.sessionId, expected: true, full: 0 };
+        this.set({ changing: profile });
+        // The next starts once this one has gone, not to be counted with it.
+        transport.close();
+    }
+
     // Ends the agent. The conversation stays where the agent keeps it.
     stop(): void {
+        this.change = null;
         const transport = this.transport;
-        if (!transport) return;
+        if (!transport) {
+            if (this.state.changing) this.set({ phase: this.state.items.length ? "ended" : "idle", changing: "" });
+            return;
+        }
         this.ended(transport, "");
         transport.close();
     }
@@ -189,6 +218,16 @@ export class Chat {
         this.connection?.close("the agent ended");
         this.connection = null;
         this.settle(null);
+        const change = this.change;
+        if (change?.expected) {
+            change.expected = false;
+            this.set({ phase: "starting", busy: false, loading: false, ask: null, sessions: [] });
+            // Sessions full: the one that ended may not have gone yet.
+            setTimeout(() => { if (this.change === change) this.launch(this.state.agent, change.profile); }, change.full ? 1000 : 0);
+            return;
+        }
+        this.change = null;
+        if (this.state.changing) this.set({ changing: "" });
         if (this.state.phase === "ended") return;
         this.set({ phase: error || this.state.items.length ? "ended" : "idle", error: this.state.error || error, busy: false, loading: false, ask: null });
     }
@@ -217,9 +256,15 @@ export class Chat {
             // The profile the backend settled on: the default one when none was named.
             this.set({ profile: typeof params.profile === "string" && params.profile ? params.profile : this.state.profile, layers });
             this.reloadTools();
-            this.initialize().catch(ex => { this.fail(ex); this.stop(); });
+            this.initialize().then(() => this.changed()).catch(ex => { this.fail(ex); this.stop(); });
         } else if (method === "_fleet/error") {
-            this.set({ phase: "ended", error: String(params.message ?? "") });
+            if (this.change && params.code === "sessions_full" && this.change.full < 5) {
+                this.change.full += 1;
+                this.change.expected = true;
+                return;
+            }
+            this.change = null;
+            this.set({ phase: "ended", changing: "", error: String(params.message ?? "") });
         } else if (method === "_auth/status_update") {
             const status = isObject(params.authStatus) ? params.authStatus : {};
             if (status.kind === "none") this.set({ needsLogin: true });
@@ -240,6 +285,16 @@ export class Chat {
         this.canList = isObject(capabilities.sessionCapabilities) && "list" in capabilities.sessionCapabilities;
         this.set({ phase: "ready" });
         await this.list();
+    }
+
+    // The end of a change of profile: the conversation opened again, and said
+    // to have gone on in the new profile.
+    private async changed(): Promise<void> {
+        const change = this.change;
+        if (!change) return;
+        this.change = null;
+        if (change.sessionId) await this.open(change.sessionId);
+        this.set({ changing: "", items: [...this.state.items, { kind: "profile", profile: this.state.profile }] });
     }
 
     private async list(): Promise<void> {

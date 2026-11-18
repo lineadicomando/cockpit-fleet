@@ -149,8 +149,10 @@ class CeilingTest(Base):
                           chat_profiles=("administrator",),
                           chat_default_profile="administrator")
         self.assertEqual(answer["error"]["code"], "forbidden")
+        # Under the ceiling the agent is an operator's, which the profile is not for.
         self.assertEqual(self.audit(), [("credential.create", "denied", "operator",
-                                         "mcp:test-client", "requires admin")])
+                                         "mcp:test-client",
+                                         "profile administrator needs the role admin")])
         self.assertNotIn("via", json.loads(
             self.ctx().conn.execute("SELECT params FROM audit").fetchone()[0]))
 
@@ -287,7 +289,11 @@ class ProfileTest(Base):
         self.config = replace(self.config, mcp_max_role="operator")
         answer = self.via("credential.create", {"name": "x", "kind": "vault"}, "administrator")
         self.assertEqual(answer["error"]["code"], "forbidden")
-        self.assertEqual(self.audit()[-1][3], "requires admin")
+        self.assertEqual(self.audit()[-1][3], "profile administrator needs the role admin")
+        # An operator's agent, with no profile named, gets one it may be in.
+        self.config = replace(self.config, chat_default_profile="administrator")
+        self.assertEqual(self.via("mcp.tools", {}, role="operator")["data"]["profile"],
+                         "assisted")
 
     def test_tools_are_those_of_the_profile(self):
         self.template()

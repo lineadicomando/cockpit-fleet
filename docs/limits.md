@@ -80,7 +80,11 @@ in [security.md](security.md); the decisions behind these limits in
   for it), so an agent sees it with no hosts; `whoami` lists the commands
   of the role, not of the profile; the questions of the page show a tool's
   description in English.
-- Chat: plain text; conversations not deletable; model not choosable; one
+- Chat: plain text; conversations not deletable; model not choosable; a
+  change of profile starts the agent again (seconds, and the replay of the
+  conversation), restarts the count of an autonomous agent's runs and
+  starts another draft for an administrator's files, and is not offered
+  by `fleet assistant` (`--profile` and the agent's own resume); one
   user can fill the sessions; missing login said only after a first message;
   role tried on x86_64 only, versions pinned in the role, no script runs it,
   untried behind a proxy; `fleet assistant` asks with Claude's own

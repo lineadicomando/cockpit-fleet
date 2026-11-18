@@ -4285,3 +4285,21 @@ msgstr "Per questo è suggerito il profilo {{profile}}; puoi sceglierne un altro
 
 msgid "Examine the run {{id}} ({{title}}): read how it went with run_result, then search its output with run_log and match (a host, fatal, FAILED, WARNING) where it helps. Find any anomalies (failed or unreachable hosts, unexpected changes, warnings, tasks that took long), investigate their causes, and propose solutions."
 msgstr "Esamina la run {{id}} ({{title}}): leggi com'è andata con run_result, poi cerca nel suo output con run_log e match (un host, fatal, FAILED, WARNING) dove serve. Individua eventuali anomalie (host falliti o irraggiungibili, cambiamenti inattesi, avvisi, task lenti), indagane le cause e proponi soluzioni."
+
+msgid "Change the profile"
+msgstr "Cambia profilo"
+
+msgid "Changing to the profile {{profile}}…"
+msgstr "Passaggio al profilo {{profile}}…"
+
+msgid "Now {{profile}}. The assistant is started again in the profile you choose, and the conversation goes on."
+msgstr "Ora {{profile}}. L'assistente viene riavviato nel profilo che scegli e la conversazione prosegue."
+
+msgid "The conversation goes on in the profile {{profile}}."
+msgstr "La conversazione prosegue nel profilo {{profile}}."
+
+msgid "What has been said so far goes on with it: the output of runs and commands read in this conversation, written by the nodes, included."
+msgstr "Quanto detto finora prosegue con il nuovo profilo, compreso l'output di run e comandi letto in questa conversazione, scritto dai nodi."
+
+msgid "What you allowed always in this conversation is asked again."
+msgstr "Ciò che hai consentito sempre in questa conversazione verrà chiesto di nuovo."

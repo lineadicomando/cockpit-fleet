@@ -189,7 +189,10 @@ admin draft.discard "{\"id\": \"$managed\", \"draft\": \"$draft\"}" > /dev/null
 expect_eq "a draft discarded is gone, main as the person left it" \
     "$(get "$(admin draft.list)" 'len(a["data"]["drafts"])') $(get "$(admin file.read "{\"id\": \"$managed\", \"path\": \"site.yml\"}")" '"hosts: db" in a["data"]["content"]')" "0 True"
 out=$(mcp itoperator "$LIST")
-expect_eq "the user's own role still holds" "$(answer "$out" 1 'any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" False
+expect_eq "the profile administrator is not an operator's" "$(answer "$out" 1 '"error" in a or a["result"].get("isError", False) or not any(t["name"] == "run_adhoc" for t in a["result"]["tools"])')" True
+expect_eq "and its refusal is in the audit log" \
+    "$(get "$(admin audit.list)" '[(e["user"], e["detail"]) for e in a["data"]["entries"] if e["command"] == "mcp.tools" and e["user"] == "itoperator" and e["outcome"] == "denied"][0]')" \
+    "('itoperator', 'profile administrator needs the role admin')"
 PROFILE=autonomous
 out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "a"}}')" "$(call 3 "$tool" '{"answers": {"greeting": "b"}}')" "$(call 4 state_ack '{"host_id": "x", "check_id": "y"}')")
 expect_eq "an autonomous agent launches as many runs as a session may" "$(answer "$out" 2 'a["result"]["isError"]')" False

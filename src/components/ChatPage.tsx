@@ -34,6 +34,9 @@ import { StatusLabel } from "./StatusLabel.tsx";
 import { PendingDrafts } from "./Drafts.tsx";
 import { Alert, Button, Modal, Spinner } from "./pf.tsx";
 
+// The profiles beyond assisted, whose risks are told (profiles.RISKY).
+const RISKY = ["diagnostic", "autonomous", "administrator"];
+
 // What each profile of the assistant is called, and what it may do.
 function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_run">) {
     const { t } = useTranslation();
@@ -120,6 +123,7 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
     const log = useRef<HTMLDivElement>(null);
     // The box scrolls, not the page: the message box below must stay in sight.
     useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [items, busy]);
+    const profiles = useProfiles();
     const who: Record<string, string> = { user: t("You"), agent: t("Assistant"), thought: t("Assistant, thinking") };
     return (
         <div ref={log} className="fleet-chat-log" role="log" aria-label={t("Conversation")}>
@@ -127,6 +131,9 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
             {items.map((item, index) => {
                 if (item.kind === "tool") return <ToolCall key={`tool-${item.id}`} item={item} />;
                 if (item.kind === "error") return <Alert key={index} variant="danger" isInline isPlain title={item.text} />;
+                if (item.kind === "profile") {
+                    return <Alert key={index} variant="info" isInline isPlain title={t("The conversation goes on in the profile {{profile}}.", { profile: profiles.name(item.profile) })} />;
+                }
                 return (
                     <div key={index} className={`fleet-chat-message fleet-chat-${item.kind}`}>
                         <div className="fleet-chat-who">{who[item.kind]}</div>
@@ -193,6 +200,74 @@ function AskModal({ ask, profile }: { ask: Ask; profile: string }) {
                     </Button>
                 )}
                 <Button variant="link" onClick={() => chat.answer("refuse")}>{t("Refuse")}</Button>
+            </ModalFooter>
+        </Modal>
+    );
+}
+
+// The risks of a profile, before its first session, and the box that accepts them.
+function Risks({ info, profile, accepted, onAccepted }: { info: ChatInfo; profile: string; accepted: boolean; onAccepted: (accepted: boolean) => void }) {
+    const { t } = useTranslation();
+    const profiles = useProfiles(info);
+    return (
+        <Alert variant="warning" isInline title={t("Before the first session as {{profile}}", { profile: profiles.name(profile) })} style={{ marginBlockEnd: "1rem" }}>
+            <Content component="ul">
+                {profiles.risks(profile).map(risk => <Content component="li" key={risk}>{risk}</Content>)}
+            </Content>
+            <Checkbox id="chat-accept" isChecked={accepted} onChange={(_event, checked) => onAccepted(checked)}
+                label={t("I understand what it may do and these risks. This is asked once, and recorded in the audit trail.")} />
+        </Alert>
+    );
+}
+
+// Another profile for the session, the conversation going on in it.
+function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; state: ChatState; onClose: () => void; onAccepted: () => void }) {
+    const { t } = useTranslation();
+    const profiles = useProfiles(info);
+    const others = info.profiles.filter(one => one !== state.profile);
+    const [profile, setProfile] = useState(others[0] ?? "");
+    const [accepted, setAccepted] = useState(false);
+    const [problem, setProblem] = useState<string | null>(null);
+    const [changing, setChanging] = useState(false);
+    const toAccept = info.to_accept.includes(profile);
+
+    async function change() {
+        setProblem(null);
+        if (toAccept) {
+            setChanging(true);
+            try {
+                await call("chat.accept", { profile });
+            } catch (ex) {
+                setProblem(ex instanceof Error ? ex.message : String(ex));
+                setChanging(false);
+                return;
+            }
+            onAccepted();
+        }
+        chat.changeProfile(profile);
+        onClose();
+    }
+
+    return (
+        <Modal variant={ModalVariant.medium} isOpen onClose={onClose}>
+            <ModalHeader title={t("Change the profile")}
+                description={t("Now {{profile}}. The assistant is started again in the profile you choose, and the conversation goes on.", { profile: profiles.name(state.profile) })} />
+            <ModalBody>
+                {problem && <Alert variant="danger" isInline title={problem} style={{ marginBlockEnd: "1rem" }} />}
+                <FormSelect value={profile} aria-label={t("Profile")} style={{ marginBlockEnd: "0.5rem" }}
+                    onChange={(_event, value) => { setProfile(value); setAccepted(false); }}>
+                    {others.map(one => <FormSelectOption key={one} value={one} label={profiles.name(one)} />)}
+                </FormSelect>
+                <Content component="p" style={{ marginBlockEnd: "1rem" }}>{profiles.what(profile)}</Content>
+                {toAccept && <Risks info={info} profile={profile} accepted={accepted} onAccepted={setAccepted} />}
+                {RISKY.includes(profile) && (
+                    <Alert variant="warning" isInline isPlain title={t("What has been said so far goes on with it: the output of runs and commands read in this conversation, written by the nodes, included.")} />
+                )}
+                <Content component="small">{t("What you allowed always in this conversation is asked again.")}</Content>
+            </ModalBody>
+            <ModalFooter>
+                <Button variant="primary" isDisabled={!profile || (toAccept && !accepted) || changing} isLoading={changing} onClick={change}>{t("Change the profile")}</Button>
+                <Button variant="link" onClick={onClose}>{t("Cancel")}</Button>
             </ModalFooter>
         </Modal>
     );
@@ -270,15 +345,7 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
                     </DescriptionListDescription>
                 </DescriptionListGroup>
             </DescriptionList>
-            {toAccept && (
-                <Alert variant="warning" isInline title={t("Before the first session as {{profile}}", { profile: profiles.name(profile) })} style={{ marginBlockEnd: "1rem" }}>
-                    <Content component="ul">
-                        {profiles.risks(profile).map(risk => <Content component="li" key={risk}>{risk}</Content>)}
-                    </Content>
-                    <Checkbox id="chat-accept" isChecked={accepted} onChange={(_event, checked) => setAccepted(checked)}
-                        label={t("I understand what it may do and these risks. This is asked once, and recorded in the audit trail.")} />
-                </Alert>
-            )}
+            {toAccept && <Risks info={info} profile={profile} accepted={accepted} onAccepted={setAccepted} />}
             {full && <Alert variant="info" isInline title={t("{{open}} sessions of the assistant are open on this controller, the most it allows.", { open: info.open_sessions })} style={{ marginBlockEnd: "1rem" }} />}
             {!agent.installed && (
                 <Alert variant="warning" isInline title={t("{{agent}} is not installed on this machine", { agent: agent.label })} style={{ marginBlockEnd: "1rem" }}>
@@ -338,7 +405,7 @@ function Composer({ state }: { state: ChatState }) {
     const { t } = useTranslation();
     const [text, setText] = useState("");
     const box = useRef<HTMLTextAreaElement>(null);
-    const idle = !state.busy && !state.loading;
+    const idle = state.phase === "ready" && !state.busy && !state.loading && !state.changing;
 
     // A message prepared on another page (the help of a run) replaces what
     // was being written, to be read, edited and sent by the user.
@@ -431,6 +498,7 @@ export function ChatPage() {
     const session = useSession();
     const profiles = useProfiles();
     const state = useSyncExternalStore(chat.subscribe, chat.getState);
+    const [changing, setChanging] = useState(false);
     // Asked again when the agent starts or ends: the sessions open change.
     const info = useLoad(() => call<ChatInfo>("chat.agents"));
     const reload = info.reload;
@@ -454,17 +522,29 @@ export function ChatPage() {
 
     const agent = info.data.agents.find(one => one.name === state.agent);
     const running = state.phase === "ready";
-    const idle = !state.busy && !state.loading;
+    // While the profile changes, the conversation stays in sight.
+    const shown = running || !!state.changing;
+    const idle = !state.busy && !state.loading && !state.changing;
     return (
-        <div className={running ? "fleet-chat" : undefined}>
-            <SectionHeader title={running && agent ? t("Assistant: {{agent}}", { agent: agent.label }) : t("Assistant")}>
-                {running && (
+        <div className={shown ? "fleet-chat" : undefined}>
+            <SectionHeader title={shown && agent ? t("Assistant: {{agent}}", { agent: agent.label }) : t("Assistant")}>
+                {state.changing && (
+                    <FlexItem>
+                        <Label color="grey" icon={<Spinner size="sm" aria-hidden />}>
+                            {t("Changing to the profile {{profile}}…", { profile: profiles.name(state.changing) })}
+                        </Label>
+                    </FlexItem>
+                )}
+                {running && !state.changing && (
                     <>
                         <FlexItem>
                             <Label color={state.profile === "autonomous" || state.profile === "administrator" ? "orange" : "blue"}>
                                 {t("Profile {{profile}}", { profile: profiles.name(state.profile) })}
                             </Label>
                         </FlexItem>
+                        {info.data.profiles.length > 1 && (
+                            <Button variant="secondary" isDisabled={!idle || !!state.ask} onClick={() => setChanging(true)}>{t("Change the profile")}</Button>
+                        )}
                         {state.sessions.length > 0 && (
                             <FlexItem style={{ inlineSize: "20rem", maxInlineSize: "100%" }}>
                                 <FormSelect value={state.sessions.some(one => one.sessionId === state.sessionId) ? state.sessionId : ""}
@@ -483,20 +563,21 @@ export function ChatPage() {
                     </>
                 )}
             </SectionHeader>
-            {state.phase === "starting" && <Spinner aria-label={t("Starting the assistant")} />}
+            {state.phase === "starting" && !state.changing && <Spinner aria-label={t("Starting the assistant")} />}
             {/* Asked for again after each answer: the assistant may have written one. */}
             {session.commands.includes("draft.list") && <PendingDrafts stamp={state.busy ? "" : `${state.sessionId}:${state.items.length}`} />}
             {running && <Instructions state={state} />}
             {state.phase === "ended" && state.items.length > 0 && <Conversation items={state.items} busy={false} />}
-            {running && (
-                <Conversation items={state.items} busy={state.busy || state.loading}>
+            {shown && (
+                <Conversation items={state.items} busy={state.busy || state.loading || !!state.changing}>
                     {!state.loading && <Content component="p">{t("The assistant is ready. It ends when this page is closed or reloaded; the conversation is kept.")}</Content>}
                 </Conversation>
             )}
             {running && state.needsLogin && <Login agent={agent} />}
-            {running && <Composer state={state} />}
+            {shown && <Composer state={state} />}
             {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} onAccepted={reload} />}
             {state.ask && <AskModal ask={state.ask} profile={state.profile} />}
+            {changing && running && <ChangeProfile info={info.data} state={state} onClose={() => setChanging(false)} onAccepted={reload} />}
         </div>
     );
 }

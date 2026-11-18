@@ -156,7 +156,10 @@ started stays as it is: once logged in, send the message again.
   no maintenance window opened or closed and no schedule turned on, and with
   `autonomous_dry_run` dry runs only; `administrator` gets whatever the
   role allows: ad-hoc commands, changes to templates, inventories and the
-  rest, files, projects, credentials, deletes. All five are enabled
+  rest, files, projects, credentials, deletes; it is offered, and allowed,
+  only to administrators of Fleet with `max_role = "admin"`, since for
+  anyone else it would be the powers of their role under a name that
+  promises more. All five are enabled
   as installed, `assisted` the default; list fewer in `profiles` to keep
   the others from users, who otherwise accept the risks of `diagnostic`,
   `autonomous` and `administrator` once each before using them. The backend refuses what is outside

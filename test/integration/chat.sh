@@ -170,7 +170,7 @@ sleep 60 | sudo -u itviewer "$CHAT" fake > /dev/null 2>&1 &
 n=0; while [ "$(pgrep -fc "^/usr/bin/python3 -I $AGENT")" -lt 2 ] && [ "$n" -lt 20 ]; do sleep 0.5; n=$((n + 1)); done
 expect_eq "open sessions are counted, for all users" "$(get "$(ctl itviewer chat.agents)" 'a["data"]["open_sessions"]')" 2
 out=$(chat itadmin fake "$INIT")
-expect_eq "one more than allowed is refused" "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" conflict
+expect_eq "one more than allowed is refused" "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" sessions_full
 expect_eq "and the refusal is in the audit log" \
     "$(get "$(admin audit.list)" '[(e["user"], e["outcome"]) for e in a["data"]["entries"] if e["command"] == "chat.start"][0]')" "('itadmin', 'error')"
 pkill -TERM -f "^/usr/bin/python3 -I $CHAT"

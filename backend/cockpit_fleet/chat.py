@@ -13,7 +13,7 @@ from pathlib import Path
 from . import agents, instructions, profiles, store
 from .auth import ROLES
 from .cli import Bool, Choice, Context, Str, Values, command
-from .errors import Conflict, NotAccepted, NotFound, Unavailable
+from .errors import Conflict, Forbidden, NotAccepted, NotFound, SessionsFull, Unavailable
 from .paths import LIBEXEC_DIR
 
 LAUNCHER = str(LIBEXEC_DIR / "fleet-chat")
@@ -76,6 +76,29 @@ def _needs_agents(ctx: Context) -> str:
     return ""
 
 
+def _agent_role(ctx: Context) -> str | None:
+    """The role an agent of the caller acts with: theirs, under [mcp] max_role."""
+    role = ctx.caller.role
+    ceiling = ctx.config.mcp_max_role
+    if role is not None and ROLES.index(role) > ROLES.index(ceiling):
+        role = ceiling
+    return role
+
+
+def _offered(ctx: Context) -> tuple[str, ...]:
+    """The profiles enabled that an agent of the caller may be in."""
+    return profiles.offered(ctx.config.chat_profiles, _agent_role(ctx))
+
+
+def _check_offered(ctx: Context, profile: str) -> None:
+    if profile not in ctx.config.chat_profiles:
+        raise Conflict(f"the profile {profile} is not enabled on this controller"
+                       " ([chat] profiles in config.toml)")
+    if profile not in _offered(ctx):
+        raise Forbidden(f"the profile {profile} of the assistant is for administrators of"
+                        " Fleet, and agents act as one only with [mcp] max_role = \"admin\"")
+
+
 def _accepted(ctx: Context) -> set[str]:
     """The profiles whose risks the caller accepted."""
     return {row["profile"] for row in ctx.conn.execute(
@@ -104,10 +127,11 @@ def chat_agents(ctx: Context, params: Values) -> dict:
         "unavailable": _needs_agents(ctx),
         "guide": _guide(ctx),
         "max_role": config.mcp_max_role,
-        "profiles": list(config.chat_profiles),
-        "default_profile": config.chat_default_profile,
+        "profiles": list(_offered(ctx)),
+        "default_profile": profiles.default(config.chat_profiles, config.chat_default_profile,
+                                            _agent_role(ctx)),
         # Those of them the caller must accept the risks of before a session.
-        "to_accept": [profile for profile in config.chat_profiles
+        "to_accept": [profile for profile in _offered(ctx)
                       if profile in profiles.RISKY and profile not in accepted],
         # What holds an agent in the profile autonomous, to tell the user.
         "autonomous_runs": config.chat_autonomous_runs,
@@ -140,10 +164,12 @@ def chat_start(ctx: Context, params: Values) -> dict:
                  None)
     if agent is None:
         raise NotFound(f"no such agent: {params['agent']}")
-    profile = params["profile"] or ctx.config.chat_default_profile
-    if profile not in ctx.config.chat_profiles:
-        raise Conflict(f"the profile {profile} is not enabled on this controller"
-                       " ([chat] profiles in config.toml)")
+    profile = params["profile"] or profiles.default(
+        ctx.config.chat_profiles, ctx.config.chat_default_profile, _agent_role(ctx))
+    if not profile:
+        raise Conflict("none of the profiles of the assistant enabled on this controller is for"
+                       " your role ([chat] profiles in config.toml)")
+    _check_offered(ctx, profile)
     if profile in profiles.RISKY and profile not in _accepted(ctx):
         raise NotAccepted(f"the risks of the profile {profile} have not been accepted yet")
     if params["terminal"] and not agent.terminal:
@@ -152,14 +178,11 @@ def chat_start(ctx: Context, params: Values) -> dict:
     # The fleet-chat that is asking is one of them already.
     limit = ctx.config.chat_max_sessions
     if open_sessions() > limit:
-        raise Conflict(f"{limit} chat sessions are open already, the most this controller"
+        raise SessionsFull(f"{limit} chat sessions are open already, the most this controller"
                        " allows ([chat] max_sessions in config.toml)")
     found = instructions.layers(profile, "terminal" if params["terminal"] else "page")
     # What the agent gets is under the ceiling for agents, as fleet-mcp has it.
-    role = ctx.caller.role
-    ceiling = ctx.config.mcp_max_role
-    if role is not None and ROLES.index(role) > ROLES.index(ceiling):
-        role = ceiling
+    role = _agent_role(ctx)
     allowed = [tool["name"] for tool in agents.tools(ctx, role, profile)
                if tool["question"] == "none"]
     return {"agent": agent.name, "profile": profile,
@@ -176,9 +199,7 @@ def chat_accept(ctx: Context, params: Values) -> dict:
     provider of its model, and accepted it: once, for every later session in
     that profile. The audit trail keeps who and when."""
     profile = params["profile"]
-    if profile not in ctx.config.chat_profiles:
-        raise Conflict(f"the profile {profile} is not enabled on this controller"
-                       " ([chat] profiles in config.toml)")
+    _check_offered(ctx, profile)
     when = store.now()
     ctx.conn.execute("INSERT OR IGNORE INTO profile_acceptances (user, profile, accepted_at)"
                      " VALUES (?, ?, ?)", (ctx.caller.user, profile, when))

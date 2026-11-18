@@ -10,6 +10,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Assistant: "Change the profile" in a session goes on with the same
+  conversation in another profile (Diagnostic to Administrator, say). The
+  assistant is started again in it, its risks told first when not
+  accepted yet; what was allowed always in the conversation is asked
+  again.
 - Runs: a button "Assistance" on a run that has ended, when the assistant
   is set up, prepares in the chat a message asking it to examine the run,
   find anomalies, investigate their causes and propose solutions. The
@@ -69,7 +74,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - Assistant: as installed, all five profiles are enabled (`[chat]
   profiles`) and agents are held to the administrator role (`[mcp]
   max_role = "admin"`), so that an administrator's assistant may run
-  ad-hoc commands and make changes, asking before each. Each user still
+  ad-hoc commands and make changes, asking before each. The profile
+  Administrator is offered and allowed only to administrators of Fleet
+  (and only with `max_role = "admin"`): an operator gets the others, and
+  Assisted when the default profile is Administrator. Each user still
   accepts the risks of Diagnostic, Autonomous and Administrator once
   before using them, and Assisted stays the default. A controller that
   left these keys out gets the new values on upgrade; to keep the old

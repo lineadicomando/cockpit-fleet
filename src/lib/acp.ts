@@ -129,7 +129,13 @@ export interface TextItem {
     text: string;
 }
 
-export type Item = TextItem | ToolItem;
+// Said by the page, not by the agent: the session went on in another profile.
+export interface ProfileItem {
+    kind: "profile";
+    profile: string;
+}
+
+export type Item = TextItem | ToolItem | ProfileItem;
 
 const MAX_OUTPUT = 20000;
 // The name the page gives fleet-mcp in a session, and so the prefix of its tools.

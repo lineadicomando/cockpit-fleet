@@ -27,6 +27,26 @@ AUTONOMOUS = ("autonomous",)
 # Profiles beyond assisted, whose risks a user accepts once before a session
 # in them (chat.accept).
 RISKY = ("diagnostic", "autonomous", "administrator")
+# Profiles only for an agent that acts with the role admin, the caller's
+# under [mcp] max_role: for anyone else administrator would be the role's
+# powers under a name that promises more.
+ADMIN_ONLY = ("administrator",)
+
+
+def offered(enabled: tuple[str, ...], role: str | None) -> tuple[str, ...]:
+    """The profiles enabled that an agent acting with ROLE may be in."""
+    return tuple(one for one in enabled if one not in ADMIN_ONLY or role == "admin")
+
+
+def default(enabled: tuple[str, ...], configured: str, role: str | None) -> str:
+    """The profile of an agent that names none: [chat] default_profile, or
+    when ROLE may not have it, assisted, or the first it may; "" for none."""
+    available = offered(enabled, role)
+    if configured in available:
+        return configured
+    if "assisted" in available:
+        return "assisted"
+    return available[0] if available else ""
 
 # The modules of an ad-hoc command that only read, when config.toml does not
 # say: those of [adhoc] modules among them.

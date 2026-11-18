@@ -185,12 +185,39 @@ class CommandsTest(Base):
             self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": profile}),
                              "conflict")
         self.config = replace(self.config, chat_profiles=("administrator",),
-                              chat_default_profile="administrator")
+                              chat_default_profile="administrator", mcp_max_role="admin")
         self.ok("chat.accept", {"profile": "administrator"})
         self.assertEqual(self.ok("chat.start", {"agent": "claude"})["profile"], "administrator")
         agents = self.ok("chat.agents")
         self.assertEqual((agents["profiles"], agents["default_profile"]),
                          (["administrator"], "administrator"))
+
+    def test_the_profile_administrator_is_for_an_agent_acting_as_an_administrator(self):
+        self.config = replace(self.config, mcp_max_role="admin",
+                              chat_profiles=tuple(profiles.PROFILES),
+                              chat_default_profile="administrator")
+        everything = list(profiles.PROFILES)
+        data = self.ok("chat.agents")
+        self.assertEqual((data["profiles"], data["default_profile"]), (everything, "administrator"))
+        data = self.ok("chat.agents", role="operator")
+        self.assertEqual((data["profiles"], data["default_profile"]),
+                         (everything[:-1], "assisted"))
+        self.assertNotIn("administrator", data["to_accept"])
+        self.assertEqual(self.code("chat.accept", {"profile": "administrator"}, role="operator"),
+                         "forbidden")
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "administrator"},
+                                   role="operator"), "forbidden")
+        self.assertEqual(self.ok("chat.start", {"agent": "claude"}, role="operator")["profile"],
+                         "assisted")
+        # An administrator whose agents are held to operator is one too.
+        self.config = replace(self.config, mcp_max_role="operator")
+        self.assertNotIn("administrator", self.ok("chat.agents")["profiles"])
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "administrator"}),
+                         "forbidden")
+        # None left for the role: said, not started.
+        self.config = replace(self.config, chat_profiles=("administrator",))
+        self.assertEqual(self.code("chat.start", {"agent": "claude"}), "conflict")
+        self.assertEqual(self.ok("chat.agents")["profiles"], [])
 
     def test_a_profile_beyond_assisted_is_accepted_once_by_each_user(self):
         self.config = replace(self.config, chat_profiles=("assisted", "diagnostic", "autonomous"))
@@ -258,7 +285,7 @@ class CommandsTest(Base):
         self.open = 2
         self.ok("chat.start", {"agent": "claude"})
         self.open = 3
-        self.assertEqual(self.code("chat.start", {"agent": "claude"}), "conflict")
+        self.assertEqual(self.code("chat.start", {"agent": "claude"}), "sessions_full")
 
     def test_neither_is_a_tool_for_an_agent(self):
         self.assertFalse(cli.COMMANDS["chat.agents"].tool)

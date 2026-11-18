@@ -179,6 +179,25 @@ accepted what is the point of it. The profile `_fleet/ready` names is shown
 in the header of the session and in each question, and the page asks
 `mcp.tools` for the tools of that profile.
 
+**Changing the profile of a session.** The header has "Change the profile"
+while the agent is idle and asks nothing. The page ends the agent and,
+once its `fleet-chat` has gone (so that it is not counted among the
+sessions open), starts another in the profile chosen, which opens the
+conversation again (`session/load`) with the `fleet-mcp` and the
+instructions of that profile, and adds a line saying the conversation went
+on in it. It is the reload of the page and an earlier conversation taken
+up, with another profile: `chat.start` checks the profile and its
+acceptance and records the start in the audit trail, as for any start, and
+nothing new reaches the backend. The risks of a profile not accepted yet
+are told in the same dialog; going to one of `RISKY` also says that the
+conversation, with what the nodes wrote in it, goes on with more powers.
+"Always" answered in the conversation is forgotten. Should `chat.start`
+find the sessions full (`sessions_full`, a kind of `conflict`), the old
+`fleet-chat` may not have gone yet: the page asks again every second, five
+times, then says why. A new `fleet-mcp` is a new session for the count of
+an autonomous agent and for the draft of an administrator's files, as when
+a conversation is taken up after a reload.
+
 **Permissions.** The agent asks before each call to a tool
 (`session/request_permission`). The page answers as `question` of the tool
 in `mcp.tools` says (see "Questions by profile" in [Agents](agents.md)): by itself

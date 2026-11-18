@@ -156,6 +156,11 @@ class Agent {
 
     async ready(profile = "assisted"): Promise<void> {
         this.chat.start("claude", profile);
+        await this.started(profile);
+    }
+
+    // What fleet-chat says once chat.start has let the agent start.
+    async started(profile: string): Promise<void> {
         this.say({
             jsonrpc: "2.0", method: "_fleet/ready", params: {
                 agent: "claude", cwd: "/home/anna", profile, instructions: "Be brief.",
@@ -435,4 +440,59 @@ test("a prepared message waits for the session and is never sent by itself", asy
     assert.equal(state.draft, "examine the run r2");
     assert.equal(state.sessionId, "s1");
     assert.equal(agent.methods().filter(method => method === "session/prompt").length, 1);
+});
+
+test("the profile changes with the conversation kept: the agent is started again and opens it", async () => {
+    const agent = new Agent();
+    await agent.ready("diagnostic");
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("why did pc215 fail?");
+    // Nothing changes while it answers, nor to the same profile.
+    agent.chat.changeProfile("diagnostic");
+    assert.equal(agent.chat.getState().changing, "");
+    agent.chat.changeProfile("administrator");
+    let state = agent.chat.getState();
+    assert.equal(state.changing, "administrator");
+    assert.equal(agent.closed, true);
+    // The next agent starts once the first has gone, not before.
+    await tick();
+    assert.equal(agent.spawned.length, 1);
+    agent.exit("");
+    await tick();
+    assert.deepEqual(agent.spawned, [["claude", "diagnostic"], ["claude", "administrator"]]);
+    state = agent.chat.getState();
+    assert.equal(state.phase, "starting");
+    assert.deepEqual(state.items[0], { kind: "user", text: "why did pc215 fail?" });
+    await agent.started("administrator");
+    await tick();
+    const loaded = agent.last("session/load").params;
+    assert.equal(loaded.sessionId, "s1");
+    assert.deepEqual(loaded.mcpServers[0].args, ["--profile", "administrator"]);
+    state = agent.chat.getState();
+    assert.equal(state.phase, "ready");
+    assert.equal(state.profile, "administrator");
+    assert.equal(state.changing, "");
+    assert.equal(state.sessionId, "s1");
+    assert.deepEqual(state.items.slice(-1), [{ kind: "profile", profile: "administrator" }]);
+});
+
+test("a change of profile waits for the sessions to free, and says why it could not", async t => {
+    const agent = new Agent();
+    await agent.ready("assisted");
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    agent.chat.changeProfile("observer");
+    agent.exit("");
+    t.mock.timers.tick(0);
+    assert.equal(agent.spawned.length, 2);
+    agent.say({ jsonrpc: "2.0", method: "_fleet/error", params: { code: "sessions_full", message: "2 chat sessions are open already" } });
+    agent.exit("exit status 1");
+    assert.equal(agent.chat.getState().changing, "observer");
+    t.mock.timers.tick(1000);
+    assert.equal(agent.spawned.length, 3);
+    agent.say({ jsonrpc: "2.0", method: "_fleet/error", params: { code: "not_accepted", message: "not accepted" } });
+    agent.exit("exit status 1");
+    const state = agent.chat.getState();
+    assert.equal(state.changing, "");
+    assert.equal(state.phase, "ended");
+    assert.equal(state.error, "not accepted");
 });

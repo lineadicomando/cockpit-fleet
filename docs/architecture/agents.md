@@ -79,7 +79,12 @@ run), `administrator` has them all. `fleet-chat --profile` asks
 `fleet-mcp --profile`, which adds it to every call beside `via`. In
 `_through`, after the ceiling lowers the role, a call whose class the
 profile does not allow is refused and audited; a call with no profile gets
-`default_profile`, one with a profile not enabled is refused. So the
+`default_profile`, one with a profile not enabled is refused.
+`administrator` is only for an agent acting with the role admin, the
+caller's under the ceiling (`profiles.ADMIN_ONLY`, 18 November): for
+anyone else it is refused there, left out of `chat.agents` and refused by
+`chat.accept` and `chat.start`, and a call with no profile gets
+`default_profile` if the role may have it, else `assisted`. So the
 profile, like `via`, can only restrict: naming another gains nothing that
 the default does not give, and leaving `via` out is what a person does by
 hand with the same role. `mcp.tools` lists only the tools of the profile,

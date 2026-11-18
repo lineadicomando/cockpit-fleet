@@ -140,7 +140,8 @@ An agent never has more than that user's role, nor more than
 from ad-hoc commands and changes), nor more than its profile of the
 assistant allows (`[chat] profiles`: as installed all five, each user
 accepting the risks of the three beyond launching what is defined before
-using them, and `assisted` the default); it approves nothing, and no tool reads or writes a
+using them, `assisted` the default, and `administrator` only for an
+administrator of Fleet whose agents act as one); it approves nothing, and no tool reads or writes a
 secret. The output of runs is written by the nodes: an agent that reads it
 and may also change things can be steered by what a node writes, which is
 why the limits are there. A profile is held by `fleetctl`, not by the agent

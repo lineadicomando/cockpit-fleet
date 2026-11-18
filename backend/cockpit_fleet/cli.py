@@ -424,20 +424,26 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     if not config.mcp_enabled:
         raise refuse("agents are not enabled",
                      "agents are not enabled on this controller ([mcp] in config.toml)")
+    ceiling = config.mcp_max_role
+    if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
+        ctx.caller = replace(ctx.caller, role=ceiling)
     if profile is None:
-        profile = config.chat_default_profile
+        # Refused below, by its name, when the role may be in none of them.
+        profile = profiles.default(config.chat_profiles, config.chat_default_profile,
+                                   ctx.caller.role) or config.chat_default_profile
     if not isinstance(profile, str) or profile not in config.chat_profiles:
         asked = profile[:40] if isinstance(profile, str) else "?"
         raise refuse(f"profile {asked!r} not enabled", "this profile of the assistant is not"
                      " enabled on this controller ([chat] profiles in config.toml)")
+    if profile not in profiles.offered(config.chat_profiles, ctx.caller.role):
+        raise refuse(f"profile {profile} needs the role admin",
+                     f"the profile {profile} of the assistant is for administrators of Fleet,"
+                     " and agents act as one only with [mcp] max_role = \"admin\"")
     ctx.profile = profile
     spec = COMMANDS.get(name)
     if spec is not None and not spec.tool and name != "mcp.tools":
         # fleet-mcp offers no such tool; a call that names one anyway is refused.
         raise refuse("not a tool for agents", f"{name} is not for agents")
-    ceiling = config.mcp_max_role
-    if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
-        ctx.caller = replace(ctx.caller, role=ceiling)
     ctx.caller = replace(ctx.caller, rights=frozenset())
     if spec is not None:
         kind = profiles.call_class(name, spec.agent, params, config.mcp_adhoc_modules)

@@ -283,8 +283,7 @@ class ModeTest(ApprovalBase):
 
     def test_an_agent_does_not_confirm_even_its_own_run(self):
         self.config = replace(self.config, mcp_enabled=True, mcp_max_role="admin",
-                              chat_profiles=("administrator",),
-                              chat_default_profile="administrator")
+                              chat_profiles=("assisted",), chat_default_profile="assisted")
         run = self.launched("confirm", via="mcp:test")
         self.assertEqual(self.code_as("approval.approve", {"id": run["id"]}, user="olga",
                                       via="mcp:test"), "forbidden")
