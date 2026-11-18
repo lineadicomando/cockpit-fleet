@@ -1,5 +1,5 @@
 Name:           cockpit-fleet
-Version:        0.3.0
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        Cockpit plugin to run Ansible and watch a fleet of nodes
 License:        LGPL-2.1-or-later
@@ -130,6 +130,9 @@ fi
 %attr(0440,root,root) %config(noreplace) %{_sysconfdir}/sudoers.d/cockpit-fleet
 
 %changelog
+* Wed Nov 18 2026 Alessandro Gagliano <alessandro.gagliano@gmail.com> - 0.4.0-1
+- Release 0.4.0. See CHANGELOG.md.
+
 * Sun Nov 15 2026 Alessandro Gagliano <alessandro.gagliano@gmail.com> - 0.3.0-1
 - Release 0.3.0. See CHANGELOG.md.
 
