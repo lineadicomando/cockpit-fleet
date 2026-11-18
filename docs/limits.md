@@ -142,7 +142,12 @@ in [security.md](security.md); the decisions behind these limits in
   days in the browser's offset of today, so a day across a change of
   summer time is an hour off, and in UTC at a terminal; the hosts that
   fail most count the runs they failed in, not out of how many; a host is
-  named, not linked, since a name may be in several inventories.
+  named, not linked, since a name may be in several inventories; changes
+  of state recorded before schema 32 (0.4.0) have no hard state, so an
+  unknown suppressed because the host could not be reached counts there
+  as a problem, recovered only when the host is reached again: until
+  then "Problems and recoveries" can show problems with no recovery while
+  none is open. It fades within 30 days of the upgrade.
 - Charts: on the page of a host (per check) and the Overview only; no
   zoom, no chosen dates, no thresholds drawn.
 - Interface (25 October): the summary a node writes for a check is English
