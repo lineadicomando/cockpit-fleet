@@ -161,3 +161,13 @@ What each closed phase had to show, and how it was shown.
   a starter the same way, its menu then offering "Usa di nuovo nei run".
   The check found, and fixed, "set di variabili" in an Italian string
   where the page says "insiemi di variabili".
+- **18, the Overview as a dashboard** (18 November): `overview.get`
+  tested in `test_overview.py` (sums, windows, the time zone, problems
+  and recoveries from hard states) and its figures in `overview.test.ts`;
+  measured at 500 hosts (see [The Overview](dashboard.md)). In a browser,
+  in Italian: as a viewer in the dark theme, Lighthouse 100 for
+  accessibility; as an operator in the light theme, on a controller in
+  use with 135 hosts and 292 runs in 14 days, the figures, the charts
+  (their text read on either theme), the links to each section and the
+  card of access. The check found, and fixed, the screen-reader tables of
+  the charts drawn over the title in Firefox.

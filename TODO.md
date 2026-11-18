@@ -6,8 +6,9 @@ workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 
 ## Status (18 November 2026)
 
-Phases 0–17 closed, 18 under way. Last release 0.3.0 (15 November);
-`make next-version` says 0.4.0. `make release` only when asked.
+Phases 0–18 closed; the user picks the next (see "Future"). Last
+release 0.3.0 (15 November); `make next-version` says 0.4.0. `make
+release` only when asked.
 
 To resume: `git status`, `git log origin/main..`; `make check` (729
 backend, 194 frontend tests). Each backend module's docstring says what
@@ -15,21 +16,12 @@ it is; `cli.py` is the registry of commands, `db.py` the schema (32
 migrations).
 
 Integration since the review of 16 November: `make ct-test` on AlmaLinux
-(all but `sandbox`, `cmdb`), and `chat`, `mcp` on Debian and Fedora
+(`runs`, `checks`, `store`, `files`, `schedules`, `cli`, `mcp`, `chat`,
+`negative`), and `chat`, `mcp` on Debian and Fedora
 after the changes of 18 November; `make ct-lifecycle` on Debian; on the
 VMs `deb13` and `alma10`: `sandbox`, `runs`, `files`, `store`, `chat`,
 `schedules`, `negative`. The rest on Fedora not since phase 17. The
 known failure of `cmdb.sh` on Fedora in a container: `architecture/tests.md`.
-
-## Phase 18: the Overview as a dashboard (under way)
-
-Decided: `decisions.md`, row "Overview"; design: `architecture/dashboard.md`;
-limits: `limits.md`, "Overview". Done and tested, seen in a browser as a
-viewer in the dark theme (Lighthouse accessibility 100).
-
-- [ ] Look at it as an operator (only the card of access differs) and in
-  the light theme.
-- [ ] Close: an entry in `acceptance.md`; this section out of the plan.
 
 ## What the review of 16 November left
 
