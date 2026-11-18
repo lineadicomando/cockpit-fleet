@@ -24,14 +24,15 @@ import cockpit from "cockpit";
 import { bySeverity, formatMetric, worstState } from "../lib/checks.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
-import { useLoad, usePolling } from "../lib/hooks.ts";
+import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
+import { originPath } from "../lib/sections.ts";
 import { hostGroups, hostMatches, isHostGroupOpen, readHostsView, stateMatches, withHostGroupsOpen, type HostsView } from "../lib/hosts.ts";
 import type { Group } from "../lib/listview.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CheckState, FleetHost, HostDetail, Inventory, StateCounts } from "../lib/types.ts";
 import { HostInventory } from "./AssetsPage.tsx";
 import { MaintenanceModal, StateCountLabels, StateLabel, useStateNames } from "./ChecksPage.tsx";
-import { FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import { FormModal, ListState, PageNav, SectionHeader, message, openHost } from "./common.tsx";
 import { GroupedRows, HostListToolbar, NothingMatches, useStoredView } from "./ListView.tsx";
 import { Alert, AlertActionCloseButton, ExpandCell, Spinner } from "./pf.tsx";
 
@@ -191,7 +192,7 @@ function Problems({ groups, grouping, onChanged, onError }: {
                         {grouped && <Td />}
                         <Td dataLabel={t("State")}><StateLabel state={state.state} /><Flags state={state} /></Td>
                         <Td dataLabel={t("Host")}>
-                            <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", state.host_id])}>{state.host}</Button>
+                            <Button variant="link" isInline onClick={() => openHost(state.host_id)}>{state.host}</Button>
                         </Td>
                         <Td dataLabel={t("Which check")}>{state.check}</Td>
                         <Td dataLabel={t("What it found")}>{state.summary}</Td>
@@ -228,7 +229,7 @@ function HostList({ groups, grouping, many }: { groups: Group<FleetHost>[]; grou
                     <Tr key={host.id} isExpanded={grouped ? open : undefined}>
                         {grouped && <Td />}
                         <Td dataLabel={t("Host")}>
-                            <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
+                            <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
                             {host.reachable === false && <Label isCompact color="red" style={{ marginInlineStart: "0.5rem" }}>{t("Not reachable")}</Label>}
                         </Td>
                         {inventory && <Td dataLabel={t("Inventory")}>{host.inventory}</Td>}
@@ -262,7 +263,7 @@ function Grid({ groups, grouping, states }: { groups: Group<FleetHost>[]; groupi
                         <Tr key={host.id} isExpanded={grouped ? open : undefined}>
                             {grouped && <Td />}
                             <Td dataLabel={t("Host")}>
-                                <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
+                                <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
                             </Td>
                             {checks.map(([id, name]) => {
                                 const state = cell.get(`${host.id} ${id}`);
@@ -396,6 +397,7 @@ export function HostDetailPage({ id }: { id: string }) {
     const can = useCan();
     const names = useStateNames();
     const host = useLoad(() => call<HostDetail>("host.get", { id }));
+    const origin = originPath(useCockpitLocation().options.from, "hosts");
     const refs = useLoad(async () => {
         const [inventories, hosts] = await Promise.all([
             call<{ inventories: Inventory[] }>("inventory.list"),
@@ -419,11 +421,14 @@ export function HostDetailPage({ id }: { id: string }) {
 
     return (
         <>
+            <PageNav links={[
+                origin && { label: t("Back"), onClick: () => cockpit.location.go(origin) },
+                { label: t("All hosts"), onClick: () => cockpit.location.go(["hosts"]) },
+            ]} />
             <SectionHeader title={data.name}>
                 {can("maintenance.create") && (
                     <Button variant="secondary" onClick={() => setMaintaining(true)} isDisabled={!refs.data}>{t("Maintenance…")}</Button>
                 )}
-                <Button variant="secondary" onClick={() => cockpit.location.go(["hosts"])}>{t("All hosts")}</Button>
             </SectionHeader>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             {data.in_maintenance && <Alert variant="info" isInline title={t("This host is in maintenance: nothing about it is told until the window ends.")} style={{ marginBottom: "1rem" }} />}

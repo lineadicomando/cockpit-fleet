@@ -47,10 +47,20 @@ among the English ones.
 an ad-hoc command, a sync or an upload does not open the run: the page
 stays where it is, and a notice in a corner (`StartedRuns` in
 `common.tsx`) links to it for a few seconds. A link to a run (`openRun`)
-carries the page it was followed from in the URL
-(`#/runs/ID?from=templates`), and the run's page offers "Back" to it;
+or to a host (`openHost`) carries the page it was followed from in the URL
+(`#/runs/ID?from=templates`), and the page offers "Back" to it;
 `originPath` takes only a known section, since the URL can be typed. The
-list of runs needs no such button: "All runs" is there anyway.
+page's own list needs no such link: "All runs" or "All hosts" is there
+anyway.
+
+**Ways out apart from actions.** A detail page (a run, a host, the files
+of a project or an inventory) has its ways out as links above the title
+(`PageNav` in `common.tsx`), the first with an arrow, and only actions in
+the header on the right. With the two in one row of buttons alike, "Back"
+sat beside "Cancel run", which acted at once. Actions that cannot be
+taken back ask first (canceling a run, a download or a copy, with
+"Keep running" rather than "Cancel" to close the dialog), and a button
+that only leaves does not sit among the actions of a dialog either.
 
 **Long lists.** Checks, job templates, host keys and the hosts of Hosts
 and Assets are filtered and grouped (checks and templates also sorted) in

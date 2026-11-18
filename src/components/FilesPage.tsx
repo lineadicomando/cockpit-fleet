@@ -32,7 +32,7 @@ import { useCan } from "../lib/session.tsx";
 import type { Chunk, Commit, FileContent, Inventory, Project, ProjectFiles, Run, Starter } from "../lib/types.ts";
 import { fileBase64, importArchive } from "../lib/upload.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
-import { ConfirmDelete, FormModal, ListState, SectionHeader, message, openRun } from "./common.tsx";
+import { ConfirmDelete, FormModal, ListState, PageNav, SectionHeader, message, openRun } from "./common.tsx";
 import { FileTree } from "./FileTree.tsx";
 import { ModuleHelpButton } from "./ModuleHelp.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
@@ -539,9 +539,17 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
     // an inventory, whose files are hosts and variables, not tasks.
     const complete = useMemo(() => (current && editable && !ofInventory && isYaml(current) ? ansibleSource(current) : undefined), [current, editable, ofInventory]);
     const currentDirectory = current ? dirname(current) : "";
+    // Asks first about tabs not saved.
+    const leave = (path: string[]) => guardClose(tabs.map(c => c.path), () => cockpit.location.go(path));
 
     return (
         <>
+            <PageNav links={[
+                !!draft && { label: t("Back to main"), onClick: () => leave([ofInventory ? "inventories" : "projects", id]) },
+                ofInventory
+                    ? { label: t("All inventories"), onClick: () => leave(["inventories"]) }
+                    : { label: t("All projects"), onClick: () => leave(["projects"]) },
+            ]} />
             <SectionHeader title={project ? (draft ? t("{{name}}: a draft", { name: project.name }) : project.name) : t("Files")}>
                 {draft && <Button variant="primary" onClick={() => setReviewing(true)}>{t("Review and merge")}</Button>}
                 {editable && <Button variant={draft ? "secondary" : "primary"} onClick={() => setDialog({ kind: "new-file", in: currentDirectory })}>{t("New file")}</Button>}
@@ -551,14 +559,6 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
                 {editable && <Button variant="secondary" onClick={() => setDialog({ kind: "history" })}>{t("All changes")}</Button>}
                 {!draft && <Button variant="secondary" onClick={() => download("")}>{t("Download all")}</Button>}
                 {can("module.help") && !ofInventory && <ModuleHelpButton />}
-                {draft && (
-                    <Button variant="secondary" onClick={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go([ofInventory ? "inventories" : "projects", id]))}>
-                        {t("Back to main")}
-                    </Button>
-                )}
-                {ofInventory
-                    ? <Button variant="secondary" onClick={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go(["inventories"]))}>{t("All inventories")}</Button>
-                    : <Button variant="secondary" onClick={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go(["projects"]))}>{t("All projects")}</Button>}
             </SectionHeader>
             <input ref={uploader} type="file" multiple hidden aria-hidden tabIndex={-1}
                 onChange={event => { startUpload([...(event.target.files ?? [])], uploadInto); event.target.value = ""; }} />
@@ -733,7 +733,7 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
             )}
             {reviewing && (
                 <DraftReview id={id} draft={draft} onClose={() => setReviewing(false)}
-                    onDone={() => guardClose(tabs.map(c => c.path), () => cockpit.location.go([ofInventory ? "inventories" : "projects", id]))} />
+                    onDone={() => leave([ofInventory ? "inventories" : "projects", id])} />
             )}
             {dialog?.kind === "discard" && (
                 <FormModal title={t("Discard the changes?")} submitLabel={t("Discard")} isDanger variant={ModalVariant.small}

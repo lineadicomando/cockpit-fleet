@@ -19,9 +19,9 @@ import {
     TextInput,
     Title,
 } from "@patternfly/react-core";
-import { ExternalLinkAltIcon } from "@patternfly/react-icons";
+import { AngleLeftIcon, ExternalLinkAltIcon } from "@patternfly/react-icons";
 import type { Loaded } from "../lib/hooks.ts";
-import { runLocation } from "../lib/sections.ts";
+import { detailLocation, runLocation } from "../lib/sections.ts";
 import { shellPage } from "../lib/shell.ts";
 import type { RunStatus } from "../lib/types.ts";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
@@ -41,6 +41,32 @@ export function isActiveRun(status: RunStatus | ""): boolean {
 export function openRun(id: string) {
     const { path, options } = runLocation(id, cockpit.location.path);
     cockpit.location.go(path, options);
+}
+
+// Opens a host's page, which then offers to go back to the page it came from.
+export function openHost(id: string) {
+    const { path, options } = detailLocation("hosts", id, cockpit.location.path);
+    cockpit.location.go(path, options);
+}
+
+export interface NavLink { label: string; onClick: () => void }
+
+// The ways out of a detail page, as links above its title: apart from the
+// page's actions, so that a click meant to leave cannot act on what it shows.
+// The first one goes back, and has the arrow.
+export function PageNav({ links }: { links: (NavLink | null | false | undefined)[] }) {
+    const { t } = useTranslation();
+    const shown = links.filter((link): link is NavLink => !!link);
+    if (shown.length === 0) return null;
+    return (
+        <Flex component="nav" aria-label={t("Page navigation")} gap={{ default: "gapMd" }} style={{ marginBlockEnd: "0.5rem" }}>
+            {shown.map((link, index) => (
+                <Button key={link.label} variant="link" isInline icon={index === 0 ? <AngleLeftIcon /> : undefined} onClick={link.onClick}>
+                    {link.label}
+                </Button>
+            ))}
+        </Flex>
+    );
 }
 
 // A run that was just started is announced, not opened: the page stays where

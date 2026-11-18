@@ -85,11 +85,19 @@ export function DraftReview({ id, draft, onDone, onClose }: {
 
     const data = diff.data;
     const conflicts = data?.changes.filter(change => change.conflict).length ?? 0;
+    const onDraftPage = cockpit.location.path.join("/") === draftPath({ id, draft }).join("/");
     return (
         <Modal variant={ModalVariant.large} isOpen onClose={onClose}>
             <ModalHeader title={t("Review a draft")}
                 description={data ? t("Written by {{author}}, last on {{time}}. No run uses it until it is merged.", { author: data.author, time: formatTime(data.time, i18n.language) }) : undefined} />
             <ModalBody>
+                {/* A way out, so not among the actions in the footer; not
+                    offered on the draft's own page, where the dialog was opened. */}
+                {!onDraftPage && (
+                    <Content component="p">
+                        <Button variant="link" isInline isDisabled={busy} onClick={() => cockpit.location.go(draftPath({ id, draft }))}>{t("Edit the draft")}</Button>
+                    </Content>
+                )}
                 {problem && <Alert variant="danger" isInline title={problem} style={{ marginBlockEnd: "1rem" }} />}
                 {diff.error && <Alert variant="danger" isInline title={diff.error.message} />}
                 {!data && !diff.error && <Spinner aria-label={t("Loading")} />}
@@ -161,7 +169,6 @@ export function DraftReview({ id, draft, onDone, onClose }: {
                 <Button variant="primary" isLoading={busy} isDisabled={!data || busy || chosen.size === 0} onClick={() => data && merge(data)}>
                     {data && chosen.size < data.changes.length ? t("Merge the chosen files") : t("Merge into main")}
                 </Button>
-                <Button variant="secondary" isDisabled={busy} onClick={() => cockpit.location.go(draftPath({ id, draft }))}>{t("Edit the draft")}</Button>
                 <Button variant="secondary" isDanger isDisabled={busy} onClick={() => setDiscarding(true)}>{t("Discard")}</Button>
                 <Button variant="link" onClick={onClose}>{t("Close")}</Button>
             </ModalFooter>

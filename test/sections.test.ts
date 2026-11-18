@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { GROUPS, SECTIONS, groupOf, originPath, runLocation, visibleGroups } from "../src/lib/sections.ts";
+import { GROUPS, SECTIONS, detailLocation, groupOf, originPath, runLocation, visibleGroups } from "../src/lib/sections.ts";
 
 test("every section is in exactly one group", () => {
     assert.equal(new Set(SECTIONS).size, SECTIONS.length);
@@ -50,6 +50,15 @@ test("a run's page knows where it was opened from", () => {
     assert.deepEqual(runLocation("r1", ["hosts", "h1"]), { path: ["runs", "r1"], options: { from: "hosts/h1" } });
     assert.deepEqual(runLocation("r1", []), { path: ["runs", "r1"], options: { from: "overview" } });
     assert.deepEqual(runLocation("r1", ["runs"]), { path: ["runs", "r1"], options: {} });
+});
+
+test("a host's page knows where it was opened from", () => {
+    assert.deepEqual(detailLocation("hosts", "h1", ["assets"]), { path: ["hosts", "h1"], options: { from: "assets" } });
+    assert.deepEqual(detailLocation("hosts", "h1", ["hosts"]), { path: ["hosts", "h1"], options: {} });
+    assert.deepEqual(detailLocation("hosts", "h1", ["runs", "r1"]), { path: ["hosts", "h1"], options: { from: "runs/r1" } });
+    assert.deepEqual(originPath("assets", "hosts"), ["assets"]);
+    assert.equal(originPath("hosts", "hosts"), null);
+    assert.deepEqual(originPath("runs", "hosts"), ["runs"]);
 });
 
 test("only a known section is gone back to", () => {

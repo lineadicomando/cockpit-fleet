@@ -31,7 +31,7 @@ import {
 } from "../lib/overview.ts";
 import type { AlertDay, Overview, RunDay, Window } from "../lib/overview.ts";
 import type { Check, Session } from "../lib/types.ts";
-import { RunStatusLabel, openRun } from "./common.tsx";
+import { RunStatusLabel, openHost, openRun } from "./common.tsx";
 import { StateLabel } from "./ChecksPage.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { Alert, Button, Spinner } from "./pf.tsx";
@@ -126,7 +126,7 @@ function ChecksCard({ data }: { data: Overview }) {
                                 <ListItem key={`${problem.host_id}/${problem.check_id}`}>
                                     <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
                                         <StateLabel state={problem.state} />
-                                        <Button variant="link" isInline onClick={() => go("hosts", problem.host_id)}>{problem.host}</Button>
+                                        <Button variant="link" isInline onClick={() => openHost(problem.host_id)}>{problem.host}</Button>
                                         <span>{problem.check}</span>
                                         {problem.acknowledged && <Label isCompact color="blue">{t("Acknowledged")}</Label>}
                                         {problem.in_maintenance && <Label isCompact color="blue">{t("In maintenance")}</Label>}

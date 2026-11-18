@@ -19,7 +19,6 @@ import {
     TabTitleText,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import { AngleLeftIcon } from "@patternfly/react-icons";
 import cockpit from "cockpit";
 import { parseAnsi } from "../lib/ansi.ts";
 import { addEvents, changesByHost, countOutcomes, diffLines, type HostChanges, type TaskView } from "../lib/events.ts";
@@ -30,7 +29,7 @@ import { originPath } from "../lib/sections.ts";
 import { useCan, useSession } from "../lib/session.tsx";
 import { chat } from "../lib/chat-agent.ts";
 import type { Chunk, HostStats, Overrides, Run, RunStatus } from "../lib/types.ts";
-import { AtTerminal, FormModal, ListState, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
+import { AtTerminal, FormModal, ListState, PageNav, RunStatusLabel, SectionHeader, isActiveRun, message, openRun } from "./common.tsx";
 import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
 import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
@@ -371,16 +370,10 @@ export function RunDetailPage({ id }: { id: string }) {
 
     return (
         <>
-            {/* Navigation stays apart from the run's actions, on the other
-                side of the page, so that a click meant to leave cannot stop a run. */}
-            <Flex gap={{ default: "gapMd" }} style={{ marginBlockEnd: "0.5rem" }}>
-                {origin && (
-                    <Button variant="link" isInline icon={<AngleLeftIcon />} onClick={() => cockpit.location.go(origin)}>{t("Back")}</Button>
-                )}
-                <Button variant="link" isInline icon={origin ? undefined : <AngleLeftIcon />} onClick={() => cockpit.location.go(["runs"])}>
-                    {t("All runs")}
-                </Button>
-            </Flex>
+            <PageNav links={[
+                origin && { label: t("Back"), onClick: () => cockpit.location.go(origin) },
+                { label: t("All runs"), onClick: () => cockpit.location.go(["runs"]) },
+            ]} />
             <SectionHeader title={data.title}>
                 {data.approval?.can_decide && <DecideButtons runId={data.id} title={data.title} onDone={run.reload} />}
                 {helped && <Button variant="secondary" onClick={askForHelp}>{t("Assistance")}</Button>}

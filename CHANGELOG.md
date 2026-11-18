@@ -87,6 +87,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   back (to the page it was opened from, and to all runs) are above the
   title, apart from the button that cancels it. The store asks too
   before canceling a download or a copy into it.
+- The pages of a run, of a host and of the files of a project or an
+  inventory have their ways out as links above the title (back, all
+  runs, all hosts, all projects or inventories, back to main from a
+  draft), apart from the page's actions. A host's page, like a run's,
+  goes back to the page it was opened from (Assets, Overview,
+  Notifications). In the review of a draft, "Edit the draft" is a link
+  above the changes, no longer a button beside "Discard".
 - Job templates are grouped by inventory by default, no longer by
   project; a browser that already keeps a view of the list keeps its
   grouping.

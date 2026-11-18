@@ -17,7 +17,6 @@ import {
     Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import cockpit from "cockpit";
 import { formatBytes } from "../lib/checks.ts";
 import { bySystem, download, hostRows, matches, toCsv } from "../lib/cmdb.ts";
 import { call } from "../lib/fleet.ts";
@@ -26,7 +25,7 @@ import { useLoad } from "../lib/hooks.ts";
 import { hostGroups, isHostGroupOpen, readHostListView, withHostGroupsOpen } from "../lib/hosts.ts";
 import { useCan } from "../lib/session.tsx";
 import type { CmdbChange, CmdbDetail, CmdbHost, Drift, Inventory, PackageHit, Template } from "../lib/types.ts";
-import { ListState, SectionHeader, message } from "./common.tsx";
+import { ListState, SectionHeader, message, openHost } from "./common.tsx";
 import { GroupedRows, HostListToolbar, NothingMatches, useStoredView } from "./ListView.tsx";
 import { LaunchModal } from "./TemplatesPage.tsx";
 import { Alert, SearchInput, TabPanel, Tabs } from "./pf.tsx";
@@ -104,7 +103,7 @@ function PackageSearch({ inventoryId }: { inventoryId: string }) {
                                         <Td dataLabel={t("Version")}>{item.version}</Td>
                                         <Td dataLabel={t("Architecture")}>{item.arch}</Td>
                                         <Td dataLabel={t("Host")}>
-                                            <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", item.host_id])}>{item.host}</Button>
+                                            <Button variant="link" isInline onClick={() => openHost(item.host_id)}>{item.host}</Button>
                                         </Td>
                                         <Td dataLabel={t("Inventory")}>{item.inventory}</Td>
                                     </Tr>
@@ -197,7 +196,7 @@ export function AssetsPage() {
                                                 <Tr key={host.id} isExpanded={grouped ? open : undefined}>
                                                     {grouped && <Td />}
                                                     <Td dataLabel={t("Host")}>
-                                                        <Button variant="link" isInline onClick={() => cockpit.location.go(["hosts", host.id])}>{host.name}</Button>
+                                                        <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
                                                         {many && !grouped && <Content component="small"> ({host.inventory})</Content>}
                                                     </Td>
                                                     <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>

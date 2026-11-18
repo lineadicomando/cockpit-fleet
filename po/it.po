@@ -378,6 +378,9 @@ msgstr "Il download si ferma. Ciò che è arrivato resta per una settimana, e «
 msgid "Keep running"
 msgstr "Lascia proseguire"
 
+msgid "Page navigation"
+msgstr "Navigazione della pagina"
+
 msgid "Ansible is stopped where it is: a task under way on a host may be left half done, and what the run has already changed stays changed."
 msgstr "Ansible viene fermato dove si trova: un task in corso su un host può restare a metà, e ciò che la run ha già modificato resta modificato."
 

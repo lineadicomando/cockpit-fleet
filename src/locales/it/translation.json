@@ -119,6 +119,7 @@
   "The copy stops, and nothing of it reaches the store.": "La copia si ferma, e niente di essa arriva nello store.",
   "The download stops. What has arrived is kept for a week, and \"Resume\" goes on from there when the server allows it.": "Il download si ferma. Ciò che è arrivato resta per una settimana, e «Riprendi» continua da lì quando il server lo consente.",
   "Keep running": "Lascia proseguire",
+  "Page navigation": "Navigazione della pagina",
   "Ansible is stopped where it is: a task under way on a host may be left half done, and what the run has already changed stays changed.": "Ansible viene fermato dove si trova: un task in corso su un host può restare a metà, e ciò che la run ha già modificato resta modificato.",
   "The run has not started yet: it will not start.": "La run non è ancora partita: non partirà.",
   "Canceled": "Annullata",
