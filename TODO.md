@@ -4,24 +4,32 @@ What is left. The other documents are listed in `CLAUDE.md`; how each
 closed phase was shown is in `docs/architecture/acceptance.md`; this
 workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 
-## Status (16 November 2026)
+## Status (18 November 2026)
 
-Phases 0–17 closed, phase 18 under way. Last release 0.3.0 (15 November);
-`[Unreleased]` has the Overview and the fixes of the review of 16
-November, so `make next-version` says 0.4.0. `make release` only when
-asked.
+Phases 0–17 closed, 18 under way. Last release 0.3.0 (15 November);
+`[Unreleased]` has `Added` entries, so `make next-version` says 0.4.0.
+`make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (727
-backend, 185 frontend tests). Each backend module's docstring says what
+To resume: `git status`, `git log origin/main..`; `make check` (729
+backend, 194 frontend tests). Each backend module's docstring says what
 it is; `cli.py` is the registry of commands, `db.py` the schema (32
 migrations).
 
-Integration after the review (16 November): `make ct-test` on AlmaLinux
-(`runs`, `checks`, `store`, `files`, `schedules`, `cli`, `mcp`, `chat`,
-`negative`), `make ct-lifecycle` on Debian; on the VMs `deb13` and
-`alma10`: `sandbox`, `runs`, `files`, `store`, `chat`, `schedules`,
-`negative`. Fedora not since phase 17. The known failure of `cmdb.sh` on
-Fedora in a container is in `architecture/tests.md`.
+Since phase 18 opened, outside any phase (in `CHANGELOG.md`,
+`decisions.md`): Hosts and Assets filtered and grouped by inventory; the
+assistant asked about a run, profiles changed within a conversation,
+`[mcp] max_role` and `[chat] profiles` wider by default; confirmations
+before canceling, and the ways out of detail pages above their title.
+
+Integration: after the review of 16 November, `make ct-test` on
+AlmaLinux (`runs`, `checks`, `store`, `files`, `schedules`, `cli`, `mcp`,
+`chat`, `negative`), `make ct-lifecycle` on Debian; on the VMs `deb13`
+and `alma10`: `sandbox`, `runs`, `files`, `store`, `chat`, `schedules`,
+`negative`. Fedora not since phase 17. The backend changes of 18 November
+(`a128aee`, `4bae8c9`: `chat`, `mcp`, `config`) have an AlmaLinux image
+of `ct-test` only: run `chat` and `mcp` on Debian and Fedora. The known
+failure of `cmdb.sh` on Fedora in a container is in
+`architecture/tests.md`.
 
 ## Phase 18: the Overview as a dashboard (under way)
 
@@ -35,35 +43,52 @@ viewer in the dark theme (Lighthouse accessibility 100).
 
 ## What the review of 16 November left
 
-Fixed in `fb74fd6`, `c359af7`, `06dbe9a` (see `CHANGELOG.md`). Left, by
-the user's choice, for another session. Fix the first four; for the
-fifth, fix or record in `limits.md`; the last is for the user to decide.
+Fixed in `fb74fd6`, `c359af7`, `06dbe9a`. Left, by the user's choice, for
+another session; checked against the code on 18 November, all still open.
 
-- [ ] `jobs.reconcile`: `flock` with no timeout; a `fleetctl` suspended
-  (Ctrl-Z) while it holds it stops every page and dispatch.
-- [ ] `fleet-secret answer` logs the ticket to the journal before it is
-  used: a reader of the journal with the operator role can spend it.
-- [ ] `store.archive` opens every file before the first byte: over about
-  1000 files, `EMFILE`, and the browser saves an empty tar.
+Fix:
+
+- [ ] `jobs.reconcile`: `fcntl.flock(LOCK_EX)` with no timeout; a
+  `fleetctl` suspended (Ctrl-Z) while it holds it stops every page and
+  dispatch.
+- [ ] `fleet-secret answer` (`backend/libexec/fleet-secret`) sends the
+  ticket's name to the journal (`log`) before a run spends it: a reader of
+  the journal with the operator role can spend it.
+- [ ] `store.archive` (`storage.py`) opens every file before the first
+  byte: over about 1000 files, `EMFILE`, and the browser saves an empty
+  tar.
 - [ ] The upgrade scriptlets (`debian/cockpit-fleet.postinst`,
   `packaging/cockpit-fleet.spec`) delete every `runs/*/inventory.json`,
   that of a reading ended and not yet collected too: tie it to the old
   version.
-- [ ] To `limits.md`, or fix: `fleet-run` keeps the unmasked error in
-  `result.json` (no message holds a secret today); two `notify_states`
-  together send one notification twice; `_last_stats` reads 256 KiB, so
-  stats and artifacts are lost past ~1900 hosts; `moved_rows` can fail on
-  a stale row after `store.move` moved the file; Files: a tab kept while
-  its read was pending spins for ever (`kept` in `FilesPage.tsx`);
-  Approvals: the decide modal vanishes when another decides
-  (`PendingApprovals`); Survey: "None" on an optional choice with a
-  default gives the default (`collectAnswers`); docs installed link to
-  `decisions.md` and `TODO.md`, not packaged, and the rpm has no
-  `CHANGELOG.md`; `security.md` repeats limits of `limits.md`.
-- [ ] To decide: a playbook can rewrite its `result.json` and turn a
-  failed run into a successful one (the run writes its own directory);
-  a store folder is drawn whole, without paging; no component tests for
-  the frontend; GitHub actions pinned by tag, not by commit.
+
+Fix, or record in `limits.md`:
+
+- [ ] `fleet-run` keeps the unmasked error in `result.json` (no message
+  holds a secret today).
+- [ ] Two `notify_states` (`checks.py`) together send one notification
+  twice.
+- [ ] `_last_stats` (`jobs.py`) reads the last 256 KiB of `events.jsonl`:
+  stats and artifacts are lost past ~1900 hosts.
+- [ ] `moved_rows` (`storage.py`) can fail on a stale row after
+  `store.move` moved the file.
+- [ ] Files: a tab kept while its read was pending spins for ever (`kept`
+  in `FilesPage.tsx`).
+- [ ] Approvals: the decide modal vanishes when another decides
+  (`PendingApprovals`).
+- [ ] Survey: "None" on an optional choice with a default gives the
+  default (`collectAnswers`).
+- [ ] Docs installed (`%doc ... docs` in the spec) link to `decisions.md`
+  and `TODO.md`, not packaged; the rpm has no `CHANGELOG.md`.
+- [ ] `security.md` repeats limits of `limits.md`.
+
+For the user to decide:
+
+- [ ] A playbook can rewrite its `result.json` and turn a failed run into
+  a successful one (the run writes its own directory).
+- [ ] A store folder is drawn whole, without paging.
+- [ ] No component tests for the frontend.
+- [ ] GitHub actions pinned by tag, not by commit.
 
 ## Future
 
