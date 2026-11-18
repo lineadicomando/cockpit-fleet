@@ -164,7 +164,10 @@ started stays as it is: once logged in, send the message again.
   the others from users, who otherwise accept the risks of `diagnostic`,
   `autonomous` and `administrator` once each before using them. The backend refuses what is outside
   the profile, and `fleet-mcp` started by hand gets the default one.
-- The user picks the profile when starting a session, among those enabled.
+- The user picks the profile when starting a session, among those enabled,
+  and may change it within the conversation ("Change the profile"): the
+  agent starts again in the new one with the same conversation, and what
+  was allowed "always" is asked again.
   Before the first session in `diagnostic`, `autonomous` or `administrator`
   the page tells what it may do and its risks (the nodes can steer an
   assistant through what they write, and in these profiles it does more
@@ -180,6 +183,11 @@ started stays as it is: once logged in, send the message again.
   commands, changes to what is defined and files every time, never
   "always". These questions are a convenience: the backend decides again,
   whatever the answer.
+- A run that has ended, and a check whose result is not ok (in the checks
+  of a host and in Problems), have a button "Assistance": it writes in the
+  chat a request to investigate it, which the user edits and sends; nothing
+  is sent by itself. `diagnostic` is suggested for a new session, when it
+  is enabled.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
   adhoc_modules`, does not start until the user confirms it, in the list of
   runs waiting for approval or with `fleet approval approve`; the assistant

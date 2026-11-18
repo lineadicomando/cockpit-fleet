@@ -32,13 +32,13 @@ The packages of each release are on
 [GitHub](https://github.com/lineadicomando/cockpit-fleet/releases), with
 their `SHA256SUMS`; they can also be built from the sources (`make deb`,
 `make rpm`, see the README). Install one with the distribution's tool,
-which brings what it depends on:
+which brings what it depends on (`X.Y.Z` is the version):
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
-sudo apt-get install ./cockpit-fleet_0.3.0_all.deb            # Debian
-sudo dnf install ./cockpit-fleet-0.3.0-1.fc44.noarch.rpm      # Fedora
-sudo dnf install ./cockpit-fleet-0.3.0-1.el10.noarch.rpm      # AlmaLinux
+sudo apt-get install ./cockpit-fleet_X.Y.Z_all.deb            # Debian
+sudo dnf install ./cockpit-fleet-X.Y.Z-1.fc44.noarch.rpm      # Fedora
+sudo dnf install ./cockpit-fleet-X.Y.Z-1.el10.noarch.rpm      # AlmaLinux
 ```
 
 It installs:
@@ -69,7 +69,7 @@ domain), and what they may do in Fleet comes from the group of that account:
 | Group | May |
 |---|---|
 | `cockpit-fleet-viewer` | see projects, inventories, templates, schedules, the outcome of runs, hosts and the states of their checks; not the output of runs |
-| `cockpit-fleet-operator` | also launch templates (narrowing the hosts, a dry run, answering the survey), read the output of runs, cancel them, acknowledge problems, open maintenance windows, run a check or a schedule now, switch schedules on and off |
+| `cockpit-fleet-operator` | also launch templates (narrowing the hosts, a dry run, answering the survey, other tags, forks or output detail for that run), read the output of runs, cancel them, acknowledge problems, open maintenance windows, run a check or a schedule now, switch schedules on and off |
 | `cockpit-fleet-admin` | everything: projects, inventories, credentials and their secrets, sets of variables and their secret variables, host keys, templates, schedules, checks, notifications, ad-hoc commands, the audit log, export and import |
 | `cockpit-fleet-approver` | approve or reject the runs of templates that ask for it, whatever their role, or alone |
 
@@ -175,6 +175,10 @@ As an administrator, in the page:
    interface (empty, or from a starter).
 6. **Job templates**: a playbook of a project, an inventory, a credential,
    and a survey if the launch needs answers. Then launch it.
+
+The **Overview**, the first tab, then shows the state of the fleet at a
+glance to every role: hosts, open problems, runs by day and outcome, what
+fails most, what is coming up, and whether the controller keeps up.
 
 To watch the nodes, add checks in **Checks** (see [checks.md](checks.md)),
 and in **Notifications** a channel and a rule that says what to tell it.
