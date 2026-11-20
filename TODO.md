@@ -71,6 +71,14 @@ For the user to decide:
 
 Not planned as phases yet; the user picks the next one.
 
+- Network discovery (decided 20 November, see `decisions.md`), in steps:
+  the `netscan` job and its page of results; an inventory made from them
+  and `mac_address` written into an existing one; `net.probe` of an
+  inventory's hosts, the comparison with the CMDB and the agent's tools;
+  a module `net_probe` run from a node of the segment (Linux and
+  Windows) for subnets beyond a router. To verify: `ping_group_range` on
+  Debian 13 and AlmaLinux 10, `host_vars/HOST/` beside `HOST.yaml` on
+  ansible-core 2.16.
 - Ad-hoc commands: sets of variables chosen for one (today only the
   inventory's).
 - Assistant: instructions per project.
