@@ -93,6 +93,7 @@ project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M
 overview.get viewer -
 netscan.subnets admin -       netscan.start admin M         netscan.result admin -
+netscan.inventory admin M     netscan.macs admin M
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()

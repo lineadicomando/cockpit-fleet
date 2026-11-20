@@ -171,6 +171,13 @@ in [security.md](security.md); the decisions behind these limits in
   agent's program, not held for an approval; the scan is a burst of
   connections an IDS may report; ICMP needs `net.ipv4.ping_group_range` to
   include the service account's group, which is not set by the package.
+  `mac_address` is written only into inventories written in Fleet, never
+  into a project's; one set in the main file of the inventory or in
+  `group_vars` is not looked for (the one written in `host_vars` wins
+  over them); `fleet_mac.yaml` is read before the other files of
+  `host_vars/HOST/`, so one of them that comes to set `mac_address` later
+  wins; a host's file is moved into `host_vars/HOST/`, which a person
+  editing it may not expect.
 - Approvals: one approver suffices (no quorum); an approval is not
   notified to the approvers by name, only to channels; a pending run shows
   its launch time as "Started".

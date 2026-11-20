@@ -36,3 +36,15 @@ test("the size of a subnet, or nothing for what is not one", () => {
         assert.equal(subnetSize(text), null, text);
     }
 });
+
+test("the hosts of an inventory that hosts of a scan may be", async () => {
+    const { inventoryHosts, inventoriesFound } = await import("../src/lib/netscan.ts");
+    const hosts = [
+        host("10.0.0.1", { mac: "52:54:00:00:00:01", known: [{ inventory_id: "i1", inventory: "lab", host: "b", by: "address" }] }),
+        host("10.0.0.2", { mac: "52:54:00:00:00:02", known: [{ inventory_id: "i1", inventory: "lab", host: "a", by: "name" }, { inventory_id: "i2", inventory: "x", host: "a", by: "address" }] }),
+        host("10.0.0.3", { known: [{ inventory_id: "i1", inventory: "lab", host: "c", by: "address" }] }),
+    ];
+    assert.deepEqual(inventoryHosts(hosts, "i1", false), ["b"]);
+    assert.deepEqual(inventoryHosts(hosts, "i1", true), ["a", "b"]);
+    assert.deepEqual([...inventoriesFound(hosts)], [["i1", 3], ["i2", 1]]);
+});

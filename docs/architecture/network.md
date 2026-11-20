@@ -1,9 +1,9 @@
 # The network
 
 What a controller finds out about the network by itself, without Ansible
-and without the nodes: the scan of a subnet, decided with the user on 20
-November (`decisions.md`, "Network discovery"). The steps after it (an
-inventory made from what a scan found, `mac_address` written into one, the
+and without the nodes: the scan of a subnet, and what it found turned into
+an inventory or into the MAC addresses of one, decided with the user on 20
+November (`decisions.md`, "Network discovery"). The steps after them (the
 hosts of an inventory probed one by one, a probe from a node of the
 segment) are in `TODO.md`.
 
@@ -74,6 +74,37 @@ DNS or the NetBIOS name, whole or its first label, against the name of a
 host or its `ansible_host`), whatever their case. With `wait`, as
 `run.result`, it answers when the scan ends or after at most 50 s.
 
+**An inventory from a scan.** `netscan.inventory` makes an inventory
+written here (managed, YAML) of the hosts of an ended scan that the caller
+chose by address, through `inventory.create` itself, so that an agent's
+waits in a draft as any inventory an agent creates; one made in main is
+read at once. Each host is named as asked: `short` (the NetBIOS name in
+lower case, or the first label of the DNS name), `dns` (the whole name) or
+`address`; a name Ansible or a path would not take, or one an earlier host
+took, gives way to the address. Each gets `ansible_host` (unless named by
+it) and `mac_address` when the scan saw one, all under one group if asked.
+The text is written by the backend, every name and value as a quoted
+string, since the standard library has no YAML.
+
+**MAC addresses into an inventory.** `netscan.macs` writes, for the hosts
+of an inventory written here that a scan found by address (and by name
+only when asked, `by_name`), `mac_address: "…"` in
+`host_vars/HOST/fleet_mac.yaml`, beside the source the inventory reads (its
+`path`, or the directory that holds it), as one commit, or in the draft of
+an agent's session. A file of ours, so that no YAML of the administrator's
+is edited, which the backend could not do without losing its comments.
+Ansible reads the first of `host_vars/HOST`, `HOST.yml`, `HOST.yaml`,
+`HOST.json` that exists, and a directory counts (`find_vars_files`, tried
+with ansible-core 2.16 on 20 November: a `pc101.yaml` beside `pc101/` was
+no longer read). So the file of the host that Ansible was reading is moved
+into the directory, unchanged, in the same commit; a host whose files
+there already set `mac_address` (a line that begins with it), whose
+directory or file is a link, which the scan found with two MAC addresses,
+or whose name cannot name a file, is left alone and told why. With
+`preview` nothing is written: the page shows what would be, host by host,
+before asking. Writing it again with the same address changes nothing.
+Only inventories written here: a project's is changed in the project.
+
 **Who.** Administrators only, for all three commands and for the output of
 the run (`run.log`), which is a map of the network. For an agent
 `netscan.start` is of its own class, `scan`, between `run` and `adhoc`:
@@ -82,7 +113,10 @@ every time (`profiles.ALWAYS_ASKED`), never trusted for a conversation.
 It does not wait for an approval as an agent's ad-hoc command does: it
 changes nothing on the hosts, and what it may reach is bounded by the
 subnets allowed. Being an administrator's command, an agent of an operator
-cannot call it whatever its profile.
+cannot call it whatever its profile. `netscan.inventory` and `netscan.macs`
+are `config`, as `inventory.create` and `inventory.update`: the profile
+`administrator` only, every call asked, and what they write goes to a
+draft.
 
 **The page.** Nodes, Network (`src/components/NetworkPage.tsx`), shown to
 those who may call `netscan.result`: the scans, newest first, with their
@@ -90,8 +124,13 @@ status and the hosts found; a dialog that offers the subnets allowed, a
 field to narrow one, and says how many addresses it may have and which
 ports are tried; the hosts a scan found, with their names, MAC address
 (and whether the host gave it over NetBIOS), open ports, how each was seen
-and the hosts of inventories it may be, filtered by any of these. The page
-of the run links to it.
+and the hosts of inventories it may be, filtered by any of these. Hosts
+are chosen with a box on each row, all of them when none is, for two
+actions: "Create an inventory" (its name, how hosts are named, a group;
+the page then opens its files) and "Write the MAC addresses into an
+inventory" (one written here that holds some of them, by name too if
+asked, with what would be done shown before). The page of the run links
+to it.
 
 Checked in containers on Debian 13, Fedora 44 and AlmaLinux 10
 (`netscan.sh`, 20 November): on a dummy interface with 192.0.2.0/24, so
@@ -100,4 +139,9 @@ it listens on, ICMP from the sandbox once `ping_group_range` let the
 service account (in a container it is `0 0`), the refusals, the output
 kept from operators, and a scan of the /24 canceled with what it had
 found. In a rootless container the network is the host's own: the default
-of the script never scans it.
+of the script never scans it. Then, with a neighbour written in by hand on
+the dummy interface (`ip neigh … nud permanent`), found by the table with
+its MAC address: an inventory made from the scan, read, and Ansible
+(`ansible-inventory --host`) giving the MAC address; an inventory with
+`host_vars/pc5.yaml`, the MAC address written and the file moved, Ansible
+giving both its variables, and a second time changing nothing.

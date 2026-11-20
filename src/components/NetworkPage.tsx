@@ -1,16 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import cockpit from "cockpit";
 import {
-    Content, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, LabelGroup, TextInput, Tooltip,
+    Checkbox, Content, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, LabelGroup, Radio, TextInput, Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
-import { filterScanHosts, subnetSize } from "../lib/netscan.ts";
+import { filterScanHosts, inventoriesFound, inventoryHosts, subnetSize } from "../lib/netscan.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Run, ScanHost, ScanResult, ScanSubnets } from "../lib/types.ts";
+import type { Inventory, MacOutcome, MacsAnswer, Run, ScanHost, ScanResult, ScanSubnets } from "../lib/types.ts";
 import { FormModal, ListState, PageNav, RunStatusLabel, SectionHeader, isActiveRun, openRun } from "./common.tsx";
 import { Alert, Button, SearchInput } from "./pf.tsx";
 
@@ -155,10 +155,163 @@ function Known({ host }: { host: ScanHost }) {
     );
 }
 
+// A new inventory written here, of the hosts chosen: named as asked, with
+// their addresses and the MAC addresses the scan saw.
+function InventoryModal({ id, hosts, onClose }: { id: string; hosts: ScanHost[]; onClose: () => void }) {
+    const { t } = useTranslation();
+    const [name, setName] = useState("");
+    const [naming, setNaming] = useState<"short" | "dns" | "address">("short");
+    const [group, setGroup] = useState("");
+
+    async function create() {
+        const made = await call<{ inventory: Inventory }>("netscan.inventory", {
+            id, name: name.trim(), naming, group: group.trim(), addresses: hosts.map(host => host.address),
+        });
+        onClose();
+        cockpit.location.go(["inventories", made.inventory.id]);
+    }
+
+    return (
+        <FormModal title={t("Create an inventory")} submitLabel={t("Create")} onSubmit={create} onClose={onClose} isDisabled={!name.trim()}>
+            <Content component="p">
+                {t("new_inventory_hosts_count", { count: hosts.length })}
+            </Content>
+            <FormGroup label={t("Name")} isRequired fieldId="ns-inv-name">
+                <TextInput id="ns-inv-name" value={name} onChange={(_e, value) => setName(value)} />
+            </FormGroup>
+            <FormGroup role="radiogroup" label={t("Names of the hosts")} fieldId="ns-inv-naming">
+                <Radio id="ns-inv-short" name="ns-inv-naming" isChecked={naming === "short"} onChange={() => setNaming("short")}
+                    label={t("Short: the NetBIOS name, or the first part of the DNS name")} />
+                <Radio id="ns-inv-dns" name="ns-inv-naming" isChecked={naming === "dns"} onChange={() => setNaming("dns")}
+                    label={t("The whole DNS name")} />
+                <Radio id="ns-inv-address" name="ns-inv-naming" isChecked={naming === "address"} onChange={() => setNaming("address")}
+                    label={t("The address")} />
+                <FormHelperText>
+                    <HelperText>
+                        <HelperTextItem>{t("A host with no such name, or whose name another host took, is named by its address.")}</HelperTextItem>
+                    </HelperText>
+                </FormHelperText>
+            </FormGroup>
+            <FormGroup label={t("Group")} fieldId="ns-inv-group">
+                <TextInput id="ns-inv-group" value={group} onChange={(_e, value) => setGroup(value)} />
+                <FormHelperText>
+                    <HelperText>
+                        <HelperTextItem>{t("Optional: a group to put every host in.")}</HelperTextItem>
+                    </HelperText>
+                </FormHelperText>
+            </FormGroup>
+        </FormModal>
+    );
+}
+
+function OutcomeLabel({ outcome }: { outcome: MacOutcome }) {
+    const { t } = useTranslation();
+    if (outcome.result === "written") return <Label isCompact color="blue">{outcome.moved ? t("Written, its file moved") : t("Written")}</Label>;
+    if (outcome.result === "unchanged") return <Label isCompact color="green">{t("Already there")}</Label>;
+    return <Tooltip content={outcome.reason ?? ""}><Label isCompact color="orange">{t("Left alone")}</Label></Tooltip>;
+}
+
+// The MAC addresses the scan saw, written as mac_address into an inventory
+// written here, for its hosts that the scan found: what would be done is
+// shown before anything is written.
+function MacsModal({ id, hosts, onClose, onDone }: {
+    id: string; hosts: ScanHost[]; onClose: () => void; onDone: (text: string) => void;
+}) {
+    const { t } = useTranslation();
+    const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
+    const found = inventoriesFound(hosts);
+    const managed = (inventories.data?.inventories ?? []).filter(inventory => inventory.kind === "managed" && found.has(inventory.id));
+    const [inventoryId, setInventoryId] = useState("");
+    const [byName, setByName] = useState(false);
+    const [preview, setPreview] = useState<MacsAnswer | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const names = inventoryId ? inventoryHosts(hosts, inventoryId, byName) : [];
+
+    useEffect(() => {
+        setPreview(null);
+        setError(null);
+        if (!inventoryId || names.length === 0) return;
+        let current = true;
+        call<MacsAnswer>("netscan.macs", { id, inventory_id: inventoryId, by_name: byName, hosts: names, preview: true })
+            .then(answer => { if (current) setPreview(answer); }, ex => { if (current) setError(ex instanceof Error ? ex.message : String(ex)); });
+        return () => { current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inventoryId, byName, names.join(" ")]);
+
+    const writing = (preview?.hosts ?? []).filter(outcome => outcome.result === "written").length;
+
+    async function write() {
+        const answer = await call<MacsAnswer>("netscan.macs", { id, inventory_id: inventoryId, by_name: byName, hosts: names });
+        const inventory = managed.find(item => item.id === inventoryId)?.name ?? "";
+        onDone(t("mac_written_count", { count: answer.hosts.filter(outcome => outcome.result === "written").length, inventory }));
+        onClose();
+    }
+
+    return (
+        <FormModal title={t("Write the MAC addresses into an inventory")} submitLabel={t("Write")} onSubmit={write} onClose={onClose}
+            isDisabled={writing === 0}>
+            <Content component="p">
+                {t("Each host of the inventory that the scan found gets mac_address in host_vars/HOST/fleet_mac.yaml, as one change of the inventory. A file of its variables already in host_vars is moved into that directory, unchanged: Ansible would no longer read it. A host whose variables already set mac_address is left alone.")}
+            </Content>
+            {inventories.error && <Alert variant="danger" isInline title={inventories.error.message} />}
+            {inventories.data && managed.length === 0 && (
+                <Alert variant="info" isInline title={t("None of these hosts is in an inventory written in Fleet.")} />
+            )}
+            {managed.length > 0 && (
+                <FormGroup label={t("Inventory")} isRequired fieldId="ns-macs-inventory">
+                    <FormSelect id="ns-macs-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
+                        <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
+                        {managed.map(inventory => (
+                            <FormSelectOption key={inventory.id} value={inventory.id}
+                                label={t("inventory_found_count", { name: inventory.name, count: found.get(inventory.id) ?? 0 })} />
+                        ))}
+                    </FormSelect>
+                </FormGroup>
+            )}
+            {inventoryId && (
+                <Checkbox id="ns-macs-by-name" isChecked={byName} onChange={(_e, value) => setByName(value)}
+                    label={t("Also the hosts found by name only, not by address")} />
+            )}
+            {inventoryId && names.length === 0 && (
+                <Content component="p">{t("No host of this inventory was found with a MAC address.")}</Content>
+            )}
+            {error && <Alert variant="danger" isInline title={error} />}
+            {preview && preview.hosts.length > 0 && (
+                <Table aria-label={t("What would be written")} variant="compact">
+                    <Thead>
+                        <Tr>
+                            <Th>{t("Host")}</Th>
+                            <Th>{t("MAC address")}</Th>
+                            <Th>{t("Result")}</Th>
+                        </Tr>
+                    </Thead>
+                    <Tbody>
+                        {preview.hosts.map(outcome => (
+                            <Tr key={outcome.host}>
+                                <Td dataLabel={t("Host")}>{outcome.host}</Td>
+                                <Td dataLabel={t("MAC address")}>{outcome.mac ? <code>{outcome.mac}</code> : "—"}</Td>
+                                <Td dataLabel={t("Result")}>
+                                    <OutcomeLabel outcome={outcome} />
+                                    {outcome.moved && <div><small>{t("{{from}} moved to {{to}}", outcome.moved)}</small></div>}
+                                    {outcome.reason && <div><small>{outcome.reason}</small></div>}
+                                </Td>
+                            </Tr>
+                        ))}
+                    </Tbody>
+                </Table>
+            )}
+        </FormModal>
+    );
+}
+
 function ScanResults({ id }: { id: string }) {
     const { t, i18n } = useTranslation();
+    const can = useCan();
     const result = useLoad(() => call<ScanResult>("netscan.result", { id }));
     const [search, setSearch] = useState("");
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [dialog, setDialog] = useState<"" | "inventory" | "macs">("");
+    const [done, setDone] = useState("");
     usePolling(() => result.reload(), 2000, !result.data?.done);
     const seen: Record<string, string> = { tcp: t("TCP"), icmp: t("ICMP"), arp: t("ARP") };
     const seenHelp: Record<string, string> = {
@@ -178,6 +331,17 @@ function ScanResults({ id }: { id: string }) {
     const data = result.data;
     const options = data.run.options;
     const hosts = filterScanHosts(data.hosts, search);
+    const chosen = data.hosts.filter(host => selected.has(host.address));
+    // What the actions take: the hosts chosen, or every one when none is.
+    const taken = chosen.length > 0 ? chosen : data.hosts;
+    const allShown = hosts.length > 0 && hosts.every(host => selected.has(host.address));
+    const select = (addresses: string[], on: boolean) => setSelected(current => {
+        const next = new Set(current);
+        for (const address of addresses) {
+            if (on) next.add(address); else next.delete(address);
+        }
+        return next;
+    });
 
     return (
         <>
@@ -200,13 +364,30 @@ function ScanResults({ id }: { id: string }) {
             {!data.on_link && (
                 <Alert variant="info" isInline title={t("This subnet is beyond a router: MAC addresses come only from NetBIOS, from the hosts that give it.")} style={{ marginBottom: "1rem" }} />
             )}
+            {done && <Alert variant="success" isInline title={done} style={{ marginBottom: "1rem" }} />}
+            {dialog === "inventory" && <InventoryModal id={id} hosts={taken} onClose={() => setDialog("")} />}
+            {dialog === "macs" && <MacsModal id={id} hosts={taken} onClose={() => setDialog("")} onDone={setDone} />}
             {data.done && data.hosts.length > 0 && (
                 <>
-                    <SearchInput placeholder={t("Filter by address, name, MAC address, port or inventory")} value={search}
-                        onChange={(_e, value) => setSearch(value)} onClear={() => setSearch("")} style={{ maxWidth: "30rem", marginBottom: "0.5rem" }} />
+                    <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} style={{ marginBottom: "0.5rem" }}>
+                        <FlexItem grow={{ default: "grow" }}>
+                            <SearchInput placeholder={t("Filter by address, name, MAC address, port or inventory")} value={search}
+                                onChange={(_e, value) => setSearch(value)} onClear={() => setSearch("")} style={{ maxWidth: "30rem" }} />
+                        </FlexItem>
+                        <FlexItem>
+                            {chosen.length > 0 ? t("chosen_hosts_count", { count: chosen.length }) : t("No host chosen: the actions take them all.")}
+                        </FlexItem>
+                        {can("netscan.inventory") && (
+                            <Button variant="secondary" onClick={() => { setDone(""); setDialog("inventory"); }}>{t("Create an inventory")}</Button>
+                        )}
+                        {can("netscan.macs") && (
+                            <Button variant="secondary" onClick={() => { setDone(""); setDialog("macs"); }}>{t("Write the MAC addresses into an inventory")}</Button>
+                        )}
+                    </Flex>
                     <Table aria-label={t("Hosts found")} variant="compact">
                         <Thead>
                             <Tr>
+                                <Th select={{ onSelect: (_e, on) => select(hosts.map(host => host.address), on), isSelected: allShown }} aria-label={t("Choose the hosts shown")} />
                                 <Th>{t("Address")}</Th>
                                 <Th>{t("Names")}</Th>
                                 <Th>{t("MAC address")}</Th>
@@ -216,8 +397,9 @@ function ScanResults({ id }: { id: string }) {
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {hosts.map(host => (
+                            {hosts.map((host, index) => (
                                 <Tr key={host.address}>
+                                    <Td select={{ rowIndex: index, onSelect: (_e, on) => select([host.address], on), isSelected: selected.has(host.address) }} />
                                     <Td dataLabel={t("Address")}><code>{host.address}</code></Td>
                                     <Td dataLabel={t("Names")}><Names host={host} /></Td>
                                     <Td dataLabel={t("MAC address")}>

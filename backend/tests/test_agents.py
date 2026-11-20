@@ -22,7 +22,7 @@ CLASS_TABLE = {
     "scan": "netscan.start",
     "adhoc": "run.adhoc",
     "config": """channel.create channel.test channel.update check.create check.update
-        inventory.create inventory.update rule.create rule.update schedule.create
+        inventory.create inventory.update netscan.inventory netscan.macs rule.create rule.update schedule.create
         schedule.update template.create template.update varset.create varset.update
         workflow.create workflow.update""",
     "code": """channel.delete check.delete config.import credential.create credential.delete

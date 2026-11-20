@@ -26,6 +26,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
   segment, its open ports and the hosts of inventories it may be. A scan
   is a run, of at most `[network] scan_max_addresses` addresses (1024).
   Commands `netscan.subnets`, `netscan.start` and `netscan.result`.
+- Nodes, Network: the hosts a scan found, all or those chosen, make a new
+  inventory written in Fleet, named by their NetBIOS or DNS names or by
+  address, with `ansible_host` and `mac_address`
+  (`netscan.inventory`); or their MAC addresses are written as
+  `mac_address` into an inventory written in Fleet that holds them, in
+  `host_vars/HOST/fleet_mac.yaml`, after a preview of what changes
+  (`netscan.macs`). A file `host_vars/HOST.yaml` already there is moved
+  into `host_vars/HOST/`, unchanged, since Ansible would no longer read
+  it beside that directory.
 - Assistant: in the profiles diagnostic and administrator the assistant
   of an administrator may scan a subnet, asked every time (a class of
   tools of its own, `scan`).

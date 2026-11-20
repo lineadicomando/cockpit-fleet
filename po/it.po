@@ -4470,3 +4470,86 @@ msgid "hosts_found_count"
 msgid_plural "hosts_found_count_plural"
 msgstr[0] "{{count}} host trovato."
 msgstr[1] "{{count}} host trovati."
+
+msgid "{{from}} moved to {{to}}"
+msgstr "{{from}} spostato in {{to}}"
+
+msgid "A host with no such name, or whose name another host took, is named by its address."
+msgstr "Un host senza un nome di questo tipo, o il cui nome è già preso da un altro host, prende il suo indirizzo come nome."
+
+msgid "Also the hosts found by name only, not by address"
+msgstr "Anche gli host trovati solo per nome, non per indirizzo"
+
+msgid "Choose the hosts shown"
+msgstr "Scegli gli host mostrati"
+
+msgid "Create an inventory"
+msgstr "Crea un inventario"
+
+msgid "Each host of the inventory that the scan found gets mac_address in host_vars/HOST/fleet_mac.yaml, as one change of the inventory. A file of its variables already in host_vars is moved into that directory, unchanged: Ansible would no longer read it. A host whose variables already set mac_address is left alone."
+msgstr "Ogni host dell'inventario trovato dalla scansione riceve mac_address in host_vars/HOST/fleet_mac.yaml, con un'unica modifica dell'inventario. Un file delle sue variabili già presente in host_vars viene spostato in quella directory, senza cambiarlo: altrimenti Ansible non lo leggerebbe più. Un host le cui variabili impostano già mac_address viene lasciato com'è."
+
+msgid "Left alone"
+msgstr "Lasciato com'è"
+
+msgid "Names of the hosts"
+msgstr "Nomi degli host"
+
+msgid "No host chosen: the actions take them all."
+msgstr "Nessun host scelto: le azioni li prendono tutti."
+
+msgid "No host of this inventory was found with a MAC address."
+msgstr "Nessun host di questo inventario è stato trovato con un indirizzo MAC."
+
+msgid "None of these hosts is in an inventory written in Fleet."
+msgstr "Nessuno di questi host è in un inventario scritto in Fleet."
+
+msgid "Optional: a group to put every host in."
+msgstr "Facoltativo: un gruppo in cui mettere tutti gli host."
+
+msgid "Result"
+msgstr "Esito"
+
+msgid "Short: the NetBIOS name, or the first part of the DNS name"
+msgstr "Breve: il nome NetBIOS, o la prima parte del nome DNS"
+
+msgid "The address"
+msgstr "L'indirizzo"
+
+msgid "The whole DNS name"
+msgstr "Il nome DNS completo"
+
+msgid "What would be written"
+msgstr "Cosa verrebbe scritto"
+
+msgid "Write"
+msgstr "Scrivi"
+
+msgid "Write the MAC addresses into an inventory"
+msgstr "Scrivi gli indirizzi MAC in un inventario"
+
+msgid "Written"
+msgstr "Scritto"
+
+msgid "Written, its file moved"
+msgstr "Scritto, con il suo file spostato"
+
+msgid "chosen_hosts_count"
+msgid_plural "chosen_hosts_count_plural"
+msgstr[0] "{{count}} host scelto"
+msgstr[1] "{{count}} host scelti"
+
+msgid "mac_written_count"
+msgid_plural "mac_written_count_plural"
+msgstr[0] "Indirizzo MAC scritto per {{count}} host di {{inventory}}."
+msgstr[1] "Indirizzi MAC scritti per {{count}} host di {{inventory}}."
+
+msgid "new_inventory_hosts_count"
+msgid_plural "new_inventory_hosts_count_plural"
+msgstr[0] "Un inventario scritto in Fleet, con {{count}} host: il suo indirizzo come ansible_host e il suo indirizzo MAC come mac_address, quando la scansione l'ha visto. Viene letto appena creato."
+msgstr[1] "Un inventario scritto in Fleet, con {{count}} host: i loro indirizzi come ansible_host e i loro indirizzi MAC come mac_address, quando la scansione li ha visti. Viene letto appena creato."
+
+msgid "inventory_found_count"
+msgid_plural "inventory_found_count_plural"
+msgstr[0] "{{name}} ({{count}} host trovato)"
+msgstr[1] "{{name}} ({{count}} host trovati)"

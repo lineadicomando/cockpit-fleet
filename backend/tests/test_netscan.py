@@ -196,7 +196,7 @@ class ScannerTest(unittest.TestCase):
         self.assertFalse(data["complete"])
 
 
-class JobTest(Base):
+class ScanBase(Base):
     def setUp(self):
         super().setUp()
         self.config = replace(self.config, mcp_enabled=True)
@@ -218,6 +218,9 @@ class JobTest(Base):
             {"subnet": "192.168.10.0/24", "icmp": True, "complete": complete, "hosts": hosts}))
         self.finish(run_id, rc)
 
+
+
+class JobTest(ScanBase):
     def test_subnets_and_roles(self):
         found = self.ok("netscan.subnets")
         self.assertEqual(found["subnets"][0]["subnet"], "192.168.10.0/24")
@@ -322,3 +325,175 @@ class JobTest(Base):
             with self.subTest(profile):
                 answer = as_agent(profile)
                 self.assertEqual(answer["ok"], allowed, answer)
+
+
+def found(address, **extra):
+    host = {"address": address, "mac": "", "mac_source": "", "dns_name": "", "netbios_name": "",
+            "workgroup": "", "ports": [], "seen": ["tcp"], "self": False, "known": []}
+    return {**host, **extra}
+
+
+class NamesTest(unittest.TestCase):
+    def test_a_host_is_named_as_asked_or_by_its_address(self):
+        host = found("10.0.0.7", dns_name="pc101.school.lan.", netbios_name="PC101")
+        self.assertEqual(netscan.host_name(host, "short"), "pc101")
+        self.assertEqual(netscan.host_name(host, "dns"), "pc101.school.lan")
+        self.assertEqual(netscan.host_name(host, "address"), "10.0.0.7")
+        dns_only = found("10.0.0.8", dns_name="printer.school.lan")
+        self.assertEqual(netscan.host_name(dns_only, "short"), "printer")
+        netbios_only = found("10.0.0.9", netbios_name="AULA_3")
+        self.assertEqual(netscan.host_name(netbios_only, "short"), "10.0.0.9")
+        self.assertEqual(netscan.host_name(found("10.0.0.10"), "dns"), "10.0.0.10")
+        self.assertEqual(netscan.host_name(found("10.0.0.11", dns_name="-x"), "dns"),
+                         "10.0.0.11")
+
+    def test_the_text_of_an_inventory(self):
+        hosts = [found("10.0.0.7", netbios_name="PC101", mac="52:54:00:aa:bb:07"),
+                 found("10.0.0.8", dns_name="pc101.other.lan"),
+                 found("10.0.0.9")]
+        text, named = netscan.inventory_text(hosts, "short", "")
+        self.assertEqual([entry["name"] for entry in named], ["pc101", "10.0.0.8", "10.0.0.9"])
+        self.assertEqual(text, 'all:\n  hosts:\n    "pc101":\n      ansible_host: "10.0.0.7"\n'
+                               '      mac_address: "52:54:00:aa:bb:07"\n    "10.0.0.8": {}\n'
+                               '    "10.0.0.9": {}\n')
+        grouped, _ = netscan.inventory_text(hosts[:1], "address", "lab")
+        self.assertEqual(grouped, 'all:\n  children:\n    lab:\n      hosts:\n'
+                                  '        "10.0.0.7":\n          mac_address: "52:54:00:aa:bb:07"\n')
+
+
+@unittest.skipUnless(Path("/usr/bin/git").exists(), "needs git")
+class InventoryTest(ScanBase):
+    HOSTS = [
+        {"address": "192.168.10.7", "mac": "52:54:00:aa:bb:07", "mac_source": "arp",
+         "netbios_name": "PC101", "seen": ["tcp", "arp"]},
+        {"address": "192.168.10.8", "mac": "52:54:00:aa:bb:08", "mac_source": "arp",
+         "dns_name": "pc102.school.lan", "seen": ["arp"]},
+        {"address": "192.168.10.9", "mac": "52:54:00:aa:bb:09", "mac_source": "netbios",
+         "netbios_name": "PC103", "seen": ["tcp"]},
+        {"address": "192.168.10.10", "seen": ["icmp"]},
+        {"address": "192.168.10.11", "mac": "52:54:00:aa:bb:11", "netbios_name": "PC105",
+         "mac_source": "arp", "seen": ["arp"]},
+    ]
+
+    def setUp(self):
+        super().setUp()
+        self.run_id = self.scan()
+        self.leave(self.run_id, self.HOSTS)
+
+    def tree(self, inventory_id):
+        return paths.INVENTORIES_DIR / inventory_id / "tree"
+
+    def test_an_inventory_from_a_scan(self):
+        made = self.ok("netscan.inventory", {
+            "id": self.run_id, "name": "aula", "group": "aula3",
+            "addresses": ["192.168.10.9", "192.168.10.7", "192.168.10.10"]})
+        inventory = made["inventory"]
+        self.assertEqual([host["name"] for host in made["hosts"]],
+                         ["pc101", "pc103", "192.168.10.10"])
+        text = (self.tree(inventory["id"]) / "hosts.yaml").read_text()
+        self.assertIn('      hosts:\n        "pc101":\n          ansible_host: "192.168.10.7"\n'
+                      '          mac_address: "52:54:00:aa:bb:07"\n', text)
+        self.assertIn('        "192.168.10.10": {}\n', text)
+        parse = self.ctx().conn.execute("SELECT kind, inventory_id FROM runs WHERE id = ?",
+                                        (made["parse_run_id"],)).fetchone()
+        self.assertEqual(tuple(parse), ("inventory", inventory["id"]))
+
+    def test_an_inventory_refuses_what_the_scan_did_not_find(self):
+        for params, code in (({"addresses": []}, "bad_request"),
+                             ({"addresses": ["192.168.10.99"]}, "bad_request"),
+                             ({"addresses": ["192.168.10.7"], "group": "all"}, "bad_request"),
+                             ({"addresses": ["192.168.10.7"], "group": "a b"}, "bad_request")):
+            with self.subTest(params):
+                self.assertEqual(self.code("netscan.inventory",
+                                           {"id": self.run_id, "name": "x", **params}), code)
+        running = self.scan()
+        self.assertEqual(self.code("netscan.inventory", {"id": running, "name": "x",
+                                                         "addresses": ["192.168.10.7"]}),
+                         "conflict")
+        self.assertEqual(self.code("netscan.inventory", {"id": self.run_id, "name": "x",
+                                                         "addresses": ["192.168.10.7"]},
+                                   role="operator"), "forbidden")
+
+    def existing(self):
+        inventory = self.ok("inventory.create", {
+            "name": "lab", "kind": "managed", "content": "all:\n  hosts: {}\n", "files": [
+                {"path": "host_vars/pc101.yaml", "content": "role: lab\n"},
+                {"path": "host_vars/pc103.yml", "content": "mac_address: '00:11:22:33:44:55'\n"},
+                {"path": "host_vars/pc105/other.yaml", "content": "x: 1\n"},
+            ]})
+        hosts = [{"name": name, "address": address, "port": None, "connection": "",
+                  "groups": []} for name, address in (
+                      ("pc101", "192.168.10.7"), ("pc102", "192.168.10.8"),
+                      ("pc103", "192.168.10.9"), ("pc104", ""), ("pc105", "192.168.10.11"))]
+        self.ctx().conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                                (json.dumps(hosts), inventory["id"]))
+        return inventory["id"]
+
+    def test_mac_addresses_written_into_an_inventory(self):
+        inventory_id = self.existing()
+        tree = self.tree(inventory_id)
+        preview = self.ok("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id,
+                                            "preview": True})
+        self.assertIsNone(preview["revision"])
+        self.assertFalse((tree / "host_vars" / "pc102").exists())
+        results = {entry["host"]: entry["result"] for entry in preview["hosts"]}
+        self.assertEqual(results, {"pc101": "written", "pc102": "written", "pc103": "skipped",
+                                   "pc105": "written"})
+        done = self.ok("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id})
+        self.assertTrue(done["revision"])
+        self.assertEqual(done["hosts"], preview["hosts"])
+        self.assertEqual((tree / "host_vars/pc101/fleet_mac.yaml").read_text(),
+                         'mac_address: "52:54:00:aa:bb:07"\n')
+        # Moved into the directory, as it was: Ansible would not read it beside it.
+        self.assertEqual((tree / "host_vars/pc101/pc101.yaml").read_text(), "role: lab\n")
+        self.assertFalse((tree / "host_vars/pc101.yaml").exists())
+        self.assertEqual(done["hosts"][0]["moved"], {"from": "host_vars/pc101.yaml",
+                                                     "to": "host_vars/pc101/pc101.yaml"})
+        self.assertTrue((tree / "host_vars/pc102/fleet_mac.yaml").is_file())
+        self.assertEqual((tree / "host_vars/pc103.yml").read_text(),
+                         "mac_address: '00:11:22:33:44:55'\n")
+        self.assertIn("mac_address is set in host_vars/pc103.yml", done["hosts"][2]["reason"])
+        self.assertEqual((tree / "host_vars/pc105/other.yaml").read_text(), "x: 1\n")
+        self.assertTrue((tree / "host_vars/pc105/fleet_mac.yaml").is_file())
+        again = self.ok("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id})
+        self.assertIsNone(again["revision"])
+        self.assertEqual({entry["result"] for entry in again["hosts"] if entry["host"] != "pc103"},
+                         {"unchanged"})
+
+    def test_only_the_hosts_asked_for_and_by_name_when_asked(self):
+        inventory_id = self.existing()
+        hosts = [{"name": "PC105", "address": "", "port": None, "connection": "", "groups": []}]
+        self.ctx().conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                                (json.dumps(hosts), inventory_id))
+        none = self.ok("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id,
+                                         "preview": True})
+        self.assertEqual(none["hosts"], [])
+        named = self.ok("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id,
+                                          "preview": True, "by_name": True,
+                                          "hosts": ["PC105", "pc999"]})
+        self.assertEqual([(entry["host"], entry["result"]) for entry in named["hosts"]],
+                         [("PC105", "written"), ("pc999", "skipped")])
+
+    def test_only_an_inventory_written_here(self):
+        project = self.local_project()
+        inventory = self.ok("inventory.create", {"name": "f", "kind": "file",
+                                                 "project_id": project["id"],
+                                                 "path": "inventories/hosts.yml"})
+        self.assertEqual(self.code("netscan.macs", {"id": self.run_id,
+                                                    "inventory_id": inventory["id"]}),
+                         "bad_request")
+
+    def test_an_agent_writes_to_its_draft(self):
+        inventory_id = self.existing()
+        self.config = replace(self.config, mcp_max_role="admin",
+                              chat_profiles=("assisted", "diagnostic", "administrator"))
+        answer = self.call("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id,
+                                            "via": "mcp:test", "profile": "administrator",
+                                            "session": "0123456789abcdef"})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["data"]["draft"], "0123456789abcdef")
+        self.assertFalse((self.tree(inventory_id) / "host_vars/pc102").exists())
+        refused = self.call("netscan.macs", {"id": self.run_id, "inventory_id": inventory_id,
+                                             "via": "mcp:test", "profile": "diagnostic"})
+        self.assertFalse(refused["ok"])
+        self.assertIn("(config) is not allowed", refused["error"]["message"])

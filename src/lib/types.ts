@@ -946,3 +946,21 @@ export interface ScanResult {
     on_link: boolean;
     hosts: ScanHost[];
 }
+
+// What became of a host of an inventory: netscan.macs.
+export interface MacOutcome {
+    host: string;
+    mac: string;
+    path: string;
+    result: "written" | "unchanged" | "skipped";
+    reason?: string;
+    // A file of the host's variables moved into host_vars/HOST/.
+    moved?: { from: string; to: string };
+}
+
+export interface MacsAnswer {
+    hosts: MacOutcome[];
+    subnet: string;
+    revision: string | null;
+    draft: string | null;
+}

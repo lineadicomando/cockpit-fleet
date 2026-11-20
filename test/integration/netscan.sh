@@ -4,10 +4,14 @@
 # scan in the sandbox of a run that finds the controller itself with a port
 # open there, ICMP when net.ipv4.ping_group_range lets the service account
 # (opened to it for the test on the dummy interface, as it was otherwise),
-# the output kept from operators, and a scan canceled keeping what it found.
+# the output kept from operators, a scan canceled keeping what it found; then
+# an inventory made from a scan, and MAC addresses written into another, a
+# file of a host's variables moved, both read by Ansible as they should be.
 # By default it scans 192.0.2.0/28, a subnet for documentation put on a
-# dummy interface for the test, where only the controller answers: nothing
-# leaves the machine (in a rootless container the network may be the host's).
+# dummy interface for the test, where only the controller answers and a
+# neighbour is written in by hand: nothing leaves the machine (in a
+# rootless container the network may be the host's). The inventories need
+# that neighbour, so they are left out with IT_NETSCAN_SUBNET.
 # IT_NETSCAN_SUBNET names a subnet of the controller's to scan instead, on a
 # lab's network; then only the controller itself is checked among the hosts.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
@@ -41,7 +45,8 @@ s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect((str(net[1]), 9)
 print(s.getsockname()[0])" "$subnet")
     wide=$subnet
 else
-    ip link add "$DUMMY" type dummy && ip addr add 192.0.2.1/24 dev "$DUMMY" && ip link set "$DUMMY" up ||
+    ip link add "$DUMMY" type dummy && ip addr add 192.0.2.1/24 dev "$DUMMY" && ip link set "$DUMMY" up &&
+        ip neigh add 192.0.2.5 lladdr 52:54:00:12:34:56 dev "$DUMMY" nud permanent ||
         { echo "cannot make a dummy interface: set IT_NETSCAN_SUBNET" >&2; exit 2; }
     echo "      | net.ipv4.ping_group_range was $RANGE; opened to the service account"
     gid=$(id -g cockpit-fleet)
@@ -80,8 +85,10 @@ expect_eq "with the port open there" "$(get "$result" "$PORT in [h for h in a['d
 expect_eq "on the controller's own segment" "$(get "$result" "a['data']['on_link']")" True
 echo "      | $(get "$result" "len(a['data']['hosts'])") hosts found; the controller: $self"
 if [ -z "${IT_NETSCAN_SUBNET:-}" ]; then
-    expect_eq "and nothing else, where nothing else is" "$(get "$result" "len(a['data']['hosts'])")" 1
+    expect_eq "and the neighbour, nothing else" "$(get "$result" "[h['address'] for h in a['data']['hosts']]")" "['192.0.2.1', '192.0.2.5']"
+    expect_eq "the neighbour seen in the table, with its MAC address" "$(get "$result" "[(h['seen'], h['mac']) for h in a['data']['hosts'] if h['address'] == '192.0.2.5'][0]")" "(['arp'], '52:54:00:12:34:56')"
 fi
+scan=$id
 
 # ICMP is the kernel's to allow, by group: what the run could do must match.
 gid=$(id -g cockpit-fleet)
@@ -107,5 +114,34 @@ admin run.cancel "{\"id\": \"$id\"}" >/dev/null
 expect_run "a scan canceled" "$id" 60 canceled
 result=$(admin netscan.result "{\"id\": \"$id\"}")
 expect_eq "says it did not end" "$(get "$result" "a['data']['run']['options'].get('complete')")" False
+
+if [ -n "${IT_NETSCAN_SUBNET:-}" ]; then
+    finish
+fi
+
+# --- inventories ----------------------------------------------------------------
+hostvars() {  # hostvars INVENTORY_ID HOST: its variables as Ansible reads the tree
+    ansible-inventory -i "/var/lib/cockpit-fleet/inventories/$1/tree" --host "$2" 2>/dev/null |
+        python3 -c "import json,sys; d=json.load(sys.stdin); print(sorted((k, v) for k, v in d.items() if k in ('ansible_host', 'mac_address', 'role')))"
+}
+made=$(admin netscan.inventory "{\"id\": \"$scan\", \"name\": \"itscan\", \"naming\": \"address\", \"group\": \"found\", \"addresses\": [\"192.0.2.5\", \"192.0.2.1\"]}")
+inv=$(get "$made" "a['data']['inventory']['id']")
+expect_run "an inventory made from the scan is read" "$(get "$made" "a['data']['parse_run_id']")" 120 successful
+expect_eq "with its two hosts" "$(db "SELECT json_array_length(hosts) FROM inventories WHERE id = '$inv'")" 2
+expect_eq "Ansible reads the MAC address the scan saw" "$(hostvars "$inv" 192.0.2.5)" "[('mac_address', '52:54:00:12:34:56')]"
+
+payload=$(python3 -c "import json; print(json.dumps({'name': 'itlab', 'kind': 'managed',
+    'content': 'all:\n  hosts:\n    pc5:\n      ansible_host: 192.0.2.5\n',
+    'files': [{'path': 'host_vars/pc5.yaml', 'content': 'role: lab\n'}]}))")
+made=$(admin inventory.create "$payload")
+lab=$(get "$made" "a['data']['id']")
+parse=$(admin inventory.parse "{\"id\": \"$lab\"}")
+expect_run "an inventory with a file of a host's variables is read" "$(get "$parse" "a['data']['run_id']")" 120 successful
+expect_eq "Ansible reads that file" "$(hostvars "$lab" pc5)" "[('ansible_host', '192.0.2.5'), ('role', 'lab')]"
+wrote=$(admin netscan.macs "{\"id\": \"$scan\", \"inventory_id\": \"$lab\"}")
+expect_eq "the MAC address is written, the file moved" "$(get "$wrote" "[(h['host'], h['result'], h['moved']['to']) for h in a['data']['hosts']]")" "[('pc5', 'written', 'host_vars/pc5/pc5.yaml')]"
+expect_eq "Ansible reads both" "$(hostvars "$lab" pc5)" "[('ansible_host', '192.0.2.5'), ('mac_address', '52:54:00:12:34:56'), ('role', 'lab')]"
+again=$(admin netscan.macs "{\"id\": \"$scan\", \"inventory_id\": \"$lab\"}")
+expect_eq "a second time changes nothing" "$(get "$again" "[h['result'] for h in a['data']['hosts']]")" "['unchanged']"
 
 finish

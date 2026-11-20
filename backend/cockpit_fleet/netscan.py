@@ -6,6 +6,12 @@ to (unless [network] scan_connected is false) or within one of [network]
 scan_subnets, and has at most scan_max_addresses addresses: an agent steered
 by what a node wrote cannot turn the controller on any network it likes.
 What the job leaves is read as untrusted, as everything a run writes.
+
+What a scan found becomes an inventory written here (netscan.inventory), or
+the MAC addresses of the hosts of one (netscan.macs): the variable
+mac_address in host_vars/HOST/fleet_mac.yaml, a file of ours. Ansible reads
+no host_vars/HOST.yaml once host_vars/HOST/ exists, so a file of the host's
+is moved, unchanged, into that directory in the same commit.
 """
 
 import ipaddress
@@ -14,12 +20,14 @@ import re
 import shutil
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from . import jobs, scanner, store
-from .cli import Context, Id, Int, Str, Values, command
-from .errors import BadRequest, Forbidden
+from . import files, jobs, scanner, store
+from .cli import COMMANDS, Bool, Choice, Context, Id, Int, Str, Strs, Values, command
+from .errors import BadRequest, Conflict, Forbidden
+from .resources import queue_parse
 from .runs import run_row
+from .validators import check_host
 
 ROUTES = Path("/proc/net/route")
 _RTF_UP = 0x1
@@ -281,3 +289,249 @@ def netscan_result(ctx: Context, params: Values) -> dict:
     return {"run": run, "done": row["status"] not in jobs.ACTIVE, "hosts": hosts,
             "subnet": run["options"].get("subnet", ""),
             "on_link": run["options"].get("on_link") is True}
+
+
+VARIABLE = "mac_address"
+MAC_FILE = "fleet_mac.yaml"
+_GROUP_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+# What Ansible looks for in host_vars, in its order: the first found is the
+# only one it reads (DataLoader.find_vars_files).
+_VARS_EXTENSIONS = ("", ".yml", ".yaml", ".json")
+_SETS_MAC = re.compile(rb"^\s*\"?mac_address\"?\s*:", re.MULTILINE)
+
+
+def _scan_hosts(ctx, run_id: str) -> tuple[dict, dict[str, dict]]:
+    """A scan that has ended, and its hosts by address."""
+    jobs.reconcile(ctx)
+    row = store.fetch(ctx.conn, "runs", run_id, "run")
+    if row["kind"] != "netscan":
+        raise BadRequest(f"{run_id} is not the run of a scan")
+    if row["status"] in jobs.ACTIVE:
+        raise Conflict("the scan has not ended yet")
+    by_address, by_name = _known(ctx)
+    hosts = {host["address"]: _row(host, by_address, by_name) for host in ctx.conn.execute(
+        "SELECT * FROM netscan_hosts WHERE run_id = ?", (run_id,))}
+    return run_row(row), hosts
+
+
+def host_name(host: dict, naming: str) -> str:
+    """The name a host found gets in an inventory: short (its NetBIOS name, or
+    the first label of its DNS name), dns (the whole DNS name, or the NetBIOS
+    name) or address; its address when it has no such name that Ansible and
+    a path take."""
+    netbios = host["netbios_name"].lower()
+    dns = host["dns_name"].rstrip(".")
+    choices = {"short": (netbios, dns.split(".")[0]), "dns": (dns, netbios),
+               "address": ()}[naming]
+    for name in choices:
+        if not name or _is_address(name):
+            continue
+        try:
+            return check_host(name)
+        except BadRequest:
+            continue
+    return host["address"]
+
+
+def inventory_text(hosts: list[dict], naming: str, group: str) -> tuple[str, list[dict]]:
+    """hosts.yaml for the hosts found, and the name each got. A name taken by
+    an earlier host is not given twice: the later one gets its address."""
+    taken: set[str] = set()
+    named = []
+    for host in hosts:
+        name = host_name(host, naming)
+        if name.lower() in taken:
+            name = host["address"]
+        taken.add(name.lower())
+        named.append({"name": name, "address": host["address"], "mac": host["mac"]})
+    lines = ["all:"]
+    indent = "  "
+    if group:
+        lines += ["  children:", f"    {group}:"]
+        indent = "      "
+    lines.append(f"{indent}hosts:" if named else f"{indent}hosts: {{}}")
+    for entry in named:
+        lines.append(f"{indent}  {json.dumps(entry['name'])}:")
+        if entry["name"] != entry["address"]:
+            lines.append(f"{indent}    ansible_host: {json.dumps(entry['address'])}")
+        if entry["mac"]:
+            lines.append(f"{indent}    {VARIABLE}: {json.dumps(entry['mac'])}")
+        if entry["name"] == entry["address"] and not entry["mac"]:
+            lines[-1] += " {}"
+    return "\n".join(lines) + "\n", named
+
+
+def _chosen(hosts: dict[str, dict], addresses: list[str]) -> list[dict]:
+    if not addresses:
+        raise BadRequest("choose the hosts: addresses")
+    missing = [address for address in addresses if address not in hosts]
+    if missing:
+        raise BadRequest(f"not found by this scan: {', '.join(missing[:10])}")
+    chosen = [hosts[address] for address in dict.fromkeys(addresses)]
+    return sorted(chosen, key=lambda host: ipaddress.IPv4Address(host["address"]))
+
+
+@command("netscan.inventory", role="admin", mutating=True, agent="config",
+         params={
+             "id": Id("The run of the scan."),
+             "name": Str("The name of the new inventory.", required=True, max_length=200),
+             "addresses": Strs("The hosts found to put in it, by address.",
+                               max_items=scanner.MAX_ADDRESSES),
+             "naming": Choice(("short", "dns", "address"), "What names the hosts: short (the"
+                              " NetBIOS name, or the first label of the DNS name), dns (the"
+                              " whole DNS name), or address; a host with no such name gets"
+                              " its address", default="short"),
+             "group": Str("A group to put every host in; none: they are hosts of all.",
+                          default="", max_length=64),
+         })
+def netscan_inventory(ctx: Context, params: Values) -> dict:
+    """Make an inventory written here from hosts a scan found: each with
+    ansible_host, its address, and mac_address when the scan saw one. It is
+    read once made; an agent's waits in a draft for a person to merge."""
+    group = params["group"]
+    if group and (not _GROUP_RE.fullmatch(group) or group in ("all", "ungrouped")):
+        raise BadRequest("group must be a name of letters, digits and _, not all or ungrouped")
+    run, hosts = _scan_hosts(ctx, params["id"])
+    chosen = _chosen(hosts, params["addresses"])
+    text, named = inventory_text(chosen, params["naming"], group)
+    created = COMMANDS["inventory.create"].call(ctx, {
+        "name": params["name"], "kind": "managed", "format": "yaml", "content": text})
+    parse = None
+    if not created.get("draft"):
+        inventory = store.fetch(ctx.conn, "inventories", created["id"], "inventory")
+        parse = queue_parse(ctx, inventory)
+    return {"inventory": created, "hosts": named, "parse_run_id": parse,
+            "subnet": run["options"].get("subnet", "")}
+
+
+def _base(inventory, tree) -> PurePosixPath:
+    """Where host_vars goes in the tree of an inventory: beside the source
+    Ansible reads, or in it when that is a directory."""
+    path = PurePosixPath(inventory["path"] or ".")
+    if str(path) != "." and not (tree / path).is_dir():
+        path = path.parent
+    return path
+
+
+def _read(tree, path: PurePosixPath) -> bytes | None:
+    """A file of the tree that is a file and no link, or None."""
+    target = tree / path
+    if target.is_symlink() or not target.is_file():
+        return None
+    return target.read_bytes()
+
+
+def plan_macs(tree, base: PurePosixPath, wanted: dict[str, str]) -> tuple[list, list[dict]]:
+    """The operations that write mac_address for each host of WANTED (name to
+    MAC address), and what becomes of each host."""
+    operations, outcome = [], []
+    for name, mac in sorted(wanted.items()):
+        directory = base / "host_vars" / name
+        ours = directory / MAC_FILE
+        text = f"{VARIABLE}: {json.dumps(mac)}\n".encode()
+        entry = {"host": name, "mac": mac, "path": str(ours)}
+        if (tree / directory).is_symlink():
+            outcome.append({**entry, "result": "skipped", "reason": f"{directory} is a link"})
+            continue
+        if (tree / directory).is_dir():
+            others = [child for child in sorted((tree / directory).iterdir())
+                      if child.name != MAC_FILE and child.is_file() and not child.is_symlink()]
+            setting = [child.name for child in others if _SETS_MAC.search(child.read_bytes())]
+            if setting:
+                outcome.append({**entry, "result": "skipped",
+                                "reason": f"{VARIABLE} is set in {directory / setting[0]}"})
+            elif _read(tree, ours) == text:
+                outcome.append({**entry, "result": "unchanged"})
+            else:
+                operations.append({"op": "write", "path": str(ours), "content": text.decode()})
+                outcome.append({**entry, "result": "written"})
+            continue
+        found = None
+        for extension in _VARS_EXTENSIONS:
+            candidate = base / "host_vars" / (name + extension)
+            if (tree / candidate).is_symlink() or (tree / candidate).exists():
+                found = candidate
+                break
+        if found is not None and _read(tree, found) is None:
+            outcome.append({**entry, "result": "skipped", "reason": f"{found} is not a file"})
+            continue
+        if found is not None and _SETS_MAC.search(_read(tree, found)):
+            outcome.append({**entry, "result": "skipped",
+                            "reason": f"{VARIABLE} is set in {found}"})
+            continue
+        if found is not None:
+            moved = directory / found.name
+            operations.append({"op": "move", "path": str(found), "to": str(moved)})
+            entry["moved"] = {"from": str(found), "to": str(moved)}
+        operations.append({"op": "write", "path": str(ours), "content": text.decode()})
+        outcome.append({**entry, "result": "written"})
+    return operations, outcome
+
+
+@command("netscan.macs", role="admin", mutating=True, agent="config",
+         params={
+             "id": Id("The run of the scan."),
+             "inventory_id": Id("An inventory written here."),
+             "hosts": Strs("Only these hosts of the inventory, by name; all those found"
+                           " otherwise.", max_items=scanner.MAX_ADDRESSES),
+             "by_name": Bool("Also the hosts that the scan found by name only, not by"
+                             " address."),
+             "preview": Bool("Say what would be written, and write nothing."),
+         })
+def netscan_macs(ctx: Context, params: Values) -> dict:
+    """Write mac_address, the MAC address a scan saw, for the hosts of an
+    inventory written here that it found, in host_vars/HOST/fleet_mac.yaml
+    beside the inventory's source, as one commit (an agent's goes to the
+    draft of its session). A file host_vars/HOST.yaml already there is moved
+    into host_vars/HOST/, unchanged, since Ansible would no longer read it; a
+    host whose host_vars already set mac_address is left alone."""
+    inventory = store.fetch(ctx.conn, "inventories", params["inventory_id"], "inventory")
+    if inventory["kind"] != "managed":
+        raise BadRequest("only an inventory written here: in a project's, write mac_address"
+                         " in the project")
+    run, hosts = _scan_hosts(ctx, params["id"])
+    found: dict[str, set[str]] = {}
+    for host in hosts.values():
+        for known in host["known"]:
+            if known["inventory_id"] == inventory["id"] and host["mac"] \
+                    and (known["by"] == "address" or params["by_name"]):
+                found.setdefault(known["host"], set()).add(host["mac"])
+    asked = set(params["hosts"])
+    outcome = [{"host": name, "mac": "", "path": "", "result": "skipped",
+                "reason": "not found by this scan with a MAC address"}
+               for name in sorted(asked - set(found))]
+    wanted = {}
+    for name, macs in found.items():
+        if asked and name not in asked:
+            continue
+        if len(macs) > 1:
+            outcome.append({"host": name, "mac": "", "path": "", "result": "skipped",
+                            "reason": "found with more than one MAC address: "
+                            + ", ".join(sorted(macs))})
+            continue
+        try:
+            files.check_file_path(f"host_vars/{name}/{MAC_FILE}", "host")
+        except BadRequest:
+            outcome.append({"host": name, "mac": "", "path": "", "result": "skipped",
+                            "reason": "its name cannot name a file"})
+            continue
+        wanted[name] = next(iter(macs))
+    tree = files.inventory_tree(ctx, inventory)
+    # An agent writes to its draft, and previews what it holds once it exists.
+    place = files.place(ctx, inventory, "", writing=not params["preview"])
+    if place is not None:
+        tree = files.draft_tree(place)
+    draft = None if params["preview"] else place
+    operations, planned = plan_macs(tree, _base(inventory, tree), wanted)
+    outcome = sorted(planned + outcome, key=lambda entry: entry["host"])
+    answer = {"hosts": outcome, "subnet": run["options"].get("subnet", ""),
+              "revision": None, "draft": None}
+    if params["preview"] or not operations:
+        return answer
+    checked = [files.check_operation(index, item) for index, item in enumerate(operations)]
+    written = sum(1 for entry in outcome if entry["result"] == "written")
+    done = files.change(ctx, inventory, checked,
+                        f"Write the MAC addresses of {written} hosts found on"
+                        f" {answer['subnet']}", draft=draft)
+    return {**answer, "revision": done["revision"], "draft": done["draft"]}
+
