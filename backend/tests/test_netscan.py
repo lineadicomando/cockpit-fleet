@@ -497,3 +497,107 @@ class InventoryTest(ScanBase):
                                              "via": "mcp:test", "profile": "diagnostic"})
         self.assertFalse(refused["ok"])
         self.assertIn("(config) is not allowed", refused["error"]["message"])
+
+
+class ProbeTest(Base):
+    """netscan.probe, with the network stood in for: what each host says."""
+
+    ANSWERS = {
+        "192.168.10.7": {"seen": ["tcp", "icmp"], "ports": [22, 445]},
+        "192.168.10.8": {"seen": ["tcp"], "ports": [3389]},
+        "192.168.10.9": {"seen": [], "ports": []},
+        "192.168.10.10": {"seen": [], "ports": []},
+        "192.168.10.11": {"seen": ["tcp"], "ports": [5985]},
+    }
+    NEIGHBOURS = {"192.168.10.7": "52:54:00:aa:bb:07", "192.168.10.10": "52:54:00:aa:bb:10",
+                  "192.168.10.11": "52:54:00:aa:bb:99"}
+
+    def setUp(self):
+        super().setUp()
+        self.inventory = self.ok("inventory.create", {"name": "aula", "kind": "file",
+                                                      "project_id": self.local_project()["id"],
+                                                      "path": "inventories/hosts.yml"})
+        hosts = [{"name": name, "address": address, "port": None, "connection": connection,
+                  "groups": []} for name, address, connection in (
+                      ("pc101", "192.168.10.7", ""), ("pc102", "192.168.10.8", ""),
+                      ("pc103", "192.168.10.9", ""), ("pc104", "192.168.10.10", ""),
+                      ("pc105", "192.168.10.11", "winrm"), ("gone.school.lan", "", ""),
+                      ("v6", "fd00::5", ""), ("localhost", "", "local"))]
+        conn = self.ctx().conn
+        conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                     (json.dumps(hosts), self.inventory["id"]))
+        for index, (name, mac, addresses) in enumerate((
+                ("pc101", "52-54-00-AA-BB-07", ["192.168.10.7/24"]),
+                ("pc105", "52:54:00:aa:bb:05", ["192.168.10.5/24"]),
+                ("pc109", "52:54:00:aa:bb:99", ["192.168.10.19/24"]))):
+            conn.execute("INSERT INTO hosts (id, inventory_id, name, created_at)"
+                         " VALUES (?, ?, ?, 0)", (f"h{index}", self.inventory["id"], name))
+            conn.execute("INSERT INTO cmdb_hosts (host_id, interfaces) VALUES (?, ?)",
+                         (f"h{index}", json.dumps([{"name": "eth0", "mac": mac,
+                                                    "addresses": addresses}])))
+        self.asked = []
+
+        def probe(address, ports, icmp):
+            self.asked.append((address, tuple(ports)))
+            return {"address": address, **self.ANSWERS[address]}
+
+        def name_host(host):
+            host.update(dns_name="", netbios_name="PC999" if host["address"] == "192.168.10.8"
+                        else "", workgroup="")
+
+        for patch in (
+                mock.patch.object(scanner, "probe", probe),
+                mock.patch.object(scanner, "name_host", name_host),
+                mock.patch.object(scanner, "is_local", lambda address: False),
+                mock.patch.object(scanner, "icmp_available", lambda: True),
+                mock.patch.object(scanner, "SETTLE", 0),
+                mock.patch.object(netscan, "_resolve", lambda name: []),
+                mock.patch.object(netscan, "_neighbours", lambda: dict(self.NEIGHBOURS)),
+                mock.patch.object(netscan, "connected_routes", lambda: [
+                    {"subnet": "192.168.10.0/24", "source": "connected", "interface": "eth0"}])):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def test_what_each_host_says(self):
+        answer = self.ok("netscan.probe", {"inventory_id": self.inventory["id"]}, role="operator")
+        hosts = {host["name"]: host for host in answer["hosts"]}
+        self.assertNotIn("localhost", hosts)
+        self.assertEqual({name: host["findings"] for name, host in hosts.items()}, {
+            "pc101": [],
+            "pc102": ["port_closed", "netbios_differs"],
+            "pc103": ["silent"],
+            "pc104": ["segment_only"],
+            "pc105": ["mac_differs", "address_moved"],
+            "gone.school.lan": ["unresolved"],
+            "v6": ["ipv6"],
+        })
+        self.assertEqual(hosts["pc101"]["cmdb"]["macs"], ["52:54:00:aa:bb:07"])
+        self.assertEqual(hosts["pc104"]["seen"], ["arp"])
+        self.assertEqual(hosts["pc105"]["mac_of"], ["pc109 (aula)"])
+        self.assertEqual(hosts["pc105"]["connection_port"], 5985)
+        self.assertTrue(hosts["pc101"]["on_link"])
+        self.assertIn(5985, answer["ports"])
+        self.assertEqual(len(self.asked), 5)
+
+    def test_only_the_hosts_asked_for(self):
+        self.assertEqual(self.code("netscan.probe", {"inventory_id": self.inventory["id"]},
+                                   role="viewer"), "forbidden")
+        answer = self.ok("netscan.probe", {"inventory_id": self.inventory["id"],
+                                            "hosts": ["pc101"]}, role="operator")
+        self.assertEqual([host["name"] for host in answer["hosts"]], ["pc101"])
+        self.assertEqual(self.code("netscan.probe", {"inventory_id": self.inventory["id"],
+                                                     "hosts": ["localhost", "nobody"]},
+                                   role="operator"), "bad_request")
+
+    def test_too_many_hosts_at_once(self):
+        hosts = [{"name": f"h{index}", "address": f"10.0.{index // 250}.{index % 250 + 1}",
+                  "port": None, "connection": "", "groups": []} for index in range(300)]
+        self.ctx().conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                                (json.dumps(hosts), self.inventory["id"]))
+        self.assertEqual(self.code("netscan.probe", {"inventory_id": self.inventory["id"]},
+                                   role="operator"), "bad_request")
+
+    def test_mac_addresses_as_windows_writes_them(self):
+        self.assertEqual(netscan.normal_mac("52-54-00-AA-BB-07"), "52:54:00:aa:bb:07")
+        for value in ("", None, "00:00:00:00:00:00", "52:54:00:aa:bb", "zz:54:00:aa:bb:07"):
+            self.assertEqual(netscan.normal_mac(value), "", value)

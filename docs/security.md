@@ -176,7 +176,10 @@ leave the list empty to allow none. What a scan finds (addresses, names,
 MAC addresses, open ports) is shown to administrators only; it reaches
 the provider of the model when the assistant reads it. An intrusion
 detection system on the network may take a scan for an attack: tell
-whoever watches it.
+whoever watches it. An operator, and the assistant in any profile, may
+probe the hosts of an inventory the same way (Inventories, "Probe the
+hosts"): only the hosts an administrator put there, at most 256 at a
+time, recorded in the journal.
 
 ## What it does not do
 

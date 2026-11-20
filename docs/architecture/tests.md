@@ -24,7 +24,7 @@ controller that accepts password logins over SSH.
 | `test/integration/store.sh` | the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses, `sftp` over SSH through `fleet store sftp` | yes |
 | `test/integration/galaxy.sh` | collections from a requirements file (IT_GALAXY_NET=yes for git) | yes |
 | `test/integration/adhoc.sh` | ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD) | yes |
-| `test/integration/netscan.sh` | the scan of a subnet: on a dummy interface by default, nothing leaving the machine (IT_NETSCAN_SUBNET: a subnet of the lab's instead, without the inventories), ICMP from the sandbox, refusals, a scan canceled; an inventory made from it and MAC addresses written into another, read by Ansible | yes |
+| `test/integration/netscan.sh` | the scan of a subnet: on a dummy interface by default, nothing leaving the machine (IT_NETSCAN_SUBNET: a subnet of the lab's instead, without the inventories), ICMP from the sandbox, refusals, a scan canceled; an inventory made from it and MAC addresses written into another, read by Ansible; an inventory probed | yes |
 | `test/integration/inventories.sh` | inventory plugins, directories of sources, scripts off and on | yes |
 | `test/integration/mcp.sh` | fleet-mcp: tools by role, ceiling, profiles, autonomy, an agent's ad-hoc confirmed, via in the audit, forced-command key | yes |
 | `test/integration/chat.sh` | fleet-chat with fake-agent.py: start, limit on sessions, tools by role | yes |

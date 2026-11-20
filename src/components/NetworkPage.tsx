@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import cockpit from "cockpit";
 import {
-    Checkbox, Content, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, LabelGroup, Radio, TextInput, Tooltip,
+    Checkbox, Content, Flex, ModalBody, ModalHeader, ModalVariant, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, LabelGroup, Radio, TextInput, Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
@@ -10,9 +10,9 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { filterScanHosts, inventoriesFound, inventoryHosts, subnetSize } from "../lib/netscan.ts";
 import { useCan } from "../lib/session.tsx";
-import type { Inventory, MacOutcome, MacsAnswer, Run, ScanHost, ScanResult, ScanSubnets } from "../lib/types.ts";
+import type { Inventory, MacOutcome, MacsAnswer, ProbeAnswer, ProbedHost, ProbeFinding, Run, ScanHost, ScanResult, ScanSubnets } from "../lib/types.ts";
 import { FormModal, ListState, PageNav, RunStatusLabel, SectionHeader, isActiveRun, openRun } from "./common.tsx";
-import { Alert, Button, SearchInput } from "./pf.tsx";
+import { Alert, Button, Modal, SearchInput, Spinner } from "./pf.tsx";
 
 function openScan(id: string) {
     cockpit.location.go(["network", id]);
@@ -432,3 +432,97 @@ function ScanResults({ id }: { id: string }) {
 export function NetworkPage({ id }: { id?: string }) {
     return id ? <ScanResults key={id} id={id} /> : <ScanList />;
 }
+
+function useFindings() {
+    const { t } = useTranslation();
+    const text: Record<ProbeFinding, string> = {
+        unresolved: t("Its name has no address"),
+        ipv6: t("IPv6 only, not probed"),
+        silent: t("Nothing answers"),
+        segment_only: t("On the segment, answers nothing"),
+        port_closed: t("Its connection's port is closed"),
+        mac_differs: t("Another MAC address than the CMDB's"),
+        address_moved: t("The CMDB saw it at another address"),
+        netbios_differs: t("Gives another name"),
+    };
+    return (finding: ProbeFinding) => text[finding] ?? finding;
+}
+
+const SERIOUS: ProbeFinding[] = ["unresolved", "silent", "mac_differs"];
+
+function Probed({ host }: { host: ProbedHost }) {
+    const { t } = useTranslation();
+    const finding = useFindings();
+    if (host.findings.length === 0) return <Label isCompact color="green">{t("Answers")}</Label>;
+    return (
+        <LabelGroup numLabels={4}>
+            {host.findings.map(item => (
+                <Label key={item} isCompact color={SERIOUS.includes(item) ? "red" : "orange"}>{finding(item)}</Label>
+            ))}
+        </LabelGroup>
+    );
+}
+
+// The hosts of an inventory probed from the controller, one by one: what
+// each says, to tell a host that is off from one that moved or is closed.
+export function ProbeModal({ inventory, onClose }: { inventory: Inventory; onClose: () => void }) {
+    const { t } = useTranslation();
+    const probe = useLoad(() => call<ProbeAnswer>("netscan.probe", { inventory_id: inventory.id }));
+    const data = probe.data;
+    return (
+        <Modal variant={ModalVariant.large} isOpen onClose={onClose}>
+            <ModalHeader title={t("Probe of {{name}}", { name: inventory.name })}
+                description={t("From the controller: whether each name resolves, whether the host answers an ICMP echo or a TCP connection, on its connection's port too, and whether the MAC address seen is the one the CMDB knows. Nothing is changed on the hosts.")} />
+            <ModalBody>
+                {probe.error && <Alert variant="danger" isInline title={probe.error.message} />}
+                {!data && !probe.error && <Spinner aria-label={t("Probing")} />}
+                {data && !data.icmp && (
+                    <Alert variant="info" isInline style={{ marginBottom: "1rem" }}
+                        title={t("ICMP echo is not allowed to the service account (net.ipv4.ping_group_range): hosts were tried by TCP and the neighbour table only.")} />
+                )}
+                {data && data.hosts.length === 0 && <Content component="p">{t("This inventory has no host reached over the network, as last read.")}</Content>}
+                {data && data.hosts.length > 0 && (
+                    <Table aria-label={t("Hosts probed")} variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>{t("Host")}</Th>
+                                <Th>{t("Address")}</Th>
+                                <Th>{t("Result")}</Th>
+                                <Th>{t("Open ports")}</Th>
+                                <Th>{t("MAC address")}</Th>
+                                <Th>{t("Names")}</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {data.hosts.map(host => (
+                                <Tr key={host.name}>
+                                    <Td dataLabel={t("Host")}>{host.name}</Td>
+                                    <Td dataLabel={t("Address")}>{host.address ? <code>{host.address}</code> : "—"}</Td>
+                                    <Td dataLabel={t("Result")}><Probed host={host} /></Td>
+                                    <Td dataLabel={t("Open ports")}>
+                                        {host.ports.length > 0 ? host.ports.join(", ") : "—"}
+                                        {host.findings.includes("port_closed") && <div><small>{t("Not {{port}}", { port: host.connection_port })}</small></div>}
+                                    </Td>
+                                    <Td dataLabel={t("MAC address")}>
+                                        {host.mac ? <code>{host.mac}</code> : "—"}
+                                        {host.findings.includes("mac_differs") && host.cmdb && (
+                                            <div><small>{t("CMDB: {{macs}}", { macs: host.cmdb.macs.join(", ") })}</small></div>
+                                        )}
+                                        {host.mac_of.length > 0 && <div><small>{t("Also that of: {{hosts}}", { hosts: host.mac_of.join(", ") })}</small></div>}
+                                    </Td>
+                                    <Td dataLabel={t("Names")}>
+                                        {[host.dns_name, host.netbios_name].filter(Boolean).join(", ") || "—"}
+                                        {host.findings.includes("address_moved") && host.cmdb && (
+                                            <div><small>{t("CMDB addresses: {{addresses}}", { addresses: host.cmdb.addresses.join(", ") })}</small></div>
+                                        )}
+                                    </Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                )}
+            </ModalBody>
+        </Modal>
+    );
+}
+

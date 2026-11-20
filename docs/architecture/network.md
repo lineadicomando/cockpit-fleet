@@ -2,10 +2,10 @@
 
 What a controller finds out about the network by itself, without Ansible
 and without the nodes: the scan of a subnet, and what it found turned into
-an inventory or into the MAC addresses of one, decided with the user on 20
-November (`decisions.md`, "Network discovery"). The steps after them (the
-hosts of an inventory probed one by one, a probe from a node of the
-segment) are in `TODO.md`.
+an inventory or into the MAC addresses of one, and the hosts of an
+inventory probed one by one, decided with the user on 20 November
+(`decisions.md`, "Network discovery"). The step after them (a probe from
+a node of the segment) is in `TODO.md`.
 
 ```
 NetworkPage ── netscan.start ──▶ fleetctl: the subnet checked, a run queued
@@ -105,7 +105,46 @@ or whose name cannot name a file, is left alone and told why. With
 before asking. Writing it again with the same address changes nothing.
 Only inventories written here: a project's is changed in the project.
 
-**Who.** Administrators only, for all three commands and for the output of
+**Probing the hosts of an inventory.** `netscan.probe` tells why hosts of
+an inventory do not answer, which a scan of their subnet tells only in
+part: what is at an address, not whether it is the host meant to be
+there. It takes the hosts of an inventory as last read (or those named,
+at most 256), all but those of a local connection, and for each, in
+`fleetctl` and at once, not as a run: it resolves the name (the IPv4
+address of `ansible_host`, or of the name), probes it as a scan probes an
+address (`scanner.probe`, with the ports of `[network] scan_ports` and
+the port of its connection: `ansible_port`, else 22, or 5985 for WinRM),
+names it from the reverse DNS and NetBIOS, and reads the neighbour table,
+waiting the 9 s only when a host was seen there and nowhere else. It is
+an operator's and of the class `read`: it changes nothing, reaches only
+hosts an administrator put in an inventory, and is bounded in number, so
+any profile of the assistant has it (and the base instructions say to
+use it before saying that hosts are off); the journal records each probe.
+A run would have been an operator's change, asked about, for what an
+agent should do without a question; the cost is that a probe of 256
+hosts holds `fleetctl` for some seconds (one per batch of up to 64, the
+lookups, and the 9 s when needed).
+
+Each host comes with its findings, from the most telling: `unresolved`
+(the name has no address), `ipv6` (only IPv6 addresses, not probed),
+`silent` (nothing answered, not even in the neighbour table: off, or
+unreachable), `segment_only` (in the table only: on, behind a firewall),
+`port_closed` (it answers, but not on its connection's port), and beside
+them `mac_differs` (the MAC address seen is none of those the CMDB last
+collected for that host; `mac_of` names the hosts the CMDB knows with
+it, in any inventory: two machines that swapped addresses),
+`address_moved` (the CMDB saw the host with other addresses) and
+`netbios_differs` (it gives another name over NetBIOS). MAC addresses are
+compared as `aa:bb:…`, Windows' `AA-BB-…` turned into that. The CMDB is
+read from `cmdb_hosts`, the last collection of the check `cmdb`: a host
+never collected has no comparison.
+
+The page shows it from the inventories ("Probe the hosts", for whoever
+may call it, on an inventory with hosts): a dialog with each host, its
+address, its findings, open ports, MAC address (with the CMDB's when it
+differs, and whose else it is), and names.
+
+**Who.** Administrators only, for the commands of scans and for the output of
 the run (`run.log`), which is a map of the network. For an agent
 `netscan.start` is of its own class, `scan`, between `run` and `adhoc`:
 allowed in the profiles `diagnostic` and `administrator`, and asked about
@@ -144,4 +183,9 @@ the dummy interface (`ip neigh … nud permanent`), found by the table with
 its MAC address: an inventory made from the scan, read, and Ansible
 (`ansible-inventory --host`) giving the MAC address; an inventory with
 `host_vars/pc5.yaml`, the MAC address written and the file moved, Ansible
-giving both its variables, and a second time changing nothing.
+giving both its variables, and a second time changing nothing. And an
+inventory probed by an operator: the controller answering, the neighbour
+`segment_only` with its MAC address, an address with nothing `silent`, a
+name of `.invalid` `unresolved`. The test's first host was named `off`,
+which YAML reads as false: what `netscan.inventory` writes quotes every
+name.

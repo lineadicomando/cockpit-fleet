@@ -177,7 +177,9 @@ in [security.md](security.md); the decisions behind these limits in
   over them); `fleet_mac.yaml` is read before the other files of
   `host_vars/HOST/`, so one of them that comes to set `mac_address` later
   wins; a host's file is moved into `host_vars/HOST/`, which a person
-  editing it may not expect.
+  editing it may not expect. A probe of an inventory holds `fleetctl` for
+  some seconds and is in the journal, not the audit log; it takes the
+  first IPv4 address of a name; the CMDB is as last collected.
 - Approvals: one approver suffices (no quorum); an approval is not
   notified to the approvers by name, only to channels; a pending run shows
   its launch time as "Started".

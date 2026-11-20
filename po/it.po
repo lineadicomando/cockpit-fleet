@@ -4553,3 +4553,60 @@ msgid "inventory_found_count"
 msgid_plural "inventory_found_count_plural"
 msgstr[0] "{{name}} ({{count}} host trovato)"
 msgstr[1] "{{name}} ({{count}} host trovati)"
+
+msgid "Also that of: {{hosts}}"
+msgstr "È anche quello di: {{hosts}}"
+
+msgid "Another MAC address than the CMDB's"
+msgstr "MAC diverso da quello del CMDB"
+
+msgid "CMDB addresses: {{addresses}}"
+msgstr "Indirizzi nel CMDB: {{addresses}}"
+
+msgid "CMDB: {{macs}}"
+msgstr "CMDB: {{macs}}"
+
+msgid "From the controller: whether each name resolves, whether the host answers an ICMP echo or a TCP connection, on its connection's port too, and whether the MAC address seen is the one the CMDB knows. Nothing is changed on the hosts."
+msgstr "Dal controller: se ogni nome si risolve, se l'host risponde a un echo ICMP o a una connessione TCP, anche sulla porta della sua connessione, e se l'indirizzo MAC visto è quello che conosce il CMDB. Sugli host non viene cambiato nulla."
+
+msgid "Gives another name"
+msgstr "Dà un altro nome"
+
+msgid "Hosts probed"
+msgstr "Host sondati"
+
+msgid "ICMP echo is not allowed to the service account (net.ipv4.ping_group_range): hosts were tried by TCP and the neighbour table only."
+msgstr "L'echo ICMP non è consentito all'account del servizio (net.ipv4.ping_group_range): gli host sono stati provati solo con TCP e la tabella dei vicini."
+
+msgid "IPv6 only, not probed"
+msgstr "Solo IPv6, non sondato"
+
+msgid "Its connection's port is closed"
+msgstr "La porta della sua connessione è chiusa"
+
+msgid "Its name has no address"
+msgstr "Il suo nome non ha un indirizzo"
+
+msgid "Not {{port}}"
+msgstr "Non la {{port}}"
+
+msgid "Nothing answers"
+msgstr "Non risponde nulla"
+
+msgid "On the segment, answers nothing"
+msgstr "Sul segmento, ma non risponde"
+
+msgid "Probe of {{name}}"
+msgstr "Sonda di {{name}}"
+
+msgid "Probe the hosts"
+msgstr "Sonda gli host"
+
+msgid "Probing"
+msgstr "Sonda in corso"
+
+msgid "The CMDB saw it at another address"
+msgstr "Il CMDB l'ha visto a un altro indirizzo"
+
+msgid "This inventory has no host reached over the network, as last read."
+msgstr "Secondo l'ultima lettura, questo inventario non ha host raggiunti via rete."

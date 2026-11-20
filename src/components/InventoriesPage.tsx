@@ -10,6 +10,7 @@ import { useCan } from "../lib/session.tsx";
 import { inventoryChoices } from "../lib/files.ts";
 import type { Credential, Inventory, Project, ProjectFiles, ProjectPaths, Starter, VariableSet } from "../lib/types.ts";
 import { CodeEditor } from "./CodeEditor.tsx";
+import { ProbeModal } from "./NetworkPage.tsx";
 import { ConfirmDelete, DuplicateModal, FormModal, StarterLabel, StarterModal, ListState, SectionHeader, message } from "./common.tsx";
 import { PathInput } from "./PathInput.tsx";
 import { ActionsColumn, Alert, ExpandCell } from "./pf.tsx";
@@ -166,6 +167,7 @@ export function InventoriesPage() {
     const [editing, setEditing] = useState<Inventory | null>(null);
     const [deleting, setDeleting] = useState<Inventory | null>(null);
     const [duplicating, setDuplicating] = useState<Inventory | null>(null);
+    const [probing, setProbing] = useState<Inventory | null>(null);
     const [marking, setMarking] = useState<Inventory | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -222,6 +224,7 @@ export function InventoriesPage() {
                                         <ActionsColumn items={[
                                             ...(inventory.kind === "managed" && can("file.list") ? [{ title: t("Files"), onClick: () => cockpit.location.go(["inventories", inventory.id]) }] : []),
                                             ...(can("inventory.parse") ? [{ title: t("Read again"), onClick: () => read(inventory) }] : []),
+                                            ...(can("netscan.probe") && inventory.host_count > 0 ? [{ title: t("Probe the hosts"), onClick: () => setProbing(inventory) }] : []),
                                             ...(can("inventory.update") ? [{ title: t("Edit"), onClick: () => edit(inventory) }] : []),
                                             ...(inventory.kind === "managed" && can("inventory.duplicate") ? [{ title: t("Duplicate"), onClick: () => setDuplicating(inventory) }] : []),
                                             ...(inventory.kind === "managed" && can("inventory.starter") ? [{ title: inventory.starter ? t("Use in runs again") : t("Use as starter"), onClick: () => setMarking(inventory) }] : []),
@@ -241,6 +244,7 @@ export function InventoriesPage() {
                     </Table>
                 )}
             </ListState>
+            {probing && <ProbeModal inventory={probing} onClose={() => setProbing(null)} />}
             {creating && <InventoryModal onClose={() => setCreating(false)} onDone={saved} />}
             {editing && <InventoryModal inventory={editing} onClose={() => setEditing(null)} onDone={saved} />}
             {marking && (

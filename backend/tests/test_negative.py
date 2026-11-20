@@ -93,7 +93,7 @@ project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M
 overview.get viewer -
 netscan.subnets admin -       netscan.start admin M         netscan.result admin -
-netscan.inventory admin M     netscan.macs admin M
+netscan.inventory admin M     netscan.macs admin M          netscan.probe operator -
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()
@@ -110,7 +110,7 @@ HOUSEKEEPING = {"run.reconcile", "scheduler.tick", "notification.deliver", "run.
                 "run.get", "run.result", "workflow.progress", "approval.list", "state.list",
                 "selfcheck", "system.health", "hostkey.scan", "module.list", "module.doc",
                 "module.help", "check.list", "host.list", "host.get", "run.log", "run.events",
-                "overview.get", "netscan.result"}
+                "overview.get", "netscan.result", "netscan.probe"}
 
 TARBALL = base64.b64encode(b"\x1f\x8b" + bytes(30)).decode()
 PUBLIC_KEY = base64.b64encode(b"\x00\x00\x00\x0bssh-ed25519" + bytes(36)).decode()

@@ -9,7 +9,7 @@ workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 Phases 0–18 closed; phase 19 under way (below). Last release 0.4.0 (18
 November), with the Overview of phase 18. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (765
+To resume: `git status`, `git log origin/main..`; `make check` (769
 backend, 197 frontend tests). Each backend module's docstring says what
 it is; `cli.py` is the registry of commands, `db.py` the schema (34
 migrations).
@@ -29,8 +29,9 @@ Decided 20 November (`decisions.md`, "Network discovery");
   `host_vars/HOST/fleet_mac.yaml`, a host's file moved there since
   ansible-core 2.16 ignores `HOST.yaml` beside `HOST/`); through a draft
   for an agent; `netscan.sh` reads both with Ansible.
-- [ ] `net.probe` of an inventory's hosts (operator, `read`), the
-  comparison of MAC addresses with the CMDB, the agent's tools.
+- [x] `netscan.probe` of an inventory's hosts (operator, `read`, in
+  `fleetctl`), the comparison of MAC addresses with the CMDB, the agent's
+  tool and instructions, "Probe the hosts" on the inventories.
 - [ ] A module `net_probe` run from a node of the segment (Linux and
   Windows), for subnets beyond a router.
 - [ ] At the close: on the VMs, `netscan.sh` with `IT_NETSCAN_SUBNET` on

@@ -35,6 +35,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   (`netscan.macs`). A file `host_vars/HOST.yaml` already there is moved
   into `host_vars/HOST/`, unchanged, since Ansible would no longer read
   it beside that directory.
+- Inventories, "Probe the hosts": an operator probes the hosts of an
+  inventory from the controller, to tell why one does not answer: its
+  name does not resolve, nothing answers, it is on the segment but
+  answers nothing, its connection's port is closed, the MAC address seen
+  is not the one the CMDB knows (and whose it is), the CMDB saw it at
+  another address, it gives another name (`netscan.probe`). The
+  assistant uses it before saying that hosts are off.
 - Assistant: in the profiles diagnostic and administrator the assistant
   of an administrator may scan a subnet, asked every time (a class of
   tools of its own, `scan`).

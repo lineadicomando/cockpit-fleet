@@ -7,6 +7,10 @@ scan_subnets, and has at most scan_max_addresses addresses: an agent steered
 by what a node wrote cannot turn the controller on any network it likes.
 What the job leaves is read as untrusted, as everything a run writes.
 
+netscan.probe looks at the hosts of an inventory one by one, synchronously:
+whether each name resolves, answers, has its connection's port open, and
+whether the MAC address seen is the one the CMDB knows for it.
+
 What a scan found becomes an inventory written here (netscan.inventory), or
 the MAC addresses of the hosts of one (netscan.macs): the variable
 mac_address in host_vars/HOST/fleet_mac.yaml, a file of ours. Ansible reads
@@ -18,11 +22,13 @@ import ipaddress
 import json
 import re
 import shutil
+import socket
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 
-from . import files, jobs, scanner, store
+from . import files, jobs, journal, scanner, store
 from .cli import COMMANDS, Bool, Choice, Context, Id, Int, Str, Strs, Values, command
 from .errors import BadRequest, Conflict, Forbidden
 from .resources import queue_parse
@@ -69,12 +75,7 @@ def connected(text: str) -> list[dict]:
 
 
 def _connected(config) -> list[dict]:
-    if not config.scan_connected:
-        return []
-    try:
-        return connected(ROUTES.read_text())
-    except OSError:
-        return []
+    return connected_routes() if config.scan_connected else []
 
 
 def allowed(config) -> list[dict]:
@@ -534,4 +535,190 @@ def netscan_macs(ctx: Context, params: Values) -> dict:
                         f"Write the MAC addresses of {written} hosts found on"
                         f" {answer['subnet']}", draft=draft)
     return {**answer, "revision": done["revision"], "draft": done["draft"]}
+
+
+MAX_PROBE = 256
+_WINRM = ("winrm", "ansible.builtin.winrm", "psrp", "ansible.builtin.psrp")
+_LOCAL = ("local", "ansible.builtin.local")
+
+
+def normal_mac(value: object) -> str:
+    """A MAC address as aa:bb:cc:dd:ee:ff, from that or aa-bb-… (Windows); ""
+    for anything else."""
+    text = str(value or "").strip().lower().replace("-", ":")
+    return text if _MAC_RE.fullmatch(text) and text != "00:00:00:00:00:00" else ""
+
+
+def _connection_port(host: dict) -> int:
+    if host.get("port"):
+        return host["port"]
+    return 5985 if host.get("connection", "") in _WINRM else 22
+
+
+def _resolve(name: str) -> list[str]:
+    try:
+        found = socket.getaddrinfo(name, None, socket.AF_INET, socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return []
+    return list(dict.fromkeys(entry[4][0] for entry in found))
+
+
+def _cmdb(ctx, inventory_id: str) -> tuple[dict[str, dict], dict[str, list[str]]]:
+    """What the CMDB last saw of the hosts of an inventory, by name (their MAC
+    addresses and addresses), and every host of any inventory by MAC address."""
+    of_inventory: dict[str, dict] = {}
+    by_mac: dict[str, list[str]] = {}
+    for row in ctx.conn.execute(
+            "SELECT h.name, h.inventory_id, i.name AS inventory, c.interfaces, c.collected_at"
+            " FROM cmdb_hosts c JOIN hosts h ON h.id = c.host_id"
+            " JOIN inventories i ON i.id = h.inventory_id"):
+        macs, addresses = set(), set()
+        for nic in store.loads(row["interfaces"], []):
+            if not isinstance(nic, dict):
+                continue
+            mac = normal_mac(nic.get("mac"))
+            if mac:
+                macs.add(mac)
+            for address in nic.get("addresses") or []:
+                addresses.add(str(address).split("/")[0])
+        for mac in macs:
+            by_mac.setdefault(mac, []).append(f"{row['name']} ({row['inventory']})")
+        if row["inventory_id"] == inventory_id:
+            of_inventory[row["name"]] = {"macs": sorted(macs), "addresses": sorted(addresses),
+                                         "collected_at": row["collected_at"]}
+    return of_inventory, by_mac
+
+
+def findings(host: dict) -> list[str]:
+    """What a probe of one host says, from the most telling: unresolved (its
+    name has no address), ipv6 (it has only IPv6 addresses, not probed),
+    silent (nothing answered, not even on the segment), segment_only (in the
+    neighbour table, answering nothing else: on, behind a firewall),
+    port_closed (it answers, but not on its connection's port),
+    mac_differs (the MAC address seen is none the CMDB knows for it; mac_of
+    says whose it is), address_moved (the CMDB saw it with other addresses),
+    netbios_differs (it gives another name over NetBIOS)."""
+    if host["unresolved"]:
+        return ["unresolved"]
+    if host["ipv6"]:
+        return ["ipv6"]
+    said = []
+    answered = "tcp" in host["seen"] or "icmp" in host["seen"]
+    if not host["seen"]:
+        said.append("silent")
+    elif not answered:
+        said.append("segment_only")
+    elif host["connection_port"] not in host["ports"]:
+        said.append("port_closed")
+    cmdb = host["cmdb"]
+    if host["mac"] and cmdb and cmdb["macs"] and host["mac"] not in cmdb["macs"]:
+        said.append("mac_differs")
+    if cmdb and cmdb["addresses"] and host["address"] not in cmdb["addresses"]:
+        said.append("address_moved")
+    short = host["name"].split(".")[0].lower()
+    if host["netbios_name"] and not _is_address(host["name"]) \
+            and host["netbios_name"].lower() != short:
+        said.append("netbios_differs")
+    return said
+
+
+@command("netscan.probe", role="operator",
+         params={
+             "inventory_id": Id("The inventory."),
+             "hosts": Strs("Only these hosts of it, by name; all otherwise.", max_items=MAX_PROBE),
+         })
+def netscan_probe(ctx: Context, params: Values) -> dict:
+    """Probe the hosts of an inventory from the controller, to tell why one
+    does not answer: whether its name resolves, whether it answers an ICMP
+    echo or a TCP connection on a few ports and on its connection's port, its
+    names from the reverse DNS and NetBIOS, its MAC address when it is on the
+    controller's own segment, and whether that is the MAC address the CMDB
+    knows for it or another host's. Each host has its findings: unresolved,
+    ipv6, silent, segment_only, port_closed, mac_differs, address_moved,
+    netbios_differs. It changes nothing; at most 256 hosts at a time."""
+    jobs.reconcile(ctx)
+    inventory = store.fetch(ctx.conn, "inventories", params["inventory_id"], "inventory")
+    listed = [host for host in store.loads(inventory["hosts"], []) if isinstance(host, dict)
+              and host.get("connection", "") not in _LOCAL]
+    if params["hosts"]:
+        names = {str(host.get("name", "")) for host in listed}
+        missing = [name for name in params["hosts"] if name not in names]
+        if missing:
+            raise BadRequest(f"not hosts of {inventory['name']} reached over the network:"
+                             f" {', '.join(missing[:10])}")
+        asked = set(params["hosts"])
+        listed = [host for host in listed if host.get("name") in asked]
+    if len(listed) > MAX_PROBE:
+        raise BadRequest(f"{inventory['name']} has {len(listed)} hosts: probe at most"
+                         f" {MAX_PROBE} at a time, by name")
+    config = ctx.config
+    ports = sorted(set(config.scan_ports) | {_connection_port(host) for host in listed})
+    ports = ports[:scanner.MAX_PORTS]
+    icmp = scanner.icmp_available()
+    connected = [ipaddress.IPv4Network(entry["subnet"]) for entry in connected_routes()]
+    cmdb, by_mac = _cmdb(ctx, inventory["id"])
+    journal.send(f"probe of {len(listed)} hosts of {inventory['name']} by {ctx.caller.user}", 6,
+                 FLEET_COMMAND="netscan.probe")
+
+    def one(entry: dict) -> dict:
+        name = str(entry.get("name", ""))
+        target = str(entry.get("address") or name)
+        addresses = [target] if _is_address(target) else _resolve(target)
+        address = next((item for item in addresses if ":" not in item), "")
+        host = {"name": name, "target": target, "address": address,
+                "unresolved": not addresses, "ipv6": bool(addresses) and not address,
+                "connection_port": _connection_port(entry),
+                "seen": [], "ports": [], "mac": "", "dns_name": "", "netbios_name": "",
+                "workgroup": "", "on_link": False, "self": False,
+                "cmdb": cmdb.get(name), "mac_of": []}
+        if not address:
+            return host
+        found = scanner.probe(address, ports, icmp)
+        host.update(seen=found["seen"], ports=found["ports"],
+                    on_link=any(ipaddress.IPv4Address(address) in net for net in connected),
+                    self=scanner.is_local(address))
+        if found["seen"]:
+            scanner.name_host(host)
+            if host.get("netbios_mac"):
+                host["mac"] = normal_mac(host.pop("netbios_mac"))
+        return host
+
+    workers = max(1, min(scanner.MAX_WORKERS, scanner.MAX_SOCKETS // len(ports)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        probed = list(pool.map(one, listed))
+    neighbours = _neighbours()
+    if any(host["address"] in neighbours and not host["seen"] for host in probed):
+        # Seen only in the table: it may be an entry the kernel has not given up yet.
+        time.sleep(scanner.SETTLE)
+        neighbours = _neighbours()
+    for host in probed:
+        mac = neighbours.get(host["address"])
+        if mac:
+            host["mac"] = mac
+            if not host["seen"]:
+                host["seen"] = ["arp"]
+            elif "arp" not in host["seen"]:
+                host["seen"].append("arp")
+        if host["mac"]:
+            host["mac_of"] = [owner for owner in by_mac.get(host["mac"], [])
+                              if owner != f"{host['name']} ({inventory['name']})"]
+        host["findings"] = findings(host)
+    return {"inventory": {"id": inventory["id"], "name": inventory["name"]},
+            "parsed_at": inventory["parsed_at"], "icmp": icmp, "ports": ports,
+            "hosts": probed}
+
+
+def connected_routes() -> list[dict]:
+    try:
+        return connected(ROUTES.read_text())
+    except OSError:
+        return []
+
+
+def _neighbours() -> dict[str, str]:
+    """Address to MAC address, from the controller's neighbour table."""
+    try:
+        return scanner.read_arp(scanner.ARP_TABLE.read_text(), ipaddress.IPv4Network("0.0.0.0/0"))
+    except OSError:
+        return {}
 

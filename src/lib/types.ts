@@ -964,3 +964,33 @@ export interface MacsAnswer {
     revision: string | null;
     draft: string | null;
 }
+
+export type ProbeFinding = "unresolved" | "ipv6" | "silent" | "segment_only" | "port_closed" | "mac_differs" | "address_moved" | "netbios_differs";
+
+// One host of an inventory as netscan.probe found it.
+export interface ProbedHost {
+    name: string;
+    target: string;
+    address: string;
+    connection_port: number;
+    seen: ("tcp" | "icmp" | "arp")[];
+    ports: number[];
+    mac: string;
+    dns_name: string;
+    netbios_name: string;
+    on_link: boolean;
+    self: boolean;
+    // What the CMDB last saw of it, if it saw it.
+    cmdb: { macs: string[]; addresses: string[]; collected_at: number | null } | null;
+    // The other hosts the CMDB knows with the MAC address seen.
+    mac_of: string[];
+    findings: ProbeFinding[];
+}
+
+export interface ProbeAnswer {
+    inventory: { id: string; name: string };
+    parsed_at: number | null;
+    icmp: boolean;
+    ports: number[];
+    hosts: ProbedHost[];
+}
