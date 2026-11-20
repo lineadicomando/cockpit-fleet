@@ -840,6 +840,54 @@ MIGRATIONS: list[list[str]] = [
         # state. Rows written before have none (the Overview takes state).
         "ALTER TABLE state_changes ADD COLUMN hard_state INTEGER",
     ],
+    [
+        # A schedule launches a job template or a workflow, one of the two:
+        # rebuilt, since template_id can no longer be NOT NULL.
+        """
+        CREATE TABLE schedules_new (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL UNIQUE,
+            template_id   TEXT REFERENCES templates (id),
+            workflow_id   TEXT REFERENCES workflows (id),
+            calendar      TEXT NOT NULL,
+            timezone      TEXT NOT NULL DEFAULT '',
+            enabled       INTEGER NOT NULL DEFAULT 1,
+            limit_hosts   TEXT NOT NULL DEFAULT '',
+            check_mode    INTEGER NOT NULL DEFAULT 0,
+            diff          INTEGER NOT NULL DEFAULT 0,
+            answers       TEXT NOT NULL DEFAULT '{}',
+            overlap       TEXT NOT NULL DEFAULT 'skip',
+            catch_up      INTEGER NOT NULL DEFAULT 0,
+            priority      INTEGER NOT NULL DEFAULT 0,
+            random_delay  INTEGER NOT NULL DEFAULT 0,
+            next_at       REAL,
+            last_at       REAL,
+            last_outcome  TEXT NOT NULL DEFAULT '',
+            last_error    TEXT NOT NULL DEFAULT '',
+            last_run_id   TEXT REFERENCES runs (id) ON DELETE SET NULL,
+            created_by    TEXT NOT NULL,
+            created_at    REAL NOT NULL,
+            updated_at    REAL NOT NULL,
+            overrides     TEXT NOT NULL DEFAULT '{}',
+            CHECK ((template_id IS NULL) != (workflow_id IS NULL))
+        )
+        """,
+        """
+        INSERT INTO schedules_new (rowid, id, name, template_id, calendar, timezone, enabled,
+                                   limit_hosts, check_mode, diff, answers, overlap, catch_up,
+                                   priority, random_delay, next_at, last_at, last_outcome,
+                                   last_error, last_run_id, created_by, created_at, updated_at,
+                                   overrides)
+        SELECT rowid, id, name, template_id, calendar, timezone, enabled, limit_hosts,
+               check_mode, diff, answers, overlap, catch_up, priority, random_delay, next_at,
+               last_at, last_outcome, last_error, last_run_id, created_by, created_at,
+               updated_at, overrides
+        FROM schedules
+        """,
+        "DROP TABLE schedules",
+        "ALTER TABLE schedules_new RENAME TO schedules",
+        "CREATE INDEX schedules_next ON schedules (enabled, next_at)",
+    ],
 ]
 
 

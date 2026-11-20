@@ -8,6 +8,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ## [Unreleased]
 
+### Added
+
+- Schedules: a schedule launches a workflow as well as a job template,
+  when none of its steps, nor their templates, asks for an approval
+  (`workflow_id` of `schedule.create`). Its steps run as they are, with
+  no limit, answers or values of the schedule's, and queue with its
+  priority; a step whose template comes to need an approval after the
+  workflow was scheduled fails instead of waiting. A workflow that a
+  schedule launches cannot be deleted.
+
 ### Changed
 
 - Nodes: its sections are in the order Assets, Checks, Hosts, Host keys,

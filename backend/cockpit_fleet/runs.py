@@ -178,6 +178,9 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
     if workflow:
         run.update(workflow_run_id=workflow["run_id"], workflow_node=workflow["node"],
                    title=workflow["title"] or template["name"])
+        if workflow.get("priority"):
+            # A step queues with the priority of the schedule that launched it.
+            run["priority"] = workflow["priority"]
     mode = approvals.strongest(template["approval"], workflow["approval"] if workflow else "none")
     if mode != "none":
         jobs.queue(ctx, run, spec, directory, jobs.WAITING)

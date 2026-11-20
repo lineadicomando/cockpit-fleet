@@ -1,4 +1,5 @@
-"""Schedules: a job template launched at the times of an OnCalendar expression.
+"""Schedules: a job template or a workflow launched at the times of an
+OnCalendar expression.
 
 There is no timer per schedule: root would have to write units from what a
 user typed. One static timer runs `fleetctl scheduler.tick` every minute, as
@@ -18,7 +19,19 @@ import unicodedata
 import zoneinfo
 from datetime import UTC, datetime
 
-from . import approvals, checks, jobs, journal, maintenance, notify, paths, runs, store, survey
+from . import (
+    approvals,
+    checks,
+    jobs,
+    journal,
+    maintenance,
+    notify,
+    paths,
+    runs,
+    store,
+    survey,
+    workflows,
+)
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, FleetError, Forbidden, Unavailable
 from .validators import check_limit
@@ -214,7 +227,8 @@ def from_cron(line: str) -> str:
 # --- commands ----------------------------------------------------------------------
 
 def _schedule(ctx: Context, row) -> dict:
-    data = {key: row[key] for key in ("id", "name", "template_id", "calendar", "timezone",
+    data = {key: row[key] for key in ("id", "name", "template_id", "workflow_id",
+                                      "calendar", "timezone",
                                       "overlap", "priority", "random_delay", "next_at",
                                       "last_at", "last_outcome", "last_error", "last_run_id",
                                       "created_by", "created_at", "updated_at")}
@@ -222,9 +236,10 @@ def _schedule(ctx: Context, row) -> dict:
                 check=bool(row["check_mode"]), diff=bool(row["diff"]),
                 catch_up=bool(row["catch_up"]), answers=store.loads(row["answers"], {}),
                 overrides=store.loads(row["overrides"], {}))
-    template = ctx.conn.execute("SELECT name FROM templates WHERE id = ?",
-                                (row["template_id"],)).fetchone()
-    data["template"] = template["name"] if template else ""
+    for key, table in (("template", "templates"), ("workflow", "workflows")):
+        named = ctx.conn.execute(f"SELECT name FROM {table} WHERE id = ?",  # noqa: S608
+                                 (row[f"{key}_id"],)).fetchone()
+        data[key] = named["name"] if named else ""
     last = ctx.conn.execute("SELECT status FROM runs WHERE id = ?",
                             (row["last_run_id"],)).fetchone()
     data["last_status"] = last["status"] if last else ""
@@ -238,7 +253,10 @@ def _answers(template, answers: dict) -> dict:
 
 _SCHEDULE_PARAMS = {
     "name": Str(required=True, max_length=200),
-    "template_id": Id("The job template to launch"),
+    "template_id": Id("The job template to launch", required=False),
+    "workflow_id": Id("Or the workflow to launch: none of its steps may need an approval;"
+                      " limit, check, diff, answers and the values replaced do not apply",
+                      required=False),
     "calendar": Str("When, as an OnCalendar expression of systemd: 'daily',"
                     " 'Mon..Fri *-*-* 02:00', '*:0/15'", required=True, max_length=256),
     "timezone": Str("A time zone such as Europe/Rome; empty for the controller's own",
@@ -260,28 +278,46 @@ _SCHEDULE_PARAMS = {
 }
 
 
-def _values(ctx: Context, params: Values) -> dict:
+# What a schedule of a workflow cannot be given: its launch takes none of them.
+_TEMPLATE_ONLY = ("limit", "check", "diff", "answers", *runs.OVERRIDES)
+
+
+def _target(ctx: Context, params: Values) -> dict:
+    """What a schedule launches, checked: the columns that say it."""
+    if (params["template_id"] is None) == (params["workflow_id"] is None):
+        raise BadRequest("give either template_id or workflow_id")
+    if params["workflow_id"] is not None:
+        params.unused(*_TEMPLATE_ONLY)
+        workflow = store.fetch(ctx.conn, "workflows", params["workflow_id"], "workflow")
+        workflows.unattended(ctx, store.loads(workflow["nodes"], []))
+        return {"template_id": None, "workflow_id": workflow["id"], "limit_hosts": "",
+                "check_mode": 0, "diff": 0, "answers": "{}", "overrides": "{}"}
     template = store.fetch(ctx.conn, "templates", params["template_id"], "template")
+    limit = params["limit"]
+    return {"template_id": template["id"], "workflow_id": None,
+            "limit_hosts": check_limit(limit) if limit else "",
+            "check_mode": int(params["check"]),
+            "diff": int(params["diff"] or params["check"]),
+            "answers": json.dumps(_answers(template, params["answers"])),
+            "overrides": json.dumps(runs.overrides(ctx, params))}
+
+
+def _values(ctx: Context, params: Values) -> dict:
+    target = _target(ctx, params)
     calendar = check_calendar(params["calendar"])
     timezone = check_timezone(params["timezone"])
-    limit = params["limit"]
     if not analyze(calendar, timezone)[1]:
         raise BadRequest(f"{calendar} has no time left to run at")
     return {
         "name": store.check_name(params["name"]),
-        "template_id": template["id"],
+        **target,
         "calendar": calendar,
         "timezone": timezone,
         "enabled": int(params["enabled"]),
-        "limit_hosts": check_limit(limit) if limit else "",
-        "check_mode": int(params["check"]),
-        "diff": int(params["diff"] or params["check"]),
-        "answers": json.dumps(_answers(template, params["answers"])),
         "overlap": params["overlap"],
         "catch_up": int(params["catch_up"]),
         "priority": params["priority"],
         "random_delay": params["random_delay"],
-        "overrides": json.dumps(runs.overrides(ctx, params)),
         "updated_at": store.now(),
     }
 
@@ -294,14 +330,16 @@ def _planned(values: dict) -> float | None:
 
 @command("schedule.list", role="viewer")
 def schedule_list(ctx: Context, params: Values) -> dict:
-    """The schedules: which template each launches, when next, and how the last time went."""
+    """The schedules: which template or workflow each launches, when next, and
+    how the last time went."""
     rows = ctx.conn.execute("SELECT * FROM schedules ORDER BY name COLLATE NOCASE").fetchall()
     return {"schedules": [_schedule(ctx, row) for row in rows]}
 
 
 @command("schedule.create", role="admin", mutating=True, params=_SCHEDULE_PARAMS)
 def schedule_create(ctx: Context, params: Values) -> dict:
-    """Create a schedule that launches a job template at the times of a calendar."""
+    """Create a schedule that launches a job template, or a workflow that needs
+    no approval, at the times of a calendar."""
     values = _values(ctx, params)
     schedule_id = store.new_id("s")
     store.insert(ctx.conn, "schedules", {"id": schedule_id, "created_by": ctx.caller.user,
@@ -334,7 +372,7 @@ def schedule_delete(ctx: Context, params: Values) -> dict:
 
 def _set_enabled(ctx: Context, schedule_id: str, enabled: bool) -> dict:
     row = store.fetch(ctx.conn, "schedules", schedule_id, "schedule")
-    if enabled and ctx.caller.role != "admin":
+    if enabled and ctx.caller.role != "admin" and row["template_id"]:
         template = store.fetch(ctx.conn, "templates", row["template_id"], "template")
         if template["approval"] != "none":
             # Its runs are launched by the schedule: whoever turned it on
@@ -354,7 +392,7 @@ def _set_enabled(ctx: Context, schedule_id: str, enabled: bool) -> dict:
              "id": Id(),
          })
 def schedule_enable(ctx: Context, params: Values) -> dict:
-    """Turn a schedule on: it launches its template from its next time on."""
+    """Turn a schedule on: it launches its template or workflow from its next time on."""
     return _set_enabled(ctx, params["id"], True)
 
 
@@ -368,6 +406,9 @@ def schedule_disable(ctx: Context, params: Values) -> dict:
 
 
 def _launch(ctx: Context, row, created_by: str | None = None) -> dict:
+    if row["workflow_id"]:
+        workflow = store.fetch(ctx.conn, "workflows", row["workflow_id"], "workflow")
+        return workflows.launch(ctx, workflow, schedule=row, created_by=created_by)
     return runs.launch(ctx, row["template_id"], row["limit_hosts"], bool(row["check_mode"]),
                        bool(row["diff"]), store.loads(row["answers"], {}), schedule=row,
                        created_by=created_by, given=store.loads(row["overrides"], {}))

@@ -257,14 +257,31 @@ def _sync_uses(ctx: Context, workflow_id: str) -> None:
 
 # --- runs of a workflow ------------------------------------------------------------
 
-def _start(ctx: Context, workflow, options: dict) -> dict:
+def unattended(ctx: Context, nodes: list[dict]) -> None:
+    """Refuse steps that would wait for a person: a schedule launches only a
+    workflow that runs from start to end with nobody to approve."""
+    for node in nodes:
+        template = ctx.conn.execute("SELECT name, approval FROM templates WHERE id = ?",
+                                    (node["template_id"],)).fetchone()
+        mode = approvals.strongest(step_mode(node),
+                                   template["approval"] if template else "none")
+        if mode != "none":
+            label = node.get("name") or (template["name"] if template else node["id"])
+            raise BadRequest(f"the step {label} waits for an approval: a schedule launches"
+                             " only a workflow whose steps need none")
+
+
+def _start(ctx: Context, workflow, options: dict, schedule=None,
+           created_by: str | None = None) -> dict:
     run_id = store.new_id("r")
     jobs.create_dir(run_id)
-    store.insert(ctx.conn, "runs", {
-        "id": run_id, "kind": "workflow", "status": "running", "title": workflow["name"],
-        "workflow_id": workflow["id"], "created_by": ctx.caller.user,
-        "created_at": store.now(), "started_at": store.now(),
-        "options": json.dumps(options)}, "run")
+    run = {"id": run_id, "kind": "workflow", "status": "running", "title": workflow["name"],
+           "workflow_id": workflow["id"], "created_by": created_by or ctx.caller.user,
+           "created_at": store.now(), "started_at": store.now(),
+           "options": json.dumps(options)}
+    if schedule is not None:
+        run.update(schedule_id=schedule["id"], priority=schedule["priority"])
+    store.insert(ctx.conn, "runs", run, "run")
     journal.send(f"workflow run {run_id} ({workflow['name']}): started", 6, FLEET_RUN=run_id)
     advance(ctx, run_id)
     return runs.run_row(store.fetch(ctx.conn, "runs", run_id, "run"))
@@ -278,9 +295,17 @@ def workflow_launch(ctx: Context, params: Values) -> dict:
     """Launch a workflow: its first steps start now, the others as the steps
     before them end. A step whose template needs approval waits for it."""
     workflow = store.fetch(ctx.conn, "workflows", params["id"], "workflow")
-    return _start(ctx, workflow, {"nodes": store.loads(workflow["nodes"], []),
-                                  "edges": store.loads(workflow["edges"], []),
-                                  "scope": scope_of(workflow)})
+    return launch(ctx, workflow)
+
+
+def launch(ctx: Context, workflow, schedule=None, created_by: str | None = None) -> dict:
+    """Start a run of a workflow: what workflow.launch does, and what a
+    schedule does at its time, after checking that no step needs approval."""
+    nodes = store.loads(workflow["nodes"], [])
+    if schedule is not None:
+        unattended(ctx, nodes)
+    return _start(ctx, workflow, {"nodes": nodes, "edges": store.loads(workflow["edges"], []),
+                                  "scope": scope_of(workflow)}, schedule, created_by)
 
 
 @command("workflow.resume", role="operator", mutating=True,
@@ -453,10 +478,15 @@ def _launch_step(ctx: Context, run, node: dict, artifacts: dict, scope: dict) ->
     if scope:
         # Its template may have changed since: the run checks for itself.
         check_scope(store.fetch(ctx.conn, "templates", node["template_id"], "template"), scope)
+    if run["schedule_id"]:
+        # Nobody is there to approve: a template that has come to need an
+        # approval since the launch fails the step instead of holding it.
+        unattended(ctx, [node])
     runs.launch(ctx, node["template_id"], node["limit"], False, False, node["answers"],
                 created_by=run["created_by"],
                 workflow={"run_id": run["id"], "node": node["id"], "title": node["name"],
-                          "vars": artifacts, "approval": step_mode(node)})
+                          "vars": artifacts, "approval": step_mode(node),
+                          "priority": run["priority"]})
 
 
 def cancel(ctx: Context, run_id: str) -> str:

@@ -285,7 +285,7 @@ function UpcomingCard({ data }: { data: Overview }) {
                             {schedules.map(schedule => (
                                 <ListItem key={schedule.id}>
                                     <Button variant="link" isInline onClick={() => go("schedules")}>{schedule.name}</Button>{" "}
-                                    <Content component="small">{formatTime(schedule.next_at, i18n.language)} · {schedule.template}</Content>
+                                    <Content component="small">{formatTime(schedule.next_at, i18n.language)} · {schedule.workflow || schedule.template}</Content>
                                 </ListItem>
                             ))}
                         </List>

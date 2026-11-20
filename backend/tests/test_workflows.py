@@ -3,10 +3,11 @@ set_stats set, wait for approvals, and can be canceled and resumed."""
 
 import json
 import unittest
+from unittest import mock
 
 from test_approvals import ApprovalBase
 
-from cockpit_fleet import jobs, paths, runner, workflows  # noqa: F401
+from cockpit_fleet import jobs, overview, paths, runner, schedules, store, workflows  # noqa: F401
 from cockpit_fleet.errors import BadRequest
 
 
@@ -352,6 +353,104 @@ class WorkflowTest(WorkflowBase):
         self.active.discard(first)
         jobs.reconcile(self.ctx())
         self.assertEqual(self.steps(run["id"])["b"][0], "active")
+
+
+class ScheduledWorkflowTest(WorkflowBase):
+    def setUp(self):
+        super().setUp()
+        patches = [
+            mock.patch.object(schedules, "analyze",
+                              lambda calendar, timezone="", count=1: (calendar, [2e9] * count)),
+            mock.patch.object(paths, "SCHEDULER_LOCK", self.root / "scheduler.lock"),
+        ]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def schedule(self, workflow, **extra):
+        return self.ok("schedule.create", {"name": "nightly", "workflow_id": workflow["id"],
+                                           "calendar": "daily", **extra})
+
+    def fire(self, schedule):
+        conn = self.ctx().conn
+        conn.execute("UPDATE schedules SET next_at = ? WHERE id = ?",
+                     (store.now() - 1, schedule["id"]))
+        return self.ok("scheduler.tick")["schedules"]
+
+    def test_a_schedule_launches_a_workflow_at_its_time(self):
+        workflow = self.chain()
+        schedule = self.schedule(workflow, priority=3)
+        listed = self.ok("schedule.list", role="viewer")["schedules"][0]
+        self.assertEqual((listed["workflow_id"], listed["workflow"], listed["template_id"],
+                          listed["template"]), (workflow["id"], "release", None, ""))
+        fired = self.fire(schedule)
+        self.assertEqual(fired[0]["outcome"], "launched", fired)
+        run = self.ok("run.get", {"id": fired[0]["run_id"]})
+        self.assertEqual((run["kind"], run["schedule_id"], run["created_by"], run["priority"]),
+                         ("workflow", schedule["id"], "schedule:nightly", 3))
+        step = self.ok("run.get", {"id": self.steps(run["id"])["a"][1]})
+        self.assertEqual((step["created_by"], step["priority"], step["schedule_id"]),
+                         ("schedule:nightly", 3, None))
+        # Still running: the next time is skipped.
+        self.assertEqual(self.fire(schedule)[0]["outcome"], "skipped")
+        upcoming = self.ok("overview.get", role="viewer")["upcoming"]["schedules"]
+        self.assertEqual((upcoming[0]["workflow"], upcoming[0]["template"]), ("release", ""))
+
+    def test_a_workflow_that_waits_for_a_person_is_not_scheduled(self):
+        self.assertEqual(self.code("schedule.create", {
+            "name": "n", "workflow_id": self.chain(approval="confirm")["id"],
+            "calendar": "daily"}), "bad_request")
+        self.ok("workflow.delete", {"id": self.ok("workflow.list")["workflows"][0]["id"]})
+        template = {key: self.second[key] for key in ("id", "name", "project_id", "playbook",
+                                                      "inventory_id", "survey")}
+        self.ok("template.update", {**template, "approval": "confirm"})
+        workflow = self.chain()
+        self.assertEqual(self.code("schedule.create", {
+            "name": "n", "workflow_id": workflow["id"], "calendar": "daily"}), "bad_request")
+
+    def test_a_schedule_names_a_template_or_a_workflow_and_what_fits_it(self):
+        workflow = self.chain()
+        self.assertEqual(self.code("schedule.create", {"name": "n", "calendar": "daily"}),
+                         "bad_request")
+        for extra in ({"template_id": self.first["id"]}, {"limit": "a"}, {"check": False},
+                      {"answers": {}}, {"forks": 2}):
+            params = {"name": "n", "calendar": "daily", "workflow_id": workflow["id"], **extra}
+            self.assertEqual(self.code("schedule.create", params), "bad_request", extra)
+
+    def test_an_approval_asked_after_the_schedule_was_saved(self):
+        workflow = self.chain()
+        schedule = self.schedule(workflow)
+        template = {key: self.second[key] for key in ("id", "name", "project_id", "playbook",
+                                                      "inventory_id", "survey")}
+        self.ok("template.update", {**template, "approval": "other"})
+        fired = self.fire(schedule)
+        self.assertEqual(fired[0]["outcome"], "error")
+        self.assertIn("migrate waits for an approval",
+                      self.ok("schedule.list")["schedules"][0]["last_error"])
+        # Asked while a scheduled run is under way: the step fails, nobody waits.
+        self.ok("template.update", {**template, "approval": "none"})
+        run = self.fire(schedule)[0]["run_id"]
+        self.ok("template.update", {**template, "approval": "other"})
+        self.end(self.steps(run)["a"][1])
+        steps = self.steps(run)
+        self.assertEqual(steps["b"][1], None)
+        self.end(steps["c"][1])
+        ended = self.ok("run.get", {"id": run})
+        self.assertEqual(ended["status"], "failed")
+        self.assertIn("waits for an approval", ended["error"])
+
+    def test_a_scheduled_workflow_is_kept_and_exported_by_name(self):
+        workflow = self.chain()
+        self.schedule(workflow, overlap="queue")
+        self.assertEqual(self.code("workflow.delete", {"id": workflow["id"]}), "conflict")
+        document = self.ok("config.export")
+        exported = document["schedules"][0]
+        self.assertEqual(exported["workflow"], "release")
+        self.assertNotIn("template", exported)
+        self.ok("schedule.delete", {"id": self.ok("schedule.list")["schedules"][0]["id"]})
+        result = self.ok("config.import", {"document": document})
+        self.assertEqual(result["failed"], 0, result)
+        self.assertEqual(self.ok("config.export")["schedules"], document["schedules"])
 
 
 class WorkflowTransferTest(WorkflowBase):

@@ -92,6 +92,34 @@ class DatabaseTest(unittest.TestCase):
                          .fetchone()[0], "[]")
         self.assertEqual(conn.execute("SELECT mode FROM approvals").fetchone()[0], "other")
 
+    def test_schedules_keep_their_rows_and_runs_when_rebuilt(self):
+        with mock.patch.object(db, "MIGRATIONS", db.MIGRATIONS[:32]):
+            conn = db.connect(self.path)
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("INSERT INTO schedules (id, name, template_id, calendar, answers,"
+                     " overrides, created_by, created_at, updated_at, next_at)"
+                     " VALUES ('s', 'nightly', 't', 'daily', '{\"a\": 1}', '{\"forks\": 2}',"
+                     " 'anna', 1, 2, 3)")
+        conn.execute("INSERT INTO runs (id, kind, status, title, created_by, created_at,"
+                     " schedule_id) VALUES ('r', 'playbook', 'successful', 'x', 'anna', 1, 's')")
+        conn.commit()
+        conn.close()
+        conn = self.opened(db.connect(self.path))
+        row = conn.execute("SELECT * FROM schedules").fetchone()
+        self.assertEqual((row["template_id"], row["workflow_id"], row["answers"],
+                          row["overrides"], row["next_at"]),
+                         ("t", None, '{"a": 1}', '{"forks": 2}', 3))
+        self.assertEqual(conn.execute("SELECT schedule_id FROM runs").fetchone()[0], "s")
+        # One of the two, never both nor neither.
+        for template, workflow in (("t", "w"), (None, None)):
+            with self.assertRaises(sqlite3.IntegrityError):
+                conn.execute("INSERT INTO schedules (id, name, template_id, workflow_id,"
+                             " calendar, created_by, created_at, updated_at)"
+                             " VALUES ('x', 'x', ?, ?, 'daily', 'anna', 1, 1)",
+                             (template, workflow))
+        conn.execute("DELETE FROM schedules")
+        self.assertIsNone(conn.execute("SELECT schedule_id FROM runs").fetchone()[0])
+
     def test_failed_migration_leaves_the_previous_version(self):
         db.connect(self.path).close()
         broken = [*db.MIGRATIONS, ["CREATE TABLE ok_table (x INTEGER)", "THIS IS NOT SQL"]]

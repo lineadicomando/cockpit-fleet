@@ -1,7 +1,7 @@
 #!/bin/sh
 # Schedules and the timer of the scheduler: roles, ten schedules on the same
-# minute under the limit of the queue, times missed while the controller was
-# off, overlap.
+# minute under the limit of the queue, a workflow, times missed while the
+# controller was off, overlap.
 # It DELETES the database, the runs and the projects: set IT_WIPE=yes to accept.
 # It waits for the timer: about three minutes.
 set -u
@@ -102,6 +102,27 @@ rid=$(get "$run" 'a["data"]["id"]')
 expect_eq "run now is the operator's" "$(get "$run" 'a["data"]["created_by"]')" itoperator
 expect_run "and it ends" "$rid" 60 successful
 expect_eq "it is in the audit trail" "$(db "SELECT count(*) FROM audit WHERE command = 'schedule.run' AND user = 'itoperator'")" 1
+
+# --- a workflow ---------------------------------------------------------------------
+steps='[{"id":"a","template_id":"'$tid'","answers":{"note":"first"}},{"id":"b","template_id":"'$tid'"}]'
+waits=$(admin workflow.create '{"name":"waits","nodes":[{"id":"a","template_id":"'$tid'","approval":"confirm"}],"edges":[]}')
+bad=$(admin schedule.create '{"name":"w","workflow_id":"'"$(get "$waits" 'a["data"]["id"]')"'","calendar":"daily"}')
+expect_eq "a workflow that waits for an approval is not scheduled" "$(get "$bad" 'a["error"]["code"]')" bad_request
+workflow=$(admin workflow.create '{"name":"pair","nodes":'"$steps"',"edges":[{"from":"a","to":"b","condition":"success"}]}')
+wid=$(get "$workflow" 'a["data"]["id"]')
+scheduled=$(admin schedule.create '{"name":"pair","workflow_id":"'$wid'","calendar":"daily","priority":1}')
+wsid=$(get "$scheduled" 'a["data"]["id"]')
+as_service_sql "UPDATE schedules SET next_at = strftime('%s', 'now') - 1 WHERE id = '$wsid'"
+systemctl start cockpit-fleet-scheduler.service
+expect_eq "the tick launched the workflow" "$(db "SELECT last_outcome FROM schedules WHERE id = '$wsid'")" launched
+wrid=$(db "SELECT last_run_id FROM schedules WHERE id = '$wsid'")
+expect_run "and both its steps ran" "$wrid" 90 successful
+expect_eq "as their schedule, with its priority" \
+    "$(db "SELECT group_concat(created_by || ' ' || priority, ',') FROM runs WHERE workflow_run_id = '$wrid'")" \
+    "schedule:pair 1,schedule:pair 1"
+del=$(admin workflow.delete '{"id":"'$wid'"}')
+expect_eq "a scheduled workflow is not deleted" "$(get "$del" 'a["error"]["code"]')" conflict
+admin schedule.delete '{"id":"'$wsid'"}' >/dev/null
 
 # --- missed while the controller was off ------------------------------------------
 systemctl stop cockpit-fleet-scheduler.timer

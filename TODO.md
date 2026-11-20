@@ -10,9 +10,9 @@ Phases 0–18 closed; the user picks the next (see "Future"). Last
 release 0.4.0 (18 November), with the Overview of phase 18. `make
 release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (729
+To resume: `git status`, `git log origin/main..`; `make check` (735
 backend, 194 frontend tests). Each backend module's docstring says what
-it is; `cli.py` is the registry of commands, `db.py` the schema (32
+it is; `cli.py` is the registry of commands, `db.py` the schema (33
 migrations).
 
 Integration since the review of 16 November: `make ct-test` on AlmaLinux

@@ -1344,8 +1344,23 @@ msgstr "Apri il terminale"
 msgid "{{agent}} is not installed on this machine"
 msgstr "{{agent}} non è installato su questa macchina"
 
-msgid "A schedule launches a job template at the times of a calendar: every night, every quarter of an hour, on the first of the month. Its runs go through the same queue as the others."
-msgstr "Una pianificazione lancia un template secondo un calendario: ogni notte, ogni quarto d'ora, il primo del mese. Le sue run passano per la stessa coda delle altre."
+msgid "A schedule launches a job template or a workflow at the times of a calendar: every night, every quarter of an hour, on the first of the month. Its runs go through the same queue as the others."
+msgstr "Una pianificazione lancia un template o un workflow secondo un calendario: ogni notte, ogni quarto d'ora, il primo del mese. Le sue run passano per la stessa coda delle altre."
+
+msgid "Launches"
+msgstr "Lancia"
+
+msgid "workflow"
+msgstr "workflow"
+
+msgid "Choose a workflow"
+msgstr "Scegli un workflow"
+
+msgid "The step {{step}} of this workflow waits for an approval, so it cannot be scheduled: nobody would be there to give it."
+msgstr "Il passo {{step}} di questo workflow attende un'approvazione, quindi non può essere pianificato: non ci sarebbe nessuno a darla."
+
+msgid "A scheduled workflow runs its steps as they are: no limit, answers or values of its own. A step whose job template comes to need an approval fails instead of waiting."
+msgstr "Un workflow pianificato esegue i suoi passi così come sono: nessun limite, risposta o valore proprio. Un passo il cui template arriva a richiedere un'approvazione fallisce invece di attendere."
 
 msgid "An OnCalendar expression of systemd, such as \"Mon..Fri *-*-* 06:00\" or \"*:0/15\". The builder above writes it; it can also be typed."
 msgstr "Un'espressione OnCalendar di systemd, come \"Mon..Fri *-*-* 06:00\" o \"*:0/15\". Viene composta dai campi qui sopra, ma si può anche digitare."

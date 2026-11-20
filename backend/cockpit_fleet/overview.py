@@ -250,8 +250,11 @@ def _compliance(ctx: Context) -> dict:
 def _upcoming(ctx: Context, now: float) -> dict:
     conn = ctx.conn
     schedules = conn.execute(
-        "SELECT s.id, s.name, s.next_at, s.template_id, t.name AS template FROM schedules s"
-        " JOIN templates t ON t.id = s.template_id WHERE s.enabled = 1 AND s.next_at IS NOT NULL"
+        "SELECT s.id, s.name, s.next_at, s.template_id, s.workflow_id,"
+        " coalesce(t.name, '') AS template, coalesce(w.name, '') AS workflow FROM schedules s"
+        " LEFT JOIN templates t ON t.id = s.template_id"
+        " LEFT JOIN workflows w ON w.id = s.workflow_id"
+        " WHERE s.enabled = 1 AND s.next_at IS NOT NULL"
         " ORDER BY s.next_at LIMIT ?", (TOP,)).fetchall()
     windows = conn.execute(
         "SELECT m.id, m.starts_at, m.ends_at, m.host_group, m.comment, i.name AS inventory,"

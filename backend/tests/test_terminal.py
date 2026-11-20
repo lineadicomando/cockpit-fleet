@@ -6,10 +6,11 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import cli, terminal
+from cockpit_fleet import cli, schedules, terminal
 from cockpit_fleet.mcp import Unreachable
 from cockpit_fleet.terminal import Failure, Terminal, Usage
 
@@ -527,6 +528,14 @@ class BackendTest(Base):
         with self.assertRaises(Failure) as caught:
             terminal.run(t, COMMANDS, ["template", "delete", "nothing"])
         self.assertIn("no template 'nothing'", str(caught.exception))
+        workflow = self.ok("workflow.create", {"name": "release", "nodes": [
+            {"id": "a", "template_id": template["id"]}], "edges": []})
+        with mock.patch.object(schedules, "analyze",
+                               lambda calendar, timezone="", count=1: (calendar, [2e9])):
+            terminal.run(t, COMMANDS, ["schedule", "create", "--name", "nightly",
+                                       "--workflow-id", "release", "--calendar", "daily"])
+        row = self.ctx().conn.execute("SELECT workflow_id FROM schedules").fetchone()
+        self.assertEqual(row["workflow_id"], workflow["id"])
 
     def streaming(self, role, sent=None):
         """A terminal whose fleetctl moves files as main() does."""

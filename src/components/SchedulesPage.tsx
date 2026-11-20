@@ -15,6 +15,7 @@ import {
     HelperTextItem,
     InputGroup,
     InputGroupItem,
+    Radio,
     Switch,
     TextInput,
 } from "@patternfly/react-core";
@@ -26,7 +27,7 @@ import { DEFAULT_SHAPE, EVERY_MINUTES, WEEKDAYS, calendarOf, shapeOf, type Repea
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
 import { overrideFields, overridesOf } from "../lib/templates.ts";
-import type { Overlap, Run, Schedule, SchedulePreview, Template } from "../lib/types.ts";
+import type { Overlap, Run, Schedule, SchedulePreview, Template, Workflow } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
@@ -176,10 +177,25 @@ function CalendarBuilder({ calendar, onChange }: { calendar: string; onChange: (
     );
 }
 
-function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Schedule; templates: Template[]; onClose: () => void; onDone: () => void }) {
+// The step of a workflow that would wait for a person, if one would: a
+// schedule launches only a workflow that needs no approval. The backend checks.
+function waitingStep(workflow: Workflow, templates: Template[]): string | null {
+    for (const node of workflow.nodes) {
+        const template = templates.find(item => item.id === node.template_id);
+        if (node.approval !== "none" || (template && template.approval !== "none"))
+            return node.name || template?.name || node.id;
+    }
+    return null;
+}
+
+function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
+    schedule?: Schedule; templates: Template[]; workflows: Workflow[]; onClose: () => void; onDone: () => void;
+}) {
     const { t } = useTranslation();
     const [name, setName] = useState(schedule?.name ?? "");
+    const [launches, setLaunches] = useState<"template" | "workflow">(schedule?.workflow_id ? "workflow" : "template");
     const [templateId, setTemplateId] = useState(schedule?.template_id ?? "");
+    const [workflowId, setWorkflowId] = useState(schedule?.workflow_id ?? "");
     const [calendar, setCalendar] = useState(schedule?.calendar ?? calendarOf(DEFAULT_SHAPE)!);
     const [timezone, setTimezone] = useState(schedule?.timezone ?? "");
     const [enabled, setEnabled] = useState(schedule?.enabled ?? true);
@@ -189,7 +205,9 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
     const [catchUp, setCatchUp] = useState(schedule?.catch_up ?? false);
     const [priority, setPriority] = useState(String(schedule?.priority ?? 0));
     const [delay, setDelay] = useState(String((schedule?.random_delay ?? 0) / 60));
-    const template = templates.find(item => item.id === templateId);
+    const template = launches === "template" ? templates.find(item => item.id === templateId) : undefined;
+    const workflow = launches === "workflow" ? workflows.find(item => item.id === workflowId) : undefined;
+    const waiting = workflow ? waitingStep(workflow, templates) : null;
     const [answers, setAnswers] = useState<Answers>(() => storedAnswers(template, schedule?.answers ?? {}));
     const [fields, setFields] = useState(() => overrideFields(template, schedule?.overrides));
 
@@ -198,12 +216,17 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
     const needsSecret = (template?.survey ?? []).some(field => field.type === "secret" && field.required);
 
     async function submit() {
-        const params = {
-            name, template_id: templateId, calendar: calendar.trim(), timezone: timezone.trim(), enabled,
-            limit: limit.trim(), check, answers: collectAnswers(survey, answers), overlap, catch_up: catchUp,
+        const common = {
+            name, calendar: calendar.trim(), timezone: timezone.trim(), enabled, overlap, catch_up: catchUp,
             priority: Number(priority), random_delay: Math.round(Number(delay) * 60),
-            ...overridesOf(template, fields),
         };
+        // A workflow takes no limit, answers or values of its own: they are not sent.
+        const params = launches === "workflow"
+            ? { ...common, workflow_id: workflowId }
+            : {
+                ...common, template_id: templateId, limit: limit.trim(), check, answers: collectAnswers(survey, answers),
+                ...overridesOf(template, fields),
+            };
         await call(schedule ? "schedule.update" : "schedule.create", schedule ? { id: schedule.id, ...params } : params);
         onDone();
         onClose();
@@ -211,7 +234,13 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
 
     return (
         <FormModal title={schedule ? t("Edit schedule") : t("New schedule")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
-            isDisabled={!name.trim() || !templateId || !calendar.trim() || needsSecret || survey.some(field => answerProblem(field, answers[field.name]))}>
+            isDisabled={!name.trim() || !calendar.trim() || (launches === "workflow"
+                ? !workflow || waiting !== null
+                : !template || needsSecret || survey.some(field => answerProblem(field, answers[field.name])))}>
+            <FormGroup label={t("Launches")} role="radiogroup" isInline fieldId="sch-launches">
+                <Radio id="sch-launches-template" name="sch-launches" label={t("Job template")} isChecked={launches === "template"} onChange={() => setLaunches("template")} />
+                <Radio id="sch-launches-workflow" name="sch-launches" label={t("Workflow")} isChecked={launches === "workflow"} onChange={() => setLaunches("workflow")} />
+            </FormGroup>
             <Grid hasGutter md={6}>
                 <GridItem>
                     <FormGroup label={t("Name")} isRequired fieldId="sch-name">
@@ -219,20 +248,31 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
                     </FormGroup>
                 </GridItem>
                 <GridItem>
-                    <FormGroup label={t("Job template")} isRequired fieldId="sch-template">
-                        <FormSelect id="sch-template" value={templateId}
-                            onChange={(_e, value) => {
-                                const chosen = templates.find(item => item.id === value);
-                                setTemplateId(value);
-                                setAnswers(storedAnswers(chosen, {}));
-                                setFields(overrideFields(chosen));
-                            }}>
-                            <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
-                            {templates.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
-                        </FormSelect>
-                    </FormGroup>
+                    {launches === "workflow" ? (
+                        <FormGroup label={t("Workflow")} isRequired fieldId="sch-workflow">
+                            <FormSelect id="sch-workflow" value={workflowId} onChange={(_e, value) => setWorkflowId(value)}>
+                                <FormSelectOption value="" label={t("Choose a workflow")} isPlaceholder />
+                                {workflows.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                            </FormSelect>
+                        </FormGroup>
+                    ) : (
+                        <FormGroup label={t("Job template")} isRequired fieldId="sch-template">
+                            <FormSelect id="sch-template" value={templateId}
+                                onChange={(_e, value) => {
+                                    const chosen = templates.find(item => item.id === value);
+                                    setTemplateId(value);
+                                    setAnswers(storedAnswers(chosen, {}));
+                                    setFields(overrideFields(chosen));
+                                }}>
+                                <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
+                                {templates.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                            </FormSelect>
+                        </FormGroup>
+                    )}
                 </GridItem>
             </Grid>
+            {waiting !== null && <Alert variant="warning" isInline title={t("The step {{step}} of this workflow waits for an approval, so it cannot be scheduled: nobody would be there to give it.", { step: waiting })} />}
+            {launches === "workflow" && <Content component="small">{t("A scheduled workflow runs its steps as they are: no limit, answers or values of its own. A step whose job template comes to need an approval fails instead of waiting.")}</Content>}
             {needsSecret && <Alert variant="warning" isInline title={t("This job template asks for a secret at launch, so it cannot be scheduled: a schedule never stores a secret.")} />}
             <CalendarBuilder calendar={calendar} onChange={setCalendar} />
             <FormGroup label={t("Time zone")} fieldId="sch-timezone">
@@ -242,11 +282,15 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
                 </datalist>
                 <FormHelperText><HelperText><Preview calendar={calendar} timezone={timezone} /></HelperText></FormHelperText>
             </FormGroup>
-            <SurveyAnswers survey={survey} answers={answers} onChange={setAnswers} />
-            <FormGroup label={t("Limit to hosts")} fieldId="sch-limit">
-                <TextInput id="sch-limit" value={limit} onChange={(_e, value) => setLimit(value)} placeholder={template?.limit_hosts || "web01,web02"} />
-                <FormHelperText><HelperText><HelperTextItem>{t("Narrows the template's own limit; it cannot widen it.")}</HelperTextItem></HelperText></FormHelperText>
-            </FormGroup>
+            {launches === "template" && (
+                <>
+                    <SurveyAnswers survey={survey} answers={answers} onChange={setAnswers} />
+                    <FormGroup label={t("Limit to hosts")} fieldId="sch-limit">
+                        <TextInput id="sch-limit" value={limit} onChange={(_e, value) => setLimit(value)} placeholder={template?.limit_hosts || "web01,web02"} />
+                        <FormHelperText><HelperText><HelperTextItem>{t("Narrows the template's own limit; it cannot widen it.")}</HelperTextItem></HelperText></FormHelperText>
+                    </FormGroup>
+                </>
+            )}
             {template && <OverridesSection key={template.id} id="sch" template={template} fields={fields} onChange={setFields} />}
             <Grid hasGutter md={4}>
                 <GridItem>
@@ -271,7 +315,7 @@ function ScheduleModal({ schedule, templates, onClose, onDone }: { schedule?: Sc
             </Grid>
             <FormGroup fieldId="sch-flags" role="group">
                 <Checkbox id="sch-catch-up" label={t("When times were missed while the controller was off, launch once at start-up")} isChecked={catchUp} onChange={(_e, value) => setCatchUp(value)} />
-                <Checkbox id="sch-check" label={t("Dry run: show what would change, change nothing")} isChecked={check} onChange={(_e, value) => setCheck(value)} />
+                {launches === "template" && <Checkbox id="sch-check" label={t("Dry run: show what would change, change nothing")} isChecked={check} onChange={(_e, value) => setCheck(value)} />}
                 <Checkbox id="sch-enabled" label={t("Enabled")} isChecked={enabled} onChange={(_e, value) => setEnabled(value)} />
             </FormGroup>
         </FormModal>
@@ -310,6 +354,7 @@ export function SchedulesPage() {
     const can = useCan();
     const list = useLoad(() => call<{ schedules: Schedule[] }>("schedule.list"));
     const templates = useLoad(() => call<{ templates: Template[] }>("template.list"));
+    const workflows = useLoad(() => call<{ workflows: Workflow[] }>("workflow.list"));
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<Schedule | null>(null);
     const [deleting, setDeleting] = useState<Schedule | null>(null);
@@ -341,18 +386,18 @@ export function SchedulesPage() {
         <>
             <SectionHeader title={t("Schedules")}>
                 {can("schedule.create") && (
-                    <Button variant="primary" onClick={() => setCreating(true)} isDisabled={!templates.data}>{t("New schedule")}</Button>
+                    <Button variant="primary" onClick={() => setCreating(true)} isDisabled={!templates.data || !workflows.data}>{t("New schedule")}</Button>
                 )}
             </SectionHeader>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             <ListState loaded={list} isEmpty={data => data.schedules.length === 0}
                 emptyTitle={t("No schedules")}
-                emptyBody={t("A schedule launches a job template at the times of a calendar: every night, every quarter of an hour, on the first of the month. Its runs go through the same queue as the others.")}>
+                emptyBody={t("A schedule launches a job template or a workflow at the times of a calendar: every night, every quarter of an hour, on the first of the month. Its runs go through the same queue as the others.")}>
                 {data => (
                     <Table variant="compact" aria-label={t("Schedules")}>
                         <Thead>
                             <Tr>
-                                <Th>{t("Name")}</Th><Th>{t("Job template")}</Th><Th>{t("Calendar")}</Th><Th>{t("Next time")}</Th>
+                                <Th>{t("Name")}</Th><Th>{t("Launches")}</Th><Th>{t("Calendar")}</Th><Th>{t("Next time")}</Th>
                                 <Th>{t("Last time")}</Th><Th>{t("Enabled")}</Th><Th screenReaderText={t("Run now")} /><Th screenReaderText={t("Actions")} />
                             </Tr>
                         </Thead>
@@ -360,7 +405,11 @@ export function SchedulesPage() {
                             {data.schedules.map(schedule => (
                                 <Tr key={schedule.id}>
                                     <Td dataLabel={t("Name")}>{schedule.name}</Td>
-                                    <Td dataLabel={t("Job template")}>{schedule.template}</Td>
+                                    <Td dataLabel={t("Launches")}>
+                                        {schedule.workflow_id
+                                            ? <>{schedule.workflow} <Content component="small">({t("workflow")})</Content></>
+                                            : schedule.template}
+                                    </Td>
                                     <Td dataLabel={t("Calendar")}>
                                         <code>{schedule.calendar}</code>
                                         {schedule.timezone && <Content component="small"> {schedule.timezone}</Content>}
@@ -391,8 +440,8 @@ export function SchedulesPage() {
                     </Table>
                 )}
             </ListState>
-            {creating && templates.data && <ScheduleModal templates={templates.data.templates} onClose={() => setCreating(false)} onDone={list.reload} />}
-            {editing && templates.data && <ScheduleModal schedule={editing} templates={templates.data.templates} onClose={() => setEditing(null)} onDone={list.reload} />}
+            {creating && templates.data && workflows.data && <ScheduleModal templates={templates.data.templates} workflows={workflows.data.workflows} onClose={() => setCreating(false)} onDone={list.reload} />}
+            {editing && templates.data && workflows.data && <ScheduleModal schedule={editing} templates={templates.data.templates} workflows={workflows.data.workflows} onClose={() => setEditing(null)} onDone={list.reload} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The schedule is deleted. The runs it launched stay in the history.")}
                     onDelete={async () => { await call("schedule.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}

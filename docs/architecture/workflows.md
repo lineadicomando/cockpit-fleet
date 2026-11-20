@@ -65,6 +65,10 @@ as in AWX. A playbook wrote it, so every string at every depth is tagged
 in clear, like extra variables: not for secrets, which only the known ones
 are masked in.
 
+**Scheduled.** A schedule may launch a workflow none of whose steps waits
+for an approval: see `schedules.md`. Its run carries `schedule_id`, and a
+step that would wait fails instead (`unattended`).
+
 **Cancel and resume.** Canceling a workflow run (`run.cancel`) asks for it,
 cancels its steps under way and starts nothing more; it ends `canceled` once
 they have. `workflow.resume` (operator), on a run that failed or was

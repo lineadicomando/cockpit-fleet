@@ -441,6 +441,9 @@ class AutonomyTest(Base):
         schedule = self.ok("schedule.create", {"name": "s", "template_id": template["id"],
                                                "calendar": "hourly"})
         self.refused(self.via("schedule.run", {"id": schedule["id"]}), "in maintenance")
+        scheduled = self.ok("schedule.create", {"name": "sw", "workflow_id": workflow["id"],
+                                                "calendar": "hourly"})
+        self.refused(self.via("schedule.run", {"id": scheduled["id"]}), "in maintenance")
         check = self.ok("check.create", {"name": "disk", "kind": "disk",
                                          "inventory_id": template["inventory_id"]})
         self.refused(self.via("check.run", {"id": check["id"]}), "in maintenance")

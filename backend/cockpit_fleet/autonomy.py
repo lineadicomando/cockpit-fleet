@@ -51,9 +51,13 @@ def _inventories(conn, name: str, params: dict) -> set[str]:
                             " JOIN templates t ON t.id = w.template_id WHERE w.workflow_id = ?",
                             (workflow,))
     elif name == "schedule.run":
+        schedule = _text(params.get("id"))
         rows = conn.execute("SELECT t.inventory_id FROM schedules s"
-                            " JOIN templates t ON t.id = s.template_id WHERE s.id = ?",
-                            (_text(params.get("id")),))
+                            " JOIN templates t ON t.id = s.template_id WHERE s.id = ?"
+                            " UNION SELECT t.inventory_id FROM schedules s"
+                            " JOIN workflow_templates w ON w.workflow_id = s.workflow_id"
+                            " JOIN templates t ON t.id = w.template_id WHERE s.id = ?",
+                            (schedule, schedule))
     else:
         rows = conn.execute("SELECT inventory_id FROM checks WHERE id = ?",
                             (_text(params.get("id")),))

@@ -374,8 +374,8 @@ export function TemplatesPage() {
                     const projectName = new Map(data.projects.map(item => [item.id, item.name]));
                     const inventoryName = new Map(data.inventories.map(item => [item.id, item.name]));
                     const scheduleCount = new Map<string, number>();
-                    for (const schedule of data.schedules)
-                        scheduleCount.set(schedule.template_id, (scheduleCount.get(schedule.template_id) ?? 0) + 1);
+                    for (const { template_id: id } of data.schedules)
+                        if (id) scheduleCount.set(id, (scheduleCount.get(id) ?? 0) + 1);
                     const names: TemplateNames = {
                         project: id => projectName.get(id) ?? "",
                         inventory: id => inventoryName.get(id) ?? "",

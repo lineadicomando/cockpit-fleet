@@ -165,8 +165,9 @@ in [security.md](security.md); the decisions behind these limits in
 - Approvals: one approver suffices (no quorum); an approval is not
   notified to the approvers by name, only to channels; a pending run shows
   its launch time as "Started".
-- Workflows: no schedule launches a workflow; the launch takes no limit or
-  answers of its own; the graph is drawn in columns, not with its arrows;
+- Workflows: the launch takes no limit or answers of its own, nor does a
+  schedule of one; a workflow with an approval at a step is never
+  scheduled; the graph is drawn in columns, not with its arrows;
   `set_stats` per host is not passed on; what a step passed on is kept in
   clear and masked only for known secrets; the steps a workflow starts are
   not in the audit (its launch, cancel and resume are); its commands are

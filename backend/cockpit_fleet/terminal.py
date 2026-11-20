@@ -84,7 +84,7 @@ _NAMED = {
     "credential": ("credential.list", "credentials"), "check": ("check.list", "checks"),
     "host": ("host.list", "hosts"), "schedule": ("schedule.list", "schedules"),
     "channel": ("channel.list", "channels"), "rule": ("rule.list", "rules"),
-    "varset": ("varset.list", "variable_sets"),
+    "varset": ("varset.list", "variable_sets"), "workflow": ("workflow.list", "workflows"),
 }
 # Parameters that hold the id of another area; "id" is of the command's own
 # area, but for the files, which are of a project.
@@ -92,7 +92,7 @@ _ID_PARAMS = {
     "template_id": "template", "project_id": "project", "inventory_id": "inventory",
     "credential_id": "credential", "machine_credential_id": "credential",
     "vault_credential_id": "credential", "check_id": "check", "host_id": "host",
-    "schedule_id": "schedule", "channel_id": "channel",
+    "schedule_id": "schedule", "channel_id": "channel", "workflow_id": "workflow",
 }
 _ID_OF_AREA = {"file": "project"}
 

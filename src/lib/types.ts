@@ -371,9 +371,12 @@ export type Overlap = "skip" | "queue" | "cancel";
 export interface Schedule {
     id: string;
     name: string;
-    template_id: string;
-    // The template's name, or "" when it is gone.
+    // What it launches: a job template or a workflow, one of the two.
+    template_id: string | null;
+    workflow_id: string | null;
+    // Their names, "" for the one it does not launch.
     template: string;
+    workflow: string;
     calendar: string;
     timezone: string;
     enabled: boolean;

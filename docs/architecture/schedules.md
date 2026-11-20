@@ -1,7 +1,8 @@
 # Schedules
 
-A schedule launches a job template at the times of an OnCalendar expression,
-with a limit, a dry run and answers to the survey stored with it. There is
+A schedule launches a job template or a workflow at the times of an
+OnCalendar expression; a template with a limit, a dry run and answers to
+the survey stored with it. There is
 one static timer, `cockpit-fleet-scheduler.timer`, every minute on the minute,
 and its service runs `fleetctl scheduler.tick` as the service account, like
 `cockpit-fleet-finish@`: the caller is `system`, with the admin role. A unit
@@ -38,7 +39,8 @@ foresaw is not retried every minute) and then:
   running, `overlap` decides:
   `skip` (the default), `queue` this one too, or `cancel` the previous one;
 - otherwise it is launched through `runs.launch`, the code of `run.start`,
-  with the stored answers. The run's `created_by` is `schedule:NAME` and it
+  with the stored answers, or `workflows.launch`, the code of
+  `workflow.launch`. The run's `created_by` is `schedule:NAME` and it
   carries `schedule_id` and the priority.
 
 What happened is kept with the schedule (`last_outcome`, `last_error`,
@@ -47,9 +49,29 @@ The tick is not a mutating command: the audit trail has who created,
 changed, turned on or off and ran a schedule, not one record per minute.
 
 **Roles.** As for templates: an administrator creates, changes and deletes;
-an operator turns a schedule on or off and runs it now (`schedule.run`, as
+an operator turns a schedule on or off (only an administrator turns on one
+of a template that asks for an approval) and runs it now (`schedule.run`, as
 the operator, with the stored answers, without moving its times); a viewer
 sees the list. A template that a schedule uses cannot be deleted.
+
+**Workflows.** A schedule names a template or a workflow (`template_id` or
+`workflow_id`, one of the two, a `CHECK` of the table since schema 33).
+Nobody is there when a schedule fires, so it launches only a workflow that
+runs from start to end without a person: none of its steps asks for an
+approval, nor does the template of any. This is checked when the schedule
+is saved, again at each launch (the workflow or a template may have changed
+since: the time is then `error`, with the step named), and once more when
+the run starts each step, against the copy it holds: a template that has
+come to need an approval while the workflow runs fails its step instead of
+holding it. A template, by contrast, may be scheduled with an approval
+(turned on by an administrator), since one run waiting is not a chain of
+steps stopped halfway. A workflow takes no limit, dry run, answers or values
+of its own at launch, so a schedule of one refuses them. Overlap looks at the
+run of the workflow, which is running until its last step ends; its steps do
+not carry `schedule_id` (canceling the workflow cancels them), but they take
+its `created_by` and its priority. A workflow that a schedule launches cannot
+be deleted (a foreign key), and the exported document names it as
+`workflow` in place of `template`.
 
 **Answers.** They are checked against the survey when the schedule is saved,
 and again at each launch, as the template may have changed since: then the

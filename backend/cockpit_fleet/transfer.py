@@ -100,15 +100,17 @@ def config_export(ctx: Context, params: Values) -> dict:
                    for node in store.loads(row["nodes"], [])],
          "edges": store.loads(row["edges"], [])}
         for row in conn.execute("SELECT * FROM workflows ORDER BY name COLLATE NOCASE")]
+    workflow_names = _names(ctx, "workflows")
     document["schedules"] = [
-        {"name": row["name"], "template": templates.get(row["template_id"], ""),
+        {"name": row["name"],
+         **({"workflow": workflow_names.get(row["workflow_id"], "")} if row["workflow_id"] else
+            {"template": templates.get(row["template_id"], ""), "limit": row["limit_hosts"],
+             "check": bool(row["check_mode"]), "diff": bool(row["diff"]),
+             "answers": store.loads(row["answers"], {}), **store.loads(row["overrides"], {})}),
          "calendar": row["calendar"], "timezone": row["timezone"],
-         "enabled": bool(row["enabled"]), "limit": row["limit_hosts"],
-         "check": bool(row["check_mode"]), "diff": bool(row["diff"]),
-         "answers": store.loads(row["answers"], {}), "overlap": row["overlap"],
+         "enabled": bool(row["enabled"]), "overlap": row["overlap"],
          "catch_up": bool(row["catch_up"]), "priority": row["priority"],
-         "random_delay": row["random_delay"],
-         **store.loads(row["overrides"], {})}
+         "random_delay": row["random_delay"]}
         for row in conn.execute("SELECT * FROM schedules ORDER BY name COLLATE NOCASE")]
     document["checks"] = [
         {"name": row["name"], "kind": row["kind"],
@@ -294,8 +296,11 @@ class _Importer:
                                          "description": item.get("description") or ""})
 
     def schedule(self, item: dict) -> None:
-        params = {"name": item.get("name"), "calendar": item.get("calendar"),
-                  "template_id": self._id("templates", item.get("template"), "template", True)}
+        params = {"name": item.get("name"), "calendar": item.get("calendar")}
+        if "workflow" in item:
+            params["workflow_id"] = self._id("workflows", item.get("workflow"), "workflow", True)
+        else:
+            params["template_id"] = self._id("templates", item.get("template"), "template", True)
         for key in ("timezone", "enabled", "limit", "check", "diff", "answers", "overlap",
                     "catch_up", "priority", "random_delay", "tags", "skip_tags", "forks",
                     "verbosity"):

@@ -59,7 +59,10 @@ export interface Overview {
     updates: { updates: number; security: number; hosts: number; security_hosts: number; known: number };
     compliance: { compliant: number; drifted: number };
     upcoming: {
-        schedules: { id: string; name: string; next_at: number; template_id: string; template: string }[];
+        schedules: {
+            id: string; name: string; next_at: number;
+            template_id: string | null; template: string; workflow_id: string | null; workflow: string;
+        }[];
         maintenances: {
             id: string; starts_at: number; ends_at: number; host_group: string; comment: string;
             inventory: string; host: string; active: boolean;
