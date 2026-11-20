@@ -89,13 +89,16 @@
 
 [adhoc]
 # Modules an administrator may run as an ad-hoc command, by their full name.
-# An empty list disables ad-hoc commands.
+# An empty list disables ad-hoc commands. lineadicomando.fleet.net_probe
+# probes from a node only subnets that may be scanned ([network]) or the
+# hosts of the inventory, on the ports of [network] scan_ports.
 #modules = [
 #    "ansible.builtin.ping", "ansible.builtin.setup", "ansible.builtin.command",
 #    "ansible.builtin.shell", "ansible.builtin.service_facts",
 #    "ansible.builtin.package_facts", "ansible.windows.win_ping",
 #    "ansible.windows.setup", "ansible.windows.win_command",
 #    "ansible.windows.win_shell", "ansible.windows.win_powershell",
+#    "lineadicomando.fleet.net_probe",
 #]
 
 [inventories]
@@ -119,6 +122,7 @@
 #    "ansible.builtin.ping", "ansible.builtin.setup",
 #    "ansible.builtin.service_facts", "ansible.builtin.package_facts",
 #    "ansible.windows.win_ping", "ansible.windows.setup",
+#    "lineadicomando.fleet.net_probe",
 #]
 
 [chat]

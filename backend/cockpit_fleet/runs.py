@@ -239,6 +239,9 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
         raise BadRequest("args is too large")
     inventory = store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
                              "inventory")
+    from . import netscan  # it builds on this module
+    if module == netscan.PROBE_MODULE:
+        args = netscan.check_probe_args(ctx.config, inventory, free_form, args)
     if inventory["kind"] == "file" and project_id is None:
         # What stands beside it, and the collections of its project.
         project_id = inventory["project_id"]

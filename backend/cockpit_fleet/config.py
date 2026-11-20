@@ -37,6 +37,7 @@ ADHOC_MODULES = (
     "ansible.builtin.package_facts",
     "ansible.windows.win_ping",
     "ansible.windows.setup",
+    "lineadicomando.fleet.net_probe",
     "ansible.windows.win_command",
     "ansible.windows.win_shell",
     "ansible.windows.win_powershell",

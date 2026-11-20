@@ -42,6 +42,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   is not the one the CMDB knows (and whose it is), the CMDB saw it at
   another address, it gives another name (`netscan.probe`). The
   assistant uses it before saying that hosts are off.
+- Collection: `lineadicomando.fleet.net_probe`, for Linux and Windows
+  nodes, probes from a node a subnet the controller may scan or hosts of
+  the inventory, and gives the MAC addresses of the node's segment, beyond
+  a router the controller cannot see past. It is among the default
+  modules of `[adhoc] modules` and `[mcp] adhoc_modules`, so the assistant
+  in the profile diagnostic may run it; its ports are those of
+  `[network] scan_ports`.
 - Assistant: in the profiles diagnostic and administrator the assistant
   of an administrator may scan a subnet, asked every time (a class of
   tools of its own, `scan`).

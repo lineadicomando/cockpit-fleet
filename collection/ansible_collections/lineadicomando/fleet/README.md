@@ -10,6 +10,13 @@ Ansible content bundled with cockpit-fleet and loaded on the controller from
   and `win_checks` for Windows): runs every check of the catalog planned for
   a host in one task, and returns their results in the contract of
   cockpit-fleet. The action chooses the module by the shell of the host.
+- `lineadicomando.fleet.net_probe` (action, with the modules `net_probe` for
+  Linux and `win_net_probe` for Windows): probes a subnet or some addresses
+  from the node, with an ICMP echo and TCP connections, and gives the MAC
+  addresses its neighbour table holds: the segment of the node, which the
+  controller may not reach. It changes nothing; cockpit-fleet lets it run
+  on a subnet it may scan, or on the hosts of the inventory, with the
+  ports of its `config.toml`.
 - `lineadicomando.fleet.fleet_result` (action, documented as a module): the
   last task of a check written as a playbook; it checks a state, a summary,
   metrics and details and hands them back, running nothing on the node.

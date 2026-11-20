@@ -179,7 +179,12 @@ detection system on the network may take a scan for an attack: tell
 whoever watches it. An operator, and the assistant in any profile, may
 probe the hosts of an inventory the same way (Inventories, "Probe the
 hosts"): only the hosts an administrator put there, at most 256 at a
-time, recorded in the journal.
+time, recorded in the journal. The module `lineadicomando.fleet.net_probe`
+does the same from a node, as an ad-hoc command: on the subnets that may
+be scanned or the hosts of the inventory only, with the ports of
+`[network] scan_ports`; it is among the modules the assistant runs
+unasked in the profile `diagnostic`, which changes nothing on the nodes:
+remove it from `[mcp] adhoc_modules` to keep it from agents.
 
 ## What it does not do
 

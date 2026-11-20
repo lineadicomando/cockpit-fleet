@@ -179,7 +179,10 @@ in [security.md](security.md); the decisions behind these limits in
   wins; a host's file is moved into `host_vars/HOST/`, which a person
   editing it may not expect. A probe of an inventory holds `fleetctl` for
   some seconds and is in the journal, not the audit log; it takes the
-  first IPv4 address of a name; the CMDB is as last collected.
+  first IPv4 address of a name; the CMDB is as last collected. What
+  `net_probe` finds on a node stays in the events of its run, not among
+  the hosts of scans, and is not turned into an inventory; it has no
+  NetBIOS names; `win_net_probe` untried on Windows.
 - Approvals: one approver suffices (no quorum); an approval is not
   notified to the approvers by name, only to channels; a pending run shows
   its launch time as "Started".

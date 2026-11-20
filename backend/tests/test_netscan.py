@@ -601,3 +601,65 @@ class ProbeTest(Base):
         self.assertEqual(netscan.normal_mac("52-54-00-AA-BB-07"), "52:54:00:aa:bb:07")
         for value in ("", None, "00:00:00:00:00:00", "52:54:00:aa:bb", "zz:54:00:aa:bb:07"):
             self.assertEqual(netscan.normal_mac(value), "", value)
+
+
+class ProbeModuleTest(ScanBase):
+    """An ad-hoc lineadicomando.fleet.net_probe: what it may probe from a node."""
+
+    def setUp(self):
+        super().setUp()
+        self.config = replace(self.config, scan_subnets=("172.16.0.0/16",))
+        project = self.local_project()
+        self.inventory = self.ok("inventory.create", {"name": "lab", "kind": "file",
+                                                      "project_id": project["id"],
+                                                      "path": "inventories/hosts.yml"})
+        hosts = [{"name": "far", "address": "10.9.9.9", "port": None, "connection": "",
+                  "groups": []}]
+        self.ctx().conn.execute("UPDATE inventories SET hosts = ? WHERE id = ?",
+                                (json.dumps(hosts), self.inventory["id"]))
+
+    def adhoc(self, args, free_form=""):
+        return self.call("run.adhoc", {"inventory_id": self.inventory["id"], "limit": "all",
+                                       "module": netscan.PROBE_MODULE, "args": args,
+                                       "free_form": free_form})
+
+    def test_what_a_node_may_probe(self):
+        for args in ({"subnet": "192.168.10.0/24"}, {"subnet": "172.16.5.0/24"},
+                     {"addresses": ["10.9.9.9", "172.16.1.1"]},
+                     {"subnet": "172.16.5.0/24", "ports": [445, 22], "timeout": 2}):
+            with self.subTest(args):
+                answer = self.adhoc(args)
+                self.assertTrue(answer["ok"], answer)
+                spec = json.loads((paths.RUNS_DIR / answer["data"]["id"] / "spec.json")
+                                  .read_text())
+                self.assertEqual(spec["args"]["ports"], sorted(args.get(
+                    "ports", list(self.config.scan_ports))))
+        for args, code in (({"subnet": "8.8.8.0/24"}, "forbidden"),
+                           ({"addresses": ["8.8.8.8"]}, "forbidden"),
+                           ({"subnet": "172.16.0.0/16"}, "bad_request"),
+                           ({}, "bad_request"),
+                           ({"subnet": "172.16.5.0/24", "addresses": ["10.9.9.9"]}, "bad_request"),
+                           ({"subnet": "172.16.5.0/24", "ports": [8080]}, "bad_request"),
+                           ({"subnet": "172.16.5.0/24", "timeout": 60}, "bad_request"),
+                           ({"subnet": "{{ lookup('pipe', 'id') }}"}, "bad_request"),
+                           ({"addresses": ["{{ x }}"]}, "bad_request"),
+                           ({"subnet": "172.16.5.0/24", "become": True}, "bad_request")):
+            with self.subTest(args):
+                answer = self.adhoc(args)
+                self.assertFalse(answer["ok"], answer)
+                self.assertEqual(answer["error"]["code"], code, answer)
+        self.assertEqual(self.adhoc({"subnet": "172.16.5.0/24"}, free_form="x")["error"]["code"],
+                         "bad_request")
+
+    def test_an_agent_probes_from_a_node_in_diagnostic(self):
+        self.config = replace(self.config, mcp_max_role="admin",
+                              chat_profiles=("assisted", "diagnostic"))
+        answer = self.call("run.adhoc", {
+            "inventory_id": self.inventory["id"], "limit": "all", "module": netscan.PROBE_MODULE,
+            "args": {"subnet": "172.16.5.0/24"}, "via": "mcp:test", "profile": "diagnostic"})
+        self.assertTrue(answer["ok"], answer)
+        self.assertEqual(answer["data"]["status"], "running")
+        refused = self.call("run.adhoc", {
+            "inventory_id": self.inventory["id"], "limit": "all", "module": netscan.PROBE_MODULE,
+            "args": {"subnet": "8.8.8.0/24"}, "via": "mcp:test", "profile": "diagnostic"})
+        self.assertEqual(refused["error"]["code"], "forbidden")

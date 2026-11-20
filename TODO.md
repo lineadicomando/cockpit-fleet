@@ -9,7 +9,7 @@ workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 Phases 0–18 closed; phase 19 under way (below). Last release 0.4.0 (18
 November), with the Overview of phase 18. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (769
+To resume: `git status`, `git log origin/main..`; `make check` (771
 backend, 197 frontend tests). Each backend module's docstring says what
 it is; `cli.py` is the registry of commands, `db.py` the schema (34
 migrations).
@@ -32,13 +32,15 @@ Decided 20 November (`decisions.md`, "Network discovery");
 - [x] `netscan.probe` of an inventory's hosts (operator, `read`, in
   `fleetctl`), the comparison of MAC addresses with the CMDB, the agent's
   tool and instructions, "Probe the hosts" on the inventories.
-- [ ] A module `net_probe` run from a node of the segment (Linux and
-  Windows), for subnets beyond a router.
-- [ ] At the close: on the VMs, `netscan.sh` with `IT_NETSCAN_SUBNET` on
-  the lab's network (the Windows node among the hosts, NetBIOS and its
-  MAC address), `sandbox.sh`; whether Debian 13 and AlmaLinux 10 let the
-  service account send ICMP as installed (`ping_group_range`); the page
-  in a browser.
+- [x] A module `net_probe` run from a node of the segment (Linux and
+  Windows), for subnets beyond a router: `run.adhoc` holds it to the
+  subnets allowed or the inventory's hosts, with `scan_ports`.
+- [ ] At the close: `win_net_probe` on the Windows node (`win11`, on the
+  workstation that has it), and `netscan.sh` with `IT_NETSCAN_SUBNET` on
+  the lab's network with `win11` up (NetBIOS and its MAC address); on
+  `alma10` and `fed44` the same and whether ICMP is allowed as installed
+  (Debian 13 allows it: done on `deb13`, 20 November, with `sandbox.sh`);
+  the page in a browser.
 
 Integration since the review of 16 November: `make ct-test` on AlmaLinux
 (`runs`, `checks`, `store`, `files`, `schedules`, `cli`, `mcp`, `chat`,

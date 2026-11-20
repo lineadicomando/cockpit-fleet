@@ -722,3 +722,55 @@ def _neighbours() -> dict[str, str]:
     except OSError:
         return {}
 
+
+PROBE_MODULE = "lineadicomando.fleet.net_probe"
+_PROBE_ARGS = ("subnet", "addresses", "ports", "timeout")
+
+
+def check_probe_args(config, inventory, free_form: str, args: dict) -> dict:
+    """The arguments of an ad-hoc net_probe, checked, with the ports of
+    config.toml: a subnet that may be scanned, or addresses each within one or
+    of a host of the inventory, so that a node cannot be turned on any network
+    either; the ports are config.toml's, a subset of them at most."""
+    if free_form:
+        raise BadRequest(f"{PROBE_MODULE} takes no free form")
+    unknown = sorted(set(args) - set(_PROBE_ARGS))
+    if unknown:
+        raise BadRequest(f"{PROBE_MODULE}: unknown argument: {', '.join(unknown)}")
+    subnet, addresses = args.get("subnet"), args.get("addresses")
+    if (subnet is None) == (addresses is None):
+        raise BadRequest(f"{PROBE_MODULE}: give either subnet or addresses")
+    checked: dict = {}
+    if subnet is not None:
+        if not isinstance(subnet, str):
+            raise BadRequest("subnet must be a string")
+        checked["subnet"] = str(check_subnet(config, subnet))
+    else:
+        if not isinstance(addresses, list) or not 1 <= len(addresses) <= config.scan_max_addresses:
+            raise BadRequest(f"addresses must be a list of 1 to {config.scan_max_addresses}"
+                             " addresses")
+        known = {str(host.get("address") or host.get("name"))
+                 for host in store.loads(inventory["hosts"], []) if isinstance(host, dict)}
+        networks = [ipaddress.IPv4Network(entry["subnet"]) for entry in allowed(config)]
+        checked["addresses"] = []
+        for value in addresses:
+            try:
+                address = ipaddress.IPv4Address(str(value))
+            except ValueError as error:
+                raise BadRequest(f"not an IPv4 address: {str(value)[:50]!r}") from error
+            if str(address) not in known and not any(address in net for net in networks):
+                raise Forbidden(f"{address} is neither a host of {inventory['name']} nor within"
+                                " a subnet that may be scanned")
+            checked["addresses"].append(str(address))
+    ports = args.get("ports", list(config.scan_ports))
+    if not isinstance(ports, list) or not ports \
+            or not all(type(port) is int and port in config.scan_ports for port in ports):
+        raise BadRequest("ports must be some of [network] scan_ports: "
+                         + ", ".join(map(str, config.scan_ports)))
+    checked["ports"] = sorted(set(ports))
+    timeout = args.get("timeout", 1.0)
+    if type(timeout) not in (int, float) or not 0.2 <= timeout <= 5:
+        raise BadRequest("timeout must be between 0.2 and 5 seconds")
+    checked["timeout"] = float(timeout)
+    return checked
+

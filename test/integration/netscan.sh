@@ -7,7 +7,8 @@
 # the output kept from operators, a scan canceled keeping what it found; then
 # an inventory made from a scan, and MAC addresses written into another, a
 # file of a host's variables moved, both read by Ansible as they should be;
-# and the hosts of an inventory probed one by one.
+# the hosts of an inventory probed one by one; and the module net_probe run
+# on a node (the controller itself, by a local connection).
 # By default it scans 192.0.2.0/28, a subnet for documentation put on a
 # dummy interface for the test, where only the controller answers and a
 # neighbour is written in by hand: nothing leaves the machine (in a
@@ -154,5 +155,24 @@ expect_run "an inventory to probe is read" "$(get "$parse" "a['data']['run_id']"
 probed=$(ctl itoperator netscan.probe "{\"inventory_id\": \"$probe\"}")
 expect_eq "an operator probes it: what each host says" "$(get "$probed" "sorted((h['name'], h['findings']) for h in a['data']['hosts'])")" "[('gone.invalid', ['unresolved']), ('me', []), ('pc5', ['segment_only']), ('pc9', ['silent'])]"
 expect_eq "the neighbour with its MAC address" "$(get "$probed" "[h['mac'] for h in a['data']['hosts'] if h['name'] == 'pc5'][0]")" "52:54:00:12:34:56"
+
+# --- a probe from a node: here the controller itself, by a local connection ---------
+payload=$(python3 -c "import json; print(json.dumps({'name': 'itnode', 'kind': 'managed',
+    'content': 'all:\n  hosts:\n    node:\n      ansible_connection: local\n'}))")
+node=$(get "$(admin inventory.create "$payload")" "a['data']['id']")
+got=$(admin run.adhoc "{\"inventory_id\": \"$node\", \"limit\": \"all\", \"module\": \"lineadicomando.fleet.net_probe\", \"args\": {\"subnet\": \"198.51.100.0/24\"}}")
+expect_eq "a node may not probe a subnet that may not be scanned" "$(get "$got" "a['error']['code']")" forbidden
+got=$(admin run.adhoc "{\"inventory_id\": \"$node\", \"limit\": \"all\", \"module\": \"lineadicomando.fleet.net_probe\", \"args\": {\"subnet\": \"192.0.2.0/28\"}}")
+run=$(get "$got" "a['data']['id']")
+expect_run "net_probe runs on the node" "$run" 120 successful
+found=$(python3 -c "
+import json, sys
+for line in open(sys.argv[1]):
+    event = json.loads(line)
+    if event.get('event') == 'host_ok':
+        hosts = event['result']['net_probe']['hosts']
+        print(sorted((h['address'], h['mac'], 'arp' in h['seen'], 'tcp' in h['seen']) for h in hosts))
+" "/var/lib/cockpit-fleet/runs/$run/events.jsonl")
+expect_eq "it finds the controller and the neighbour with its MAC address" "$found" "[('192.0.2.1', '', False, True), ('192.0.2.5', '52:54:00:12:34:56', True, False)]"
 
 finish

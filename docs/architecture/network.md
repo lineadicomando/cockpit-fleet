@@ -2,10 +2,10 @@
 
 What a controller finds out about the network by itself, without Ansible
 and without the nodes: the scan of a subnet, and what it found turned into
-an inventory or into the MAC addresses of one, and the hosts of an
-inventory probed one by one, decided with the user on 20 November
-(`decisions.md`, "Network discovery"). The step after them (a probe from
-a node of the segment) is in `TODO.md`.
+an inventory or into the MAC addresses of one, the hosts of an inventory
+probed one by one, and a probe from a node of a segment the controller
+does not reach, decided with the user on 20 November (`decisions.md`,
+"Network discovery").
 
 ```
 NetworkPage ── netscan.start ──▶ fleetctl: the subnet checked, a run queued
@@ -144,6 +144,31 @@ may call it, on an inventory with hosts): a dialog with each host, its
 address, its findings, open ports, MAC address (with the CMDB's when it
 differs, and whose else it is), and names.
 
+**From a node.** Beyond a router the controller sees no MAC address, and
+may not reach the segment at all; a node on it does. The bundled
+collection has `lineadicomando.fleet.net_probe`, an action that runs the
+module of the node's platform as `checks` does: `net_probe` (Python 3.6 or
+later, standard library) where the shell is not PowerShell,
+`win_net_probe` (PowerShell 5.1, no privilege: `Ping`, `TcpClient`,
+`Get-NetNeighbor`) where it is. Given a subnet (at most 1024 addresses) or
+addresses, it tries each with an ICMP echo (on Linux a datagram socket,
+or the `ping` program when the group may not), TCP connections to the
+ports, and reads the node's neighbour table, waiting 9 s when an address
+is there and nowhere else; it answers with the node's interfaces and the
+hosts found, in the shape of a scan's, and changes nothing. It is an
+ad-hoc command, so it needs nothing new in the backend but one check in
+`run.adhoc` (`netscan.check_probe_args`, for whoever calls it): a subnet
+that may be scanned, or addresses each within one or of a host of the
+inventory, no free form, no other argument, and the ports those of
+`[network] scan_ports` (some of them at most), which the backend writes
+into the arguments; a template in a string fails the check of its type.
+So a node is held to the subnets the controller is, and a subnet beyond a
+router is probed once an administrator lists it in `scan_subnets`. It is
+among the default modules of `[adhoc] modules` and of `[mcp]
+adhoc_modules`, so the assistant in `diagnostic` runs it without a
+question, like `setup`. What it finds stays in the run's events, as any
+module's: it is not taken into `netscan_hosts`.
+
 **Who.** Administrators only, for the commands of scans and for the output of
 the run (`run.log`), which is a map of the network. For an agent
 `netscan.start` is of its own class, `scan`, between `run` and `adhoc`:
@@ -178,7 +203,12 @@ it listens on, ICMP from the sandbox once `ping_group_range` let the
 service account (in a container it is `0 0`), the refusals, the output
 kept from operators, and a scan of the /24 canceled with what it had
 found. In a rootless container the network is the host's own: the default
-of the script never scans it. Then, with a neighbour written in by hand on
+of the script never scans it. On the VM `deb13` (20 November), with
+`IT_NETSCAN_SUBNET=192.168.140.0/28`, the lab's network: Debian 13 as
+installed lets the service account send ICMP (`ping_group_range` is
+`0 2147483647`), the controller found with ICMP, its name from the DNS of
+libvirt, and the gateway; `sandbox.sh` passes. `win_net_probe` is not yet
+tried on a Windows node. Then, with a neighbour written in by hand on
 the dummy interface (`ip neigh … nud permanent`), found by the table with
 its MAC address: an inventory made from the scan, read, and Ansible
 (`ansible-inventory --host`) giving the MAC address; an inventory with
@@ -186,6 +216,9 @@ its MAC address: an inventory made from the scan, read, and Ansible
 giving both its variables, and a second time changing nothing. And an
 inventory probed by an operator: the controller answering, the neighbour
 `segment_only` with its MAC address, an address with nothing `silent`, a
-name of `.invalid` `unresolved`. The test's first host was named `off`,
+name of `.invalid` `unresolved`. Then `net_probe` as an ad-hoc command on
+the controller itself, by a local connection, in the sandbox of a run: a
+subnet that may not be scanned refused, and on 192.0.2.0/28 the controller
+by TCP and the neighbour with its MAC address. The test's first host was named `off`,
 which YAML reads as false: what `netscan.inventory` writes quotes every
 name.
