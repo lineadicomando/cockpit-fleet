@@ -18,9 +18,9 @@ DIAGNOSTIC = "adhoc-diagnostic"
 PROFILES: dict[str, tuple[str, ...]] = {
     "observer": ("read",),
     "assisted": ("read", "run"),
-    "diagnostic": ("read", "run", DIAGNOSTIC),
+    "diagnostic": ("read", "run", "scan", DIAGNOSTIC),
     "autonomous": ("read", "run"),
-    "administrator": ("read", "run", "adhoc", "config", "code"),
+    "administrator": ("read", "run", "scan", "adhoc", "config", "code"),
 }
 # Profiles in which nobody confirms the calls: autonomy.py holds them.
 AUTONOMOUS = ("autonomous",)
@@ -100,7 +100,7 @@ def allows(profile: str, kind: str) -> bool:
 
 # Classes whose calls a person is asked about every time, in any profile:
 # never trusted for a conversation, never made without a question.
-ALWAYS_ASKED = ("adhoc", "config", "code")
+ALWAYS_ASKED = ("scan", "adhoc", "config", "code")
 
 
 def question(profile: str, kind: str, read_only: bool) -> str:

@@ -149,7 +149,9 @@ started stays as it is: once logged in, send the message again.
   launches and cancels what is defined (templates, workflows, checks,
   schedules turned on or off); `diagnostic` also runs ad-hoc commands of the
   modules in `[mcp] adhoc_modules`, which change nothing, without become
-  and with no template (`{{ }}`) in their arguments;
+  and with no template (`{{ }}`) in their arguments, and for an
+  administrator of Fleet scans a subnet among those allowed
+  (`[network]`, see [security.md](security.md));
   `autonomous` is as `assisted`, held by the backend since nobody confirms
   its calls: at most `[chat] autonomous_runs` launches in a session, none on
   an inventory with a maintenance window open, no acknowledging a problem,
@@ -178,10 +180,10 @@ started stays as it is: once logged in, send the message again.
 - What the page asks about follows the profile: in `observer` nothing,
   since nothing changes; in `assisted` every launch or cancel, with "always"
   to trust launches for the rest of the conversation; in `diagnostic` the
-  same, and its ad-hoc commands go unasked; in `autonomous` nothing, the
-  backend holds it instead; in `administrator` every change, and ad-hoc
-  commands, changes to what is defined and files every time, never
-  "always". These questions are a convenience: the backend decides again,
+  same, and its ad-hoc commands go unasked, while each scan of a subnet is
+  asked; in `autonomous` nothing, the backend holds it instead; in
+  `administrator` every change, and scans, ad-hoc commands, changes to
+  what is defined and files every time, never "always". These questions are a convenience: the backend decides again,
   whatever the answer.
 - A run that has ended, and a check whose result is not ok (in the checks
   of a host and in Problems), have a button "Assistance": it writes in the

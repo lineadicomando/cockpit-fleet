@@ -1,14 +1,16 @@
 """Turn a stored job specification into the commands a run unit executes.
 
-A job is one of eight kinds: "playbook" (ansible-playbook), "adhoc" (one
+A job is one of eleven kinds: "playbook" (ansible-playbook), "adhoc" (one
 module, as a playbook written for the job), "inventory" (ansible-inventory, to
 list hosts and groups), "sync" (fetch a git project), "syntax" (check a
 playbook without running it, or read an inventory strictly), "unpack"
 (extract an uploaded archive, which runs no command: see archive.py),
-"galaxy" (install the collections a project asks for) and "check" (a
+"galaxy" (install the collections a project asks for), "check" (a
 cycle of the checks of the catalog, one task per host, as a playbook
-written for the job). Nothing from the frontend reaches a command line
-without going through the functions here.
+written for the job), "download" and "copy" (files of the store) and
+"netscan" (the scan of a subnet, which runs no command: see
+scanner.py). Nothing from the frontend reaches a command line without
+going through the functions here.
 """
 
 import configparser
@@ -34,7 +36,7 @@ from .validators import (
 )
 
 KINDS = ("playbook", "adhoc", "inventory", "sync", "syntax", "unpack", "galaxy", "check",
-         "download", "copy")
+         "download", "copy", "netscan")
 
 # Optional: when it is installed, a syntax job runs it after the check.
 LINT = "/usr/bin/ansible-lint"

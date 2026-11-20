@@ -19,6 +19,7 @@ CLASS_TABLE = {
     "run": """check.run file.check inventory.parse maintenance.create maintenance.delete
         notification.retry run.cancel run.start schedule.disable schedule.enable schedule.run
         state.ack state.unack workflow.launch workflow.resume""",
+    "scan": "netscan.start",
     "adhoc": "run.adhoc",
     "config": """channel.create channel.test channel.update check.create check.update
         inventory.create inventory.update rule.create rule.update schedule.create
@@ -350,6 +351,9 @@ class ProfileTest(Base):
             ("diagnostic", "run", False, "ask"),
             ("autonomous", "run", False, "none"),
             ("autonomous", "adhoc", False, "every"),
+            # A scan is asked about every time, in the profiles that allow it.
+            ("diagnostic", "scan", False, "every"),
+            ("administrator", "scan", False, "every"),
             ("administrator", "config", False, "every"),
             ("administrator", "code", False, "every"),
             ("administrator", "run", False, "ask"),

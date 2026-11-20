@@ -4,6 +4,7 @@ A missing file means defaults. An unknown key is an error rather than being
 ignored, so that a typo does not silently leave a limit at its default.
 """
 
+import ipaddress
 import re
 import tomllib
 from dataclasses import asdict, dataclass
@@ -20,6 +21,11 @@ _PROXY_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?")
 _LINK_RE = re.compile(r"https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?")
 _AGENT_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
 _MAX_AGENTS = 8
+
+# The ports a scan of a subnet tries when config.toml does not say: SSH,
+# the web, the services of Windows (RPC, NetBIOS, SMB, RDP, WinRM).
+SCAN_PORTS = (22, 80, 135, 139, 443, 445, 3389, 5985, 5986)
+_MAX_SCAN_SUBNETS = 64
 
 # What an ad-hoc command may run when config.toml does not say.
 ADHOC_MODULES = (
@@ -65,6 +71,13 @@ class Config:
     local_project_roots: tuple[str, ...] = ()
     max_upload_mb: int = 20
     proxy: str = ""
+    # The scan of a subnet: whether those the controller is attached to may
+    # be scanned, which others may, the ports tried and how many addresses
+    # one scan takes at most.
+    scan_connected: bool = True
+    scan_subnets: tuple[str, ...] = ()
+    scan_ports: tuple[int, ...] = SCAN_PORTS
+    scan_max_addresses: int = 1024
     adhoc_modules: tuple[str, ...] = ADHOC_MODULES
     inventory_scripts: bool = False
     mcp_enabled: bool = False
@@ -178,6 +191,16 @@ def _agent(name: str, section: object) -> ChatAgent:
                      _text(section, table, "login", 200), terminal)
 
 
+def _subnet(value: object) -> str:
+    try:
+        if not isinstance(value, str):
+            raise TypeError(value)
+        return str(ipaddress.IPv4Network(value))
+    except (TypeError, ValueError) as error:
+        raise ConfigError(f"network.scan_subnets: {value!r} is not an IPv4 subnet written"
+                          " as address/prefix, with no bits of a host") from error
+
+
 def _argv(command: object, what: str) -> tuple[str, ...]:
     # An empty word is an argument too, such as the empty list of tools.
     if (not isinstance(command, list) or not 1 <= len(command) <= 32
@@ -212,10 +235,23 @@ def parse(text: str) -> Config:
     if not isinstance(roots, list):
         raise ConfigError("projects.local_roots must be a list")
 
-    network = _section(data, "network", {"proxy"})
+    network = _section(data, "network", {"proxy", "scan_connected", "scan_subnets", "scan_ports",
+                                         "scan_max_addresses"})
     proxy = network.get("proxy", "")
     if not isinstance(proxy, str) or (proxy and not _PROXY_RE.fullmatch(proxy)):
         raise ConfigError("network.proxy must be empty or an http(s)://host[:port] URL")
+    scan_connected = network.get("scan_connected", True)
+    if not isinstance(scan_connected, bool):
+        raise ConfigError("network.scan_connected must be true or false")
+    scan_subnets = network.get("scan_subnets", [])
+    if not isinstance(scan_subnets, list) or len(scan_subnets) > _MAX_SCAN_SUBNETS:
+        raise ConfigError(f"network.scan_subnets must be a list of at most {_MAX_SCAN_SUBNETS}"
+                          " IPv4 subnets")
+    scan_ports = network.get("scan_ports", list(SCAN_PORTS))
+    if (not isinstance(scan_ports, list) or not 1 <= len(scan_ports) <= 32
+            or not all(isinstance(port, int) and not isinstance(port, bool)
+                       and 0 < port < 65536 for port in scan_ports)):
+        raise ConfigError("network.scan_ports must be a list of 1 to 32 port numbers")
 
     adhoc = _section(data, "adhoc", {"modules"})
     modules = adhoc.get("modules", list(ADHOC_MODULES))
@@ -298,6 +334,11 @@ def parse(text: str) -> Config:
         max_upload_mb=_int(projects, "projects", "max_upload_mb", Config.max_upload_mb,
                            1, MAX_UPLOAD_MB),
         proxy=proxy,
+        scan_connected=scan_connected,
+        scan_subnets=tuple(dict.fromkeys(_subnet(subnet) for subnet in scan_subnets)),
+        scan_ports=tuple(sorted(set(scan_ports))),
+        scan_max_addresses=_int(network, "network", "scan_max_addresses",
+                                Config.scan_max_addresses, 4, 4096),
         adhoc_modules=adhoc_modules,
         inventory_scripts=scripts,
         mcp_enabled=mcp_enabled,

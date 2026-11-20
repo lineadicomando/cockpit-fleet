@@ -120,6 +120,11 @@ commented out. An unknown key is an error, which the System tab and
   sandbox, so the copy still works.
 - `[network] proxy`, and `[notifications] url`, where people reach Cockpit,
   for the links in the messages.
+- `[network] scan_connected`, `scan_subnets`, `scan_ports` and
+  `scan_max_addresses`: which subnets administrators may scan (Nodes,
+  Network), with which ports and how large; as installed, those the
+  controller is attached to, up to 1024 addresses. See
+  [security.md](security.md).
 - `[adhoc] modules`: the modules an administrator may run as an ad-hoc
   command; an empty list turns them off.
 - `[mcp]` and `[chat]`: agents, off as installed; see [chat.md](chat.md).

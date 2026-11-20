@@ -17,6 +17,18 @@ entries go under `[Unreleased]`, under the heading of their kind.
   priority; a step whose template comes to need an approval after the
   workflow was scheduled fails instead of waiting. A workflow that a
   schedule launches cannot be deleted.
+- Nodes, Network: an administrator scans a subnet the controller is
+  attached to, or one listed in `[network] scan_subnets` of
+  `config.toml`, for the hosts that answer: each address is tried with
+  an ICMP echo and a TCP connection to a few ports
+  (`[network] scan_ports`), and each host found is shown with its names
+  from the DNS and NetBIOS, its MAC address on the controller's own
+  segment, its open ports and the hosts of inventories it may be. A scan
+  is a run, of at most `[network] scan_max_addresses` addresses (1024).
+  Commands `netscan.subnets`, `netscan.start` and `netscan.result`.
+- Assistant: in the profiles diagnostic and administrator the assistant
+  of an administrator may scan a subnet, asked every time (a class of
+  tools of its own, `scan`).
 
 ### Changed
 

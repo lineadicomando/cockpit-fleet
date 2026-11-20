@@ -50,7 +50,7 @@ function keepEnd(text: string): string {
 
 function useKinds() {
     const { t } = useTranslation();
-    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation"), check: t("Check cycle"), workflow: t("Workflow"), download: t("Download into the store"), copy: t("Copy within the store") } as Record<Run["kind"], string>;
+    return { playbook: t("Playbook"), adhoc: t("Ad-hoc command"), inventory: t("Inventory reading"), sync: t("Project update"), syntax: t("Syntax check"), unpack: t("Archive upload"), galaxy: t("Collection installation"), check: t("Check cycle"), workflow: t("Workflow"), download: t("Download into the store"), copy: t("Copy within the store"), netscan: t("Network scan") } as Record<Run["kind"], string>;
 }
 
 export function RunsPage() {
@@ -293,7 +293,8 @@ export function RunDetailPage({ id }: { id: string }) {
     const [confirmCancel, setConfirmCancel] = useState(false);
     const position = useRef({ log: 0, events: 0, play: "", busy: false, again: false, done: false });
     const active = run.data ? isActive(run.data.status) : true;
-    const mayRead = can("run.log");
+    // The output of a scan is a map of the network, for administrators.
+    const mayRead = can("run.log") && (run.data?.kind !== "netscan" || can("netscan.result"));
     const session = useSession();
     const origin = originPath(useCockpitLocation().options.from);
 
@@ -374,6 +375,7 @@ export function RunDetailPage({ id }: { id: string }) {
             <PageNav links={[
                 origin && { label: t("Back"), onClick: () => cockpit.location.go(origin) },
                 { label: t("All runs"), onClick: () => cockpit.location.go(["runs"]) },
+                data.kind === "netscan" && can("netscan.result") && { label: t("Hosts found"), onClick: () => cockpit.location.go(["network", data.id]) },
             ]} />
             <SectionHeader title={data.title}>
                 {data.approval?.can_decide && <DecideButtons runId={data.id} title={data.title} onDone={run.reload} />}

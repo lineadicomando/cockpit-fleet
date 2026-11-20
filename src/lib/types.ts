@@ -442,7 +442,7 @@ export interface HostStats {
 
 export interface Run {
     id: string;
-    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow" | "download" | "copy";
+    kind: "playbook" | "adhoc" | "inventory" | "sync" | "syntax" | "unpack" | "galaxy" | "check" | "workflow" | "download" | "copy" | "netscan";
     status: RunStatus;
     title: string;
     template_id: string | null;
@@ -481,6 +481,10 @@ export interface Run {
         serial?: boolean;
         // What replaced the template's values for this run.
         overrides?: Overrides;
+        // A scan of a subnet: which, whether it is the controller's own
+        // segment, and once it ended how many hosts it found, whether ICMP
+        // could be used and whether it ran to the end.
+        subnet?: string; on_link?: boolean; hosts?: number; icmp?: boolean; complete?: boolean;
     };
     stats: Record<string, HostStats>;
     cursor?: number;
@@ -898,4 +902,47 @@ export interface Starter {
     path?: string;
     // A playbook's text.
     content?: string;
+}
+
+// A subnet a scan may cover: netscan.subnets.
+export interface ScanSubnet {
+    subnet: string;
+    source: "connected" | "config";
+    interface: string;
+}
+
+export interface ScanSubnets {
+    subnets: ScanSubnet[];
+    max_addresses: number;
+    ports: number[];
+}
+
+// A host of an inventory that a host found by a scan may be.
+export interface ScanKnown {
+    inventory_id: string;
+    inventory: string;
+    host: string;
+    by: "address" | "name";
+}
+
+// A host a scan found: netscan.result.
+export interface ScanHost {
+    address: string;
+    mac: string;
+    mac_source: "" | "arp" | "netbios";
+    dns_name: string;
+    netbios_name: string;
+    workgroup: string;
+    ports: number[];
+    seen: ("tcp" | "icmp" | "arp")[];
+    self: boolean;
+    known: ScanKnown[];
+}
+
+export interface ScanResult {
+    run: Run;
+    done: boolean;
+    subnet: string;
+    on_link: boolean;
+    hosts: ScanHost[];
 }

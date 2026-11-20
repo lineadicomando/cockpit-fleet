@@ -162,6 +162,15 @@ in [security.md](security.md); the decisions behind these limits in
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.
+- Network scans: IPv4 only; MAC addresses only of the controller's own
+  segment, or given over NetBIOS by a host beyond a router; a neighbour the
+  kernel still holds as stale 9 s after the sweep is shown as seen; a host
+  that answers nothing and is beyond a router is not found; the ports are
+  the same for every scan (`[network] scan_ports`); the hosts appear only
+  when a scan ends; an agent's scan is asked about by the page or the
+  agent's program, not held for an approval; the scan is a burst of
+  connections an IDS may report; ICMP needs `net.ipv4.ping_group_range` to
+  include the service account's group, which is not set by the package.
 - Approvals: one approver suffices (no quorum); an approval is not
   notified to the approvers by name, only to channels; a pending run shows
   its launch time as "Started".

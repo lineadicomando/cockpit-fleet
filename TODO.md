@@ -4,16 +4,39 @@ What is left. The other documents are listed in `CLAUDE.md`; how each
 closed phase was shown is in `docs/architecture/acceptance.md`; this
 workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 
-## Status (18 November 2026)
+## Status (20 November 2026)
 
-Phases 0–18 closed; the user picks the next (see "Future"). Last
-release 0.4.0 (18 November), with the Overview of phase 18. `make
-release` only when asked.
+Phases 0–18 closed; phase 19 under way (below). Last release 0.4.0 (18
+November), with the Overview of phase 18. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (735
-backend, 194 frontend tests). Each backend module's docstring says what
-it is; `cli.py` is the registry of commands, `db.py` the schema (33
+To resume: `git status`, `git log origin/main..`; `make check` (757
+backend, 196 frontend tests). Each backend module's docstring says what
+it is; `cli.py` is the registry of commands, `db.py` the schema (34
 migrations).
+
+## Phase 19: network discovery
+
+Decided 20 November (`decisions.md`, "Network discovery");
+`docs/architecture/network.md` says what exists.
+
+- [x] The scan of a subnet: the job `netscan` in the sandbox, the subnets
+  allowed (`[network] scan_*`), `netscan.subnets`, `netscan.start`,
+  `netscan.result`, the class `scan` for agents (diagnostic and
+  administrator, asked every time), the page Nodes, Network;
+  `netscan.sh` in containers on the three distributions.
+- [ ] An inventory made from a scan's results, and `mac_address` written
+  into an existing one (`host_vars/HOST/fleet_mac.yaml`; check that
+  ansible-core 2.16 reads it beside `HOST.yaml`); through a draft for an
+  agent.
+- [ ] `net.probe` of an inventory's hosts (operator, `read`), the
+  comparison of MAC addresses with the CMDB, the agent's tools.
+- [ ] A module `net_probe` run from a node of the segment (Linux and
+  Windows), for subnets beyond a router.
+- [ ] At the close: on the VMs, `netscan.sh` with `IT_NETSCAN_SUBNET` on
+  the lab's network (the Windows node among the hosts, NetBIOS and its
+  MAC address), `sandbox.sh`; whether Debian 13 and AlmaLinux 10 let the
+  service account send ICMP as installed (`ping_group_range`); the page
+  in a browser.
 
 Integration since the review of 16 November: `make ct-test` on AlmaLinux
 (`runs`, `checks`, `store`, `files`, `schedules`, `cli`, `mcp`, `chat`,
@@ -71,14 +94,6 @@ For the user to decide:
 
 Not planned as phases yet; the user picks the next one.
 
-- Network discovery (decided 20 November, see `decisions.md`), in steps:
-  the `netscan` job and its page of results; an inventory made from them
-  and `mac_address` written into an existing one; `net.probe` of an
-  inventory's hosts, the comparison with the CMDB and the agent's tools;
-  a module `net_probe` run from a node of the segment (Linux and
-  Windows) for subnets beyond a router. To verify: `ping_group_range` on
-  Debian 13 and AlmaLinux 10, `host_vars/HOST/` beside `HOST.yaml` on
-  ansible-core 2.16.
 - Ad-hoc commands: sets of variables chosen for one (today only the
   inventory's).
 - Assistant: instructions per project.

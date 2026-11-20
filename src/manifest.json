@@ -62,6 +62,16 @@
         },
         {
           "matches": [
+            "network scan",
+            "subnet",
+            "mac address",
+            "scansione",
+            "rete"
+          ],
+          "goto": "network"
+        },
+        {
+          "matches": [
             "run",
             "job",
             "playbook",

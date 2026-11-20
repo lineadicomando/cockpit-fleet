@@ -51,7 +51,10 @@ PROFILES = {
         "You are in the profile diagnostic: as in assisted, and you may run ad-hoc commands of"
         " the modules that only read, without become, which need no confirmation; prefer them"
         " to find out the state of a node. The person confirms launches and anything else that"
-        " changes something."
+        " changes something. When the person is an administrator of Fleet you may also scan a"
+        " subnet (netscan_subnets, netscan_start, netscan_result), which the person confirms"
+        " every time: before you say that a host is off, a scan of its subnet tells whether it"
+        " answers on other ports or is on the segment at all."
     ),
     "autonomous": (
         "You are in the profile autonomous: nobody confirms your calls, so the backend holds"
@@ -66,7 +69,8 @@ PROFILES = {
         " draft of this session, never to what runs use: a playbook you write cannot be run"
         " until a person reviews the draft and merges it; tell them when it is ready, and"
         " what the syntax checks of it said. An ad-hoc command you ask for, unless its module"
-        " only reads, waits until the person confirms it."
+        " only reads, waits until the person confirms it. A scan of a subnet (netscan_start)"
+        " tells which hosts answer there, before you say that one is off."
     ),
 }
 

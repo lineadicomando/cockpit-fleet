@@ -642,6 +642,8 @@ def _tidy(directory: Path, kind: str, status: str) -> None:
     (directory / "archive").unlink(missing_ok=True)
     # Taken by _store_inventory already: only hosts and groups, but no use kept.
     (directory / "inventory.json").unlink(missing_ok=True)
+    # Taken by netscan.ingest.
+    (directory / "netscan.json").unlink(missing_ok=True)
 
 
 def _finish(ctx, run_id: str, status: str, rc: int | None, error: str = "",
@@ -740,6 +742,11 @@ def _collect(ctx, run) -> None:
         if run["kind"] == "check":
             from . import checks  # it builds on this module
             checks.ingest(ctx, run, directory, error)
+        if run["kind"] == "netscan":
+            # Taken whatever the status: a scan stopped leaves what it found.
+            from . import netscan  # it builds on this module
+            found = netscan.ingest(ctx, run, directory)
+            extra["options"] = json.dumps({**store.loads(run["options"], {}), **found})
         if run["kind"] in ("playbook", "adhoc"):
             from . import storage  # it builds on this module
             taken = storage.take_farm(ctx, run, directory)

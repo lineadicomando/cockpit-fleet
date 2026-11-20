@@ -19,6 +19,7 @@ hand.
 | [notifications.md](architecture/notifications.md) | Channels, rules, the outbox and its delivery |
 | [checks.md](architecture/checks.md) | The catalog, `fleet_result`, cycles, states, sizing, falling behind, measures at scale |
 | [inventory-of-hosts.md](architecture/inventory-of-hosts.md) | CMDB, updates, drift |
+| [network.md](architecture/network.md) | The scan of a subnet: subnets allowed, the job in the sandbox, what it keeps, the page |
 | [time-series.md](architecture/time-series.md) | Metrics and their aggregates |
 | [maintenance.md](architecture/maintenance.md) | Retention and `maintenance.tidy` |
 | [health.md](architecture/health.md) | `system.health` |

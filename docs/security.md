@@ -158,7 +158,25 @@ what they let through without asking is decided by the backend for the
 profile (`profiles.question`), and the backend decides each call again
 whatever was answered. Files an agent writes in a project or inventory
 written in Fleet go to a draft of its session, which no run reads; only a
-person merges or discards it, after seeing what it changes.
+person merges or discards it, after seeing what it changes. The agent of
+an administrator may scan a subnet in the profiles `diagnostic` and
+`administrator`, asked every time: only those subnets an administrator
+may scan, below.
+
+## Scans of the network
+
+An administrator of Fleet, and their assistant once they confirm, may
+scan a subnet from the controller (Nodes, Network): an ICMP echo and a
+TCP connection to a few ports for each address, as a run in the sandbox,
+recorded in the audit log. Only subnets the controller is attached to
+(`[network] scan_connected`, on as installed) or those listed in
+`[network] scan_subnets` may be scanned, of at most
+`[network] scan_max_addresses` addresses; turn `scan_connected` off and
+leave the list empty to allow none. What a scan finds (addresses, names,
+MAC addresses, open ports) is shown to administrators only; it reaches
+the provider of the model when the assistant reads it. An intrusion
+detection system on the network may take a scan for an attack: tell
+whoever watches it.
 
 ## What it does not do
 

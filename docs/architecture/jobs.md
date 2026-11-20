@@ -1,6 +1,6 @@
 # Jobs
 
-A run unit executes one job, of one of eight kinds, described by `spec.json`
+A run unit executes one job, of one of the kinds below, described by `spec.json`
 in its directory: `playbook` (ansible-playbook), `adhoc` (one module, as a
 playbook written for the job), `inventory` (`ansible-inventory --list`, to
 learn hosts and groups; when it fails, Ansible quotes the lines it could not
@@ -8,8 +8,10 @@ read, which may hold passwords, so why is shown to administrators only,
 and so is its output), `sync` (fetch a git project), `syntax` (check a
 playbook without running it, or an inventory written in the interface,
 whose output is for administrators as a reading's is), `unpack` (extract an uploaded archive),
-`galaxy` (install the collections a project asks for) and `check` (a cycle
-of checks, see [Checks](checks.md)). A run of a workflow is not a job: it has no
+`galaxy` (install the collections a project asks for), `check` (a cycle
+of checks, see [Checks](checks.md)), `download` and `copy` (files of the
+store, see [The store](store.md)) and `netscan` (the scan of a subnet, see
+[The network](network.md)). A run of a workflow is not a job: it has no
 unit, and its steps are runs of playbooks (see [Workflows](workflows.md)). All of them need the sandbox, because all of them work on what a project
 brings: inventory plugins and scripts, git itself, the rules a project gives
 to ansible-lint, an archive made by anyone, or a list of sources to download

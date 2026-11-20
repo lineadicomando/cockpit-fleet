@@ -51,13 +51,14 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
     const what: Record<string, string> = {
         observer: t("It reads what you may read, and launches and changes nothing: it asks you nothing."),
         assisted: t("It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."),
-        diagnostic: t("As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches."),
+        diagnostic: t("As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches, and before each scan of a subnet, which only administrators may ask for."),
         autonomous: info?.autonomous_dry_run ? `${autonomous} ${t("Its runs are dry runs only, and it launches no workflow and no schedule.")}` : autonomous,
         administrator: t("Whatever your role allows: ad-hoc commands, changes to templates, inventories and the rest, files. It asks you before every change; files it writes go to a draft that you review before any run uses them."),
     };
     const risks: Record<string, string[]> = {
         diagnostic: [
             t("Ad-hoc commands run on the managed nodes without a question. They only read, but what they read (facts, services, packages) goes to the provider of the model."),
+            t("With your confirmation it scans the subnets Fleet allows: what it finds (addresses, names, MAC addresses, open ports) goes to the provider of the model."),
         ],
         autonomous: [
             t("Nobody confirms its launches: a playbook it launches runs on the nodes as soon as it asks for it."),
@@ -83,6 +84,7 @@ function useClasses() {
         run: t("launches and cancellations"),
         adhoc: t("ad-hoc commands"),
         "adhoc-diagnostic": t("ad-hoc commands that only read"),
+        scan: t("scans of a subnet"),
         config: t("changes to what is defined"),
         code: t("files of projects and inventories"),
     };

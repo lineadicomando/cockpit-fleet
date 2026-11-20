@@ -92,6 +92,7 @@ starter.list admin -
 project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M
 overview.get viewer -
+netscan.subnets admin -       netscan.start admin M         netscan.result admin -
 """
 EXPECTED = {}
 _words = ROLE_TABLE.split()
@@ -108,7 +109,7 @@ HOUSEKEEPING = {"run.reconcile", "scheduler.tick", "notification.deliver", "run.
                 "run.get", "run.result", "workflow.progress", "approval.list", "state.list",
                 "selfcheck", "system.health", "hostkey.scan", "module.list", "module.doc",
                 "module.help", "check.list", "host.list", "host.get", "run.log", "run.events",
-                "overview.get"}
+                "overview.get", "netscan.result"}
 
 TARBALL = base64.b64encode(b"\x1f\x8b" + bytes(30)).decode()
 PUBLIC_KEY = base64.b64encode(b"\x00\x00\x00\x0bssh-ed25519" + bytes(36)).decode()
@@ -396,6 +397,7 @@ class Fixture(CheckBase):
             "edges": [{"from": "a", "to": "b", "condition": "success"}]},
         "maintenance.create": lambda fx: {"ends_at": 1_800_003_600, "group": "web"},
         "hostkey.scan": lambda fx: {"inventory_id": fx["inventory"]},
+        "netscan.start": lambda fx: {"subnet": "192.0.2.0/30"},
         "hostkey.add": lambda fx: {"host": "web02", "key_type": "ssh-ed25519",
                                    "key": PUBLIC_KEY},
         "hostkey.remove": lambda fx: {"id": 1},

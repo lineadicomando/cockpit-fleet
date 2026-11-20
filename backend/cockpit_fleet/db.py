@@ -888,6 +888,24 @@ MIGRATIONS: list[list[str]] = [
         "ALTER TABLE schedules_new RENAME TO schedules",
         "CREATE INDEX schedules_next ON schedules (enabled, next_at)",
     ],
+    [
+        # The hosts a scan of a subnet found (netscan.py), kept with the run.
+        """
+        CREATE TABLE netscan_hosts (
+            run_id        TEXT NOT NULL REFERENCES runs (id) ON DELETE CASCADE,
+            address       TEXT NOT NULL,
+            mac           TEXT NOT NULL DEFAULT '',
+            mac_source    TEXT NOT NULL DEFAULT '',
+            dns_name      TEXT NOT NULL DEFAULT '',
+            netbios_name  TEXT NOT NULL DEFAULT '',
+            workgroup     TEXT NOT NULL DEFAULT '',
+            ports         TEXT NOT NULL DEFAULT '[]',
+            seen          TEXT NOT NULL DEFAULT '[]',
+            self          INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (run_id, address)
+        )
+        """,
+    ],
 ]
 
 

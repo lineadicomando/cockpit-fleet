@@ -3263,8 +3263,8 @@ msgstr "Un assistente che lavora su questo controller attraverso Fleet, entro ci
 msgid "ansible-lint has remarks"
 msgstr "ansible-lint ha delle osservazioni"
 
-msgid "As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches."
-msgstr "Come Assistito; in più esegue, senza chiedere conferma, comandi ad-hoc di moduli di sola lettura, senza become. Chiede conferma prima di ogni lancio."
+msgid "As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches, and before each scan of a subnet, which only administrators may ask for."
+msgstr "Come Assistito; in più esegue, senza chiedere conferma, comandi ad-hoc di moduli di sola lettura, senza become. Chiede conferma prima di ogni lancio e prima di ogni scansione di una subnet, che possono chiedere solo gli amministratori."
 
 msgid "Assisted"
 msgstr "Assistito"
@@ -4336,3 +4336,137 @@ msgstr "Dove il tuo profilo lo consente, guarda il nodo stesso con comandi ad-ho
 
 msgid "Say whether it is a real problem or an expected change, find its cause, and propose solutions."
 msgstr "Di' se è un problema reale o un cambiamento atteso, trovane la causa e proponi soluzioni."
+
+msgid "{{host}} in {{inventory}}"
+msgstr "{{host}} in {{inventory}}"
+
+msgid "{{host}} in {{inventory}}, by name"
+msgstr "{{host}} in {{inventory}}, per nome"
+
+msgid "{{size}} addresses, more than {{max}}: scan a part of it, such as a /24."
+msgstr "{{size}} indirizzi, più di {{max}}: scansionane una parte, per esempio una /24."
+
+msgid "{{subnet}} (attached, {{interface}})"
+msgstr "{{subnet}} (collegata, {{interface}})"
+
+msgid "{{subnet}} (config.toml)"
+msgstr "{{subnet}} (config.toml)"
+
+msgid "A port open, or a connection refused"
+msgstr "Una porta aperta, o una connessione rifiutata"
+
+msgid "A scan finds the hosts that answer on a subnet the controller may reach, with their names, open ports and MAC addresses."
+msgstr "Una scansione trova gli host che rispondono su una subnet raggiungibile dal controller, con i loro nomi, le porte aperte e gli indirizzi MAC."
+
+msgid "All scans"
+msgstr "Tutte le scansioni"
+
+msgid "An answer to an ICMP echo"
+msgstr "Una risposta a un echo ICMP"
+
+msgid "ARP"
+msgstr "ARP"
+
+msgid "Choose a subnet"
+msgstr "Scegli una subnet"
+
+msgid "Each address is tried with an ICMP echo and a TCP connection to a few ports; each host that answers is named from the DNS and NetBIOS, with its MAC address when it is on the controller's own segment. Nothing is changed on the hosts."
+msgstr "Ogni indirizzo viene provato con un echo ICMP e una connessione TCP ad alcune porte; di ogni host che risponde si cercano i nomi nel DNS e in NetBIOS, e l'indirizzo MAC quando è sullo stesso segmento del controller. Sugli host non viene cambiato nulla."
+
+msgid "Filter by address, name, MAC address, port or inventory"
+msgstr "Filtra per indirizzo, nome, indirizzo MAC, porta o inventario"
+
+msgid "Given by the host over NetBIOS, not seen on the segment"
+msgstr "Dichiarato dall'host via NetBIOS, non visto sul segmento"
+
+msgid "Hosts found"
+msgstr "Host trovati"
+
+msgid "ICMP"
+msgstr "ICMP"
+
+msgid "ICMP echo was not allowed to the runs (net.ipv4.ping_group_range): hosts were found by TCP and the neighbour table only."
+msgstr "L'echo ICMP non è consentito alle esecuzioni (net.ipv4.ping_group_range): gli host sono stati trovati solo con TCP e la tabella dei vicini."
+
+msgid "In inventories"
+msgstr "Negli inventari"
+
+msgid "In the controller's neighbour table"
+msgstr "Nella tabella dei vicini del controller"
+
+msgid "Launched by {{user}}, {{time}}."
+msgstr "Avviata da {{user}}, {{time}}."
+
+msgid "Names"
+msgstr "Nomi"
+
+msgid "NetBIOS"
+msgstr "NetBIOS"
+
+msgid "NetBIOS name"
+msgstr "Nome NetBIOS"
+
+msgid "Network scan"
+msgstr "Scansione di rete"
+
+msgid "Network scans"
+msgstr "Scansioni di rete"
+
+msgid "No scans yet"
+msgstr "Nessuna scansione"
+
+msgid "No subnet may be scanned"
+msgstr "Nessuna subnet può essere scansionata"
+
+msgid "One of those above or a part of one, of at most {{max}} addresses. Ports tried: {{ports}}."
+msgstr "Una di quelle sopra o una sua parte, di al massimo {{max}} indirizzi. Porte provate: {{ports}}."
+
+msgid "Open ports"
+msgstr "Porte aperte"
+
+msgid "Scan"
+msgstr "Scansiona"
+
+msgid "Scan a subnet"
+msgstr "Scansiona una subnet"
+
+msgid "Scan of {{subnet}}"
+msgstr "Scansione di {{subnet}}"
+
+msgid "Scanning: the hosts appear when the scan ends."
+msgstr "Scansione in corso: gli host compaiono quando finisce."
+
+msgid "scans of a subnet"
+msgstr "scansioni di una subnet"
+
+msgid "Seen by"
+msgstr "Visto con"
+
+msgid "Subnet"
+msgstr "Subnet"
+
+msgid "Subnets that may be scanned"
+msgstr "Subnet che si possono scansionare"
+
+msgid "TCP"
+msgstr "TCP"
+
+msgid "The controller is attached to none, or config.toml turns them off: list the subnets that may be scanned in [network] scan_subnets."
+msgstr "Il controller non è collegato a nessuna, oppure config.toml le esclude: elenca le subnet da poter scansionare in [network] scan_subnets."
+
+msgid "The scan was stopped before the end: these are the hosts it had found."
+msgstr "La scansione è stata fermata prima della fine: questi sono gli host trovati fino a quel momento."
+
+msgid "This controller"
+msgstr "Questo controller"
+
+msgid "This subnet is beyond a router: MAC addresses come only from NetBIOS, from the hosts that give it."
+msgstr "Questa subnet è oltre un router: gli indirizzi MAC arrivano solo da NetBIOS, dagli host che lo forniscono."
+
+msgid "With your confirmation it scans the subnets Fleet allows: what it finds (addresses, names, MAC addresses, open ports) goes to the provider of the model."
+msgstr "Con la tua conferma scansiona le subnet consentite da Fleet: quello che trova (indirizzi, nomi, indirizzi MAC, porte aperte) va al fornitore del modello."
+
+msgid "hosts_found_count"
+msgid_plural "hosts_found_count_plural"
+msgstr[0] "{{count}} host trovato."
+msgstr[1] "{{count}} host trovati."

@@ -363,6 +363,9 @@ def _readable(ctx: Context, run_id: str) -> None:
             and ctx.caller.role != "admin":
         # Ansible quotes the lines it could not read, and they may hold passwords.
         raise Forbidden("the output of reading an inventory is for administrators")
+    if run["kind"] == "netscan" and ctx.caller.role != "admin":
+        # The map of a network, as netscan.result is.
+        raise Forbidden("the output of a scan is for administrators")
 
 
 def _read_from(ctx: Context, params: Values, name: str) -> dict:

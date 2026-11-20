@@ -25,6 +25,7 @@ import { SystemPage } from "./components/SystemPage.tsx";
 import { CredentialsPage } from "./components/CredentialsPage.tsx";
 import { FilesPage } from "./components/FilesPage.tsx";
 import { HostKeysPage } from "./components/HostKeysPage.tsx";
+import { NetworkPage } from "./components/NetworkPage.tsx";
 import { InventoriesPage } from "./components/InventoriesPage.tsx";
 import { ProjectsPage } from "./components/ProjectsPage.tsx";
 import { StorePage } from "./components/StorePage.tsx";
@@ -81,8 +82,10 @@ export function App() {
         }
         // Not every tab is for everyone: the audit trail is for administrators,
         // and the chat is there when config.toml names an agent for it, or for
-        // administrators, who find there how to set it up.
-        const visible = (tab: string) => (tab !== "audit" || data.commands.includes("audit.list")) && (tab !== "chat" || data.chat || data.role === "admin");
+        // administrators, who find there how to set it up; so are scans of the
+        // network.
+        const visible = (tab: string) => (tab !== "audit" || data.commands.includes("audit.list")) && (tab !== "chat" || data.chat || data.role === "admin")
+            && (tab !== "network" || data.commands.includes("netscan.result"));
         const groups = visibleGroups(visible);
         const section = SECTIONS.includes(location.path[0]) && visible(location.path[0]) ? location.path[0] : "overview";
         const group = groupOf(groups, section);
@@ -92,7 +95,7 @@ export function App() {
         };
         const titles: Record<string, string> = {
             overview: t("Overview"), hosts: t("Hosts"), assets: t("Assets"), checks: t("Checks"), runs: t("Runs"), templates: t("Job templates"), workflows: t("Workflows"), schedules: t("Schedules"), notifications: t("Notifications"), inventories: t("Inventories"),
-            projects: t("Projects"), store: t("Store"), credentials: t("Credentials"), variables: t("Variables"), hostkeys: t("Host keys"), system: t("System"),
+            projects: t("Projects"), store: t("Store"), credentials: t("Credentials"), variables: t("Variables"), hostkeys: t("Host keys"), network: t("Network"), system: t("System"),
             audit: t("Audit log"), chat: t("Assistant"),
         };
 
@@ -144,6 +147,7 @@ export function App() {
                         {section === "credentials" && <CredentialsPage />}
                         {section === "variables" && <VariablesPage />}
                         {section === "hostkeys" && <HostKeysPage />}
+                        {section === "network" && <NetworkPage id={location.path[1]} />}
                         {section === "chat" && <ChatPage />}
                         {section === "system" && <SystemPage />}
                         {section === "audit" && <AuditPage />}

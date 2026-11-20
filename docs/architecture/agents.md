@@ -54,9 +54,10 @@ secrets, because `fleet-secret` is not a command of `fleetctl`: an agent may
 create a credential, a person enters its value.
 
 **Classes of tools.** Every command declares what it lets an agent do, one
-of five classes from the least to the most: `read`; `run` (start, stop and
+of six classes from the least to the most: `read`; `run` (start, stop and
 follow work already defined: launches, cancels, checks, schedules turned on
-or off, acknowledgements, maintenance windows, a syntax check); `adhoc` (any
+or off, acknowledgements, maintenance windows, a syntax check); `scan` (the
+scan of a subnet, see [The network](network.md)); `adhoc` (any
 module on the nodes); `config` (create and change templates, inventories,
 schedules, rules, channels, checks, sets of variables, workflows); `code`
 (the files of projects, projects themselves, credentials, host keys,
@@ -70,7 +71,7 @@ class is a decision.
 
 **Profiles of the assistant.** A profile is a set of classes
 (`profiles.py`): `observer` reads, `assisted` and `autonomous` also run,
-`diagnostic` also `adhoc-diagnostic`, which is not the class of a command
+`diagnostic` also `scan` and `adhoc-diagnostic`, which is not the class of a command
 but of a call (`run.adhoc` with a module of `[mcp] adhoc_modules`, without
 become, and no `{{`, `{%` or `{#` in its arguments: Ansible would read them
 as templates, and a lookup in one runs a command on the controller, in the
@@ -96,7 +97,7 @@ hand with the same role. `mcp.tools` lists only the tools of the profile,
 backend's too: `profiles.question` gives, for a profile and a class, `none`
 (made unasked: reading; `run` in `autonomous`, which autonomy holds;
 `adhoc-diagnostic` in `diagnostic`), `every` (asked every time, never
-trusted for a conversation: `adhoc`, `config`, `code`, in any profile) or
+trusted for a conversation: `scan`, `adhoc`, `config`, `code`, in any profile) or
 `ask` (asked, and "always" trusts the class for the conversation).
 `mcp.tools` gives it with each tool, for the page, and `chat.start` gives
 the names of the tools that are `none`, for the agent's program at a

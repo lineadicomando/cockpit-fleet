@@ -9,7 +9,7 @@ export interface ToolInfo {
     name: string;
     description: string;
     readOnly: boolean;
-    // What it lets an agent do: read, run, adhoc, adhoc-diagnostic, config or code.
+    // What it lets an agent do: read, run, scan, adhoc, adhoc-diagnostic, config or code.
     class: string;
     // How the person is asked about a call of it in the profile of the session.
     question: Question;

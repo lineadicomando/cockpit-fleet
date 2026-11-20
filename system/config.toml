@@ -36,6 +36,16 @@
 # Proxy for outgoing connections (git, ansible-galaxy, notifications over
 # HTTP; mail goes straight to its server).
 #proxy = "http://proxy.example.org:3128"
+# The scan of a subnet (Nodes, Network), by administrators of Fleet and by
+# the assistant in the profiles diagnostic and administrator: IPv4 only,
+# a subnet within one the controller is attached to (scan_connected) or
+# within one listed here, of at most scan_max_addresses addresses (4 to
+# 4096). Each address is tried with an ICMP echo and a TCP connection to
+# each of scan_ports; MAC addresses only on the controller's own segment.
+#scan_connected = true
+#scan_subnets = ["10.20.0.0/16"]
+#scan_ports = [22, 80, 135, 139, 443, 445, 3389, 5985, 5986]
+#scan_max_addresses = 1024
 
 [notifications]
 # Where the web console is reached, for the links in the messages. Empty
@@ -129,7 +139,8 @@
 # The profiles of the assistant a user may pick, by what an agent may call:
 #   observer       reads
 #   assisted       reads, launches and cancels what is defined
-#   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules
+#   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules,
+#                  and scans of a subnet (asked every time, administrators)
 #   autonomous     as assisted, without being asked, within the limits below
 #   administrator  everything the role allows: ad-hoc commands, changes to
 #                  templates and the rest, files, projects, credentials;

@@ -32,7 +32,7 @@ MAX_INPUT = 1024 * 1024
 # stop and follow work already defined; run any module on the nodes; change
 # what is defined; change the code that runs, the secrets, or delete. The
 # profiles of the assistant are made of these.
-AGENT_CLASSES = ("read", "run", "adhoc", "config", "code")
+AGENT_CLASSES = ("read", "run", "scan", "adhoc", "config", "code")
 # How a call that does not come from the interface names what it came through.
 _VIA_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}")
 
@@ -522,6 +522,7 @@ def load_commands() -> dict[str, Command]:
         health,
         metrics,
         moduledocs,
+        netscan,
         notify,
         overview,
         resources,
