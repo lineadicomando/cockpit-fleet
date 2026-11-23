@@ -146,7 +146,7 @@ secret. The output of runs is written by the nodes: an agent that reads it
 and may also change things can be steered by what a node writes, which is
 why the limits are there. A profile is held by `fleetctl`, not by the agent
 or the page: one that names another, or none, gets no more than the
-default one. An agent that acts without asking (the profile `autonomous`) launches a bounded number of runs in a session, more only when the person it acts for allows them from the page (`chat.grant_runs`, which no agent may call), nothing
+default one. An agent that acts without asking (the profile `autonomous`) launches a bounded number of runs in a session, another number only when the person it acts for chooses it when starting the session, and more when they allow them from the page (`chat.limit_runs`, `chat.grant_runs`, which no agent may call), nothing
 on an inventory in maintenance, and cannot silence a problem; a run that
 needs approval still waits for a person. An ad-hoc command an agent asks
 for, of a module that may change something, waits until the person it acts

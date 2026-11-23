@@ -59,13 +59,19 @@ entries go under `[Unreleased]`, under the heading of their kind.
   profile, while its runs have not ended, "Stop everything" stops the
   answer and cancels them. Commands `chat.session`, `chat.grant_runs` and
   `chat.cancel_runs`, which agents cannot call; `fleet-mcp --session`.
+- Assistant: in the profile `autonomous`, the start of a session (and
+  the change to that profile) has a field for the runs it may launch in
+  each conversation, lower or higher than `[chat] autonomous_runs`
+  (command `chat.limit_runs`, which agents cannot call).
 
 ### Changed
 
 - Assistant: an autonomous agent is told to launch one run on a group
   rather than one per host, and to stop and say so when its runs are
   spent.
-
+- `[chat] autonomous_runs` is 30 by default, not 10: a controller that
+  leaves it commented out lets an autonomous agent launch 30 runs in a
+  conversation.
 - Nodes: its sections are in the order Assets, Checks, Hosts, Host keys,
   and the tab opens on Assets.
 

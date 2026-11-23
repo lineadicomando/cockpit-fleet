@@ -923,6 +923,20 @@ MIGRATIONS: list[list[str]] = [
         """,
         "CREATE INDEX session_grants_session ON session_grants (session, user)",
     ],
+    [
+        # The runs a person chose, when the conversation began, that an agent
+        # of theirs acting without asking may launch in one session, in place
+        # of [chat] autonomous_runs (chat.limit_runs); the grants add to it.
+        """
+        CREATE TABLE session_limits (
+            session  TEXT NOT NULL,
+            user     TEXT NOT NULL,
+            runs     INTEGER NOT NULL,
+            set_at   REAL NOT NULL,
+            PRIMARY KEY (session, user)
+        )
+        """,
+    ],
 ]
 
 

@@ -126,8 +126,14 @@ gives nothing a person could not take by hand: `fleetctl` already takes
 any `session` a call of an agent names. Counts and grants are by session and
 user, so naming another user's session gains nothing. `chat.session` (viewer) gives the launches counted, those
 allowed and the runs not ended; `chat.grant_runs` (operator) records in
-`session_grants` that the user allows so many more, which `autonomy.hold`
-adds to `[chat] autonomous_runs`; `chat.cancel_runs` (operator) cancels the
+`session_grants` that the user allows so many more, which `autonomy.allowed`
+adds to the base of the session; `chat.limit_runs` (operator, schema 36)
+sets that base in `session_limits`, one row per session and user that a
+new value replaces, in place of `[chat] autonomous_runs`: what the user
+chose for the conversations of a chat session, lower or higher, which the
+page sets for each conversation before the agent is told anything of it.
+No ceiling of the administrator's bounds it, since grants already do not:
+a ceiling would hold only if grants were bounded too. `chat.cancel_runs` (operator) cancels the
 user's runs of the session not ended, by `runs.session`, set when an
 agent's call queues a run of a template, an ad-hoc command, a workflow run or a
 scan (`runs.launch`, `run.adhoc`, `workflows._start`, `netscan.start`).

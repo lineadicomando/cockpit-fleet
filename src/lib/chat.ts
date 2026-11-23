@@ -81,6 +81,9 @@ export interface ChatState {
     // it, to follow what the agent launched (chat.session), allow it more
     // runs and cancel them. A conversation opened again gets a new one.
     fleetSession: string;
+    // The runs an agent in the profile autonomous may launch in each
+    // conversation, as chosen when the session started; 0 for config.toml's.
+    runs: number;
 }
 
 export interface Transport {
@@ -94,8 +97,11 @@ export type Spawn = (agent: string, profile: string, onData: (text: string) => v
 // The tools of an agent in a profile.
 export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 
+// Sets the runs an agent acting without asking may launch in a session of fleet-mcp.
+export type LimitRuns = (session: string, runs: number) => Promise<void>;
+
 const IDLE: ChatState = {
-    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "",
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "", runs: 0,
 };
 
 // What fleet-mcp takes as the identifier of a session: 16 hexadecimal digits.
@@ -120,6 +126,7 @@ export class Chat {
     private readonly listeners = new Set<() => void>();
     private readonly spawn: Spawn;
     private readonly loadTools: LoadTools;
+    private readonly limitRuns: LimitRuns;
     private transport: Transport | null = null;
     private connection: Connection | null = null;
     private tools = new Map<string, ToolInfo>();
@@ -136,9 +143,10 @@ export class Chat {
     // how many times its start found the sessions full.
     private change: { profile: string; sessionId: string; expected: boolean; full: number } | null = null;
 
-    constructor(spawn: Spawn, loadTools: LoadTools) {
+    constructor(spawn: Spawn, loadTools: LoadTools, limitRuns: LimitRuns = async () => undefined) {
         this.spawn = spawn;
         this.loadTools = loadTools;
+        this.limitRuns = limitRuns;
     }
 
     subscribe = (listener: () => void): (() => void) => {
@@ -153,10 +161,10 @@ export class Chat {
         for (const listener of this.listeners) listener();
     }
 
-    start(agent: string, profile: string): void {
+    start(agent: string, profile: string, runs = 0): void {
         if (this.state.phase === "starting" || this.state.phase === "ready") return;
         // A draft waits for the session it was prepared for.
-        this.state = { ...IDLE, draft: this.state.draft };
+        this.state = { ...IDLE, draft: this.state.draft, runs };
         this.change = null;
         this.launch(agent, profile);
     }
@@ -200,12 +208,12 @@ export class Chat {
     // started again by fleet-chat in that profile (chat.start says whether it
     // may be, and tells the agent its instructions), and told to open the
     // conversation again. What was trusted for it is trusted no more.
-    changeProfile(profile: string): void {
+    changeProfile(profile: string, runs = this.state.runs): void {
         const transport = this.transport;
         if (!transport || this.state.phase !== "ready" || this.state.busy || this.state.loading || this.state.ask
             || this.change || !profile || profile === this.state.profile) return;
         this.change = { profile, sessionId: this.state.sessionId, expected: true, full: 0 };
-        this.set({ changing: profile });
+        this.set({ changing: profile, runs });
         // The next starts once this one has gone, not to be counted with it.
         transport.close();
     }
@@ -340,6 +348,14 @@ export class Chat {
         };
     }
 
+    // The runs chosen for the session, set for the conversation's session of
+    // fleet-mcp before the agent can launch anything in it.
+    private async limit(): Promise<void> {
+        if (this.state.profile === "autonomous" && this.state.runs > 0) {
+            await this.limitRuns(this.state.fleetSession, this.state.runs);
+        }
+    }
+
     // A new conversation: the agent is told when the first message is sent.
     fresh(): void {
         if (this.state.busy || this.state.loading) return;
@@ -353,6 +369,7 @@ export class Chat {
         this.always.clear();
         this.set({ sessionId, items: [], loading: true, fleetSession: drawSession() });
         try {
+            await this.limit();
             await this.connection.request("session/load", { ...this.sessionParams(), sessionId });
         } catch (ex) {
             this.fail(ex);
@@ -367,6 +384,7 @@ export class Chat {
         try {
             if (!this.state.sessionId) {
                 this.set({ fleetSession: drawSession() });
+                await this.limit();
                 const session = await connection.request<{ sessionId: string }>("session/new", this.sessionParams());
                 this.set({ sessionId: session.sessionId });
             }

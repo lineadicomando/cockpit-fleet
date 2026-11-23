@@ -20,6 +20,7 @@ import {
     ModalHeader,
     ModalVariant,
     TextArea,
+    TextInput,
 } from "@patternfly/react-core";
 import type { Item, ToolItem, ToolStatus } from "../lib/acp.ts";
 import { chat } from "../lib/chat-agent.ts";
@@ -47,7 +48,7 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
         autonomous: t("Autonomous"),
         administrator: t("Administrator"),
     };
-    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a conversation unless you allow more, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
+    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most the runs you choose for each conversation ({{runs}} unless you change them) and those you allow later, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
     const what: Record<string, string> = {
         observer: t("It reads what you may read, and launches and changes nothing: it asks you nothing."),
         assisted: t("It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."),
@@ -74,6 +75,38 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
         what: (profile: string) => what[profile] ?? "",
         risks: (profile: string) => [...(risks[profile] ?? []), steering],
     };
+}
+
+// The runs an agent in the profile autonomous may launch in each
+// conversation, as typed: a whole number from 1 to 1000, or null.
+function validRuns(text: string): number | null {
+    const runs = Number(text);
+    return /^\d+$/.test(text.trim()) && runs >= 1 && runs <= 1000 ? runs : null;
+}
+
+// What the session is started with: 0 when it is config.toml's, which the
+// backend applies by itself.
+function chosenRuns(text: string, info: ChatInfo): number {
+    const runs = validRuns(text);
+    return runs === null || runs === info.autonomous_runs ? 0 : runs;
+}
+
+// The choice of those runs, for a session in the profile autonomous.
+function RunsInput({ info, value, onChange }: { info: ChatInfo; value: string; onChange: (value: string) => void }) {
+    const { t } = useTranslation();
+    const valid = validRuns(value) !== null;
+    return (
+        <>
+            <TextInput type="number" min={1} max={1000} value={value} onChange={(_event, text) => onChange(text)}
+                validated={valid ? "default" : "error"} aria-label={t("Runs without asking, in each conversation")}
+                style={{ maxInlineSize: "8rem" }} />
+            <Content component="small" style={{ display: "block", marginBlockStart: "0.25rem" }}>
+                {valid
+                    ? t("This controller sets {{runs}}. When they are spent you can allow more, from the conversation.", { runs: info.autonomous_runs })
+                    : t("A whole number from 1 to 1000.")}
+            </Content>
+        </>
+    );
 }
 
 // What a class of tools lets the assistant do, as said in a question.
@@ -225,13 +258,16 @@ function Risks({ info, profile, accepted, onAccepted }: { info: ChatInfo; profil
 // Another profile for the session, the conversation going on in it.
 function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; state: ChatState; onClose: () => void; onAccepted: () => void }) {
     const { t } = useTranslation();
+    const session = useSession();
     const profiles = useProfiles(info);
     const others = info.profiles.filter(one => one !== state.profile);
     const [profile, setProfile] = useState(others[0] ?? "");
     const [accepted, setAccepted] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [changing, setChanging] = useState(false);
+    const [runs, setRuns] = useState(String(state.runs || info.autonomous_runs));
     const toAccept = info.to_accept.includes(profile);
+    const choosing = profile === "autonomous" && session.commands.includes("chat.limit_runs");
 
     async function change() {
         setProblem(null);
@@ -246,7 +282,7 @@ function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; s
             }
             onAccepted();
         }
-        chat.changeProfile(profile);
+        chat.changeProfile(profile, choosing ? chosenRuns(runs, info) : state.runs);
         onClose();
     }
 
@@ -261,6 +297,12 @@ function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; s
                     {others.map(one => <FormSelectOption key={one} value={one} label={profiles.name(one)} />)}
                 </FormSelect>
                 <Content component="p" style={{ marginBlockEnd: "1rem" }}>{profiles.what(profile)}</Content>
+                {choosing && (
+                    <div style={{ marginBlockEnd: "1rem" }}>
+                        <Content component="p">{t("Runs without asking, in each conversation")}</Content>
+                        <RunsInput info={info} value={runs} onChange={setRuns} />
+                    </div>
+                )}
                 {toAccept && <Risks info={info} profile={profile} accepted={accepted} onAccepted={setAccepted} />}
                 {RISKY.includes(profile) && (
                     <Alert variant="warning" isInline isPlain title={t("What has been said so far goes on with it: the output of runs and commands read in this conversation, written by the nodes, included.")} />
@@ -268,7 +310,7 @@ function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; s
                 <Content component="small">{t("What you allowed always in this conversation is asked again.")}</Content>
             </ModalBody>
             <ModalFooter>
-                <Button variant="primary" isDisabled={!profile || (toAccept && !accepted) || changing} isLoading={changing} onClick={change}>{t("Change the profile")}</Button>
+                <Button variant="primary" isDisabled={!profile || (toAccept && !accepted) || changing || (choosing && validRuns(runs) === null)} isLoading={changing} onClick={change}>{t("Change the profile")}</Button>
                 <Button variant="link" onClick={onClose}>{t("Cancel")}</Button>
             </ModalFooter>
         </Modal>
@@ -292,6 +334,9 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
     const [accepted, setAccepted] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [starting, setStarting] = useState(false);
+    // Those of the last session, if one was chosen, or config.toml's.
+    const [runs, setRuns] = useState(String(state.runs || info.autonomous_runs));
+    const choosing = profile === "autonomous" && session.commands.includes("chat.limit_runs");
     const full = info.open_sessions >= info.max_sessions;
     const agent = info.agents.find(one => one.name === name) ?? info.agents[0];
     const toAccept = info.to_accept.includes(profile);
@@ -310,7 +355,7 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
             setStarting(false);
             onAccepted();
         }
-        chat.start(agent.name, profile);
+        chat.start(agent.name, profile, choosing ? chosenRuns(runs, info) : 0);
     }
 
     return (
@@ -346,6 +391,12 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
                         <Content component="p" style={{ marginBlockStart: "0.5rem" }}>{profiles.what(profile)}</Content>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
+                {choosing && (
+                    <DescriptionListGroup>
+                        <DescriptionListTerm>{t("Runs without asking, in each conversation")}</DescriptionListTerm>
+                        <DescriptionListDescription><RunsInput info={info} value={runs} onChange={setRuns} /></DescriptionListDescription>
+                    </DescriptionListGroup>
+                )}
             </DescriptionList>
             {toAccept && <Risks info={info} profile={profile} accepted={accepted} onAccepted={setAccepted} />}
             {full && <Alert variant="info" isInline title={t("{{open}} sessions of the assistant are open on this controller, the most it allows.", { open: info.open_sessions })} style={{ marginBlockEnd: "1rem" }} />}
@@ -369,7 +420,7 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
                         </FormSelect>
                     </FlexItem>
                 )}
-                <Button variant="primary" isDisabled={!agent.installed || (toAccept && !accepted) || starting} isLoading={starting}
+                <Button variant="primary" isDisabled={!agent.installed || (toAccept && !accepted) || starting || (choosing && validRuns(runs) === null)} isLoading={starting}
                     onClick={start}>{t("Start the assistant")}</Button>
             </Flex>
         </>

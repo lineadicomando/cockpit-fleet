@@ -3339,8 +3339,8 @@ msgstr "Istruzioni date all'assistente"
 msgid "It may change templates, inventories, schedules and the rest, and run any ad-hoc command your role allows, once you confirm. A change you confirm is made in your name: read each question."
 msgstr "Può cambiare template, inventari, pianificazioni e il resto, ed eseguire qualunque comando ad-hoc il tuo ruolo consenta, dopo la tua conferma. Una modifica che confermi è fatta a tuo nome: leggi ogni domanda."
 
-msgid "It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a conversation unless you allow more, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem."
-msgstr "Legge e lancia ciò che è definito senza chiedere conferma. A limitarlo è Fleet: al massimo {{runs}} run in una conversazione, salvo che tu ne conceda altre, nulla su un inventario in manutenzione, nessuna pianificazione attivata, e non mette mai a tacere un problema."
+msgid "It reads and launches what is defined without asking you. Fleet holds it instead: at most the runs you choose for each conversation ({{runs}} unless you change them) and those you allow later, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem."
+msgstr "Legge e lancia ciò che è definito senza chiedere conferma. A limitarlo è Fleet: al massimo le run che scegli per ogni conversazione ({{runs}} se non cambi il numero) e quelle che concedi in seguito, nulla su un inventario in manutenzione, nessuna pianificazione attivata, e non mette mai a tacere un problema."
 
 msgid "It reads what you may read, and launches and changes nothing: it asks you nothing."
 msgstr "Legge ciò che puoi leggere tu, non lancia né modifica nulla e quindi non chiede conferme."
@@ -4208,6 +4208,15 @@ msgid "chat_runs_not_ended"
 msgid_plural "chat_runs_not_ended_plural"
 msgstr[0] "{{count}} run lanciata non è ancora finita"
 msgstr[1] "{{count}} run lanciate non sono ancora finite"
+
+msgid "Runs without asking, in each conversation"
+msgstr "Run senza chiedere, per ogni conversazione"
+
+msgid "This controller sets {{runs}}. When they are spent you can allow more, from the conversation."
+msgstr "Questo controller ne prevede {{runs}}. Quando sono esaurite puoi concederne altre dalla conversazione."
+
+msgid "A whole number from 1 to 1000."
+msgstr "Un numero intero da 1 a 1000."
 
 msgid "awaiting_approval_count"
 msgid_plural "awaiting_approval_count_plural"

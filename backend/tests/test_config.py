@@ -62,7 +62,7 @@ class ConfigTest(unittest.TestCase):
     def test_limits_of_autonomy(self):
         config = parse("")
         self.assertEqual((config.chat_autonomous_runs, config.chat_autonomous_dry_run),
-                         (10, False))
+                         (30, False))
         config = parse("[chat]\nautonomous_runs = 3\nautonomous_dry_run = true")
         self.assertEqual((config.chat_autonomous_runs, config.chat_autonomous_dry_run),
                          (3, True))

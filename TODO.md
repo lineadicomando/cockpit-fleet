@@ -9,9 +9,9 @@ workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 Phases 0–18 closed; phase 19 under way (below). Last release 0.4.0 (18
 November), with the Overview of phase 18. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (774
-backend, 198 frontend tests). Each backend module's docstring says what
-it is; `cli.py` is the registry of commands, `db.py` the schema (35
+To resume: `git status`, `git log origin/main..`; `make check` (775
+backend, 201 frontend tests). Each backend module's docstring says what
+it is; `cli.py` is the registry of commands, `db.py` the schema (36
 migrations).
 
 ## Phase 19: network discovery

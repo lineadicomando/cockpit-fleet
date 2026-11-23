@@ -95,7 +95,7 @@ class Config:
     chat_default_profile: str = "assisted"
     # What holds an agent of an autonomous profile: the runs it may launch in
     # one session, and whether they must all be dry runs (autonomy.py).
-    chat_autonomous_runs: int = 10
+    chat_autonomous_runs: int = 30
     chat_autonomous_dry_run: bool = False
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""

@@ -245,15 +245,32 @@ def _not_ended(ctx: Context, session: str) -> list:
 def chat_session(ctx: Context, params: Values) -> dict:
     """What an agent of the caller launched in a session of fleet-mcp: how
     many launches went through, how many it may make in the profile
-    autonomous ([chat] autonomous_runs and those the caller allowed since),
-    and its runs not ended yet."""
+    autonomous (as the caller chose for it, or [chat] autonomous_runs, and
+    those the caller allowed since), and its runs not ended yet."""
     session = _session(params)
     jobs.reconcile(ctx)
     user = ctx.caller.user
-    granted = autonomy.granted(ctx.conn, session, user)
     return {"launched": autonomy.launched(ctx.conn, session, user),
-            "allowed": ctx.config.chat_autonomous_runs + granted, "granted": granted,
+            "allowed": autonomy.allowed(ctx.conn, ctx.config, session, user),
+            "granted": autonomy.granted(ctx.conn, session, user),
             "not_ended": [dict(row) for row in _not_ended(ctx, session)]}
+
+
+@command("chat.limit_runs", role="operator", mutating=True, tool=False,
+         params={"session": _SESSION,
+                 "runs": Int(1, 1000, "How many launches to allow", default=1)})
+def chat_limit_runs(ctx: Context, params: Values) -> dict:
+    """Set how many launches an agent of the caller acting without asking may
+    make in a session of fleet-mcp, in place of [chat] autonomous_runs: what
+    the caller chose when the conversation began. Set again, it replaces
+    what was set; what was allowed since (chat.grant_runs) adds to it. A
+    person's decision, never an agent's, which is refused this command."""
+    session = _session(params)
+    ctx.conn.execute("INSERT INTO session_limits (session, user, runs, set_at)"
+                     " VALUES (?, ?, ?, ?) ON CONFLICT (session, user)"
+                     " DO UPDATE SET runs = excluded.runs, set_at = excluded.set_at",
+                     (session, ctx.caller.user, params["runs"], store.now()))
+    return {"allowed": autonomy.allowed(ctx.conn, ctx.config, session, ctx.caller.user)}
 
 
 @command("chat.grant_runs", role="operator", mutating=True, tool=False,
@@ -261,14 +278,14 @@ def chat_session(ctx: Context, params: Values) -> dict:
                  "runs": Int(1, 1000, "How many more launches to allow", default=10)})
 def chat_grant_runs(ctx: Context, params: Values) -> dict:
     """Allow an agent of the caller acting without asking more launches in a
-    session of fleet-mcp than [chat] autonomous_runs: a person's decision,
+    session of fleet-mcp than it may make (chat.limit_runs, or [chat]
+    autonomous_runs): a person's decision,
     never an agent's, which is refused this command."""
     session = _session(params)
     ctx.conn.execute("INSERT INTO session_grants (session, user, runs, granted_at)"
                      " VALUES (?, ?, ?, ?)", (session, ctx.caller.user, params["runs"],
                                               store.now()))
-    return {"allowed": ctx.config.chat_autonomous_runs
-            + autonomy.granted(ctx.conn, session, ctx.caller.user)}
+    return {"allowed": autonomy.allowed(ctx.conn, ctx.config, session, ctx.caller.user)}
 
 
 @command("chat.cancel_runs", role="operator", mutating=True, tool=False,

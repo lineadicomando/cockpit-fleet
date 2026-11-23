@@ -214,7 +214,12 @@ expect_eq "the person allows one more" \
     "$(get "$(ctl itoperator chat.grant_runs "{\"session\": \"$SESSION\", \"runs\": 1}")" 'a["data"]["allowed"]')" 2
 out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "f"}}')")
 expect_eq "and the agent goes on" "$(answer "$out" 2 'a["result"]["isError"]')" False
-expect_eq "its runs carry the session" "$(db "SELECT count(*) FROM runs WHERE session = '$SESSION'")" 2
+expect_eq "the runs chosen for the conversation replace config.toml's, and what was allowed adds to them" \
+    "$(get "$(ctl itoperator chat.limit_runs "{\"session\": \"$SESSION\", \"runs\": 2}")" 'a["data"]["allowed"]')" 3
+out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "g"}}')" "$(call 3 "$tool" '{"answers": {"greeting": "h"}}')")
+expect_eq "so the agent launches one more, and no more" \
+    "$(answer "$out" 2 'a["result"]["isError"]') $(answer "$out" 3 '"as many runs as it may: 3" in a["result"]["content"][0]["text"]')" "False True"
+expect_eq "its runs carry the session" "$(db "SELECT count(*) FROM runs WHERE session = '$SESSION'")" 3
 expect_eq "the person stops everything" \
     "$(get "$(ctl itoperator chat.cancel_runs "{\"session\": \"$SESSION\"}")" 'a["ok"]') $(get "$(ctl itoperator chat.session "{\"session\": \"$SESSION\"}")" 'a["data"]["not_ended"]')" "True []"
 SESSION=

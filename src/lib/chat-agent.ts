@@ -32,4 +32,8 @@ function spawnAgent(agent: string, profile: string, onData: (text: string) => vo
     };
 }
 
-export const chat = new Chat(spawnAgent, async profile => (await call<{ tools: ToolInfo[] }>("mcp.tools", profile ? { profile } : {})).tools);
+export const chat = new Chat(
+    spawnAgent,
+    async profile => (await call<{ tools: ToolInfo[] }>("mcp.tools", profile ? { profile } : {})).tools,
+    async (session, runs) => { await call("chat.limit_runs", { session, runs }); },
+);

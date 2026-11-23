@@ -208,8 +208,15 @@ not ended. In `autonomous` it shows the launches of those allowed and, once
 they are spent, "Allow N more" (`chat.grant_runs`, N = `[chat]
 autonomous_runs`); in any profile, while runs have not ended, "Stop
 everything", which asks first, then sends `session/cancel` and calls
-`chat.cancel_runs`. The backend side, and why the limit stays: agents.md,
-"The person beside an autonomous agent".
+`chat.cancel_runs`. In `autonomous` the start of a session, and the change
+to that profile, have a field for the runs of each conversation, with
+`[chat] autonomous_runs` in it (or what was chosen last). `Chat` keeps the
+number (`runs`, 0 when it is config.toml's, which needs no call) and,
+whenever it draws a session, calls `chat.limit_runs` (the third argument
+of its constructor) before `session/new` or `session/load`. A failure ends
+the sending there, with the error in the conversation, rather than let the
+agent go on with another limit than the one chosen. The backend side, and
+why the limit stays: agents.md, "The person beside an autonomous agent".
 
 **Permissions.** The agent asks before each call to a tool
 (`session/request_permission`). The page answers as `question` of the tool

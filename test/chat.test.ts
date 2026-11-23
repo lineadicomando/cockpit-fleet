@@ -118,6 +118,10 @@ class Agent {
     spawned: string[][] = [];
     // The profiles the tools were asked for.
     listed: string[] = [];
+    // The runs set for sessions of fleet-mcp, with the methods the agent had been sent by then.
+    limits: { session: string; runs: number; before: number }[] = [];
+    // Why setting them fails, when it does.
+    limitFails = "";
     private onData: (text: string) => void = () => undefined;
     private onExit: (error: string) => void = () => undefined;
     // How the agent answers each method; a function gets the message.
@@ -146,7 +150,11 @@ class Agent {
                 },
                 close: () => { this.closed = true; },
             };
-        }, async profile => { this.listed.push(profile); return toolsOf(profile); });
+        }, async profile => { this.listed.push(profile); return toolsOf(profile); },
+        async (session, runs) => {
+            if (this.limitFails) throw new Error(this.limitFails);
+            this.limits.push({ session, runs, before: this.received.length });
+        });
     }
 
     say(message: object): void { this.onData(JSON.stringify(message) + "\n"); }
@@ -154,8 +162,8 @@ class Agent {
     methods(): (string | undefined)[] { return this.received.map(message => message.method); }
     last(method: string): Message { return this.received.filter(message => message.method === method).slice(-1)[0]; }
 
-    async ready(profile = "assisted"): Promise<void> {
-        this.chat.start("claude", profile);
+    async ready(profile = "assisted", runs = 0): Promise<void> {
+        this.chat.start("claude", profile, runs);
         await this.started(profile);
     }
 
@@ -376,6 +384,45 @@ test("each conversation has a session of fleet-mcp of its own", async () => {
     assert.match(second, /^[0-9a-f]{16}$/);
     assert.notEqual(second, first);
     assert.equal(agent.last("session/new").params.mcpServers[0].args.at(-1), second);
+});
+
+test("the runs chosen for an autonomous session are set for each conversation before the agent is told", async () => {
+    const agent = new Agent();
+    await agent.ready("autonomous", 5);
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("reboot the lab");
+    const first = agent.chat.getState().fleetSession;
+    assert.deepEqual(agent.limits, [{ session: first, runs: 5, before: agent.received.indexOf(agent.last("session/new")) }]);
+    await agent.chat.send("again");
+    assert.equal(agent.limits.length, 1);
+    // An earlier conversation opened again has a session of its own, set as well.
+    await agent.chat.open("old");
+    assert.equal(agent.limits.length, 2);
+    assert.equal(agent.limits[1].session, agent.chat.getState().fleetSession);
+    assert.notEqual(agent.limits[1].session, first);
+    assert.equal(agent.limits[1].before, agent.received.indexOf(agent.last("session/load")));
+});
+
+test("nothing is set for config.toml's runs, nor in a profile that asks", async () => {
+    for (const [profile, runs] of [["autonomous", 0], ["assisted", 5]] as const) {
+        const agent = new Agent();
+        await agent.ready(profile, runs);
+        agent.answers["session/prompt"] = { stopReason: "end_turn" };
+        await agent.chat.send("hello");
+        assert.deepEqual(agent.limits, [], profile);
+    }
+});
+
+test("runs that cannot be set leave the conversation unopened, and say why", async () => {
+    const agent = new Agent();
+    agent.limitFails = "chat.limit_runs requires the operator role";
+    await agent.ready("autonomous", 5);
+    await agent.chat.send("reboot the lab");
+    assert.equal(agent.last("session/new"), undefined);
+    const state = agent.chat.getState();
+    assert.deepEqual(state.items[state.items.length - 1], { kind: "error", text: "chat.limit_runs requires the operator role" });
+    assert.equal(state.sessionId, "");
+    assert.equal(state.busy, false);
 });
 
 test("an earlier conversation is replayed by the agent", async () => {

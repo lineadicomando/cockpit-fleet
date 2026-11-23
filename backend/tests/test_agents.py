@@ -459,6 +459,30 @@ class AutonomyTest(Base):
         # Bob's own count of the same session starts from nothing.
         self.assertEqual(self.as_user("chat.session", session, "bob")["data"]["launched"], 0)
 
+    def test_a_person_chooses_the_runs_of_a_conversation(self):
+        launch = {"template_id": self.template()["id"]}
+        session = {"session": self.SESSION}
+        # Fewer than config.toml, or more; set again, it replaces what was set.
+        self.assertEqual(self.ok("chat.limit_runs", {**session, "runs": 5}), {"allowed": 5})
+        self.assertEqual(self.ok("chat.limit_runs", {**session, "runs": 1}), {"allowed": 1})
+        self.assertTrue(self.via("run.start", launch)["ok"])
+        self.refused(self.via("run.start", launch), "as many runs as it may: 1")
+        # What is allowed since adds to it.
+        self.assertEqual(self.ok("chat.grant_runs", {**session, "runs": 2}), {"allowed": 3})
+        self.assertEqual(self.ok("chat.limit_runs", {**session, "runs": 4}), {"allowed": 6})
+        self.assertEqual(self.ok("chat.session", session)["allowed"], 6)
+        # Never by the agent, nor by a viewer, nor out of bounds; another user's is theirs.
+        self.refused(self.via("chat.limit_runs", {**session, "runs": 100}), "not for agents")
+        self.assertEqual(self.code("chat.limit_runs", {**session, "runs": 3}, "viewer"),
+                         "forbidden")
+        for bad in (0, 1001, "9"):
+            self.assertEqual(self.code("chat.limit_runs", {**session, "runs": bad}),
+                             "bad_request", bad)
+        self.assertTrue(self.as_user("chat.limit_runs", {**session, "runs": 900}, "bob")["ok"])
+        self.assertEqual(self.ok("chat.session", session)["allowed"], 6)
+        # Another session keeps config.toml's.
+        self.assertEqual(self.ok("chat.session", {"session": "fedcba9876543210"})["allowed"], 2)
+
     def test_a_person_cancels_what_the_session_launched(self):
         self.config = replace(self.config, chat_autonomous_runs=9, max_concurrent_runs=9)
         template = self.template()

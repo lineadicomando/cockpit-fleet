@@ -3,8 +3,11 @@ the assistant that is autonomous (profiles.AUTONOMOUS).
 
 Nobody confirms its calls, so the backend is the only control left, and an
 agent that reads what the nodes wrote can be steered by it. Within one
-session it launches at most so many runs ([chat] autonomous_runs, counted
-from the audit trail), none on an inventory in maintenance, and with
+session it launches at most so many runs ([chat] autonomous_runs, or as
+many as the person it acts for chose when the conversation began:
+session_limits; and as many more as they allow from the chat page:
+session_grants; counted from the audit trail), none on an inventory in
+maintenance, and with
 [chat] autonomous_dry_run only dry runs; it never silences a problem. A run
 of a template that needs approval still waits for a person: an agent has no
 right to approve.
@@ -81,6 +84,15 @@ def granted(conn, session: str, user: str) -> int:
                         " WHERE session = ? AND user = ?", (session, user)).fetchone()[0]
 
 
+def allowed(conn, config, session: str, user: str) -> int:
+    """How many launches a user's session may make: the base the user chose
+    for it, or [chat] autonomous_runs, and what they allowed since."""
+    row = conn.execute("SELECT runs FROM session_limits WHERE session = ? AND user = ?",
+                       (session, user)).fetchone()
+    base = row[0] if row else config.chat_autonomous_runs
+    return base + granted(conn, session, user)
+
+
 def hold(ctx, name: str, params: dict) -> None:
     """Refuse a call of an autonomous agent that goes beyond its limits;
     with dry runs only, make a launch of a template one."""
@@ -98,10 +110,11 @@ def hold(ctx, name: str, params: dict) -> None:
         raise Forbidden("an agent acting without asking launches only within a session"
                         " of fleet-mcp")
     user = ctx.caller.user
-    limit = config.chat_autonomous_runs + granted(ctx.conn, ctx.session, user)
+    limit = allowed(ctx.conn, config, ctx.session, user)
     if launched(ctx.conn, ctx.session, user) >= limit:
         raise Forbidden(f"this session has launched as many runs as it may: {limit}"
-                        " ([chat] autonomous_runs in config.toml, and those allowed since);"
+                        " (as the person chose, or [chat] autonomous_runs in config.toml,"
+                        " and those allowed since);"
                         " tell the person you act for, who can allow more from the chat page,"
                         " and wait for them")
     now = store.now()
