@@ -75,6 +75,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - Nodes: its sections are in the order Assets, Checks, Hosts, Host keys,
   and the tab opens on Assets.
 
+### Fixed
+
+- Assistant: a message written and not sent is still there after a
+  visit to another tab of Fleet (not after reloading the page).
+
 ## [0.4.0] - 2026-11-18
 
 ### Added

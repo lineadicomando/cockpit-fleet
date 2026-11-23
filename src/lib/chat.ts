@@ -123,6 +123,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export class Chat {
     private state: ChatState = IDLE;
+    // What is written in the composer and not sent, kept here so that it
+    // outlives the page of the chat when another tab is opened. Not in the
+    // state: a keystroke must not draw the conversation again.
+    typed = "";
     private readonly listeners = new Set<() => void>();
     private readonly spawn: Spawn;
     private readonly loadTools: LoadTools;

@@ -511,6 +511,20 @@ test("a prepared message waits for the session and is never sent by itself", asy
     assert.equal(agent.methods().filter(method => method === "session/prompt").length, 1);
 });
 
+test("what is written and not sent is kept across conversations and sessions", async () => {
+    const agent = new Agent();
+    await agent.ready();
+    agent.chat.typed = "list the hosts of";
+    agent.chat.fresh();
+    assert.equal(agent.chat.typed, "list the hosts of");
+    agent.chat.stop();
+    agent.chat.start("claude", "assisted");
+    assert.equal(agent.chat.typed, "list the hosts of");
+    // A prepared message leaves it to the composer, which replaces it.
+    agent.chat.prepare("examine the run r1");
+    assert.equal(agent.chat.typed, "list the hosts of");
+});
+
 test("the profile changes with the conversation kept: the agent is started again and opens it", async () => {
     const agent = new Agent();
     await agent.ready("diagnostic");

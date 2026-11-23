@@ -456,28 +456,34 @@ function Instructions({ state }: { state: ChatState }) {
 
 function Composer({ state }: { state: ChatState }) {
     const { t } = useTranslation();
-    const [text, setText] = useState("");
+    // What was being written comes back after a visit to another tab.
+    const [text, setText] = useState(() => chat.typed);
     const box = useRef<HTMLTextAreaElement>(null);
     const idle = state.phase === "ready" && !state.busy && !state.loading && !state.changing;
+
+    function write(value: string) {
+        chat.typed = value;
+        setText(value);
+    }
 
     // A message prepared on another page (the help of a run) replaces what
     // was being written, to be read, edited and sent by the user.
     useEffect(() => {
         if (!state.draft) return;
-        setText(chat.takeDraft());
+        write(chat.takeDraft());
         box.current?.focus();
     }, [state.draft]);
 
     function send() {
         if (!idle || !text.trim()) return;
         chat.send(text.trim());
-        setText("");
+        write("");
     }
 
     return (
         <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsFlexEnd" }} flexWrap={{ default: "nowrap" }}>
             <FlexItem grow={{ default: "grow" }}>
-                <TextArea ref={box} value={text} onChange={(_event, value) => setText(value)} rows={2} resizeOrientation="vertical"
+                <TextArea ref={box} value={text} onChange={(_event, value) => write(value)} rows={2} resizeOrientation="vertical"
                     aria-label={t("Message")} placeholder={t("Write a message; Enter sends it, Shift+Enter goes to a new line")}
                     onKeyDown={event => {
                         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {

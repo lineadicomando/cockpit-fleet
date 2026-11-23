@@ -239,7 +239,12 @@ across the tabs of the plugin; a reload of the page closes the channel, and
 `fleet-chat`, the agent and `fleet-mcp` end with it. Answers are shown as
 plain text. The page takes the height left in the window and the
 conversation scrolls inside it, so that the message box stays in sight
-(measured, not a fixed share of the window: what is above it changes).
+(measured, not a fixed share of the window: what is above it changes). What
+is written and not sent is kept by the page's `Chat` (`typed`, outside its
+state, so that a keystroke does not draw the conversation again): it
+outlives a visit to another tab, which unmounts the page, and a new
+conversation or session; not a reload, which ends the agent too, and never
+in the browser's storage, shared by the users of a controller.
 
 **Help with a run.** The page of a run that has ended (not one rejected
 or expired, which never ran) has a button "Assistance" when an agent is

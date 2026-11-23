@@ -87,7 +87,8 @@ in [security.md](security.md); the decisions behind these limits in
   canceled from the Runs page) and
   starts another draft for an administrator's files, and is not offered
   by `fleet assistant` (`--profile` and the agent's own resume); one
-  user can fill the sessions; missing login said only after a first message;
+  user can fill the sessions; missing login said only after a first message; a
+  message written and not sent is lost on a reload of the page;
   role tried on x86_64 only, versions pinned in the role, no script runs it,
   untried behind a proxy; `fleet assistant` asks with Claude's own
   questions, whose "don't ask again" trusts one tool, of any class (adhoc,
