@@ -20,16 +20,17 @@ trap cleanup EXIT
 prepare
 
 # mcp USER MESSAGE...: the answers of fleet-mcp, started by that user (with
-# --profile PROFILE when set), to an initialize followed by these JSON-RPC
+# --profile PROFILE and --session SESSION when set), to an initialize followed by these JSON-RPC
 # messages, one per line.
 PROFILE=
+SESSION=
 mcp() {
     user=$1; shift
     {
         printf '%s\n' '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"it-client","version":"1"}}}'
         printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized"}'
         for message in "$@"; do printf '%s\n' "$message"; done
-    } | sudo -u "$user" "$MCP" ${PROFILE:+--profile "$PROFILE"} 2>&1
+    } | sudo -u "$user" "$MCP" ${PROFILE:+--profile "$PROFILE"} ${SESSION:+--session "$SESSION"} 2>&1
 }
 # answer TEXT ID EXPRESSION: python EXPRESSION on the answer "a" with that id
 answer() {
@@ -200,6 +201,23 @@ expect_eq "and no more" "$(answer "$out" 3 '"as many runs as" in a["result"]["co
 expect_eq "it does not silence a problem" "$(answer "$out" 4 '"does not silence" in a["result"]["content"][0]["text"]')" True
 expect_eq "the count is by session, in the audit log" \
     "$(get "$(admin audit.list)" 'len({e["session"] for e in a["data"]["entries"] if e["profile"] == "autonomous" and e["command"] == "run.start"})')" 1
+# A session the chat page names: it follows it, allows more, and cancels its runs.
+SESSION=0123456789abcdef
+out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "d"}}')" "$(call 3 "$tool" '{"answers": {"greeting": "e"}}')")
+expect_eq "a session named by the page is the one counted" \
+    "$(answer "$out" 2 'a["result"]["isError"]') $(answer "$out" 3 '"allow more from the chat page" in a["result"]["content"][0]["text"]')" "False True"
+expect_eq "the page sees what it launched" \
+    "$(get "$(ctl itoperator chat.session "{\"session\": \"$SESSION\"}")" '(a["data"]["launched"], a["data"]["allowed"])')" "(1, 1)"
+expect_eq "an agent cannot allow itself more" \
+    "$(get "$(ctl itoperator chat.grant_runs "{\"session\": \"$SESSION\", \"runs\": 9, \"via\": \"mcp:x\"}")" 'a["error"]["code"]')" forbidden
+expect_eq "the person allows one more" \
+    "$(get "$(ctl itoperator chat.grant_runs "{\"session\": \"$SESSION\", \"runs\": 1}")" 'a["data"]["allowed"]')" 2
+out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "f"}}')")
+expect_eq "and the agent goes on" "$(answer "$out" 2 'a["result"]["isError"]')" False
+expect_eq "its runs carry the session" "$(db "SELECT count(*) FROM runs WHERE session = '$SESSION'")" 2
+expect_eq "the person stops everything" \
+    "$(get "$(ctl itoperator chat.cancel_runs "{\"session\": \"$SESSION\"}")" 'a["ok"]') $(get "$(ctl itoperator chat.session "{\"session\": \"$SESSION\"}")" 'a["data"]["not_ended"]')" "True []"
+SESSION=
 expect_eq "a maintenance window opens on the inventory" \
     "$(get "$(admin maintenance.create "{\"inventory_id\": \"$inventory_id\", \"group\": \"all\", \"ends_at\": $(( $(date +%s) + 600 ))}")" 'a["ok"]')" True
 out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "c"}}')")

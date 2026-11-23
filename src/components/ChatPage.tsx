@@ -28,8 +28,8 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useSession } from "../lib/session.tsx";
-import type { ChatAgentInfo, ChatGuide, ChatInfo } from "../lib/types.ts";
-import { SectionHeader, TerminalCommand as Command } from "./common.tsx";
+import type { ChatAgentInfo, ChatGuide, ChatInfo, ChatSessionRuns } from "../lib/types.ts";
+import { FormModal, SectionHeader, TerminalCommand as Command } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { PendingDrafts } from "./Drafts.tsx";
 import { Alert, Button, Modal, Spinner } from "./pf.tsx";
@@ -47,7 +47,7 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
         autonomous: t("Autonomous"),
         administrator: t("Administrator"),
     };
-    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a session, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
+    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most {{runs}} runs in a conversation unless you allow more, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
     const what: Record<string, string> = {
         observer: t("It reads what you may read, and launches and changes nothing: it asks you nothing."),
         assisted: t("It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."),
@@ -442,6 +442,93 @@ function Composer({ state }: { state: ChatState }) {
     );
 }
 
+// What the assistant launched in this conversation: in the profile
+// autonomous how many runs of those it may, and more allowed when they are
+// spent; in any profile its runs not ended, to be canceled with the answer
+// under way. Asked for again as the conversation goes on, and while runs are.
+function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
+    const { t } = useTranslation();
+    const session = useSession();
+    const [runs, setRuns] = useState<ChatSessionRuns | null>(null);
+    const [error, setError] = useState("");
+    const [stopping, setStopping] = useState(false);
+    const [granting, setGranting] = useState(false);
+    const fleetSession = state.fleetSession;
+    const load = React.useCallback(async () => {
+        if (!fleetSession) return;
+        try {
+            setRuns(await call<ChatSessionRuns>("chat.session", { session: fleetSession }));
+        } catch (ex) {
+            setError(ex instanceof Error ? ex.message : String(ex));
+        }
+    }, [fleetSession]);
+    useEffect(() => { setRuns(null); setError(""); }, [fleetSession]);
+    useEffect(() => { load(); }, [load, state.items.length, state.busy]);
+    usePolling(load, 5000, !!fleetSession && (state.busy || (runs?.not_ended.length ?? 0) > 0));
+
+    if (!fleetSession || !runs) return null;
+    const autonomous = state.profile === "autonomous";
+    const spent = autonomous && runs.launched >= runs.allowed;
+    const open = runs.not_ended.length;
+    if (!autonomous && open === 0 && !error) return null;
+
+    async function grant() {
+        setGranting(true);
+        try {
+            await call("chat.grant_runs", { session: fleetSession, runs: info.autonomous_runs });
+            await load();
+        } catch (ex) {
+            setError(ex instanceof Error ? ex.message : String(ex));
+        }
+        setGranting(false);
+    }
+
+    async function stopAll() {
+        chat.cancel();
+        await call("chat.cancel_runs", { session: fleetSession });
+        setStopping(false);
+        await load();
+    }
+
+    return (
+        <div className="fleet-chat-runs">
+            {error && <Alert variant="danger" isInline title={error} style={{ marginBlockEnd: "0.5rem" }} />}
+            <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
+                {autonomous && (
+                    <FlexItem>
+                        <Label color={spent ? "orange" : "grey"}>
+                            {t("Runs launched in this conversation: {{launched}} of {{allowed}}", { launched: runs.launched, allowed: runs.allowed })}
+                        </Label>
+                    </FlexItem>
+                )}
+                {spent && session.commands.includes("chat.grant_runs") && (
+                    <Button variant="secondary" size="sm" isLoading={granting} isDisabled={granting} onClick={grant}>
+                        {t("Allow {{runs}} more", { runs: info.autonomous_runs })}
+                    </Button>
+                )}
+                {open > 0 && (
+                    <FlexItem>
+                        <Label color="blue" icon={<Spinner size="sm" aria-hidden />}>{t("chat_runs_not_ended", { count: open })}</Label>
+                    </FlexItem>
+                )}
+                {open > 0 && session.commands.includes("chat.cancel_runs") && (
+                    <Button variant="danger" size="sm" onClick={() => setStopping(true)}>{t("Stop everything")}</Button>
+                )}
+            </Flex>
+            {spent && <Content component="small">{t("The assistant has launched as many runs as it may in this conversation without asking you. Allow more if it should go on, then tell it so.")}</Content>}
+            {stopping && (
+                <FormModal title={t("Stop everything?")} submitLabel={t("Stop everything")} isDanger
+                    cancelLabel={t("Keep them")} onSubmit={stopAll} onClose={() => setStopping(false)}>
+                    <Content component="p">{t("The assistant stops answering, and the runs it launched in this conversation that have not ended are canceled: queued, running or waiting for an approval. A run stopped halfway may leave the nodes halfway too.")}</Content>
+                    <Content component="ul">
+                        {runs.not_ended.map(run => <Content component="li" key={run.id}>{run.title || run.id}</Content>)}
+                    </Content>
+                </FormModal>
+            )}
+        </div>
+    );
+}
+
 function Login({ agent }: { agent: ChatAgentInfo | undefined }) {
     const { t } = useTranslation();
     return (
@@ -576,6 +663,7 @@ export function ChatPage() {
                 </Conversation>
             )}
             {running && state.needsLogin && <Login agent={agent} />}
+            {running && <SessionRuns state={state} info={info.data} />}
             {shown && <Composer state={state} />}
             {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} onAccepted={reload} />}
             {state.ask && <AskModal ask={state.ask} profile={state.profile} />}

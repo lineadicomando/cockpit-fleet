@@ -160,7 +160,9 @@
 #profiles = ["observer", "assisted", "diagnostic", "autonomous", "administrator"]
 #default_profile = "assisted"
 # An agent in the profile autonomous launches at most this many runs (of
-# templates, workflows, schedules, checks) in one session of fleet-mcp,
+# templates, workflows, schedules, checks) in one session of fleet-mcp (a
+# conversation of the chat page, where the user may allow as many more,
+# again and again, when they are spent),
 # nothing on an inventory with a maintenance window open, and never
 # acknowledges a problem or opens or closes a maintenance window. A
 # template that needs approval still waits for a person. With

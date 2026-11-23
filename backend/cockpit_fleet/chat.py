@@ -4,16 +4,26 @@ An agent is a program the administrator of the machine installed and named
 in config.toml. It runs as the user who opens the page, started by
 fleet-chat, and reaches the backend only through fleet-mcp, so it gets the
 role of that user under the ceiling set for agents. Nothing here runs it:
-these commands say what may be started and count what is.
+these commands say what may be started and count what is, and let the
+person follow what an agent of theirs launched in a conversation: allow it
+more runs, or cancel those not ended.
 """
 
 import os
 from pathlib import Path
 
-from . import agents, instructions, profiles, store
+from . import agents, autonomy, instructions, jobs, profiles, store
 from .auth import ROLES
-from .cli import Bool, Choice, Context, Str, Values, command
-from .errors import Conflict, Forbidden, NotAccepted, NotFound, SessionsFull, Unavailable
+from .cli import Bool, Choice, Context, Int, Str, Values, command
+from .errors import (
+    BadRequest,
+    Conflict,
+    Forbidden,
+    NotAccepted,
+    NotFound,
+    SessionsFull,
+    Unavailable,
+)
 from .paths import LIBEXEC_DIR
 
 LAUNCHER = str(LIBEXEC_DIR / "fleet-chat")
@@ -206,3 +216,75 @@ def chat_accept(ctx: Context, params: Values) -> dict:
     row = ctx.conn.execute("SELECT accepted_at FROM profile_acceptances"
                            " WHERE user = ? AND profile = ?", (ctx.caller.user, profile)).fetchone()
     return {"profile": profile, "accepted_at": row["accepted_at"]}
+
+
+# --- what an agent launched in a conversation ----------------------------------------
+
+_SESSION = Str("The session of fleet-mcp of the conversation, as the page gave it",
+               required=True, max_length=16)
+# Runs not ended: queued, running, or waiting for a person.
+_NOT_ENDED = (*jobs.ACTIVE, jobs.WAITING)
+
+
+def _session(params: Values) -> str:
+    session = params["session"]
+    if not autonomy.SESSION_RE.fullmatch(session):
+        raise BadRequest("session must be the identifier of a session of fleet-mcp")
+    return session
+
+
+def _not_ended(ctx: Context, session: str) -> list:
+    marks = ", ".join("?" * len(_NOT_ENDED))
+    return ctx.conn.execute(
+        f"SELECT id, title, status FROM runs WHERE session = ? AND created_by = ?"  # noqa: S608
+        f" AND status IN ({marks}) ORDER BY rowid", (session, ctx.caller.user, *_NOT_ENDED)
+    ).fetchall()
+
+
+@command("chat.session", role="viewer", tool=False, params={"session": _SESSION})
+def chat_session(ctx: Context, params: Values) -> dict:
+    """What an agent of the caller launched in a session of fleet-mcp: how
+    many launches went through, how many it may make in the profile
+    autonomous ([chat] autonomous_runs and those the caller allowed since),
+    and its runs not ended yet."""
+    session = _session(params)
+    jobs.reconcile(ctx)
+    user = ctx.caller.user
+    granted = autonomy.granted(ctx.conn, session, user)
+    return {"launched": autonomy.launched(ctx.conn, session, user),
+            "allowed": ctx.config.chat_autonomous_runs + granted, "granted": granted,
+            "not_ended": [dict(row) for row in _not_ended(ctx, session)]}
+
+
+@command("chat.grant_runs", role="operator", mutating=True, tool=False,
+         params={"session": _SESSION,
+                 "runs": Int(1, 1000, "How many more launches to allow", default=10)})
+def chat_grant_runs(ctx: Context, params: Values) -> dict:
+    """Allow an agent of the caller acting without asking more launches in a
+    session of fleet-mcp than [chat] autonomous_runs: a person's decision,
+    never an agent's, which is refused this command."""
+    session = _session(params)
+    ctx.conn.execute("INSERT INTO session_grants (session, user, runs, granted_at)"
+                     " VALUES (?, ?, ?, ?)", (session, ctx.caller.user, params["runs"],
+                                              store.now()))
+    return {"allowed": ctx.config.chat_autonomous_runs
+            + autonomy.granted(ctx.conn, session, ctx.caller.user)}
+
+
+@command("chat.cancel_runs", role="operator", mutating=True, tool=False,
+         params={"session": _SESSION})
+def chat_cancel_runs(ctx: Context, params: Values) -> dict:
+    """Cancel every run an agent of the caller launched in a session of
+    fleet-mcp that has not ended: queued, running, or waiting for an
+    approval. The steps of a workflow run go with it; a check cycle a
+    launch made due is not the session's, and is left to end."""
+    session = _session(params)
+    jobs.reconcile(ctx)
+    canceled = []
+    for row in _not_ended(ctx, session):
+        try:
+            jobs.cancel(ctx, row["id"])
+        except BadRequest:
+            continue  # ended meanwhile
+        canceled.append(row["id"])
+    return {"canceled": canceled}

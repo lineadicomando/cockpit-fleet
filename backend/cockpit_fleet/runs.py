@@ -175,6 +175,10 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         run.update(schedule_id=schedule["id"], priority=schedule["priority"])
     if created_by:
         run["created_by"] = created_by
+    if ctx.session and not workflow:
+        # An agent's: the person it acts for may cancel it with the rest
+        # of its session. A step goes with its workflow run.
+        run["session"] = ctx.session
     if workflow:
         run.update(workflow_run_id=workflow["run_id"], workflow_node=workflow["node"],
                    title=workflow["title"] or template["name"])
@@ -290,7 +294,8 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
         options["serial"] = True
     run = {"id": run_id, "kind": "adhoc", "title": f"{module} [{limit}]",
            "project_id": project_id, "inventory_id": inventory_id,
-           "revision": project["revision"] if project else "", "options": json.dumps(options)}
+           "revision": project["revision"] if project else "", "options": json.dumps(options),
+           "session": ctx.session}
     if is_agent(ctx.via) and not profiles.is_diagnostic(
             {"module": module, "become": become}, ctx.config.mcp_adhoc_modules):
         # Nobody reads what an agent runs before it runs: the person it acts

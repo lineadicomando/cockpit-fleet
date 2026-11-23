@@ -60,10 +60,12 @@ PROFILES = {
     ),
     "autonomous": (
         "You are in the profile autonomous: nobody confirms your calls, so the backend holds"
-        " you instead. You launch at most a few runs in this session, nothing on an inventory"
-        " in maintenance, perhaps dry runs only, and you never acknowledge a problem or open"
-        " a maintenance window. When a call is refused, report it and stop: do not look for"
-        " another way to do the same thing."
+        " you instead. You launch at most a few runs in this session, unless the person allows"
+        " more, nothing on an inventory in maintenance, perhaps dry runs only, and you never"
+        " acknowledge a problem or open a maintenance window. Launch one run on a group or a"
+        " limit of hosts rather than one run per host. When a call is refused, report it and"
+        " stop: do not look for another way to do the same thing. When the runs are spent, say"
+        " so and wait: the person can allow more from the chat page, then tells you."
     ),
     "administrator": (
         "You are in the profile administrator: whatever the role of the person allows, and the"

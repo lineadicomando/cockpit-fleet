@@ -278,7 +278,7 @@ def _start(ctx: Context, workflow, options: dict, schedule=None,
     run = {"id": run_id, "kind": "workflow", "status": "running", "title": workflow["name"],
            "workflow_id": workflow["id"], "created_by": created_by or ctx.caller.user,
            "created_at": store.now(), "started_at": store.now(),
-           "options": json.dumps(options)}
+           "options": json.dumps(options), "session": ctx.session}
     if schedule is not None:
         run.update(schedule_id=schedule["id"], priority=schedule["priority"])
     store.insert(ctx.conn, "runs", run, "run")

@@ -426,6 +426,77 @@ class AutonomyTest(Base):
         self.ok("run.start", launch)
         self.assertTrue(self.via("run.list")["ok"])
 
+    def as_user(self, name, params, user, role="admin"):
+        return cli.dispatch(name, json.dumps(params).encode(), self.ctx(role, user))
+
+    def test_a_person_allows_more_runs(self):
+        launch = {"template_id": self.template()["id"]}
+        session = {"session": self.SESSION}
+        for _ in range(2):
+            self.assertTrue(self.via("run.start", launch)["ok"])
+        self.refused(self.via("run.start", launch), "allow more from the chat page")
+        self.assertEqual(self.ok("chat.session", session),
+                         {"launched": 2, "allowed": 2, "granted": 0,
+                          "not_ended": self.ok("chat.session", session)["not_ended"]})
+        # Never by the agent, nor by a viewer, nor for a session made up.
+        self.refused(self.via("chat.grant_runs", {**session, "runs": 5}), "not for agents")
+        self.assertEqual(self.code("chat.grant_runs", {**session, "runs": 1}, "viewer"),
+                         "forbidden")
+        self.assertEqual(self.code("chat.grant_runs", {"session": "nope", "runs": 1}),
+                         "bad_request")
+        # Another user's grant is theirs.
+        self.assertTrue(self.as_user("chat.grant_runs", {**session, "runs": 5}, "bob")["ok"])
+        self.refused(self.via("run.start", launch), "as many runs as")
+        self.assertEqual(self.ok("chat.grant_runs", {**session, "runs": 1}), {"allowed": 3})
+        self.assertTrue(self.via("run.start", launch)["ok"])
+        self.refused(self.via("run.start", launch), "as many runs as it may: 3")
+        known = self.ok("chat.session", session)
+        self.assertEqual((known["launched"], known["allowed"], known["granted"]), (3, 3, 1))
+        row = self.ctx().conn.execute("SELECT command, params, outcome FROM audit"
+                                      " WHERE command = 'chat.grant_runs' ORDER BY id DESC"
+                                      ).fetchone()
+        self.assertEqual((row["outcome"], json.loads(row["params"])["runs"]), ("ok", 1))
+        # Bob's own count of the same session starts from nothing.
+        self.assertEqual(self.as_user("chat.session", session, "bob")["data"]["launched"], 0)
+
+    def test_a_person_cancels_what_the_session_launched(self):
+        self.config = replace(self.config, chat_autonomous_runs=9, max_concurrent_runs=9)
+        template = self.template()
+        launch = {"template_id": template["id"]}
+        session = {"session": self.SESSION}
+        first = self.via("run.start", launch)["data"]
+        second = self.via("run.start", launch, profile="assisted")["data"]
+        workflow = self.ok("workflow.create", {"name": "w", "nodes": [
+            {"id": "a", "template_id": template["id"]}], "edges": []})
+        flow = self.via("workflow.launch", {"id": workflow["id"]})["data"]
+        other = self.via("run.start", launch, session="fedcba9876543210")["data"]
+        mine = self.ok("run.start", launch)
+        listed = self.ok("chat.session", session)["not_ended"]
+        self.assertEqual([run["id"] for run in listed], [first["id"], second["id"], flow["id"]])
+        # Not for an agent, nor for another user, whose runs of it are none.
+        self.refused(self.via("chat.cancel_runs", session), "not for agents")
+        self.assertEqual(self.as_user("chat.cancel_runs", session, "bob")["data"],
+                         {"canceled": []})
+        self.assertEqual(self.code("chat.cancel_runs", session, "viewer"), "forbidden")
+        canceled = self.ok("chat.cancel_runs", session)["canceled"]
+        self.assertEqual(canceled, [first["id"], second["id"], flow["id"]])
+        # The units of those running are stopped; their end is collected as ever.
+        for run in (first, second):
+            self.assertIn(run["id"], self.stopped)
+            self.finish(run["id"], rc=-15)
+            self.assertEqual(self.ok("run.get", {"id": run["id"]})["status"], "canceled")
+        # A step goes with its workflow run, and is not the session's.
+        steps = self.ctx().conn.execute("SELECT id, session FROM runs"
+                                        " WHERE workflow_run_id = ?", (flow["id"],)).fetchall()
+        self.assertEqual([(row["id"] in self.stopped, row["session"]) for row in steps],
+                         [(True, "")])
+        self.finish(steps[0]["id"], rc=-15)
+        self.assertEqual(self.ok("run.get", {"id": flow["id"]})["status"], "canceled")
+        for run in (other, mine):
+            self.assertNotEqual(self.ok("run.get", {"id": run["id"]})["status"], "canceled")
+        self.assertEqual(self.ok("chat.session", session)["not_ended"], [])
+        self.assertEqual(self.ok("chat.cancel_runs", session), {"canceled": []})
+
     def test_no_launch_without_a_session_and_no_session_made_up(self):
         template = self.template()
         self.refused(self.via("run.start", {"template_id": template["id"]}, session=""),
@@ -665,6 +736,13 @@ class ServerTest(unittest.TestCase):
                                 "arguments": {"profile": "assisted"}})
         self.assertNotIn("profile", self.calls[-1][1])
 
+    def test_a_session_given_is_kept(self):
+        source = io.StringIO('{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}\n')
+        self.assertEqual(mcp.main(["fleet-mcp", "--profile", "autonomous", "--session",
+                                   "0123456789abcdef"], source, io.StringIO(),
+                                  self.server._call), 0)
+        self.assertEqual(self.sessions, {"0123456789abcdef"})
+
     def test_one_session_for_every_call_of_a_server(self):
         self.ask("tools/list")
         self.ask("tools/call", {"name": "launch_deploy_abc123", "arguments": {
@@ -683,7 +761,9 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.calls, [("mcp.tools", {"via": "mcp", "profile": "diagnostic"})])
         with mock.patch("sys.stderr", new_callable=io.StringIO):
             for argv in (["fleet-mcp", "--profile"], ["fleet-mcp", "--profile", "A b"],
-                         ["fleet-mcp", "x"]):
+                         ["fleet-mcp", "x"], ["fleet-mcp", "--session", "0" * 15],
+                         ["fleet-mcp", "--session", "ABCDEF0123456789"],
+                         ["fleet-mcp", "--profile", "a", "--profile", "b"]):
                 self.assertEqual(mcp.main(argv, source, sink, self.server._call), 2, argv)
 
     def test_bad_lines_are_answered_and_the_session_goes_on(self):

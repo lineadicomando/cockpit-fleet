@@ -153,7 +153,8 @@ started stays as it is: once logged in, send the message again.
   administrator of Fleet scans a subnet among those allowed
   (`[network]`, see [security.md](security.md));
   `autonomous` is as `assisted`, held by the backend since nobody confirms
-  its calls: at most `[chat] autonomous_runs` launches in a session, none on
+  its calls: at most `[chat] autonomous_runs` launches in a conversation
+  (the user allows more from the page when they are spent), none on
   an inventory with a maintenance window open, no acknowledging a problem,
   no maintenance window opened or closed and no schedule turned on, and with
   `autonomous_dry_run` dry runs only; `administrator` gets whatever the
@@ -185,6 +186,16 @@ started stays as it is: once logged in, send the message again.
   `administrator` every change, and scans, ad-hoc commands, changes to
   what is defined and files every time, never "always". These questions are a convenience: the backend decides again,
   whatever the answer.
+- Above the message box the page shows what the assistant launched in the
+  conversation. In `autonomous`, how many runs of those it may ("Runs
+  launched in this conversation: 10 of 10"); when they are spent, "Allow
+  10 more" (`[chat] autonomous_runs` more each time) lets it go on, for
+  users with the role operator: the agent is told to stop and say so, and
+  goes on when told. In any profile, while runs it launched have not ended,
+  "Stop everything" stops the answer under way and cancels them, queued,
+  running or waiting for an approval; the steps of a workflow go with it.
+  Both are the user's own decisions, recorded in the audit log
+  (`chat.grant_runs`, `chat.cancel_runs`); an agent cannot call them.
 - A run that has ended, and a check whose result is not ok (in the checks
   of a host and in Problems), have a button "Assistance": it writes in the
   chat a request to investigate it, which the user edits and sends; nothing

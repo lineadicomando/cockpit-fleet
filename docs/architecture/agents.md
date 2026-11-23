@@ -116,7 +116,32 @@ schedule, which have no dry run. The session is drawn by `fleet-mcp` when
 it starts and added to every call; the audit records it (column `session`,
 schema 23) and the launches are counted from there, so there is no counter
 to keep in step and an agent cannot reset it. A fleet-mcp started again is
-a new session: what a person with a shell could do by hand anyway. Rights
+a new session: what a person with a shell could do by hand anyway.
+
+**The person beside an autonomous agent** (schema 35). The chat page draws
+the session for each conversation (16 hex digits, as `fleet-mcp` would) and
+gives it to `fleet-mcp` with `--session`, so that it can follow what the
+agent launched. `fleet-mcp` started without draws its own. Naming the session
+gives nothing a person could not take by hand: `fleetctl` already takes
+any `session` a call of an agent names. Counts and grants are by session and
+user, so naming another user's session gains nothing. `chat.session` (viewer) gives the launches counted, those
+allowed and the runs not ended; `chat.grant_runs` (operator) records in
+`session_grants` that the user allows so many more, which `autonomy.hold`
+adds to `[chat] autonomous_runs`; `chat.cancel_runs` (operator) cancels the
+user's runs of the session not ended, by `runs.session`, set when an
+agent's call queues a run of a template, an ad-hoc command, a workflow run or a
+scan (`runs.launch`, `run.adhoc`, `workflows._start`, `netscan.start`).
+The steps of a workflow run are not tagged: `jobs.cancel` of the
+workflow run cancels them, and a step queued by `reconcile` during another
+session's call must not be taken for that session's. Check cycles
+are not tagged either: `check.run` plans every check that is due, not
+only its own. The three are `tool=False`, so `_through` refuses them to
+an agent: allowing more runs is a person's decision. When its runs are
+spent, the refusal tells the agent to say so and wait, and the profile's
+instructions say the same; the page shows "Allow N more" then, with N
+being `[chat] autonomous_runs`. The alternative of no limit and a stop
+button was set aside: the profile is meant for when nobody watches, and
+a stop button holds only while somebody does. Rights
 are taken away from agents, so a run that needs approval waits for a
 person.
 

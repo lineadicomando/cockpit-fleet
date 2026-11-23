@@ -82,7 +82,9 @@ in [security.md](security.md); the decisions behind these limits in
   description in English.
 - Chat: plain text; conversations not deletable; model not choosable; a
   change of profile starts the agent again (seconds, and the replay of the
-  conversation), restarts the count of an autonomous agent's runs and
+  conversation), restarts the count of an autonomous agent's runs (and
+  what "Stop everything" reaches: runs launched before the change are
+  canceled from the Runs page) and
   starts another draft for an administrator's files, and is not offered
   by `fleet assistant` (`--profile` and the agent's own resume); one
   user can fill the sessions; missing login said only after a first message;
@@ -92,7 +94,12 @@ in [security.md](security.md); the decisions behind these limits in
   config and code included), for the session, and only the tools the
   profile lets through are known when it starts (a template made later is
   asked about); controllers configured before `{allowed_tools}` ask about
-  every call until the role is run again; Claude's question on trusting its directory
+  every call until the role is run again; `fleet assistant` has neither
+  "Allow more" nor "Stop everything" (its `fleet-mcp` draws a session the
+  terminal does not show: an autonomous agent there stops at
+  `[chat] autonomous_runs`, and its runs are canceled one by one); a check
+  cycle a launch of `check.run` makes due is not the session's, and "Stop
+  everything" leaves it to end; Claude's question on trusting its directory
   the first time (it says the agent may edit and run files: it may not);
   the page lists Claude's own `/login` among past conversations; for a viewer
   or an operator the tab appears only once the page is reloaded after the

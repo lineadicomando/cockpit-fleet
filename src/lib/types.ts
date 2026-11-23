@@ -50,6 +50,15 @@ export interface ChatInfo {
     open_sessions: number;
 }
 
+// What an agent launched in a conversation (chat.session): launches that
+// went through, those allowed in the profile autonomous, and its runs not ended.
+export interface ChatSessionRuns {
+    launched: number;
+    allowed: number;
+    granted: number;
+    not_ended: { id: string; title: string; status: string }[];
+}
+
 // A draft an agent left in a managed project or inventory (draft.list).
 export interface DraftInfo {
     id: string;

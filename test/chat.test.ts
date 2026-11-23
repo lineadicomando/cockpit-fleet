@@ -213,7 +213,10 @@ test("the first message opens a session with fleet-mcp as the only server and no
     await sent;
     const created = agent.last("session/new").params;
     assert.equal(created.cwd, "/home/anna");
-    assert.deepEqual(created.mcpServers, [{ name: "cockpit-fleet", command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: ["--profile", "assisted"], env: [] }]);
+    // With the session of fleet-mcp the page drew for the conversation, to follow it.
+    const fleetSession = agent.chat.getState().fleetSession;
+    assert.match(fleetSession, /^[0-9a-f]{16}$/);
+    assert.deepEqual(created.mcpServers, [{ name: "cockpit-fleet", command: "/usr/libexec/cockpit-fleet/fleet-mcp", args: ["--profile", "assisted", "--session", fleetSession], env: [] }]);
     assert.equal(created._meta.disableBuiltInTools, true);
     assert.deepEqual(created._meta.systemPrompt, { append: "Be brief." });
     assert.deepEqual(created._meta.claudeCode.options, { settingSources: [], strictMcpConfig: true });
@@ -357,6 +360,24 @@ test("an agent with no login to its model is said so, not shown as an error", as
     assert.deepEqual(agent.chat.getState().items.slice(-1)[0], { kind: "error", text: "boom" });
 });
 
+test("each conversation has a session of fleet-mcp of its own", async () => {
+    const agent = new Agent();
+    await agent.ready();
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    assert.equal(agent.chat.getState().fleetSession, "");
+    await agent.chat.send("one");
+    const first = agent.chat.getState().fleetSession;
+    await agent.chat.send("two");
+    assert.equal(agent.chat.getState().fleetSession, first);
+    agent.chat.fresh();
+    assert.equal(agent.chat.getState().fleetSession, "");
+    await agent.chat.send("three");
+    const second = agent.chat.getState().fleetSession;
+    assert.match(second, /^[0-9a-f]{16}$/);
+    assert.notEqual(second, first);
+    assert.equal(agent.last("session/new").params.mcpServers[0].args.at(-1), second);
+});
+
 test("an earlier conversation is replayed by the agent", async () => {
     const agent = new Agent();
     agent.answers["session/list"] = { sessions: [
@@ -373,6 +394,7 @@ test("an earlier conversation is replayed by the agent", async () => {
     const load = agent.last("session/load");
     assert.equal(load.params.sessionId, "old");
     assert.equal(load.params.mcpServers.length, 1);
+    assert.deepEqual(load.params.mcpServers[0].args.slice(-2), ["--session", agent.chat.getState().fleetSession]);
     agent.say({ jsonrpc: "2.0", id: load.id, result: {} });
     await opened;
     assert.deepEqual(agent.chat.getState().items, [{ kind: "user", text: "before" }]);
@@ -467,7 +489,9 @@ test("the profile changes with the conversation kept: the agent is started again
     await tick();
     const loaded = agent.last("session/load").params;
     assert.equal(loaded.sessionId, "s1");
-    assert.deepEqual(loaded.mcpServers[0].args, ["--profile", "administrator"]);
+    // Opened again in a new profile: a new session of fleet-mcp, with a count of its own.
+    assert.deepEqual(loaded.mcpServers[0].args.slice(0, 3), ["--profile", "administrator", "--session"]);
+    assert.match(loaded.mcpServers[0].args[3], /^[0-9a-f]{16}$/);
     state = agent.chat.getState();
     assert.equal(state.phase, "ready");
     assert.equal(state.profile, "administrator");

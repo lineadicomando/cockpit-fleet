@@ -198,6 +198,19 @@ times, then says why. A new `fleet-mcp` is a new session for the count of
 an autonomous agent and for the draft of an administrator's files, as when
 a conversation is taken up after a reload.
 
+**What the agent launched in a conversation.** The page draws the session
+of `fleet-mcp` for each conversation (`drawSession` in `chat.ts`, when the
+first message opens it or an earlier one is opened again) and adds
+`--session` to the arguments of `fleet-mcp` that `_fleet/ready` gave. Above
+the message box `SessionRuns` asks `chat.session` after each change of the
+conversation, and every 5 seconds while the agent answers or its runs have
+not ended. In `autonomous` it shows the launches of those allowed and, once
+they are spent, "Allow N more" (`chat.grant_runs`, N = `[chat]
+autonomous_runs`); in any profile, while runs have not ended, "Stop
+everything", which asks first, then sends `session/cancel` and calls
+`chat.cancel_runs`. The backend side, and why the limit stays: agents.md,
+"The person beside an autonomous agent".
+
 **Permissions.** The agent asks before each call to a tool
 (`session/request_permission`). The page answers as `question` of the tool
 in `mcp.tools` says (see "Questions by profile" in [Agents](agents.md)): by itself

@@ -906,6 +906,23 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The session of fleet-mcp whose agent launched a run, for the person
+        # it acts for to cancel what it launched (chat.cancel_runs).
+        "ALTER TABLE runs ADD COLUMN session TEXT NOT NULL DEFAULT ''",
+        "CREATE INDEX runs_session ON runs (session) WHERE session != ''",
+        # The runs a person allowed an agent of theirs acting without asking
+        # beyond [chat] autonomous_runs, in one session (chat.grant_runs).
+        """
+        CREATE TABLE session_grants (
+            session     TEXT NOT NULL,
+            user        TEXT NOT NULL,
+            runs        INTEGER NOT NULL,
+            granted_at  REAL NOT NULL
+        )
+        """,
+        "CREATE INDEX session_grants_session ON session_grants (session, user)",
+    ],
 ]
 
 

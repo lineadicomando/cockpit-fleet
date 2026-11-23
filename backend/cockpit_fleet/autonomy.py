@@ -9,10 +9,13 @@ from the audit trail), none on an inventory in maintenance, and with
 of a template that needs approval still waits for a person: an agent has no
 right to approve.
 
-A session is a fleet-mcp: it draws its identifier when it starts and adds it
-to every call, so an agent cannot reset its count. Starting another
-fleet-mcp starts another session, which is what whoever can start one could
-do by hand with the same role.
+A session is a fleet-mcp: it adds its identifier to every call, so an agent
+cannot reset its count. The chat page draws one for each conversation and
+gives it to fleet-mcp (--session), to follow the count and allow more;
+started without, fleet-mcp draws its own. Starting another fleet-mcp, or
+naming another session, starts another count, which is what whoever can
+start one could do by hand with the same role. Counts and grants are each
+user's: naming another user's session gains nothing.
 """
 
 import re
@@ -64,12 +67,18 @@ def _inventories(conn, name: str, params: dict) -> set[str]:
     return {row[0] for row in rows}
 
 
-def launched(conn, session: str) -> int:
-    """How many launches of a session went through."""
+def launched(conn, session: str, user: str) -> int:
+    """How many launches of a user's session went through."""
     marks = ", ".join("?" * len(LAUNCHES))
     return conn.execute(
-        f"SELECT count(*) FROM audit WHERE session = ? AND outcome = 'ok'"  # noqa: S608
-        f" AND command IN ({marks})", (session, *LAUNCHES)).fetchone()[0]
+        f"SELECT count(*) FROM audit WHERE session = ? AND user = ? AND outcome = 'ok'"  # noqa: S608
+        f" AND command IN ({marks})", (session, user, *LAUNCHES)).fetchone()[0]
+
+
+def granted(conn, session: str, user: str) -> int:
+    """How many launches beyond [chat] autonomous_runs a user allowed a session."""
+    return conn.execute("SELECT coalesce(sum(runs), 0) FROM session_grants"
+                        " WHERE session = ? AND user = ?", (session, user)).fetchone()[0]
 
 
 def hold(ctx, name: str, params: dict) -> None:
@@ -88,10 +97,13 @@ def hold(ctx, name: str, params: dict) -> None:
     if not ctx.session:
         raise Forbidden("an agent acting without asking launches only within a session"
                         " of fleet-mcp")
-    limit = config.chat_autonomous_runs
-    if launched(ctx.conn, ctx.session) >= limit:
-        raise Forbidden("this session has launched as many runs as an agent acting without"
-                        f" asking may: {limit} ([chat] autonomous_runs in config.toml)")
+    user = ctx.caller.user
+    limit = config.chat_autonomous_runs + granted(ctx.conn, ctx.session, user)
+    if launched(ctx.conn, ctx.session, user) >= limit:
+        raise Forbidden(f"this session has launched as many runs as it may: {limit}"
+                        " ([chat] autonomous_runs in config.toml, and those allowed since);"
+                        " tell the person you act for, who can allow more from the chat page,"
+                        " and wait for them")
     now = store.now()
     for inventory in _inventories(ctx.conn, name, params):
         if ctx.conn.execute("SELECT 1 FROM maintenances WHERE inventory_id = ?"

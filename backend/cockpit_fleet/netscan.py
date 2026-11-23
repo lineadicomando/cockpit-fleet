@@ -134,7 +134,8 @@ def netscan_start(ctx: Context, params: Values) -> dict:
     directory = jobs.create_dir(run_id)
     try:
         run = {"id": run_id, "kind": "netscan", "title": str(subnet),
-               "options": json.dumps({"subnet": str(subnet), "on_link": on_link})}
+               "options": json.dumps({"subnet": str(subnet), "on_link": on_link}),
+               "session": ctx.session}
         spec = {"kind": "netscan", "subnet": str(subnet), "ports": list(ctx.config.scan_ports)}
         jobs.enqueue(ctx, run, spec, directory)
     except BaseException:

@@ -43,6 +43,7 @@ approval.approve operator M   approval.list viewer -        approval.reject oper
 audit.list admin -            channel.create admin M        channel.delete admin M
 channel.list viewer -         channel.test admin M          channel.update admin M
 chat.accept viewer M          chat.agents viewer -          chat.start viewer M
+chat.cancel_runs operator M   chat.grant_runs operator M    chat.session viewer -
 check.catalog viewer -
 check.create admin M          check.delete admin M          check.list viewer -
 check.run operator M          check.update admin M          cmdb.get viewer -
@@ -413,6 +414,9 @@ class Fixture(CheckBase):
         "cmdb.packages": lambda fx: {"name": "openssl"},
         "chat.start": lambda fx: {"agent": "claude"},
         "chat.accept": lambda fx: {"profile": "diagnostic"},
+        "chat.session": lambda fx: {"session": "0123456789abcdef"},
+        "chat.grant_runs": lambda fx: {"session": "0123456789abcdef", "runs": 1},
+        "chat.cancel_runs": lambda fx: {"session": "0123456789abcdef"},
         "notification.retry": lambda fx: {"id": 1},
         "config.import": lambda fx: {"document": fx["export"]},
         "channel.update": lambda fx: {"settings": WEBHOOK["settings"]},

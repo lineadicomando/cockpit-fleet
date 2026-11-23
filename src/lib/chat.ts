@@ -77,6 +77,10 @@ export interface ChatState {
     suggested: string;
     // The profile the session is being restarted in, keeping its conversation.
     changing: string;
+    // The session of fleet-mcp of the conversation: drawn here and given to
+    // it, to follow what the agent launched (chat.session), allow it more
+    // runs and cancel them. A conversation opened again gets a new one.
+    fleetSession: string;
 }
 
 export interface Transport {
@@ -91,8 +95,14 @@ export type Spawn = (agent: string, profile: string, onData: (text: string) => v
 export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 
 const IDLE: ChatState = {
-    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "",
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "",
 };
+
+// What fleet-mcp takes as the identifier of a session: 16 hexadecimal digits.
+export function drawSession(): string {
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
 
 interface Waiting {
     ask: Ask;
@@ -317,9 +327,11 @@ export class Chat {
     // tool of the agent's own, and none of the user's settings for it, which
     // could bring other servers or rules that allow a call without asking.
     private sessionParams(): object {
+        const mcp = this.setup!.mcp as { args?: unknown };
+        const args = Array.isArray(mcp.args) ? mcp.args : [];
         return {
             cwd: this.setup!.cwd,
-            mcpServers: [this.setup!.mcp],
+            mcpServers: [{ ...mcp, args: [...args, "--session", this.state.fleetSession] }],
             _meta: {
                 disableBuiltInTools: true,
                 systemPrompt: { append: this.setup!.instructions },
@@ -332,14 +344,14 @@ export class Chat {
     fresh(): void {
         if (this.state.busy || this.state.loading) return;
         this.always.clear();
-        this.set({ sessionId: "", items: [] });
+        this.set({ sessionId: "", items: [], fleetSession: "" });
     }
 
     // Goes on with an earlier conversation, which the agent replays.
     async open(sessionId: string): Promise<void> {
         if (!this.connection || this.state.busy || this.state.loading) return;
         this.always.clear();
-        this.set({ sessionId, items: [], loading: true });
+        this.set({ sessionId, items: [], loading: true, fleetSession: drawSession() });
         try {
             await this.connection.request("session/load", { ...this.sessionParams(), sessionId });
         } catch (ex) {
@@ -354,6 +366,7 @@ export class Chat {
         this.set({ busy: true, needsLogin: false, items: [...this.state.items, { kind: "user", text }] });
         try {
             if (!this.state.sessionId) {
+                this.set({ fleetSession: drawSession() });
                 const session = await connection.request<{ sessionId: string }>("session/new", this.sessionParams());
                 this.set({ sessionId: session.sessionId });
             }

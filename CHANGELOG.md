@@ -52,8 +52,19 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - Assistant: in the profiles diagnostic and administrator the assistant
   of an administrator may scan a subnet, asked every time (a class of
   tools of its own, `scan`).
+- Assistant: above the message box, what the assistant launched in the
+  conversation. In the profile `autonomous`, the runs launched of those
+  it may and, when they are spent, "Allow N more" (`[chat]
+  autonomous_runs` more each time) instead of starting again; in any
+  profile, while its runs have not ended, "Stop everything" stops the
+  answer and cancels them. Commands `chat.session`, `chat.grant_runs` and
+  `chat.cancel_runs`, which agents cannot call; `fleet-mcp --session`.
 
 ### Changed
+
+- Assistant: an autonomous agent is told to launch one run on a group
+  rather than one per host, and to stop and say so when its runs are
+  spent.
 
 - Nodes: its sections are in the order Assets, Checks, Hosts, Host keys,
   and the tab opens on Assets.

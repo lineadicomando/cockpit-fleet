@@ -6,8 +6,9 @@ exactly what the interface does, so the roles and the audit trail are the
 same. It adds "via" to every call, which makes fleetctl apply what
 config.toml allows to agents and record where the call came from, and with
 --profile the profile of the assistant the session was started in (without,
-fleetctl applies the default one), and the identifier of this session,
-drawn at its start.
+fleetctl applies the default one), and the identifier of this session:
+drawn at its start, or given with --session by the chat page, which follows
+what the session launched with it.
 
 The protocol is JSON-RPC 2.0, one message per line. Only tools are offered.
 """
@@ -35,6 +36,7 @@ INSTRUCTIONS = (
 )
 _TIMEOUT = 120
 _PROFILE_RE = re.compile(r"[a-z]{1,32}")
+_SESSION_RE = re.compile(r"[0-9a-f]{16}")
 
 
 class Unreachable(Exception):
@@ -59,12 +61,12 @@ def fleetctl(name: str, params: dict) -> dict:
 
 
 class Server:
-    def __init__(self, call=fleetctl, profile: str = ""):
+    def __init__(self, call=fleetctl, profile: str = "", session: str = ""):
         self._call = call
         self._via = "mcp"
         self._profile = profile
-        # Drawn here, so that an agent cannot reset what is counted by it.
-        self._session = secrets.token_hex(8)
+        # Not the agent's to say, so that it cannot reset what is counted by it.
+        self._session = session or secrets.token_hex(8)
         # Tool name -> (command, parameters the tool fixes).
         self._tools: dict[str, tuple[str, dict]] = {}
 
@@ -184,11 +186,16 @@ def serve(source=sys.stdin, sink=sys.stdout, server: Server | None = None) -> in
 
 
 def main(argv: list[str], source=sys.stdin, sink=sys.stdout, call=fleetctl) -> int:
-    """fleet-mcp [--profile NAME]"""
-    profile = ""
-    if len(argv) == 3 and argv[1] == "--profile" and _PROFILE_RE.fullmatch(argv[2]):
-        profile = argv[2]
-    elif len(argv) != 1:
-        print("usage: fleet-mcp [--profile NAME]", file=sys.stderr)
+    """fleet-mcp [--profile NAME] [--session ID]"""
+    given = {"--profile": _PROFILE_RE, "--session": _SESSION_RE}
+    values = {}
+    words = argv[1:]
+    while len(words) >= 2 and words[0] in given and words[0] not in values \
+            and given[words[0]].fullmatch(words[1]):
+        values[words[0]] = words[1]
+        words = words[2:]
+    if words:
+        print("usage: fleet-mcp [--profile NAME] [--session ID]", file=sys.stderr)
         return 2
-    return serve(source, sink, Server(call, profile))
+    return serve(source, sink, Server(call, values.get("--profile", ""),
+                                      values.get("--session", "")))
