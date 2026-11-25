@@ -16,11 +16,11 @@ call, decided by its parameters.
 DIAGNOSTIC = "adhoc-diagnostic"
 
 PROFILES: dict[str, tuple[str, ...]] = {
-    "observer": ("read",),
-    "assisted": ("read", "run"),
-    "diagnostic": ("read", "run", "scan", DIAGNOSTIC),
-    "autonomous": ("read", "run"),
-    "administrator": ("read", "run", "scan", "adhoc", "config", "code"),
+    "observer": ("read", "doc"),
+    "assisted": ("read", "run", "doc"),
+    "diagnostic": ("read", "run", "scan", DIAGNOSTIC, "doc"),
+    "autonomous": ("read", "run", "doc"),
+    "administrator": ("read", "run", "scan", "adhoc", "config", "code", "doc"),
 }
 # Profiles in which nobody confirms the calls: autonomy.py holds them.
 AUTONOMOUS = ("autonomous",)
@@ -102,17 +102,26 @@ def allows(profile: str, kind: str) -> bool:
 # Classes whose calls a person is asked about every time, in any profile:
 # never trusted for a conversation, never made without a question.
 ALWAYS_ASKED = ("scan", "adhoc", "config", "code")
+# Commands asked every time whatever their class, but in a profile nobody
+# confirms, where the backend bounds them (autonomy.py).
+ALWAYS_ASKED_COMMANDS = ("doc.delete",)
 
 
-def question(profile: str, kind: str, read_only: bool) -> str:
+def question(profile: str, kind: str, read_only: bool, name: str = "") -> str:
     """How the page and the agent at a terminal ask the person about a call of
-    the class KIND in PROFILE: "none" (made with no question), "ask" (asked,
-    and "always" may trust the class for the conversation) or "every" (asked
-    every time). A floor, not a control: what the profile does not allow is
-    refused by the backend whatever the person answers."""
+    the class KIND (of the command NAME) in PROFILE: "none" (made with no
+    question), "ask" (asked, and "always" may trust the class for the
+    conversation) or "every" (asked every time). A floor, not a control:
+    what the profile does not allow is refused by the backend whatever the
+    person answers."""
     if read_only or kind == "read":
         return "none"
     if kind in ALWAYS_ASKED:
+        return "every"
+    # The backend holds an autonomous agent to its limits instead.
+    if profile in AUTONOMOUS and kind == "doc":
+        return "none"
+    if name in ALWAYS_ASKED_COMMANDS:
         return "every"
     if profile == "diagnostic" and kind == DIAGNOSTIC:
         return "none"

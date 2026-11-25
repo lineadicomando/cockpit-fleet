@@ -170,6 +170,10 @@
 # and it launches no workflow and no schedule.
 #autonomous_runs = 30
 #autonomous_dry_run = false
+# And it makes at most this many changes to the documents in one session
+# (writes, moves, copies, deletions, restores): no person confirms them,
+# and a text it replaced or deleted is restored from the history.
+#autonomous_writes = 20
 #[chat.agents.claude]
 #command = ["/opt/cockpit-fleet-agent/bin/claude-agent-acp"]
 #label = "Claude"
@@ -189,3 +193,9 @@
 # Downloads from URLs into the store running at the same time, in a queue
 # of their own beside the runs.
 #max_downloads = 2
+
+[documents]
+# Megabytes the documents may take together, their attachments included.
+# Each text (.md) is at most 1 MB; like the store, a file is refused when it
+# would leave the disk with less than 1 GB free.
+#max_mb = 1024

@@ -10,6 +10,18 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Documents: texts in Markdown and their attachments, in folders, kept on
+  the controller apart from the store and never given to runs. Every
+  change to a text is kept in a history of its own, with who made it,
+  and a text can be compared with or restored to any earlier version.
+  Viewers read and search them, operators also write, upload, move,
+  copy and delete. Commands `doc.*` (`fleet doc put` and `fleet doc get`
+  at a terminal); `[documents] max_mb` of `config.toml` bounds them
+  (1024).
+- Assistant: in every profile it reads, searches and writes the
+  documents, a change asked about as launches are and a deletion every
+  time; in `autonomous` it changes them unasked, at most
+  `[chat] autonomous_writes` times in a conversation (20).
 - Schedules: a schedule launches a workflow as well as a job template,
   when none of its steps, nor their templates, asks for an approval
   (`workflow_id` of `schedule.create`). Its steps run as they are, with

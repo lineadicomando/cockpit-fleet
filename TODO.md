@@ -7,12 +7,12 @@ workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 ## Status (25 November 2026)
 
 Phases 0–18 closed; phase 19 under way (its close below), phase 20
-(documents) planned next. Last release 0.4.0 (18 November); `[Unreleased]`
+(documents) begun before it closes. Last release 0.4.0 (18 November); `[Unreleased]`
 of `CHANGELOG.md` has what came since. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (776
+To resume: `git status`, `git log origin/main..`; `make check` (793
 backend, 207 frontend tests). Each backend module's docstring says what
-it is; `cli.py` is the registry of commands, `db.py` the schema (36
+it is; `cli.py` is the registry of commands, `db.py` the schema (37
 migrations).
 
 ## Phase 19: network discovery
@@ -51,29 +51,24 @@ VMs `deb13` and `alma10`: `sandbox`, `runs`, `files`, `store`, `chat`,
 `schedules`, `negative`. The rest on Fedora not since phase 17. The
 known failure of `cmdb.sh` on Fedora in a container: `architecture/tests.md`.
 
-## Phase 20: documents (next)
+## Phase 20: documents
 
-Decided 25 November (`decisions.md`, "Documents"); to begin once phase 19
-closes.
+Decided 25 November (`decisions.md`, "Documents"); begun on 25 November,
+before phase 19 closed. `docs/architecture/documents.md` says what exists.
 
-- [ ] Backend: `paths.DOCUMENTS_DIR` and its repository beside it (the git
-  helpers of `files.py`, no drafts); a migration for the rows of
-  attachments and exports and the bound of an autonomous agent's writes;
-  `documents.py`: `doc.list`, `read` (chunks of 16 KiB for agents),
-  `search` (the text), `write` (an overwrite quotes the digest read),
-  `mkdir`, `move`, `copy`, `delete`, `history`, `diff`, `restore`;
-  `doc.put`/`doc.get` streamed as the store's; `[documents] max_mb`.
+- [x] Backend: `documents.py` (`doc.*`), the repository of the texts beside
+  the tree, `document_files` (schema 37), `[documents] max_mb`; `fleet doc
+  put|get`.
 - [ ] `docrender.py`: Markdown to HTML with the standard library (a
   subset of GFM: headings, emphasis, code, nested and task lists, tables,
   quotes, links, images), raw HTML escaped, links `http(s)`, `mailto`,
   relative and `fleet:` only, images only from the documents' tree;
   optional front matter; `doc.render`; tests on a corpus and against
   XSS, remote images and `javascript:`.
-- [ ] Agents: the class `doc` (`cli.AGENT_CLASSES`, every profile,
-  `profiles.question` "ask", none in `autonomous` with a bound per
-  session in `autonomy.py`, delete asked every time), `CLASS_TABLE`, the
-  tools' docstrings, the base instructions (documents are data, search
-  them first, never secrets); `mcp.sh`.
+- [x] Agents: the class `doc` for the changes (reading is `read`), every
+  profile, unasked in `autonomous` within `[chat] autonomous_writes`
+  (counted from the audit, no table), `doc.delete` asked every time; the
+  instructions; `mcp.sh` on AlmaLinux and Debian.
 - [ ] Interface: a `FileManager` taken out of `StorePage` with an adapter
   (the store unchanged); `DocumentsPage` under Resources: the tree, the
   rendered document in a sandboxed iframe, the editor

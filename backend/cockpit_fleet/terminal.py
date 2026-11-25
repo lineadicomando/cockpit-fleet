@@ -17,6 +17,8 @@ its stdin: never on a command line.
     fleet store read --path PATH [--output FILE | -]
     fleet store sftp                     the store over SFTP, for a client
                                          at the other end of an SSH login
+    fleet doc put --file FILE --path PATH [--replace]
+    fleet doc get --path PATH [--output FILE | -]
     fleet project clone PROJECT [DIR] | pull [DIR] | push [DIR]
     fleet inventory clone INVENTORY [DIR] | pull [DIR] | push [DIR]
     fleet help [AREA [VERB]]
@@ -1250,6 +1252,8 @@ def _stream_command(term: Terminal, command: Command, args: list[str]) -> int:
         args = [word for word in args if word != "--resume"]
         if local is None:
             raise Usage(f"fleet {command.name.replace('.', ' ')} --file FILE --path PATH")
+        if resume and "offset" not in command.params:
+            raise Usage(f"fleet {command.name.replace('.', ' ')} cannot resume an upload")
         params = parse_params(command, args, term.stdin)
         try:
             source = open(local, "rb")  # noqa: SIM115  (closed below)

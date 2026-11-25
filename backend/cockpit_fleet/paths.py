@@ -13,6 +13,12 @@ STORE_DIR = STATE_DIR / "store"
 STORE_UPLOADS = STATE_DIR / "store-uploads"
 STORE_FARMS = STATE_DIR / "store-farms"
 STORE_LOCK = STATE_DIR / "store.lock"
+# Documents (documents.py): the tree, out of every run's reach; beside it the
+# repository of its text, and what is being uploaded into it.
+DOCUMENTS_DIR = STATE_DIR / "documents"
+DOCUMENTS_REPO = STATE_DIR / "documents.git"
+DOCUMENTS_UPLOADS = STATE_DIR / "documents-uploads"
+DOCUMENTS_LOCK = STATE_DIR / "documents.lock"
 # What can be computed again: the list of the installed modules.
 CACHE_DIR = STATE_DIR / "cache"
 

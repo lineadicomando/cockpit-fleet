@@ -30,9 +30,10 @@ from .names import check_id
 MAX_INPUT = 1024 * 1024
 # What a command lets an agent do, from the least to the most: read; start,
 # stop and follow work already defined; run any module on the nodes; change
-# what is defined; change the code that runs, the secrets, or delete. The
-# profiles of the assistant are made of these.
-AGENT_CLASSES = ("read", "run", "scan", "adhoc", "config", "code")
+# what is defined; change the code that runs, the secrets, or delete. Apart
+# from them, doc: read and write the documents. The profiles of the
+# assistant are made of these.
+AGENT_CLASSES = ("read", "run", "scan", "adhoc", "config", "code", "doc")
 # How a call that does not come from the interface names what it came through.
 _VIA_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}")
 
@@ -517,6 +518,7 @@ def load_commands() -> dict[str, Command]:
         chat,
         checks,
         cmdb,
+        documents,
         drafts,
         files,
         health,

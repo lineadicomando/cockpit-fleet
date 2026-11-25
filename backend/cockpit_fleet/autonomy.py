@@ -8,7 +8,8 @@ many as the person it acts for chose when the conversation began:
 session_limits; and as many more as they allow from the chat page:
 session_grants; counted from the audit trail), none on an inventory in
 maintenance, and with
-[chat] autonomous_dry_run only dry runs; it never silences a problem. A run
+[chat] autonomous_dry_run only dry runs; it never silences a problem. It
+changes the documents at most [chat] autonomous_writes times. A run
 of a template that needs approval still waits for a person: an agent has no
 right to approve.
 
@@ -34,6 +35,9 @@ LAUNCHES = ("run.start", "run.adhoc", "workflow.launch", "workflow.resume", "sch
 SILENCERS = ("state.ack", "state.unack", "maintenance.create", "maintenance.delete")
 # What launches for ever after, out of reach of the count of a session.
 UNBOUNDED = ("schedule.enable",)
+# What changes the documents (the class doc): counted apart from launches.
+DOCUMENT_CHANGES = ("doc.write", "doc.mkdir", "doc.move", "doc.copy", "doc.delete",
+                    "doc.restore", "doc.put")
 
 
 def _text(value: object) -> str:
@@ -70,12 +74,13 @@ def _inventories(conn, name: str, params: dict) -> set[str]:
     return {row[0] for row in rows}
 
 
-def launched(conn, session: str, user: str) -> int:
-    """How many launches of a user's session went through."""
-    marks = ", ".join("?" * len(LAUNCHES))
+def launched(conn, session: str, user: str, commands: tuple[str, ...] = LAUNCHES) -> int:
+    """How many launches of a user's session went through; or calls of
+    other COMMANDS."""
+    marks = ", ".join("?" * len(commands))
     return conn.execute(
         f"SELECT count(*) FROM audit WHERE session = ? AND user = ? AND outcome = 'ok'"  # noqa: S608
-        f" AND command IN ({marks})", (session, user, *LAUNCHES)).fetchone()[0]
+        f" AND command IN ({marks})", (session, user, *commands)).fetchone()[0]
 
 
 def granted(conn, session: str, user: str) -> int:
@@ -93,6 +98,18 @@ def allowed(conn, config, session: str, user: str) -> int:
     return base + granted(conn, session, user)
 
 
+def _hold_writes(ctx) -> None:
+    """Refuse a change to the documents beyond [chat] autonomous_writes."""
+    if not ctx.session:
+        raise Forbidden("an agent acting without asking changes the documents only within a"
+                        " session of fleet-mcp")
+    limit = ctx.config.chat_autonomous_writes
+    if launched(ctx.conn, ctx.session, ctx.caller.user, DOCUMENT_CHANGES) >= limit:
+        raise Forbidden(f"this session has changed the documents as many times as it may:"
+                        f" {limit} ([chat] autonomous_writes in config.toml); tell the person"
+                        " you act for, and leave the rest to them")
+
+
 def hold(ctx, name: str, params: dict) -> None:
     """Refuse a call of an autonomous agent that goes beyond its limits;
     with dry runs only, make a launch of a template one."""
@@ -103,6 +120,9 @@ def hold(ctx, name: str, params: dict) -> None:
         raise Forbidden("an agent acting without asking does not turn schedules on: what they"
                         " launch would not count against its limits; ask a person, or use"
                         " a profile that asks")
+    if name in DOCUMENT_CHANGES:
+        _hold_writes(ctx)
+        return
     if name not in LAUNCHES:
         return
     config = ctx.config

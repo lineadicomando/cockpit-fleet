@@ -152,22 +152,30 @@ def check_draft(value: str) -> str:
     return value
 
 
-def _run_git(project_id: str, args: tuple[str, ...], env: dict | None, draft: Draft | None,
-             binary: bool):
-    home = _home(project_id)
-    tree = draft.tree if draft else home / "tree"
-    extra = {"GIT_INDEX_FILE": str(draft.home / "index")} if draft else {}
+def spawn_git(git_dir: Path, tree: Path, home: Path, args: tuple[str, ...],
+              env: dict | None = None, binary: bool = False):
+    """One git command on the repository GIT_DIR with the work tree TREE,
+    reading no configuration but its own, its hooks off; HOME is its home,
+    and where it runs while TREE does not exist."""
     argv = ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "-c", "gc.autoDetach=false",
-            f"--git-dir={home / 'repo.git'}", f"--work-tree={tree}", *args]
+            f"--git-dir={git_dir}", f"--work-tree={tree}", *args]
     text = {} if binary else {"encoding": "utf-8", "errors": "replace"}
     try:
         return subprocess.run(
             argv, capture_output=True, timeout=120, check=False, stdin=subprocess.DEVNULL,
             cwd=tree if tree.is_dir() else home,
-            env={**_GIT_ENV, "HOME": str(home), **extra, **(env or {})}, **text,
+            env={**_GIT_ENV, "HOME": str(home), **(env or {})}, **text,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise Unavailable(f"cannot run git: {error}") from error
+
+
+def _run_git(project_id: str, args: tuple[str, ...], env: dict | None, draft: Draft | None,
+             binary: bool):
+    home = _home(project_id)
+    tree = draft.tree if draft else home / "tree"
+    extra = {"GIT_INDEX_FILE": str(draft.home / "index")} if draft else {}
+    return spawn_git(home / "repo.git", tree, home, args, {**extra, **(env or {})}, binary)
 
 
 def git(project_id: str, *args: str, env: dict | None = None, check: bool = True,
@@ -267,7 +275,7 @@ def locked(project_id: str):
         yield
 
 
-def _identity(author: str) -> dict:
+def identity(author: str) -> dict:
     """AUTHOR as the author, the service as the committer."""
     host = socket.gethostname() or "localhost"
     user = re.sub(r"[<>\s]+", "-", author) or paths.SERVICE_USER
@@ -291,7 +299,7 @@ def _commit(ctx: Context, project, message: str, by_service: bool = False,
     if not git(project_id, "status", "--porcelain"):
         return project["revision"]  # written again as it was
     git(project_id, "commit", "--quiet", f"--message={message}",
-         env=_identity(paths.SERVICE_USER if by_service else author or ctx.caller.user))
+         env=identity(paths.SERVICE_USER if by_service else author or ctx.caller.user))
     revision = git(project_id, "rev-parse", "HEAD").strip()
     table, what = _table(project_id)
     values = {"revision": revision}
@@ -312,9 +320,8 @@ def _commit_draft(ctx: Context, draft: Draft, message: str, author: str | None =
     parent = tip or head(project_id)
     if parent and git(project_id, "rev-parse", f"{parent}^{{tree}}").strip() == tree:
         return parent  # written again as it was
-    identity = _identity(author or ctx.caller.user)
     commit = git(project_id, "commit-tree", tree, *(["-p", parent] if parent else []),
-                  "-m", message, env=identity).strip()
+                  "-m", message, env=identity(author or ctx.caller.user)).strip()
     git(project_id, "update-ref", draft.ref, commit, tip or "")
     return commit
 

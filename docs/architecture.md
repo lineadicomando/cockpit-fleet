@@ -13,6 +13,7 @@ hand.
 | [jobs.md](architecture/jobs.md) | Runs and the other jobs, `fleet-run`, the queue and lanes, runs in series; what a launch is given: host keys, keys with a passphrase, vaults, sets of variables and secret variables, limits, ad-hoc commands, surveys, secret answers, masking |
 | [projects.md](architecture/projects.md) | Projects (git, managed, uploaded), Galaxy, syntax checks, the files page and editor, `ansible.cfg`, help on modules, inventories (file, managed), starters |
 | [store.md](architecture/store.md) | The store: hard links and intake, uploads, downloads to the browser and from URLs, copies, archives, sources, SFTP, the page |
+| [documents.md](architecture/documents.md) | Documents: texts in a history of their own, attachments, what agents read and write |
 | [schedules.md](architecture/schedules.md) | The timer and `scheduler.tick`, missed times, overlap |
 | [approvals.md](architecture/approvals.md) | Approvals and their modes |
 | [workflows.md](architecture/workflows.md) | Workflows: steps, `set_stats`, failure, resume |

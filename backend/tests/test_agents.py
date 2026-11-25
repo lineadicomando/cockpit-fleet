@@ -10,7 +10,7 @@ from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import agents, cli, mcp, paths, profiles, schedules
+from cockpit_fleet import agents, autonomy, cli, mcp, paths, profiles, schedules
 
 # What each tool lets an agent do, beyond reading. A new tool, or one moved to
 # another class, fails here until this table says so: the profiles of the
@@ -31,6 +31,7 @@ CLASS_TABLE = {
         project.delete project.duplicate project.starter inventory.starter
         project.sync project.update rule.delete schedule.delete template.delete varset.delete
         workflow.delete""",
+    "doc": """doc.copy doc.delete doc.mkdir doc.move doc.restore doc.write""",
 }
 
 
@@ -45,6 +46,10 @@ class ClassTest(unittest.TestCase):
             if spec.tool:
                 self.assertEqual(spec.agent, expected.pop(name, "read"), name)
         self.assertEqual(expected, {}, "not tools")
+
+    def test_autonomy_counts_every_change_to_the_documents(self):
+        self.assertEqual(set(autonomy.DOCUMENT_CHANGES),
+                         {name for name, spec in cli.COMMANDS.items() if spec.agent == "doc"})
 
     def test_a_command_that_changes_nothing_reads(self):
         for name, spec in cli.COMMANDS.items():
@@ -305,10 +310,10 @@ class ProfileTest(Base):
             return {tool["name"]: tool for tool in answer["data"]["tools"]}
 
         observer = tools("observer")
-        self.assertEqual({tool["class"] for tool in observer.values()}, {"read"})
+        self.assertEqual({tool["class"] for tool in observer.values()}, {"read", "doc"})
         self.assertIn("run_list", observer)
         assisted = tools(None)
-        self.assertEqual({tool["class"] for tool in assisted.values()}, {"read", "run"})
+        self.assertEqual({tool["class"] for tool in assisted.values()}, {"read", "run", "doc"})
         self.assertTrue(any(name.startswith("launch_") for name in assisted))
         self.assertNotIn("run_adhoc", assisted)
         adhoc = tools("diagnostic")["run_adhoc"]
@@ -365,6 +370,21 @@ class ProfileTest(Base):
         for profile, kind, read_only, expected in table:
             self.assertEqual(profiles.question(profile, kind, read_only), expected,
                              (profile, kind, read_only))
+
+    def test_documents_are_asked_about_but_a_deletion_every_time(self):
+        for profile in profiles.PROFILES:
+            self.assertTrue(profiles.allows(profile, "doc"), profile)
+            autonomous = profile in profiles.AUTONOMOUS
+            self.assertEqual(profiles.question(profile, "doc", False, "doc.write"),
+                             "none" if autonomous else "ask", profile)
+            self.assertEqual(profiles.question(profile, "doc", False, "doc.delete"),
+                             "none" if autonomous else "every", profile)
+            self.assertEqual(profiles.question(profile, "read", True, "doc.read"), "none")
+        observer = {tool["command"]: tool for tool in
+                    self.ok("mcp.tools", {"profile": "observer"})["tools"]}
+        self.assertEqual((observer["doc.search"]["question"], observer["doc.write"]["question"],
+                          observer["doc.delete"]["question"]), ("none", "ask", "every"))
+        self.assertNotIn("doc.put", observer)
 
     def test_the_page_asks_the_tools_of_a_profile(self):
         names = {tool["name"] for tool in self.ok("mcp.tools", {"profile": "observer"})["tools"]}
@@ -425,6 +445,19 @@ class AutonomyTest(Base):
         self.assertTrue(self.via("run.start", launch, profile="assisted")["ok"])
         self.ok("run.start", launch)
         self.assertTrue(self.via("run.list")["ok"])
+
+    def test_changes_to_the_documents_are_counted_by_session(self):
+        self.config = replace(self.config, chat_autonomous_writes=2)
+        self.assertTrue(self.via("doc.write", {"path": "a.md", "content": "a"})["ok"])
+        self.assertEqual(self.via("doc.write", {"path": "a.md", "content": "b"})["error"]["code"],
+                         "conflict")
+        self.assertTrue(self.via("doc.mkdir", {"path": "d"})["ok"])
+        self.refused(self.via("doc.delete", {"path": "a.md"}), "changed the documents as many")
+        self.refused(self.via("doc.write", {"path": "b.md", "content": "b"}, session=""),
+                     "within a session")
+        # Reading is not counted; a profile that asks is not held.
+        self.assertTrue(self.via("doc.read", {"path": "a.md"})["ok"])
+        self.assertTrue(self.via("doc.delete", {"path": "a.md"}, profile="assisted")["ok"])
 
     def as_user(self, name, params, user, role="admin"):
         return cli.dispatch(name, json.dumps(params).encode(), self.ctx(role, user))

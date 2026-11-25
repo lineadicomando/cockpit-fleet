@@ -97,6 +97,8 @@ class Config:
     # one session, and whether they must all be dry runs (autonomy.py).
     chat_autonomous_runs: int = 30
     chat_autonomous_dry_run: bool = False
+    # And the changes to the documents it may make in one session.
+    chat_autonomous_writes: int = 20
     # Where the web console is reached, for the links in notifications.
     notify_url: str = ""
     # Check cycles: how many at once (apart from runs), at most so many hosts
@@ -127,6 +129,8 @@ class Config:
     store_max_gb: int = 0
     # Downloads into the store running at the same time, apart from runs.
     store_max_downloads: int = 2
+    # Megabytes the documents, their attachments included, may take together.
+    documents_max_mb: int = 1024
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -220,7 +224,7 @@ def parse(text: str) -> Config:
         raise ConfigError(f"not valid TOML: {error}") from error
     unknown = sorted(set(data) - {"runs", "projects", "network", "adhoc", "inventories", "mcp",
                                      "chat", "notifications", "checks", "metrics",
-                                     "approvals", "store"})
+                                     "approvals", "store", "documents"})
     if unknown:
         raise ConfigError(f"unknown section: {', '.join(unknown)}")
 
@@ -285,7 +289,8 @@ def parse(text: str) -> Config:
         diagnostic = tuple(module for module in DIAGNOSTIC_MODULES if module in adhoc_modules)
 
     chat = _section(data, "chat", {"agents", "max_sessions", "profiles", "default_profile",
-                                   "autonomous_runs", "autonomous_dry_run"})
+                                   "autonomous_runs", "autonomous_dry_run",
+                                   "autonomous_writes"})
     agents = chat.get("agents", {})
     if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
         raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
@@ -325,6 +330,7 @@ def parse(text: str) -> Config:
         raise ConfigError("approvals.admins_exempt must be true or false")
 
     store = _section(data, "store", {"max_gb", "max_downloads"})
+    documents = _section(data, "documents", {"max_mb"})
 
     return Config(
         max_concurrent_runs=_int(runs, "runs", "max_concurrent", Config.max_concurrent_runs, 1, 64),
@@ -352,6 +358,8 @@ def parse(text: str) -> Config:
         chat_autonomous_runs=_int(chat, "chat", "autonomous_runs", Config.chat_autonomous_runs,
                                   1, 1000),
         chat_autonomous_dry_run=dry_run,
+        chat_autonomous_writes=_int(chat, "chat", "autonomous_writes",
+                                    Config.chat_autonomous_writes, 1, 1000),
         notify_url=notify_url.rstrip("/"),
         checks_max_concurrent=_int(checks, "checks", "max_concurrent",
                                    Config.checks_max_concurrent, 1, 16),
@@ -374,6 +382,8 @@ def parse(text: str) -> Config:
         store_max_gb=_int(store, "store", "max_gb", Config.store_max_gb, 0, 1024 * 1024),
         store_max_downloads=_int(store, "store", "max_downloads", Config.store_max_downloads,
                                  1, 16),
+        documents_max_mb=_int(documents, "documents", "max_mb", Config.documents_max_mb,
+                              1, 1024 * 1024),
     )
 
 

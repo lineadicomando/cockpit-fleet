@@ -128,7 +128,7 @@ out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")")
 expect_eq "with the ceiling at admin, the default profile still gives no ad-hoc command" \
     "$(answer "$out" 1 'any(t["name"] in ("run_adhoc", "credential_create") for t in a["result"]["tools"])')" False
 expect_eq "nor does a call that names it" "$(answer "$out" 2 'a["error"]["code"] if "error" in a else a["result"]["isError"]')" -32602
-printf '[chat]\nprofiles = ["assisted", "diagnostic", "administrator", "autonomous"]\nautonomous_runs = 1\n' >> "$CONFIG"
+printf '[chat]\nprofiles = ["assisted", "diagnostic", "administrator", "autonomous"]\nautonomous_runs = 1\nautonomous_writes = 1\n' >> "$CONFIG"
 PROFILE=diagnostic
 out=$(mcp itadmin "$LIST" "$(call 2 run_adhoc "$ADHOC")" "$(call 3 run_adhoc "$PING")")
 expect_eq "in the profile diagnostic, ad-hoc commands of modules that change nothing" \
@@ -228,6 +228,26 @@ expect_eq "a maintenance window opens on the inventory" \
 out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "c"}}')")
 expect_eq "another session counts on its own, and launches nothing on an inventory in maintenance" \
     "$(answer "$out" 2 '"in maintenance" in a["result"]["content"][0]["text"]')" True
+# The documents: written, read and searched by an agent, its writes bounded when autonomous.
+PROFILE=assisted
+out=$(mcp itoperator "$LIST" "$(call 2 doc_write '{"path": "reports/it.md", "content": "# Report\n\nweb01 rebooted.\n"}')" \
+    "$(call 3 doc_search '{"query": "web01"}')" "$(call 4 doc_read '{"path": "reports/it.md"}')")
+expect_eq "the documents are tools, a search one that only reads" \
+    "$(answer "$out" 1 'sorted((t["name"], t["annotations"]["readOnlyHint"]) for t in a["result"]["tools"] if t["name"] in ("doc_search", "doc_delete"))')" \
+    "[('doc_delete', False), ('doc_search', True)]"
+expect_eq "an agent writes a document" "$(answer "$out" 2 'a["result"]["isError"]')" False
+expect_eq "and finds it" "$(answer "$out" 3 '"reports/it.md" in a["result"]["content"][0]["text"]')" True
+expect_eq "and reads it" "$(answer "$out" 4 '"web01 rebooted" in a["result"]["content"][0]["text"]')" True
+expect_eq "its write is the person's in the history, through an agent in the audit log" \
+    "$(get "$(ctl itoperator doc.history)" 'a["data"]["commits"][0]["author"]') $(get "$(admin audit.list)" '[e["via"] for e in a["data"]["entries"] if e["command"] == "doc.write"][0]')" \
+    "itoperator mcp:it-client"
+expect_eq "the text is the service's, in the history of the documents" \
+    "$(stat -c %U /var/lib/cockpit-fleet/documents/reports/it.md) $(sudo -u cockpit-fleet git --git-dir=/var/lib/cockpit-fleet/documents.git ls-files)" \
+    "cockpit-fleet reports/it.md"
+PROFILE=autonomous
+out=$(mcp itoperator "$(call 2 doc_write '{"path": "a.md", "content": "a"}')" "$(call 3 doc_write '{"path": "b.md", "content": "b"}')")
+expect_eq "an autonomous agent changes the documents as many times as a session may, and no more" \
+    "$(answer "$out" 2 'a["result"]["isError"]') $(answer "$out" 3 '"as many times as it may" in a["result"]["content"][0]["text"]')" "False True"
 PROFILE=observer
 out=$(mcp itadmin "$LIST")
 expect_eq "a profile not enabled gives nothing" "$(answer "$out" 1 '"not enabled" in a["error"]["message"]')" True

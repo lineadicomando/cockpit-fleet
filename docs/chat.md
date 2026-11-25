@@ -164,7 +164,10 @@ started stays as it is: once logged in, send the message again.
   rest, files, projects, credentials, deletes; it is offered, and allowed,
   only to administrators of Fleet with `max_role = "admin"`, since for
   anyone else it would be the powers of their role under a name that
-  promises more. All five are enabled
+  promises more. In every profile the assistant also reads, searches and
+  writes the documents (Resources, Documents); in `autonomous` it changes
+  them at most `[chat] autonomous_writes` times in a conversation (20 as
+  installed). All five are enabled
   as installed, `assisted` the default; list fewer in `profiles` to keep
   the others from users, who otherwise accept the risks of `diagnostic`,
   `autonomous` and `administrator` once each before using them. The backend refuses what is outside
@@ -180,13 +183,15 @@ started stays as it is: once logged in, send the message again.
   log (`chat.accept`), and until then the backend refuses to start a
   session in that profile. Enabling a profile in `config.toml` is the
   administrator's decision; accepting its risks is each user's.
-- What the page asks about follows the profile: in `observer` nothing,
-  since nothing changes; in `assisted` every launch or cancel, with "always"
+- What the page asks about follows the profile: in `observer` only a
+  change to the documents; in `assisted` every launch or cancel, with "always"
   to trust launches for the rest of the conversation; in `diagnostic` the
   same, and its ad-hoc commands go unasked, while each scan of a subnet is
   asked; in `autonomous` nothing, the backend holds it instead; in
   `administrator` every change, and scans, ad-hoc commands, changes to
-  what is defined and files every time, never "always". These questions are a convenience: the backend decides again,
+  what is defined and files every time, never "always". A change to the
+  documents is asked about, with "always", in every profile but
+  `autonomous`; deleting one is asked every time. These questions are a convenience: the backend decides again,
   whatever the answer.
 - Above the message box the page shows what the assistant launched in the
   conversation. In `autonomous`, how many runs of those it may ("Runs

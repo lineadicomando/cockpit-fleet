@@ -90,6 +90,11 @@ store.mkdir operator M        store.move operator M         store.delete operato
 store.fetch operator M        store.downloads operator -     store.copy operator M
 store.archive viewer M         store.refresh operator M      store.track operator M
 store.sftp viewer M
+doc.list viewer -             doc.read viewer -             doc.search viewer -
+doc.write operator M          doc.mkdir operator M          doc.move operator M
+doc.copy operator M           doc.delete operator M         doc.history viewer -
+doc.diff viewer -             doc.restore operator M        doc.put operator M
+doc.get viewer M
 starter.list admin -
 project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M
@@ -671,7 +676,8 @@ class RoleTest(Fixture):
                 # never silences a problem nor turns a schedule on (autonomy.py,
                 # tested on its own).
                 held = profile in profiles.AUTONOMOUS and name in (
-                    *autonomy.LAUNCHES, *autonomy.SILENCERS, *autonomy.UNBOUNDED)
+                    *autonomy.LAUNCHES, *autonomy.SILENCERS, *autonomy.UNBOUNDED,
+                    *autonomy.DOCUMENT_CHANGES)
                 expected = tool and profiles.allows(profile, kind) and not held
                 self.assertEqual(self.reached(name, "admin", via="mcp:x", config=enabled,
                                               profile=profile), expected, (name, profile))
@@ -684,7 +690,7 @@ class RoleTest(Fixture):
             self.assertFalse(self.reached(name, "admin", via="mcp:x", config=only,
                                           profile="administrator"), name)
             self.assertEqual(self.reached(name, "admin", via="mcp:x", config=only),
-                             tool and kind == "read", name)
+                             tool and profiles.allows("observer", kind), name)
 
     def test_a_diagnostic_profile_reaches_only_diagnostic_commands(self):
         enabled = dataclasses.replace(self.config, mcp_enabled=True, mcp_max_role="admin",

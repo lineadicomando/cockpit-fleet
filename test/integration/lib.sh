@@ -77,7 +77,8 @@ wipe() {
     rm -rf /srv/fleet-it /var/lib/cockpit-fleet/runs/* /var/lib/cockpit-fleet/projects/* \
         /var/lib/cockpit-fleet/inventories/* /var/lib/cockpit-fleet/cache \
         /var/lib/cockpit-fleet/store/* /var/lib/cockpit-fleet/store-uploads/* \
-        /var/lib/cockpit-fleet/store-farms/*
+        /var/lib/cockpit-fleet/store-farms/* /var/lib/cockpit-fleet/documents \
+        /var/lib/cockpit-fleet/documents.git /var/lib/cockpit-fleet/documents-uploads
     rm -f "$DB" "$DB-wal" "$DB-shm"
     systemctl reset-failed 'cockpit-fleet-run@*' 'cockpit-fleet-finish@*' 2>/dev/null
     return 0

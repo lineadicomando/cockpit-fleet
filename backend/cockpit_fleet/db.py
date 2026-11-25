@@ -937,6 +937,22 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The files of the documents that are not text, out of the history
+        # of the text: attachments, and exports kept beside a document; where
+        # each came from (source: the document, or what it was taken from).
+        """
+        CREATE TABLE document_files (
+            path        TEXT PRIMARY KEY,
+            size        INTEGER NOT NULL,
+            sha256      TEXT NOT NULL,
+            origin      TEXT NOT NULL,
+            source      TEXT NOT NULL DEFAULT '',
+            created_by  TEXT,
+            created_at  REAL NOT NULL
+        )
+        """,
+    ],
 ]
 
 

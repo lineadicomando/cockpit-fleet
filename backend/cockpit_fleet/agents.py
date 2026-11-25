@@ -158,7 +158,8 @@ def tools(ctx: Context, role: str | None, profile: str) -> list[dict]:
             if tool is not None:
                 found.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
     for tool in found:
-        tool["question"] = profiles.question(profile, tool["class"], tool["readOnly"])
+        tool["question"] = profiles.question(profile, tool["class"], tool["readOnly"],
+                                             tool["command"])
     return found
 
 

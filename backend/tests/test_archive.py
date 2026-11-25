@@ -323,7 +323,8 @@ class UploadTest(Base):
         self.assertLessEqual({name for name, spec in cli.COMMANDS.items()
                               if spec.max_input != cli.MAX_INPUT},
                              {"project.upload", "config.import", "file.push", "file.write",
-                              "file.change", "file.import", "inventory.create"})
+                              "file.change", "file.import", "inventory.create",
+                          "doc.write"})
 
 
 if __name__ == "__main__":

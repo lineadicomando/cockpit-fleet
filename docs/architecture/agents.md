@@ -54,14 +54,16 @@ secrets, because `fleet-secret` is not a command of `fleetctl`: an agent may
 create a credential, a person enters its value.
 
 **Classes of tools.** Every command declares what it lets an agent do, one
-of six classes from the least to the most: `read`; `run` (start, stop and
+of six classes from the least to the most, and one apart: `read`; `run` (start, stop and
 follow work already defined: launches, cancels, checks, schedules turned on
 or off, acknowledgements, maintenance windows, a syntax check); `scan` (the
 scan of a subnet, see [The network](network.md)); `adhoc` (any
 module on the nodes); `config` (create and change templates, inventories,
 schedules, rules, channels, checks, sets of variables, workflows); `code`
 (the files of projects, projects themselves, credentials, host keys,
-`config.import`, and every delete). The default comes from the declaration:
+`config.import`, and every delete); and apart, `doc`: the changes to the
+documents (`documents.md`), in every profile, since a text is not run and
+has its history (reading them is `read`). The default comes from the declaration:
 a command that changes nothing reads, one that changes something is `run`
 for an operator and `config` for an administrator; the others say theirs
 (`agent=` in `@command`). `mcp.tools` gives each tool its class, a
@@ -95,9 +97,10 @@ hand with the same role. `mcp.tools` lists only the tools of the profile,
 
 **Questions by profile.** How a person is asked about a call is the
 backend's too: `profiles.question` gives, for a profile and a class, `none`
-(made unasked: reading; `run` in `autonomous`, which autonomy holds;
+(made unasked: reading; `run` and `doc` in `autonomous`, which autonomy holds;
 `adhoc-diagnostic` in `diagnostic`), `every` (asked every time, never
-trusted for a conversation: `scan`, `adhoc`, `config`, `code`, in any profile) or
+trusted for a conversation: `scan`, `adhoc`, `config`, `code`, in any profile,
+and `doc.delete` but in `autonomous`: `profiles.ALWAYS_ASKED_COMMANDS`) or
 `ask` (asked, and "always" trusts the class for the conversation).
 `mcp.tools` gives it with each tool, for the page, and `chat.start` gives
 the names of the tools that are `none`, for the agent's program at a
@@ -112,7 +115,10 @@ would go on after the session and outside its count; launches (templates, ad-hoc
 schedules, checks) only with a session, at most `[chat] autonomous_runs` of
 them, none on an inventory with a maintenance window open, and with
 `autonomous_dry_run` a template's run in check mode and no workflow or
-schedule, which have no dry run. The session is drawn by `fleet-mcp` when
+schedule, which have no dry run; changes to the documents only with a
+session, at most `[chat] autonomous_writes` of them (20), counted from the
+audit as launches are (`autonomy.DOCUMENT_CHANGES`), with no grant: a person
+writes beside the agent instead. The session is drawn by `fleet-mcp` when
 it starts and added to every call; the audit records it (column `session`,
 schema 23) and the launches are counted from there, so there is no counter
 to keep in step and an agent cannot reset it. A fleet-mcp started again is
