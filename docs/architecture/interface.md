@@ -78,6 +78,21 @@ value that is not understood (an older version, an edit by hand) falls
 back to the default. PatternFly's toolbar filters are not used: their
 labels ("Show Filters", "Close …") are English that cannot be translated.
 
+**Choosing one of many.** Where a form chooses a job template (a
+workflow's step, a schedule, a rule of notifications), a workflow, or the
+target of a rule, the choice is a `SearchSelect`
+(`src/components/SearchSelect.tsx`) rather than the browser's `<select>`,
+which can only jump to an initial: typing narrows the list to the options
+every word typed is in, in any order, with no regard to case or accents, in
+the label, the line under it or the label of its group (`src/lib/search.ts`),
+so `info2 wu` finds the update templates of the inventory `spalla_info2`.
+Job templates are grouped by inventory, with their project and playbook
+under each. Only an option of the list is taken: leaving the field, by
+Escape or a click elsewhere, puts back the one chosen, so the form still
+sends an id the backend checks. Escape closes the list and not the dialog
+around it, and Enter chooses rather than submits, as in `PathInput`. Short,
+fixed lists (verbosity, modes, conditions) stay `<select>`.
+
 The hosts of Hosts (its three views) and Assets share `src/lib/hosts.ts`
 and, in `ListView.tsx`, a toolbar (`HostListToolbar`) and the bodies of a
 table in groups or not (`GroupedRows`): a text of which every word must be

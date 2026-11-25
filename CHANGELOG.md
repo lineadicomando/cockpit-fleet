@@ -78,6 +78,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   by inventory, and each step says the inventory it runs on; the steps of
   a workflow run show theirs too (`inventory_id` and `inventory` of each
   step in `workflow.progress`).
+- A job template is chosen by typing part of its name, its inventory, its
+  project or its playbook, in the steps of a workflow, in schedules and in
+  the rules of notifications; so are a schedule's workflow and the target
+  of a rule.
 
 ### Fixed
 

@@ -4651,3 +4651,26 @@ msgstr "Usa l'inventario {{inventory}}."
 
 msgid "Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them."
 msgstr "Host o gruppi di {{inventory}}, per restringere quelli del template; vuoto per tutti."
+
+msgid "Show the choices"
+msgstr "Mostra le scelte"
+
+msgid "Nothing matches what was typed"
+msgstr "Nessuna corrispondenza con quanto scritto"
+
+msgid "choices_more_count"
+msgid_plural "choices_more_count_plural"
+msgstr[0] "Ancora {{count}}: continua a scrivere per restringere"
+msgstr[1] "Altri {{count}}: continua a scrivere per restringere"
+
+msgid "Show the job templates"
+msgstr "Mostra i template"
+
+msgid "No job template matches what was typed"
+msgstr "Nessun template corrisponde a quanto scritto"
+
+msgid "Show the workflows"
+msgstr "Mostra i workflow"
+
+msgid "No workflow matches what was typed"
+msgstr "Nessun workflow corrisponde a quanto scritto"

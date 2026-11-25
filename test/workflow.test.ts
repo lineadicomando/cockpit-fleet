@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { inScope, layers, nextStepId, templateGroups } from "../src/lib/workflow.ts";
+import type { Template } from "../src/lib/types.ts";
 
 test("steps go in columns after the longest chain they follow", () => {
     const edges = [
@@ -30,15 +31,19 @@ test("a workflow of a project or an inventory takes only their templates", () =>
 test("the templates a step may take go by inventory, by name in each", () => {
     const inventories = new Map([["i1", "lab2"], ["i2", "lab10"]]);
     const projects = new Map([["p1", "school"], ["p2", "office"]]);
+    const template = (id: string, name: string, project_id: string, inventory_id: string) =>
+        ({ id, name, project_id, inventory_id, playbook: `${name}.yaml` }) as Template;
     const templates = [
-        { id: "t1", name: "shutdown", project_id: "p1", inventory_id: "i2" },
-        { id: "t2", name: "ping", project_id: "p1", inventory_id: "i1" },
-        { id: "t3", name: "ping", project_id: "p2", inventory_id: "i1" },
-        { id: "t4", name: "wol", project_id: "p1", inventory_id: "i1" },
+        template("t1", "shutdown", "p1", "i2"),
+        template("t2", "wol", "p1", "i1"),
+        template("t3", "ping", "p2", "i1"),
     ];
     assert.deepEqual(templateGroups(templates, { project_id: "", inventory_id: "" }, inventories, projects), [
-        { label: "lab2", options: [{ id: "t2", label: "ping — school" }, { id: "t3", label: "ping — office" }, { id: "t4", label: "wol" }] },
-        { label: "lab10", options: [{ id: "t1", label: "shutdown" }] },
+        { label: "lab2", options: [
+            { id: "t3", label: "ping", description: "office · ping.yaml" },
+            { id: "t2", label: "wol", description: "school · wol.yaml" },
+        ] },
+        { label: "lab10", options: [{ id: "t1", label: "shutdown", description: "school · shutdown.yaml" }] },
     ]);
     // A workflow of one inventory: one group with no label.
     const one = templateGroups(templates.slice(1), { project_id: "", inventory_id: "i1" }, inventories, projects);

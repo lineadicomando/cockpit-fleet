@@ -12,7 +12,6 @@ import {
     FormHelperText,
     FormSelect,
     FormSelectOption,
-    FormSelectOptionGroup,
     Grid,
     GridItem,
     HelperText,
@@ -33,6 +32,7 @@ import type { ApprovalMode, Inventory, Project, Run, StepCondition, Template, Wo
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
+import { SearchSelect } from "./SearchSelect.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
 import { ActionsColumn, Alert } from "./pf.tsx";
 
@@ -104,17 +104,10 @@ function StepEditor({ step, steps, templates, scope, inventories, projects, onCh
                 <Grid hasGutter md={6}>
                     <GridItem>
                         <FormGroup label={t("Job template")} isRequired fieldId={`wf-${step.id}-template`}>
-                            <FormSelect id={`wf-${step.id}-template`} value={step.template_id}
-                                onChange={(_e, value) => onChange({ ...step, template_id: value, answers: storedAnswers(templates.find(item => item.id === value), {}) })}>
-                                <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
-                                {groups.map(group => group.label
-                                    ? (
-                                        <FormSelectOptionGroup key={group.label} label={group.label}>
-                                            {group.options.map(item => <FormSelectOption key={item.id} value={item.id} label={item.label} />)}
-                                        </FormSelectOptionGroup>
-                                    )
-                                    : group.options.map(item => <FormSelectOption key={item.id} value={item.id} label={item.label} />))}
-                            </FormSelect>
+                            <SearchSelect id={`wf-${step.id}-template`} label={t("Job template")} value={step.template_id}
+                                groups={groups} placeholder={t("Choose a job template")} toggleLabel={t("Show the job templates")}
+                                emptyText={t("No job template matches what was typed")}
+                                onChange={value => onChange({ ...step, template_id: value, answers: storedAnswers(templates.find(item => item.id === value), {}) })} />
                             {template && (
                                 <FormHelperText><HelperText><HelperTextItem>
                                     {t("Runs on the inventory {{inventory}}.", { inventory })}

@@ -1601,5 +1601,14 @@
   "The CMDB saw it at another address": "Il CMDB l'ha visto a un altro indirizzo",
   "This inventory has no host reached over the network, as last read.": "Secondo l'ultima lettura, questo inventario non ha host raggiunti via rete.",
   "Runs on the inventory {{inventory}}.": "Usa l'inventario {{inventory}}.",
-  "Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them.": "Host o gruppi di {{inventory}}, per restringere quelli del template; vuoto per tutti."
+  "Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them.": "Host o gruppi di {{inventory}}, per restringere quelli del template; vuoto per tutti.",
+  "Show the choices": "Mostra le scelte",
+  "Nothing matches what was typed": "Nessuna corrispondenza con quanto scritto",
+  "choices_more_count_one": "Ancora {{count}}: continua a scrivere per restringere",
+  "choices_more_count_many": "Altri {{count}}: continua a scrivere per restringere",
+  "choices_more_count_other": "Altri {{count}}: continua a scrivere per restringere",
+  "Show the job templates": "Mostra i template",
+  "No job template matches what was typed": "Nessun template corrisponde a quanto scritto",
+  "Show the workflows": "Mostra i workflow",
+  "No workflow matches what was typed": "Nessun workflow corrisponde a quanto scritto"
 }

@@ -22,8 +22,10 @@ import { formatTime } from "../lib/format.ts";
 import { usePolling, useLoad } from "../lib/hooks.ts";
 import { EMPTY_FORM, destination, formOf, settingsOf, type ChannelForm } from "../lib/notify.ts";
 import { useCan } from "../lib/session.tsx";
+import { templateGroups } from "../lib/workflow.ts";
 import type { Channel, ChannelKind, CheckDef, CheckEvent, FleetHost, Inventory, Notification, NotifyEvent, NotifyRule, Project, RuleScope, RunEvent, Schedule, SystemEvent, Template } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, SectionHeader, message, openHost, openRun } from "./common.tsx";
+import { SearchSelect } from "./SearchSelect.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { ActionsColumn, Alert, NumberInput } from "./pf.tsx";
 
@@ -247,6 +249,9 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
             call<{ hosts: FleetHost[] }>("host.list"),
         ]);
         return {
+            templates: templates.templates,
+            projectNames: new Map(projects.projects.map(item => [item.id, item.name])),
+            inventoryNames: new Map(inventories.inventories.map(item => [item.id, item.name])),
             lists: {
                 project: projects.projects, template: templates.templates, schedule: schedules.schedules,
                 inventory: inventories.inventories, group: inventories.inventories, check: checks.checks,
@@ -255,6 +260,10 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
         };
     });
     const choices = scope === "all" ? [] : targets.data?.lists[scope] ?? [];
+    // Templates by inventory, as a workflow's steps; the rest in one list, by name.
+    const targetGroups = scope === "template" && targets.data
+        ? templateGroups(targets.data.templates, { project_id: "", inventory_id: "" }, targets.data.inventoryNames, targets.data.projectNames)
+        : [{ label: "", options: [...choices].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(item => ({ id: item.id, label: item.name })) }];
     // The groups of the inventory chosen, as its hosts last listed them.
     const groups = [...new Set((targets.data?.hosts ?? []).filter(host => host.inventory_id === scopeId).flatMap(host => host.groups))].sort();
     const runsAllowed = !CHECK_SCOPES.includes(scope);
@@ -319,10 +328,8 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
             </FormGroup>
             {scope !== "all" && (
                 <FormGroup label={labels.scopes[scope]} isRequired fieldId="rule-target">
-                    <FormSelect id="rule-target" value={scopeId} onChange={(_e, value) => setScopeId(value)} isDisabled={!targets.data}>
-                        <FormSelectOption value="" label={t("Choose…")} isPlaceholder />
-                        {choices.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
-                    </FormSelect>
+                    <SearchSelect key={scope} id="rule-target" label={labels.scopes[scope]} value={scopeId} onChange={setScopeId}
+                        groups={targetGroups} placeholder={t("Choose…")} />
                 </FormGroup>
             )}
             {scope === "group" && (

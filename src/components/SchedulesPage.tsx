@@ -27,8 +27,10 @@ import { DEFAULT_SHAPE, EVERY_MINUTES, WEEKDAYS, calendarOf, shapeOf, type Repea
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
 import { overrideFields, overridesOf } from "../lib/templates.ts";
-import type { Overlap, Run, Schedule, SchedulePreview, Template, Workflow } from "../lib/types.ts";
+import { templateGroups } from "../lib/workflow.ts";
+import type { Inventory, Overlap, Project, Run, Schedule, SchedulePreview, Template, Workflow } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
+import { SearchSelect } from "./SearchSelect.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
 import { OverridesSection } from "./Overrides.tsx";
@@ -208,6 +210,20 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
     const template = launches === "template" ? templates.find(item => item.id === templateId) : undefined;
     const workflow = launches === "workflow" ? workflows.find(item => item.id === workflowId) : undefined;
     const waiting = workflow ? waitingStep(workflow, templates) : null;
+    const places = useLoad(() => Promise.all([
+        call<{ projects: Project[] }>("project.list"),
+        call<{ inventories: Inventory[] }>("inventory.list"),
+    ]).then(([p, i]) => ({
+        projects: new Map(p.projects.map(item => [item.id, item.name])),
+        inventories: new Map(i.inventories.map(item => [item.id, item.name])),
+    })));
+    const templateChoices = templateGroups(templates, { project_id: "", inventory_id: "" },
+        places.data?.inventories ?? new Map(), places.data?.projects ?? new Map());
+    const workflowGroups = [{
+        label: "",
+        options: [...workflows].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+            .map(item => ({ id: item.id, label: item.name, description: item.description })),
+    }];
     const [answers, setAnswers] = useState<Answers>(() => storedAnswers(template, schedule?.answers ?? {}));
     const [fields, setFields] = useState(() => overrideFields(template, schedule?.overrides));
 
@@ -250,23 +266,21 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
                 <GridItem>
                     {launches === "workflow" ? (
                         <FormGroup label={t("Workflow")} isRequired fieldId="sch-workflow">
-                            <FormSelect id="sch-workflow" value={workflowId} onChange={(_e, value) => setWorkflowId(value)}>
-                                <FormSelectOption value="" label={t("Choose a workflow")} isPlaceholder />
-                                {workflows.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
-                            </FormSelect>
+                            <SearchSelect id="sch-workflow" label={t("Workflow")} value={workflowId} onChange={setWorkflowId}
+                                groups={workflowGroups} placeholder={t("Choose a workflow")} toggleLabel={t("Show the workflows")}
+                                emptyText={t("No workflow matches what was typed")} />
                         </FormGroup>
                     ) : (
                         <FormGroup label={t("Job template")} isRequired fieldId="sch-template">
-                            <FormSelect id="sch-template" value={templateId}
-                                onChange={(_e, value) => {
+                            <SearchSelect id="sch-template" label={t("Job template")} value={templateId}
+                                groups={templateChoices} placeholder={t("Choose a job template")} toggleLabel={t("Show the job templates")}
+                                emptyText={t("No job template matches what was typed")}
+                                onChange={value => {
                                     const chosen = templates.find(item => item.id === value);
                                     setTemplateId(value);
                                     setAnswers(storedAnswers(chosen, {}));
                                     setFields(overrideFields(chosen));
-                                }}>
-                                <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
-                                {templates.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
-                            </FormSelect>
+                                }} />
                         </FormGroup>
                     )}
                 </GridItem>
