@@ -74,6 +74,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   conversation.
 - Nodes: its sections are in the order Assets, Checks, Hosts, Host keys,
   and the tab opens on Assets.
+- Workflows: in the form, the job templates a step may take are grouped
+  by inventory, and each step says the inventory it runs on; the steps of
+  a workflow run show theirs too (`inventory_id` and `inventory` of each
+  step in `workflow.progress`).
 
 ### Fixed
 

@@ -370,7 +370,8 @@ export type StepState = "active" | "success" | "failure" | "ready" | "waiting" |
 
 export interface WorkflowProgress {
     run: Run;
-    nodes: (WorkflowNode & { state: StepState; run: Run | null; carried: boolean; error: string })[];
+    // inventory: the one the step ran on, or its template's for one not started.
+    nodes: (WorkflowNode & { state: StepState; run: Run | null; carried: boolean; error: string; inventory_id: string | null; inventory: string })[];
     edges: WorkflowEdge[];
     resumed_from: string | null;
 }

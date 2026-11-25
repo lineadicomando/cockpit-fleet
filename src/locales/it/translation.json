@@ -1599,5 +1599,7 @@
   "Probe the hosts": "Sonda gli host",
   "Probing": "Sonda in corso",
   "The CMDB saw it at another address": "Il CMDB l'ha visto a un altro indirizzo",
-  "This inventory has no host reached over the network, as last read.": "Secondo l'ultima lettura, questo inventario non ha host raggiunti via rete."
+  "This inventory has no host reached over the network, as last read.": "Secondo l'ultima lettura, questo inventario non ha host raggiunti via rete.",
+  "Runs on the inventory {{inventory}}.": "Usa l'inventario {{inventory}}.",
+  "Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them.": "Host o gruppi di {{inventory}}, per restringere quelli del template; vuoto per tutti."
 }

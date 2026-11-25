@@ -297,6 +297,24 @@ class WorkflowTest(WorkflowBase):
                                                **steps(self.first, other)})
         self.assertEqual((workflow["project_id"], workflow["inventory_id"]), (None, None))
 
+    def test_progress_tells_the_inventory_of_each_step(self):
+        other = self.elsewhere()
+        workflow = self.ok("workflow.create", {"name": "w", "nodes": [
+            {"id": "a", "template_id": self.first["id"]},
+            {"id": "b", "template_id": other["id"]},
+        ], "edges": [{"from": "a", "to": "b", "condition": "success"}]})
+        run = self.ok("workflow.launch", {"id": workflow["id"]})
+        names = {row["id"]: row["name"] for row in self.ok("inventory.list")["inventories"]}
+        nodes = {node["id"]: node for node in
+                 self.ok("workflow.progress", {"id": run["id"]}, role="viewer")["nodes"]}
+        # One started, from its run; one not yet, from its template.
+        self.assertIsNotNone(nodes["a"]["run"])
+        self.assertIsNone(nodes["b"]["run"])
+        self.assertEqual((nodes["a"]["inventory_id"], nodes["a"]["inventory"]),
+                         (self.first["inventory_id"], names[self.first["inventory_id"]]))
+        self.assertEqual((nodes["b"]["inventory_id"], nodes["b"]["inventory"]),
+                         (other["inventory_id"], "other"))
+
     def test_a_template_stays_where_a_workflow_takes_its_steps_from(self):
         other = self.elsewhere()
         workflow = self.ok("workflow.create", {

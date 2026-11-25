@@ -24,6 +24,13 @@ one that could not start. A starter is not named. The run of the workflow
 itself keeps `project_id` and `inventory_id` empty: runs in series wait by
 inventory, and its own steps would wait for it.
 
+With no inventory named, the steps of one workflow may be on several
+inventories (rooms, or a staging inventory before the real one, or the
+hypervisors before their guests): the form groups the templates it offers by
+inventory and says under each step the one it runs on, and
+`workflow.progress` gives each step's inventory, the one its run took or,
+for a step not started, its template's now.
+
 **Runs.** `workflow.launch` (operator) records a run of kind `workflow`.
 It has no unit and no place in the queue (the lanes of `dispatch` leave it
 out); it holds a copy of the steps and links (and of where they are from), so that changing the workflow

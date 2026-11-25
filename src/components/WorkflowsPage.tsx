@@ -12,6 +12,7 @@ import {
     FormHelperText,
     FormSelect,
     FormSelectOption,
+    FormSelectOptionGroup,
     Grid,
     GridItem,
     HelperText,
@@ -27,7 +28,7 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
-import { inScope, layers, nextStepId, type StepScope } from "../lib/workflow.ts";
+import { inScope, layers, nextStepId, templateGroups, type StepScope } from "../lib/workflow.ts";
 import type { ApprovalMode, Inventory, Project, Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
@@ -68,12 +69,13 @@ interface Choices {
     inventories: Inventory[];
 }
 
-function StepEditor({ step, steps, templates, scope, inventories, onChange, onRemove }: {
+function StepEditor({ step, steps, templates, scope, inventories, projects, onChange, onRemove }: {
     step: StepDraft;
     steps: StepDraft[];
     templates: Template[];
     scope: StepScope;
     inventories: Map<string, string>;
+    projects: Map<string, string>;
     onChange: (step: StepDraft) => void;
     onRemove?: () => void;
 }) {
@@ -86,8 +88,8 @@ function StepEditor({ step, steps, templates, scope, inventories, onChange, onRe
     const outside = !!template && !inScope(template, scope);
     // The one chosen stays in the list when it no longer fits, to be seen and changed.
     const offered = templates.filter(item => inScope(item, scope) || item.id === step.template_id);
-    // Templates alike on several inventories are told apart by theirs, unless all are on one.
-    const option = (item: Template) => scope.inventory_id ? item.name : `${item.name} — ${inventories.get(item.inventory_id) ?? ""}`;
+    const groups = templateGroups(offered, scope, inventories, projects);
+    const inventory = template ? inventories.get(template.inventory_id) ?? template.inventory_id : "";
 
     return (
         <Card isCompact>
@@ -105,8 +107,19 @@ function StepEditor({ step, steps, templates, scope, inventories, onChange, onRe
                             <FormSelect id={`wf-${step.id}-template`} value={step.template_id}
                                 onChange={(_e, value) => onChange({ ...step, template_id: value, answers: storedAnswers(templates.find(item => item.id === value), {}) })}>
                                 <FormSelectOption value="" label={t("Choose a job template")} isPlaceholder />
-                                {offered.map(item => <FormSelectOption key={item.id} value={item.id} label={option(item)} />)}
+                                {groups.map(group => group.label
+                                    ? (
+                                        <FormSelectOptionGroup key={group.label} label={group.label}>
+                                            {group.options.map(item => <FormSelectOption key={item.id} value={item.id} label={item.label} />)}
+                                        </FormSelectOptionGroup>
+                                    )
+                                    : group.options.map(item => <FormSelectOption key={item.id} value={item.id} label={item.label} />))}
                             </FormSelect>
+                            {template && (
+                                <FormHelperText><HelperText><HelperTextItem>
+                                    {t("Runs on the inventory {{inventory}}.", { inventory })}
+                                </HelperTextItem></HelperText></FormHelperText>
+                            )}
                         </FormGroup>
                     </GridItem>
                     <GridItem>
@@ -119,6 +132,11 @@ function StepEditor({ step, steps, templates, scope, inventories, onChange, onRe
                 {needsSecret && <Alert variant="warning" isInline title={t("This job template asks for a secret at launch, so it cannot be a step: a workflow never stores a secret.")} />}
                 <FormGroup label={t("Limit to hosts")} fieldId={`wf-${step.id}-limit`}>
                     <TextInput id={`wf-${step.id}-limit`} value={step.limit} placeholder={template?.limit_hosts || "web01,web02"} onChange={(_e, value) => onChange({ ...step, limit: value })} />
+                    {template && (
+                        <FormHelperText><HelperText><HelperTextItem>
+                            {t("Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them.", { inventory })}
+                        </HelperTextItem></HelperText></FormHelperText>
+                    )}
                 </FormGroup>
                 <SurveyAnswers survey={surveyOf(template)} answers={step.answers} onChange={answers => onChange({ ...step, answers })} />
                 <ApprovalModeField id={`wf-${step.id}-approval`} value={step.approval} floor={template?.approval ?? "none"}
@@ -164,6 +182,7 @@ function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Work
     const [description, setDescription] = useState(workflow?.description ?? "");
     const [scope, setScope] = useState<StepScope>({ project_id: workflow?.project_id ?? "", inventory_id: workflow?.inventory_id ?? "" });
     const inventories = new Map(choices.inventories.map(item => [item.id, item.name]));
+    const projects = new Map(choices.projects.map(item => [item.id, item.name]));
     const [steps, setSteps] = useState<StepDraft[]>(() => toDrafts(workflow, templates));
 
     const invalid = !name.trim() || steps.some(step => {
@@ -221,7 +240,7 @@ function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Work
             </HelperTextItem></HelperText></FormHelperText>
             <Content component="small">{t("Each step passes on to the steps after it the variables its playbook sets with set_stats (with per_host: false). They are kept in clear with the run: not for secrets.")}</Content>
             {steps.map(step => (
-                <StepEditor key={step.id} step={step} steps={steps} templates={templates} scope={scope} inventories={inventories}
+                <StepEditor key={step.id} step={step} steps={steps} templates={templates} scope={scope} inventories={inventories} projects={projects}
                     onChange={changed => setSteps(steps.map(item => item.id === step.id ? changed : item))}
                     onRemove={steps.length > 1 ? () => remove(step.id) : undefined} />
             ))}
@@ -402,6 +421,7 @@ export function WorkflowSteps({ id }: { id: string }) {
                                         <StepStateLabel node={node} />
                                         {node.carried && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Done before")}</Label>}
                                         {node.approval !== "none" && <span style={{ marginInlineStart: "0.5rem" }}><ApprovalModeLabel mode={node.approval} color="orange" /></span>}
+                                        {node.inventory && <Content component="small" style={{ display: "block" }}>{t("Inventory")}: {node.inventory}</Content>}
                                         {node.limit && <Content component="small" style={{ display: "block" }}><code>{node.limit}</code></Content>}
                                         {node.run?.started_at && <Content component="small" style={{ display: "block" }}>{formatTime(node.run.started_at, i18n.language)}</Content>}
                                         {after.map(edge => (

@@ -510,7 +510,8 @@ def cancel(ctx: Context, run_id: str) -> str:
          })
 def workflow_progress(ctx: Context, params: Values) -> dict:
     """The steps of a workflow run: each with its state, its run if it has
-    one, and the links between them."""
+    one, the inventory it ran on (or will run on, its template's now), and
+    the links between them."""
     run = store.fetch(ctx.conn, "runs", params["id"], "run")
     if run["kind"] != "workflow":
         raise BadRequest("this run is not a workflow run")
@@ -519,16 +520,26 @@ def workflow_progress(ctx: Context, params: Values) -> dict:
     failures = options.get("failures", {})
     states = plan(options, steps, failures)
     carried = options.get("carried", {})
+    inventories = {row["id"]: row["name"] for row in
+                   ctx.conn.execute("SELECT id, name FROM inventories").fetchall()}
     out = []
     for node in options.get("nodes", []):
         step = steps.get(node["id"])
         state = states[node["id"]]
+        if step is not None:
+            inventory_id = step["inventory_id"]
+        else:
+            row = ctx.conn.execute("SELECT inventory_id FROM templates WHERE id = ?",
+                                   (node["template_id"],)).fetchone()
+            inventory_id = row["inventory_id"] if row else None
         if state == "ready" and run["status"] != "running":
             state = "skipped"  # never started: the run ended first
         out.append({**node_out(node), "state": state,
                     "run": runs.run_row(step) if step else None,
                     "carried": node["id"] in carried and step is not None
                     and step["id"] == carried[node["id"]],
-                    "error": failures.get(node["id"], "")})
+                    "error": failures.get(node["id"], ""),
+                    "inventory_id": inventory_id,
+                    "inventory": inventories.get(inventory_id, "")})
     return {"run": runs.run_row(run), "nodes": out, "edges": options.get("edges", []),
             "resumed_from": options.get("resumed_from")}

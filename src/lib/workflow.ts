@@ -40,3 +40,26 @@ export function inScope(template: { project_id: string; inventory_id: string }, 
     return (!scope.project_id || template.project_id === scope.project_id)
         && (!scope.inventory_id || template.inventory_id === scope.inventory_id);
 }
+
+// The job templates a step may take, by inventory unless the workflow names one, by name in each.
+// Two of one name in a group are told apart by their project. A group with no label is the
+// one of a workflow that names its inventory.
+export function templateGroups<T extends { id: string; name: string; project_id: string; inventory_id: string }>(offered: T[], scope: StepScope, inventories: Map<string, string>, projects: Map<string, string>) {
+    const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+    const groups = new Map<string, T[]>();
+    for (const item of offered) {
+        const key = scope.inventory_id ? "" : item.inventory_id;
+        groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+    return [...groups.entries()]
+        .map(([id, items]) => ({
+            label: id ? inventories.get(id) ?? id : "",
+            options: items.sort((a, b) => byName(a.name, b.name)).map(item => ({
+                id: item.id,
+                label: items.filter(other => other.name === item.name).length > 1
+                    ? `${item.name} — ${projects.get(item.project_id) ?? ""}`
+                    : item.name,
+            })),
+        }))
+        .sort((a, b) => byName(a.label, b.label));
+}

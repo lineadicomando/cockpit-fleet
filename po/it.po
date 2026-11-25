@@ -4645,3 +4645,9 @@ msgstr "Il CMDB l'ha visto a un altro indirizzo"
 
 msgid "This inventory has no host reached over the network, as last read."
 msgstr "Secondo l'ultima lettura, questo inventario non ha host raggiunti via rete."
+
+msgid "Runs on the inventory {{inventory}}."
+msgstr "Usa l'inventario {{inventory}}."
+
+msgid "Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them."
+msgstr "Host o gruppi di {{inventory}}, per restringere quelli del template; vuoto per tutti."
