@@ -10,7 +10,7 @@ Phases 0–18 closed; phase 19 under way (its close below), phase 20
 (documents) begun before it closes. Last release 0.4.0 (18 November); `[Unreleased]`
 of `CHANGELOG.md` has what came since. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (793
+To resume: `git status`, `git log origin/main..`; `make check` (830
 backend, 207 frontend tests). Each backend module's docstring says what
 it is; `cli.py` is the registry of commands, `db.py` the schema (37
 migrations).
@@ -59,12 +59,8 @@ before phase 19 closed. `docs/architecture/documents.md` says what exists.
 - [x] Backend: `documents.py` (`doc.*`), the repository of the texts beside
   the tree, `document_files` (schema 37), `[documents] max_mb`; `fleet doc
   put|get`.
-- [ ] `docrender.py`: Markdown to HTML with the standard library (a
-  subset of GFM: headings, emphasis, code, nested and task lists, tables,
-  quotes, links, images), raw HTML escaped, links `http(s)`, `mailto`,
-  relative and `fleet:` only, images only from the documents' tree;
-  optional front matter; `doc.render`; tests on a corpus and against
-  XSS, remote images and `javascript:`.
+- [x] `docrender.py` and `doc.render`: what it lets through, and why, in
+  `architecture/documents.md`.
 - [x] Agents: the class `doc` for the changes (reading is `read`), every
   profile, unasked in `autonomous` within `[chat] autonomous_writes`
   (counted from the audit, no table), `doc.delete` asked every time; the

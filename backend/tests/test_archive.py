@@ -324,7 +324,7 @@ class UploadTest(Base):
                               if spec.max_input != cli.MAX_INPUT},
                              {"project.upload", "config.import", "file.push", "file.write",
                               "file.change", "file.import", "inventory.create",
-                          "doc.write"})
+                          "doc.write", "doc.render"})
 
 
 if __name__ == "__main__":

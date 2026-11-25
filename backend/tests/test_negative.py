@@ -94,7 +94,7 @@ doc.list viewer -             doc.read viewer -             doc.search viewer -
 doc.write operator M          doc.mkdir operator M          doc.move operator M
 doc.copy operator M           doc.delete operator M         doc.history viewer -
 doc.diff viewer -             doc.restore operator M        doc.put operator M
-doc.get viewer M
+doc.get viewer M              doc.render viewer -
 starter.list admin -
 project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M

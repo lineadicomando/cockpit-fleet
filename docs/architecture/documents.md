@@ -49,6 +49,40 @@ most hits first, with a few of the lines that have one. Commands
 that change the documents are in the class `doc` (`agents.md`); those that
 read them in `read`.
 
+**One renderer, on the backend** (`docrender.py`, standard library only).
+`doc.render` gives a text as HTML, for the page, the preview while
+editing (it takes the text being written as `content`, and the path for
+its links and images) and the exports; never to agents, which read the
+Markdown. A subset of GitHub's Markdown: headings, emphasis, strong and
+strikethrough, code spans and blocks, quotes, lists nested and with tasks,
+tables, thematic breaks, links inline, by reference, `<autolinks>` and bare
+addresses, images; a front matter of `key: value` lines between two `---`
+is given apart (`meta`), its `title` or the first heading of level 1 as
+the title, and the headings with their ids for an outline. What it lets
+through is decided there, not in the browser:
+
+- raw HTML is text: the source reaches the page escaped, and the only
+  tags and attributes are the renderer's own (a test parses the output of
+  a corpus of attacks and of random input against that list);
+- a link goes to `http(s)` (opened apart, `noopener noreferrer`),
+  `mailto`, `fleet:KIND/ID` (an object of Fleet, for the page to open), or
+  a file of the documents, written relative to the text or to the root of
+  the tree and made `fleet:doc/PATH`; anything else (`javascript:`,
+  `data:`, `file:`, `//host`, a path out of the tree) is left as its text;
+- an image is a file of the tree, read as the others are (no link
+  followed) and embedded as a `data:` URI, 4 MiB each and 16 MiB for a
+  text at most: so the page and an exported `.html` need nothing else, and
+  an image from elsewhere is fetched neither by the controller nor by the
+  browser (a tracking pixel in a document an agent wrote, say); it shows
+  as its text instead, and the answer lists it.
+
+It is not CommonMark to the letter (a blank line in an item makes the
+whole list loose, a table must have as many cells in its delimiter row as
+in its header, HTML is never HTML); where it differs, it shows the text as
+it was written. Its costs are bounded for a text of 1 MiB: brackets and
+backticks are paired in one pass, emphasis looks back over 200 pieces at
+most, quotes and lists nest 16 deep.
+
 **Files of any size** come in and go out as the store's do (`store.md`):
 `doc.put` takes the parameters on one line and the bytes after them (no
 resume: attachments are small next to the store's files), `doc.get`

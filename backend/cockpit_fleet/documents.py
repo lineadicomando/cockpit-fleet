@@ -30,7 +30,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import PurePosixPath
 
-from . import files, paths, storage, store
+from . import docrender, files, paths, storage, store
 from .cli import Bool, Choice, Context, Int, Objs, Str, Strs, Values, command, is_agent
 from .errors import BadRequest, Conflict, NotFound, Unavailable
 from .validators import check_file_path
@@ -432,6 +432,45 @@ def doc_search(ctx: Context, params: Values) -> dict:
     return {"matches": [{"path": path, "hits": hits, "lines": lines}
                         for hits, path, lines in found[:limit]],
             "more": len(found) > limit}
+
+
+def _image(path: PurePosixPath) -> bytes | None:
+    """An image of the tree for the renderer; None when it cannot be one."""
+    try:
+        return _read(path, docrender.MAX_IMAGE)
+    except (NotFound, Conflict, BadRequest):
+        return None
+
+
+@command("doc.render", role="viewer", tool=False, redact=("content",),
+         max_input=_MAX_WRITE_INPUT, params={
+    "path": Str("The text to render; with content, where that text is, for its links and"
+                " images", required=True, max_length=1024),
+    "content": Str("A text to render instead of the one in the tree: the one being written",
+                   max_length=MAX_TEXT),
+    "images": Bool("Embed the images of the tree", default=True),
+})
+def doc_render(ctx: Context, params: Values) -> dict:
+    """A text of the documents as HTML, for the page and its exports: raw
+    HTML escaped, links only to http(s), mailto, fleet: and the documents,
+    images only from the documents, embedded. With its front matter (meta),
+    its title and its headings."""
+    path = check_file_path(params["path"])
+    if not is_text(path):
+        raise BadRequest(f"{path} is not a text (.md)")
+    if params["content"] is None:
+        data = _text(path)
+        try:
+            text = data.decode()
+        except UnicodeDecodeError:
+            raise Conflict(f"{path} is not UTF-8 text") from None
+    else:
+        text = params["content"]
+    rendered = docrender.render(text, path.parent, _image if params["images"] else None)
+    return {"path": str(path), "html": rendered.html, "meta": rendered.meta,
+            "title": rendered.title, "headings": rendered.headings,
+            "images": rendered.images, "refused": rendered.refused,
+            "sha256": _digest(text.encode())}
 
 
 # --- writing ----------------------------------------------------------------------
