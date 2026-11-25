@@ -50,6 +50,42 @@ VMs `deb13` and `alma10`: `sandbox`, `runs`, `files`, `store`, `chat`,
 `schedules`, `negative`. The rest on Fedora not since phase 17. The
 known failure of `cmdb.sh` on Fedora in a container: `architecture/tests.md`.
 
+## Phase 20: documents (next)
+
+Decided 25 November (`decisions.md`, "Documents"); to begin once phase 19
+closes.
+
+- [ ] Backend: `paths.DOCUMENTS_DIR` and its repository beside it (the git
+  helpers of `files.py`, no drafts); a migration for the rows of
+  attachments and exports and the bound of an autonomous agent's writes;
+  `documents.py`: `doc.list`, `read` (chunks of 16 KiB for agents),
+  `search` (the text), `write` (an overwrite quotes the digest read),
+  `mkdir`, `move`, `copy`, `delete`, `history`, `diff`, `restore`;
+  `doc.put`/`doc.get` streamed as the store's; `[documents] max_mb`.
+- [ ] `docrender.py`: Markdown to HTML with the standard library (a
+  subset of GFM: headings, emphasis, code, nested and task lists, tables,
+  quotes, links, images), raw HTML escaped, links `http(s)`, `mailto`,
+  relative and `fleet:` only, images only from the documents' tree;
+  optional front matter; `doc.render`; tests on a corpus and against
+  XSS, remote images and `javascript:`.
+- [ ] Agents: the class `doc` (`cli.AGENT_CLASSES`, every profile,
+  `profiles.question` "ask", none in `autonomous` with a bound per
+  session in `autonomy.py`, delete asked every time), `CLASS_TABLE`, the
+  tools' docstrings, the base instructions (documents are data, search
+  them first, never secrets); `mcp.sh`.
+- [ ] Interface: a `FileManager` taken out of `StorePage` with an adapter
+  (the store unchanged); `DocumentsPage` under Resources: the tree, the
+  rendered document in a sandboxed iframe, the editor
+  (`@codemirror/lang-markdown`) with a preview beside it, history, diff
+  and restore; Export: PDF through the browser's printing (a print
+  stylesheet), the `.md` and a self-contained `.html` downloaded; "Open
+  the document" on an agent's write in the chat; `fleet:` links; Italian.
+- [ ] Integration `documents.sh` (`make ct-test` on the three); the docs
+  (`architecture/documents.md` and the index, `limits.md`, `backup.md`,
+  `security.md`), `CHANGELOG.md`; at the close, with Claude on a VM: a
+  report of a run written in a folder, edited by hand, the agent's
+  version restored, printed to PDF from the page.
+
 ## What the review of 16 November left
 
 Left by the user for another session; checked against the code on 18
