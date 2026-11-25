@@ -29,6 +29,7 @@ import { NetworkPage } from "./components/NetworkPage.tsx";
 import { InventoriesPage } from "./components/InventoriesPage.tsx";
 import { ProjectsPage } from "./components/ProjectsPage.tsx";
 import { StorePage } from "./components/StorePage.tsx";
+import { DocumentsPage } from "./components/DocumentsPage.tsx";
 import { RunDetailPage, RunsPage } from "./components/RunsPage.tsx";
 import { NotificationsPage } from "./components/NotificationsPage.tsx";
 import { SchedulesPage } from "./components/SchedulesPage.tsx";
@@ -95,7 +96,7 @@ export function App() {
         };
         const titles: Record<string, string> = {
             overview: t("Overview"), hosts: t("Hosts"), assets: t("Assets"), checks: t("Checks"), runs: t("Runs"), templates: t("Job templates"), workflows: t("Workflows"), schedules: t("Schedules"), notifications: t("Notifications"), inventories: t("Inventories"),
-            projects: t("Projects"), store: t("Store"), credentials: t("Credentials"), variables: t("Variables"), hostkeys: t("Host keys"), network: t("Network"), system: t("System"),
+            projects: t("Projects"), store: t("Store"), documents: t("Documents"), credentials: t("Credentials"), variables: t("Variables"), hostkeys: t("Host keys"), network: t("Network"), system: t("System"),
             audit: t("Audit log"), chat: t("Assistant"),
         };
 
@@ -144,6 +145,7 @@ export function App() {
                                 draft={location.path[2] === "drafts" ? location.path[3] ?? "" : ""} />
                             : <ProjectsPage />)}
                         {section === "store" && <StorePage directory={location.path.slice(1).join("/")} />}
+                        {section === "documents" && <DocumentsPage path={location.path.slice(1).join("/")} />}
                         {section === "credentials" && <CredentialsPage />}
                         {section === "variables" && <VariablesPage />}
                         {section === "hostkeys" && <HostKeysPage />}

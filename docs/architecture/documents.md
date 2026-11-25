@@ -83,6 +83,33 @@ it was written. Its costs are bounded for a text of 1 MiB: brackets and
 backticks are paired in one pass, emphasis looks back over 200 pieces at
 most, quotes and lists nest 16 deep.
 
+**The page** (Resources, Documents; `DocumentsPage.tsx`). A folder is the
+store's file manager (`FileManager.tsx`) on `doc.list`, with the changes
+made by `doc.*` and attachments uploaded through `doc.put`; a text
+(`#/documents/PATH.md`) is shown as `doc.render` gives it, in an iframe of
+its own: `srcdoc`, `sandbox="allow-same-origin allow-modals"` (no
+scripts; same origin so that the page can reach into it, modals for
+printing) and a policy of its own in it (`default-src 'none'; img-src
+data:`). The frame inherits Cockpit's policy too, which refuses inline
+styles: the renderer aligns cells by class, and the page adopts the
+document's stylesheet into the frame as a constructed sheet
+(`adoptedStyleSheets`), as CodeMirror's are; the frame is as tall as the
+document. A click on a link is taken by a listener the page puts on the
+frame's document (it runs in the page's realm: tried with a trusted click
+and keyboard on Chrome, 25 November): `fleet:doc/` opens another document,
+`fleet:run/` and `fleet:host/` their pages, `#id` scrolls, http(s) and
+mailto open in a tab of their own with `noopener`; the frame never
+navigates. Editing (`?mode=edit`) is CodeMirror with Markdown beside a
+preview, rendered by the backend 400 ms after the last keystroke; a save
+quotes the digest read, with an optional line for the history. History,
+diff and restore are a dialog as for projects. Exports: "Print or save as
+PDF" prints the frame (the stylesheet has print rules: page margins, no
+breaks inside code and rows), "Download the text" is `doc.get`, "Download
+as a web page" is the rendered page saved from the browser with the
+stylesheet and its policy inside it, the images in it. In the chat, a write
+of the agent that went through (`doc_write`, `doc_restore`, a copy or a
+move to a text) has "Open the document".
+
 **Files of any size** come in and go out as the store's do (`store.md`):
 `doc.put` takes the parameters on one line and the bytes after them (no
 resume: attachments are small next to the store's files), `doc.get`

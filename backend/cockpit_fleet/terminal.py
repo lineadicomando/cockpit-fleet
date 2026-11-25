@@ -168,9 +168,14 @@ def _fleetctl_stream(name: str, params: dict, source: BinaryIO | None,
         process.stdin.write(json.dumps(params).encode() + b"\n")
         if source is not None:
             shutil.copyfileobj(source, process.stdin, 1024 * 1024)
-        process.stdin.close()
     except BrokenPipeError:
         pass  # refused before the end: the answer says why
+    try:
+        process.stdin.close()
+    except BrokenPipeError:
+        pass
+    # Closed here: communicate() would flush it again, which Python 3.13 refuses.
+    process.stdin = None
     out, err = process.communicate()
     try:
         answer = json.loads(out)

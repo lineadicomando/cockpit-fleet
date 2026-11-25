@@ -4,6 +4,7 @@ person, the shortcuts, and that it reaches the backend as the interface does."""
 import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -647,3 +648,16 @@ class SftpTest(unittest.TestCase):
         self.assertEqual((fake.calls, t.out.getvalue()), ([], ""))
         with self.assertRaises(Usage):
             terminal.run(t, COMMANDS, ["store", "sftp", "--path", "x"])
+
+
+class StreamTest(unittest.TestCase):
+    def test_a_file_sent_after_its_parameters_gets_the_answer(self):
+        # A child in place of fleetctl, which reads everything, then answers.
+        script = ("import json, sys; data = sys.stdin.buffer.read();"
+                  " line, _, rest = data.partition(b'\\n');"
+                  " print(json.dumps({'ok': True, 'data': {'params': json.loads(line), 'size': len(rest)}}))")
+        popen = terminal.subprocess.Popen
+        with mock.patch.object(terminal.subprocess, "Popen",
+                               lambda _argv, **kwargs: popen([sys.executable, "-c", script], **kwargs)):
+            answer = terminal._fleetctl_stream("doc.put", {"path": "a.png"}, io.BytesIO(b"x" * 3_000_000), None)
+        self.assertEqual(answer["data"], {"params": {"path": "a.png"}, "size": 3_000_000})

@@ -37,7 +37,23 @@ export interface StoreSource {
     error: string;
 }
 
-export interface StoreList {
+// What a list of files needs of each file, whatever it lists: the store's,
+// the documents'.
+export interface Listed {
+    path: string;
+    size: number;
+    updated_at: number;
+}
+
+// A tree of files as the backend lists it: its files and its folders.
+export interface Listing<F extends Listed = Listed> {
+    files: F[];
+    directories: string[];
+    // False when the tree had more entries than are listed.
+    complete: boolean;
+}
+
+export interface StoreList extends Listing<StoreFile> {
     files: StoreFile[];
     directories: string[];
     // False when the tree had more entries than are listed.
@@ -126,7 +142,11 @@ export function putHeader(path: string, size: number, offset: number, replace: b
 }
 
 export interface UploadOptions {
-    // Bytes of an earlier upload of the same file the backend already has.
+    // The command that takes the file: store.put, or doc.put.
+    command?: string;
+    // Its other parameters, beside the path, the size and replace.
+    params?: Record<string, unknown>;
+    // Bytes of an earlier upload of the same file the backend already has (store.put only).
     offset?: number;
     replace?: boolean;
     onProgress?: (sent: number) => void;
@@ -140,15 +160,18 @@ export interface Upload {
 // Sends a file to the store. Progress counts what fleetctl says it has written.
 export function uploadToStore(file: Blob, path: string, options: UploadOptions = {}): Upload {
     const offset = options.offset ?? 0;
+    const command = options.command ?? "store.put";
     const channel = cockpit.channel({
         payload: "stream",
-        spawn: fleetctl("store.put"),
+        spawn: fleetctl(command),
         binary: true,
         err: "message",
         environ: ["LC_ALL=C"],
         ...(isElevated() ? { superuser: "try" as const } : {}),
     });
-    const header = putHeader(path, file.size, offset, options.replace ?? false);
+    const header = command === "store.put"
+        ? putHeader(path, file.size, offset, options.replace ?? false)
+        : new TextEncoder().encode(JSON.stringify({ path, size: file.size, replace: options.replace ?? false, progress: true, ...options.params }) + "\n");
     // fleetctl's output: lines {"received": N} as it writes, then the answer.
     const decoder = new TextDecoder();
     let pending = "";
@@ -265,8 +288,8 @@ function streamUrl(command: string, paths: string[], name: string, type: string)
     return `${prefix}?${base64(JSON.stringify(options))}`;
 }
 
-export function downloadUrl(path: string): string {
-    return streamUrl("store.read", [path], path.split("/").pop() || "file", "application/octet-stream");
+export function downloadUrl(path: string, command = "store.read"): string {
+    return streamUrl(command, [path], path.split("/").pop() || "file", "application/octet-stream");
 }
 
 // The paths travel in the link: a long one is refused by the web server on
@@ -283,7 +306,7 @@ export function archiveName(paths: string[], directory: string): string {
     return `${basename(directory) || "store"}.tar`;
 }
 
-function save(href: string, name: string) {
+export function save(href: string, name: string) {
     const link = document.createElement("a");
     link.href = href;
     link.download = name;
@@ -314,11 +337,13 @@ export async function downloadFromStore(path: string): Promise<StoreFile> {
 }
 
 // What the store holds in one directory, from the list of all of it.
-export interface StoreEntry {
+export interface Entry<F extends Listed = StoreFile> {
     name: string;
     path: string;
-    file: StoreFile | null;
+    file: F | null;
 }
+
+export type StoreEntry = Entry<StoreFile>;
 
 export function entriesOf(list: StoreList, directory: string): StoreEntry[] {
     const prefix = directory ? directory + "/" : "";
@@ -335,8 +360,8 @@ export function joinPath(directory: string, name: string): string {
 
 // The entries of every directory of the store, each list sorted by name:
 // built once per listing, not each time a folder is drawn.
-export function indexStore(list: StoreList): Map<string, StoreEntry[]> {
-    const index = new Map<string, StoreEntry[]>([["", []]]);
+export function indexStore<F extends Listed>(list: Listing<F>): Map<string, Entry<F>[]> {
+    const index = new Map<string, Entry<F>[]>([["", []]]);
     const into = (directory: string) => {
         let entries = index.get(directory);
         if (!entries) index.set(directory, entries = []);
@@ -369,9 +394,9 @@ export function readStoreSort(text: string | null): StoreSort {
 }
 
 // Folders always first, by name; files by the key asked, then by name.
-export function sortEntries(entries: StoreEntry[], sort: StoreSort): StoreEntry[] {
+export function sortEntries<F extends Listed>(entries: Entry<F>[], sort: StoreSort): Entry<F>[] {
     const sign = sort.ascending ? 1 : -1;
-    const key = (entry: StoreEntry) => (sort.by === "size" ? entry.file?.size ?? 0 : entry.file?.updated_at ?? 0);
+    const key = (entry: Entry<F>) => (sort.by === "size" ? entry.file?.size ?? 0 : entry.file?.updated_at ?? 0);
     return [...entries].sort((a, b) => {
         if (!a.file !== !b.file) return a.file ? 1 : -1;
         if (sort.by === "name" || !a.file) return sign * a.name.localeCompare(b.name);
@@ -380,21 +405,21 @@ export function sortEntries(entries: StoreEntry[], sort: StoreSort): StoreEntry[
 }
 
 // The entries of a folder whose name has QUERY in it, ignoring case.
-export function filterEntries(entries: StoreEntry[], query: string): StoreEntry[] {
+export function filterEntries<F extends Listed>(entries: Entry<F>[], query: string): Entry<F>[] {
     const wanted = query.trim().toLowerCase();
     return wanted ? entries.filter(entry => entry.name.toLowerCase().includes(wanted)) : entries;
 }
 
 // Files and folders anywhere in the store whose path has QUERY in it: those
 // whose name starts with it first, then those whose name has it.
-export function searchStore(list: StoreList, query: string, limit: number): { entries: StoreEntry[]; more: number } {
+export function searchStore<F extends Listed>(list: Listing<F>, query: string, limit: number): { entries: Entry<F>[]; more: number } {
     const wanted = query.trim().toLowerCase();
     if (!wanted) return { entries: [], more: 0 };
-    const all: StoreEntry[] = [
+    const all: Entry<F>[] = [
         ...list.directories.map(path => ({ name: basename(path), path, file: null })),
         ...list.files.map(file => ({ name: basename(file.path), path: file.path, file })),
     ];
-    const rank = (entry: StoreEntry) => {
+    const rank = (entry: Entry<F>) => {
         const name = entry.name.toLowerCase();
         if (name.startsWith(wanted)) return 0;
         if (name.includes(wanted)) return 1;
@@ -408,7 +433,7 @@ export function searchStore(list: StoreList, query: string, limit: number): { en
 }
 
 // How many files PATHS hold, folders counted with what is in them, and their bytes.
-export function sizeOf(list: StoreList, paths: string[]): { files: number; bytes: number } {
+export function sizeOf(list: Listing, paths: string[]): { files: number; bytes: number } {
     const inside = list.files.filter(file => paths.some(path => isInside(file.path, path)));
     return { files: inside.length, bytes: inside.reduce((total, file) => total + file.size, 0) };
 }
@@ -450,7 +475,7 @@ export function storeChoices(list: StoreList, folder: string, partial: string): 
 
 // The store as it will be once MOVES are done: shown before the backend
 // has answered, and replaced by its listing as soon as it comes.
-export function moveInList(list: StoreList, moves: { path: string; to: string }[]): StoreList {
+export function moveInList<L extends Listing>(list: L, moves: { path: string; to: string }[]): L {
     const move = (path: string) => {
         for (const { path: from, to } of moves) {
             const next = renamed(path, from, to);
@@ -470,7 +495,7 @@ export function moveInList(list: StoreList, moves: { path: string; to: string }[
     };
 }
 
-export function removeFromList(list: StoreList, paths: string[]): StoreList {
+export function removeFromList<L extends Listing>(list: L, paths: string[]): L {
     const gone = (path: string) => paths.some(removed => isInside(path, removed));
     return { ...list, files: list.files.filter(file => !gone(file.path)), directories: list.directories.filter(path => !gone(path)) };
 }

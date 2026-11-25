@@ -350,7 +350,7 @@ def doc_list(ctx: Context, params: Values) -> dict:
         if not inside(path):
             continue
         row = rows.get(path)
-        entry = {"path": path, "size": status.st_size, "modified": status.st_mtime,
+        entry = {"path": path, "size": status.st_size, "updated_at": status.st_mtime,
                  "text": is_text(path)}
         if row is not None and not entry["text"]:
             entry.update(origin=row["origin"], source=row["source"],

@@ -18,6 +18,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   copy and delete. Commands `doc.*` (`fleet doc put` and `fleet doc get`
   at a terminal); `[documents] max_mb` of `config.toml` bounds them
   (1024).
+- Resources, Documents: folders of texts and attachments managed as the
+  store is; a text shown as it will be printed, written beside a preview,
+  its history with the changes and "Put it back"; printed or saved as
+  PDF from the browser, downloaded as Markdown or as a web page that
+  holds its images. Links lead to other documents and to runs and hosts
+  (`fleet:run/ID`, `fleet:host/ID`); images come only from the
+  documents, and raw HTML is shown as text. The assistant's writes have
+  "Open the document" in the chat.
 - Assistant: in every profile it reads, searches and writes the
   documents, a change asked about as launches are and a deletion every
   time; in `autonomous` it changes them unasked, at most
@@ -97,6 +105,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- `fleet store put` failed after sending the file, with Python 3.13 as
+  Debian 13 has it ("flush of closed file"), though the file arrived.
 - Assistant: a message written and not sent is still there after a
   visit to another tab of Fleet (not after reloading the page).
 

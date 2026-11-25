@@ -166,6 +166,10 @@
     z-index: var(--pf-t--global--z-index--lg, 400);
     min-inline-size: 12rem;
 }
+.fleet-document-frame { display: block; inline-size: 100%; border: var(--pf-t--global--border--width--regular) solid var(--pf-t--global--border--color--default); border-radius: var(--pf-t--global--border--radius--small); background: #fff; }
+.fleet-document-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--pf-t--global--spacer--md); block-size: 65vh; min-block-size: 20rem; margin-block-end: var(--pf-t--global--spacer--sm); }
+.fleet-document-edit > .fleet-editor, .fleet-document-edit > .fleet-document-frame { block-size: 100%; min-block-size: 0; }
+@media (max-width: 60rem) { .fleet-document-edit { grid-template-columns: 1fr; block-size: auto; } .fleet-document-edit > * { block-size: 50vh; } }
 .fleet-store-list { min-block-size: 10rem; border-radius: var(--pf-t--global--border--radius--small); }
 .fleet-store-list.is-target { outline: 2px dashed var(--pf-t--global--border--color--clicked); outline-offset: 2px; }
 .fleet-store-list tr.is-cut { opacity: 0.5; }

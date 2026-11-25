@@ -131,6 +131,16 @@
         },
         {
           "matches": [
+            "document",
+            "report",
+            "markdown",
+            "documento",
+            "relazione"
+          ],
+          "goto": "documents"
+        },
+        {
+          "matches": [
             "variable",
             "extra vars",
             "variabile"

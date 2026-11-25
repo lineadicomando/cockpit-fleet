@@ -4,6 +4,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, t
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { jinja } from "@codemirror/lang-jinja";
 import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
 import { yaml } from "@codemirror/lang-yaml";
 import {
@@ -24,6 +25,7 @@ function languageFor(path: string): Extension {
     if (/\.j2$/.test(name)) return jinja();
     if (/\.py$/.test(name)) return python();
     if (/\.json$/.test(name)) return json();
+    if (/\.md$/i.test(name)) return [markdown(), EditorView.lineWrapping];
     if (/\.(ini|cfg|conf|toml)$/.test(name) || name === "hosts" || name === "inventory") return StreamLanguage.define(properties);
     return [];
 }

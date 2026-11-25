@@ -22,9 +22,11 @@ import {
     TextArea,
     TextInput,
 } from "@patternfly/react-core";
+import cockpit from "cockpit";
 import type { Item, ToolItem, ToolStatus } from "../lib/acp.ts";
 import { chat } from "../lib/chat-agent.ts";
 import type { Ask, ChatState } from "../lib/chat.ts";
+import { documentLocation, writtenDocument } from "../lib/documents.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
@@ -120,6 +122,7 @@ function useClasses() {
         scan: t("scans of a subnet"),
         config: t("changes to what is defined"),
         code: t("files of projects and inventories"),
+        doc: t("changes to the documents"),
     };
     return (kind: string) => names[kind] ?? kind;
 }
@@ -131,6 +134,7 @@ function shown(value: unknown): string {
 function ToolCall({ item }: { item: ToolItem }) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
+    const written = writtenDocument(item);
     const status: Record<ToolStatus, React.ReactNode> = {
         pending: <Label isCompact color="grey">{t("Waiting")}</Label>,
         in_progress: <Label isCompact color="blue" icon={<Spinner size="sm" aria-hidden />}>{t("Running")}</Label>,
@@ -141,6 +145,11 @@ function ToolCall({ item }: { item: ToolItem }) {
         <div className="fleet-chat-tool">
             <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
                 <FlexItem>{status[item.status]}</FlexItem>
+                {written && (
+                    <FlexItem>
+                        <Button variant="link" isInline onClick={() => cockpit.location.go(documentLocation(written))}>{t("Open the document")}</Button>
+                    </FlexItem>
+                )}
                 <FlexItem>
                     <ExpandableSection toggleText={item.tool || item.title || t("Tool")} isExpanded={open}
                         onToggle={(_event, expanded) => setOpen(expanded)} isIndented>

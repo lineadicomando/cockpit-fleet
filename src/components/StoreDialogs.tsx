@@ -194,21 +194,24 @@ export function RenameModal({ path, taken, onSubmit, onClose }: {
 }
 
 // What to do with names already in the store, for all of them at once.
-export function ConflictModal({ paths, canReplace, onChoose, onClose }: {
+export function ConflictModal({ paths, canReplace, onChoose, onClose, title, intro }: {
     paths: string[];
     // Uploads may replace a file; a move may not.
     canReplace: boolean;
     onChoose: (clash: Clash) => void;
     onClose: () => void;
+    // Where the names are taken: the store's words by default.
+    title?: string;
+    intro?: string;
 }) {
     const { t } = useTranslation();
     const [clash, setClash] = useState<Clash>(canReplace ? "replace" : "keep");
     const shown = paths.slice(0, 10);
     return (
-        <FormModal title={t("Names already in the store")} submitLabel={t("Continue")} variant={ModalVariant.small}
+        <FormModal title={title ?? t("Names already in the store")} submitLabel={t("Continue")} variant={ModalVariant.small}
             isDanger={clash === "replace"} onClose={onClose}
             onSubmit={async () => { onChoose(clash); onClose(); }}>
-            <Content component="p">{t("These are already in the store:")}</Content>
+            <Content component="p">{intro ?? t("These are already in the store:")}</Content>
             <Content component="ul">
                 {shown.map(path => <Content component="li" key={path}>{path}</Content>)}
                 {paths.length > shown.length && <Content component="li">{t("files_count", { count: paths.length - shown.length })}</Content>}

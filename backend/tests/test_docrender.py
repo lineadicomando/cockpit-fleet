@@ -40,7 +40,7 @@ CORPUS = [
     ("text\n- item", "<p>text</p>\n<ul>\n<li>item</li>\n</ul>"),
     ("text\n2. not a list", "<p>text\n2. not a list</p>"),
     ("***\n---\n___", "<hr>\n<hr>\n<hr>"),
-    ("| a | b |\n|---|:-:|\n| 1 | 2 |\n| 3 |", '<table>\n<thead>\n<tr><th>a</th><th style="text-align: center">b</th></tr>\n</thead>\n<tbody>\n<tr><td>1</td><td style="text-align: center">2</td></tr>\n<tr><td>3</td><td style="text-align: center"></td></tr>\n</tbody>\n</table>'),
+    ("| a | b |\n|---|:-:|\n| 1 | 2 |\n| 3 |", '<table>\n<thead>\n<tr><th>a</th><th class="align-center">b</th></tr>\n</thead>\n<tbody>\n<tr><td>1</td><td class="align-center">2</td></tr>\n<tr><td>3</td><td class="align-center"></td></tr>\n</tbody>\n</table>'),
     ("| a |\n| - | - |", "<p>| a |\n| - | - |</p>"),
     ("[x](https://e.org \"T\")", '<p><a href="https://e.org" title="T" rel="noopener noreferrer" target="_blank">x</a></p>'),
     ("[x](<a b.md>)", '<p><a href="fleet:doc/dir/a%20b.md">x</a></p>'),
@@ -93,7 +93,7 @@ ALLOWED = {
     "p": set(), "br": set(), "em": set(), "strong": set(), "del": set(), "code": {"class"},
     "pre": set(), "blockquote": set(), "ul": set(), "ol": {"start"}, "li": {"class"},
     "input": {"type", "disabled", "checked"}, "hr": set(), "table": set(), "thead": set(),
-    "tbody": set(), "tr": set(), "th": {"style"}, "td": {"style"},
+    "tbody": set(), "tr": set(), "th": {"class"}, "td": {"class"},
     "a": {"href", "title", "rel", "target"}, "img": {"src", "alt", "title"},
     "span": {"class", "title"},
 }
@@ -115,8 +115,8 @@ class Checker(HTMLParser):
                 self.test.assertTrue(value.startswith(ALLOWED_HREF), value)
             if name == "src":
                 self.test.assertTrue(value.startswith("data:image/"), value)
-            if name == "style":
-                self.test.assertRegex(value, r"^text-align: (left|right|center)$")
+            if name == "class" and tag in ("th", "td"):
+                self.test.assertRegex(value, r"^align-(left|right|center)$")
             if name == "type":
                 self.test.assertEqual(value, "checkbox")
 

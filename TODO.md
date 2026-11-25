@@ -10,8 +10,8 @@ Phases 0–18 closed; phase 19 under way (its close below), phase 20
 (documents) begun before it closes. Last release 0.4.0 (18 November); `[Unreleased]`
 of `CHANGELOG.md` has what came since. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (830
-backend, 207 frontend tests). Each backend module's docstring says what
+To resume: `git status`, `git log origin/main..`; `make check` (831
+backend, 212 frontend tests). Each backend module's docstring says what
 it is; `cli.py` is the registry of commands, `db.py` the schema (37
 migrations).
 
@@ -65,13 +65,10 @@ before phase 19 closed. `docs/architecture/documents.md` says what exists.
   profile, unasked in `autonomous` within `[chat] autonomous_writes`
   (counted from the audit, no table), `doc.delete` asked every time; the
   instructions; `mcp.sh` on AlmaLinux and Debian.
-- [ ] Interface: a `FileManager` taken out of `StorePage` with an adapter
-  (the store unchanged); `DocumentsPage` under Resources: the tree, the
-  rendered document in a sandboxed iframe, the editor
-  (`@codemirror/lang-markdown`) with a preview beside it, history, diff
-  and restore; Export: PDF through the browser's printing (a print
-  stylesheet), the `.md` and a self-contained `.html` downloaded; "Open
-  the document" on an agent's write in the chat; `fleet:` links; Italian.
+- [x] Interface: `FileManager` out of `StorePage`, `DocumentsPage`
+  (Resources), the editor with its preview, history and restore, exports,
+  "Open the document" in the chat; tried in Chrome on `deb13` (25
+  November) but for printing.
 - [ ] Integration `documents.sh` (`make ct-test` on the three); the docs
   (`architecture/documents.md` and the index, `limits.md`, `backup.md`,
   `security.md`), `CHANGELOG.md`; at the close, with Claude on a VM: a

@@ -236,7 +236,10 @@ network and `169.254.169.254`; on `deb13`, 1 GiB queued from the page came
 from a container node in about 10 s, its digest checked, the list of the
 store brought up to date when it landed.
 
-**The page.** The Store page works as a file manager does, on what
+**The page.** The Store page works as a file manager does
+(`FileManager.tsx`, which the Documents page shares: the list, its
+selection, drags, clipboard, menus, keys, dialogs and the queue of uploads;
+the page gives it how each change is made, its columns and its panel), on what
 `store.list` gives (one listing of the whole tree, indexed by folder in the
 page): a filter of the folder or a search of the whole store by name,
 columns to sort by (kept in the browser), many entries selected (checkboxes,

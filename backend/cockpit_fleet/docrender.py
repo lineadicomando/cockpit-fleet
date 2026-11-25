@@ -400,7 +400,8 @@ class _Renderer:
             cells = (cells + [""] * len(header))[:len(header)]
             parts = []
             for cell, align in zip(cells, aligns, strict=True):
-                style = f' style="text-align: {align}"' if align else ""
+                # A class, not a style: Cockpit's policy refuses inline styles.
+                style = f' class="align-{align}"' if align else ""
                 parts.append(f"<{tag}{style}>{self.inline(cell)}</{tag}>")
             return "<tr>" + "".join(parts) + "</tr>"
 

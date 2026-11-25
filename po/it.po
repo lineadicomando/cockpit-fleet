@@ -4674,3 +4674,131 @@ msgstr "Mostra i workflow"
 
 msgid "No workflow matches what was typed"
 msgstr "Nessun workflow corrisponde a quanto scritto"
+
+msgid "{{used}} used of {{limit}}."
+msgstr "{{used}} usati di {{limit}}."
+
+msgid "# Title\n\nWrite in Markdown."
+msgstr "# Titolo\n\nScrivi in Markdown."
+
+msgid "A document shows only images among the documents, of at most 4 MB each and 16 MB in all; those from elsewhere are not fetched."
+msgstr "Un documento mostra solo immagini presenti tra i documenti, di al massimo 4 MB l'una e 16 MB in tutto; quelle da altrove non vengono scaricate."
+
+msgid "Attachment"
+msgstr "Allegato"
+
+msgid "Attachment of {{name}}"
+msgstr "Allegato di {{name}}"
+
+msgid "changes to the documents"
+msgstr "modifiche ai documenti"
+
+msgid "Ctrl+S saves. Raw HTML is shown as text; images come from the documents only."
+msgstr "Ctrl+S salva. L'HTML scritto nel testo è mostrato come testo; le immagini vengono solo dai documenti."
+
+msgid "Documents"
+msgstr "Documenti"
+
+msgid "Documents are written by operators and by the assistant."
+msgstr "I documenti sono scritti dagli operatori e dall'assistente."
+
+msgid "Download as a web page"
+msgstr "Scarica come pagina web"
+
+msgid "Download the text"
+msgstr "Scarica il testo"
+
+msgid "Export of {{name}}"
+msgstr "Esportazione di {{name}}"
+
+msgid "Give them up"
+msgstr "Scartale"
+
+msgid "Give up the changes?"
+msgstr "Scartare le modifiche?"
+
+msgid "History"
+msgstr "Cronologia"
+
+msgid "In {{path}}. It ends in .md; a / makes folders within folders."
+msgstr "In {{path}}. Termina con .md; una / crea cartelle dentro cartelle."
+
+msgid "In all the documents"
+msgstr "In tutti i documenti"
+
+msgid "It ends in .md; a / makes folders within folders."
+msgstr "Termina con .md; una / crea cartelle dentro cartelle."
+
+msgid "Names already among the documents"
+msgstr "Nomi già presenti tra i documenti"
+
+msgid "New document"
+msgstr "Nuovo documento"
+
+msgid "No documents yet"
+msgstr "Ancora nessun documento"
+
+msgid "Not a usable name."
+msgstr "Nome non utilizzabile."
+
+msgid "Nothing changed in {{path}}."
+msgstr "Nessuna modifica a {{path}}."
+
+msgid "Open the document"
+msgstr "Apri il documento"
+
+msgid "Preview"
+msgstr "Anteprima"
+
+msgid "Print or save as PDF"
+msgstr "Stampa o salva in PDF"
+
+msgid "Reports of interventions, studies and analyses, written here or by the assistant, with the images and files they show. Every change to a text is kept with its author, and an earlier version can be restored. Runs never see them; do not write secrets here."
+msgstr "Rapporti di interventi, studi e analisi, scritti qui o dall'assistente, con le immagini e i file che mostrano. Ogni modifica a un testo è conservata con il suo autore, e una versione precedente può essere ripristinata. Le run non li vedono mai; non scriverci segreti."
+
+msgid "Search all the documents"
+msgstr "Cerca in tutti i documenti"
+
+msgid "The document {{name}}"
+msgstr "Il documento {{name}}"
+
+msgid "The text can be restored from the history afterwards."
+msgstr "Il testo potrà essere ripristinato dalla cronologia."
+
+msgid "The text of {{name}}"
+msgstr "Il testo di {{name}}"
+
+msgid "the top of the documents"
+msgstr "la radice dei documenti"
+
+msgid "There are more documents than can be listed here: only part of them is shown."
+msgstr "I documenti sono più di quanti se ne possano elencare qui: ne è mostrata solo una parte."
+
+msgid "There is a document with this name already."
+msgstr "Esiste già un documento con questo nome."
+
+msgid "There is no folder {{path}} among the documents."
+msgstr "Non c'è una cartella {{path}} tra i documenti."
+
+msgid "These are already among the documents:"
+msgstr "Questi sono già tra i documenti:"
+
+msgid "What changed (optional, for the history)"
+msgstr "Cosa è cambiato (facoltativo, per la cronologia)"
+
+msgid "What is deleted can be restored from the history if it is a text; an attachment cannot."
+msgstr "Ciò che viene eliminato può essere ripristinato dalla cronologia se è un testo; un allegato no."
+
+msgid "What was written since the last save is lost."
+msgstr "Quanto scritto dall'ultimo salvataggio va perso."
+
+msgid "Write it"
+msgstr "Scrivilo"
+
+msgid "Write one, upload files or drop them here, or ask the assistant for a report."
+msgstr "Scrivine uno, carica dei file o trascinali qui, oppure chiedi un rapporto all'assistente."
+
+msgid "images_refused_count"
+msgid_plural "images_refused_count_plural"
+msgstr[0] "{{count}} immagine non è mostrata"
+msgstr[1] "{{count}} immagini non sono mostrate"
