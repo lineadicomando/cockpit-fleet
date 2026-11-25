@@ -136,6 +136,9 @@ file, and navigate to `http://127.0.0.1:9091/fleet`. What makes it work:
   need the native value setter followed by an `input` event; after a
   redeploy, reload ignoring the cache (a change of the URL fragment does
   not reload the bundle);
+- `sourcePath` is the Chrome tools' (`mcp__chrome-devtools__*`); in a frame
+  without scripts (a rendered document) their click fails: dispatch the
+  click from the page, or focus the element from the page and press a key;
 - to look at a page as a given role, create a throwaway account in the
   matching group, log in with it, and delete it afterwards.
 
