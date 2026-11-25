@@ -69,11 +69,11 @@ before phase 19 closed. `docs/architecture/documents.md` says what exists.
   (Resources), the editor with its preview, history and restore, exports,
   "Open the document" in the chat; tried in Chrome on `deb13` (25
   November) but for printing.
-- [ ] Integration `documents.sh` (`make ct-test` on the three); the docs
-  (`architecture/documents.md` and the index, `limits.md`, `backup.md`,
-  `security.md`), `CHANGELOG.md`; at the close, with Claude on a VM: a
-  report of a run written in a folder, edited by hand, the agent's
-  version restored, printed to PDF from the page.
+- [x] Integration `documents.sh` (`make ct-test` on the three, 25
+  November); `limits.md`, `backup.md`, `security.md`, `install.md`.
+- [ ] At the close, with Claude on a VM: a report of a run written in a
+  folder, edited by hand, the agent's version restored, printed to PDF
+  from the page (printing not tried yet).
 
 ## What the review of 16 November left
 

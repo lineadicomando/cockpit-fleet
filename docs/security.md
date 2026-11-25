@@ -16,8 +16,8 @@ they can reach.
 |---|---|---|
 | An administrator of Fleet (`cockpit-fleet-admin`) | decide what runs where: projects, inventories, credentials, templates, checks, ad-hoc commands | become root on the controller, read a secret back, or reach the database outside the backend's commands |
 | Whoever writes a project | write code that runs, in the sandbox of a run, with the credentials of the templates that use it | reach other projects (but see the note on local directories below), other runs, their secrets, or the controller beyond the sandbox |
-| An operator | launch what administrators defined, on fewer hosts than the template says, with answers to its survey; put files in the store, which playbooks may install on nodes | widen a template's hosts, change what it runs, or have an answer read as code |
-| A viewer | see what exists and how runs ended, and download the files of the store | read the output of runs, which may hold data of the nodes |
+| An operator | launch what administrators defined, on fewer hosts than the template says, with answers to its survey; put files in the store, which playbooks may install on nodes; write, move and delete documents | widen a template's hosts, change what it runs, or have an answer read as code |
+| A viewer | see what exists and how runs ended, and download the files of the store; read and search the documents | read the output of runs, which may hold data of the nodes |
 | An approver | let a run that waits for approval start, or refuse it | approve their own launch where another person is asked for (an administrator may, unless `[approvals] admins_exempt = false`) |
 | A node | answer what it is asked | report for another host or another check, or have its answers read as code |
 
@@ -72,6 +72,15 @@ else. An administrator of the machine can, of course, do anything.
    by hand or every day, week or month: what the URL serves then replaces
    it and reaches the next runs, so give a digest (`sha256`) to a file that
    must not change, which then refuses another version.
+   The documents are not given to runs: they are kept apart from the
+   store, under the state directory that the sandbox of a run hides. They
+   are read by every viewer, so they are not a place for secrets either.
+   What the page shows of them is rendered by the backend, which escapes
+   any HTML written in them, lets links go only to http(s), mailto, Fleet
+   and other documents, and shows only images among the documents; the
+   page shows the result in a frame where no script runs, under a policy
+   that lets in only the images it carries. A document an agent wrote
+   cannot make the browser of whoever reads it fetch anything.
    The store over SFTP (`fleet store sftp`) needs an SSH login to the
    controller and gives that person what their role gives them in the
    page, through the same `fleetctl` and the same audit trail: it opens no
@@ -158,7 +167,13 @@ what they let through without asking is decided by the backend for the
 profile (`profiles.question`), and the backend decides each call again
 whatever was answered. Files an agent writes in a project or inventory
 written in Fleet go to a draft of its session, which no run reads; only a
-person merges or discards it, after seeing what it changes. The agent of
+person merges or discards it, after seeing what it changes. Documents
+an agent writes are not drafts: every profile may write them, asked as a
+launch is (a deletion every time), and `autonomous` at most
+`[chat] autonomous_writes` times a session; each change is in their
+history with the person the agent acts for as its author, and in the audit
+log as coming through an agent, so that a text can be put back as it was.
+The agent of
 an administrator may scan a subnet in the profiles `diagnostic` and
 `administrator`, asked every time: only those subnets an administrator
 may scan, below.

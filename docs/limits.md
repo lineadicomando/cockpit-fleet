@@ -57,6 +57,16 @@ in [security.md](security.md); the decisions behind these limits in
   a file by deleting it and renaming the new one, so for a moment the
   store has none there; through `sshfs` a file reaches the store a moment
   after the copy returns.
+- Documents: only the texts (`.md`) have a history; an attachment
+  replaced or deleted is gone. No drafts: an agent's write is a commit
+  like a person's, restored from the history if unwanted. Markdown is a
+  subset of GitHub's, not CommonMark to the letter (`documents.md`); no
+  HTML, no images from outside the documents, 4 MB each and 16 MB a
+  document at most. A text is at most 1 MiB; an upload of an attachment
+  is not resumed. The search reads every text at each call (no index),
+  the listing stops at 20 000 entries. A PDF only through the browser's
+  printing, never on the controller. Two people editing one text: the
+  second save is refused, and its changes must be carried over by hand.
 - Ad-hoc: arguments as one line in the page, stored in clear.
 - Sets of variables: a secret variable is an extra variable, one value for
   every host of a run (a value per group needs a name per group); its value

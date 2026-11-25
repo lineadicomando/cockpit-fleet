@@ -22,6 +22,7 @@ controller that accepts password logins over SSH.
 | `test/integration/files.sh` | a project written in the interface, syntax checks, starters | yes |
 | `test/integration/upload.sh` | a project uploaded as an archive, hostile archives | yes |
 | `test/integration/store.sh` | the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses, `sftp` over SSH through `fleet store sftp` | yes |
+| `test/integration/documents.sh` | the documents: the tree and its repository made by the service with git as installed, roles, a text written, replaced with its digest, moved, deleted and restored as commits of the caller, an attachment put and read back out of the history, the rendered page, a text put there by hand, `fleet doc put` and `get`, a run that does not see them | yes |
 | `test/integration/galaxy.sh` | collections from a requirements file (IT_GALAXY_NET=yes for git) | yes |
 | `test/integration/adhoc.sh` | ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD) | yes |
 | `test/integration/netscan.sh` | the scan of a subnet: on a dummy interface by default, nothing leaving the machine (IT_NETSCAN_SUBNET: a subnet of the lab's instead, without the inventories), ICMP from the sandbox, refusals, a scan canceled; an inventory made from it and MAC addresses written into another, read by Ansible; an inventory probed; `net_probe` as an ad-hoc command on the controller | yes |

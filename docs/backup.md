@@ -11,6 +11,7 @@ for the administrator of the machine; every command runs as root.
 | Projects written in the interface (a git repository each, with their history), uploaded archives, collections installed for projects, checkouts of git projects | `/var/lib/cockpit-fleet/projects/` | yes; git projects and their collections can also be fetched again |
 | Inventories written in the interface (their files, a git repository each, with their history) | `/var/lib/cockpit-fleet/inventories/` | yes |
 | The store: files that playbooks copy to nodes, what runs fetched | `/var/lib/cockpit-fleet/store/` (what each file is and who put it there is in the database) | if its files cannot be downloaded again; it may be large. `store-uploads/` and `store-farms/` beside it are not needed |
+| Documents: texts and their attachments, and the history of the texts | `/var/lib/cockpit-fleet/documents/` and `documents.git/` beside it (where each attachment came from is in the database) | yes, the two together; `documents-uploads/` is not needed |
 | The output and events of runs | `/var/lib/cockpit-fleet/runs/` | if the output of past runs matters; it is deleted after `[runs] keep_days` anyway |
 | The configuration | `/etc/cockpit-fleet/config.toml` | yes |
 | Starters of your own: projects and inventories offered when one is created | `/etc/cockpit-fleet/starters/` | yes, if you made some |
