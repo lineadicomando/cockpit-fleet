@@ -132,6 +132,12 @@ file, and navigate to `http://127.0.0.1:9091/fleet`. What makes it work:
   that refuses cookies from scripts. A fresh context per account;
 - the login through the tunnel, over HTTP: a cookie got over HTTPS on the
   VM itself is not accepted at `http://127.0.0.1:9091`.
+- the page is an iframe named `cockpit1:localhost/fleet`; React inputs
+  need the native value setter followed by an `input` event; after a
+  redeploy, reload ignoring the cache (a change of the URL fragment does
+  not reload the bundle);
+- to look at a page as a given role, create a throwaway account in the
+  matching group, log in with it, and delete it afterwards.
 
 To see a page as a role, use a throwaway account in the role's group, as
 `CLAUDE.md` says: give it a random password made on the host in a shell

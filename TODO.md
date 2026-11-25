@@ -4,13 +4,14 @@ What is left. The other documents are listed in `CLAUDE.md`; how each
 closed phase was shown is in `docs/architecture/acceptance.md`; this
 workstation and its lab VMs in `CLAUDE.local.md` (not tracked).
 
-## Status (20 November 2026)
+## Status (25 November 2026)
 
-Phases 0–18 closed; phase 19 under way (below). Last release 0.4.0 (18
-November), with the Overview of phase 18. `make release` only when asked.
+Phases 0–18 closed; phase 19 under way (its close below), phase 20
+(documents) planned next. Last release 0.4.0 (18 November); `[Unreleased]`
+of `CHANGELOG.md` has what came since. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (775
-backend, 201 frontend tests). Each backend module's docstring says what
+To resume: `git status`, `git log origin/main..`; `make check` (776
+backend, 207 frontend tests). Each backend module's docstring says what
 it is; `cli.py` is the registry of commands, `db.py` the schema (36
 migrations).
 

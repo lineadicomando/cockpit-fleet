@@ -132,15 +132,6 @@ them needs the user's explicit agreement.
   `make pot && make po-compile`. Plurals use a symbolic key (`things_count`)
   whose English forms are edited by hand in `src/locales/en/translation.json`.
 
-To drive the interface from the browser tools, the page is an iframe named
-`cockpit1:localhost/fleet`; React inputs need the native value setter followed
-by an `input` event. After a redeploy, reload the page ignoring the cache: a
-change of the URL fragment does not reload the bundle.
-
-To look at a page as a given role, create a throwaway account on the
-controller in the matching group, log in to Cockpit with it, and delete it
-afterwards.
-
 ## Commands
 
 ```
@@ -175,36 +166,27 @@ or on another machine: `docs/architecture/tests.md`.
   what you started.
 - Cockpit has a self-signed certificate, which the browser tools refuse:
   tunnel (`lab.sh tunnel`, or `ssh -L 9091:127.0.0.1:9090`) and use
-  `http://127.0.0.1:9091`.
+  `http://127.0.0.1:9091`; logging in and driving the page: skill
+  `vm-lab`, "The interface in the browser tools".
 - Do not `pkill -f` or `pgrep -f` with a pattern that also appears in your own
   command line: it matches the shell that runs it.
 
 ## Versions and releases
 
-- Versions follow Semantic Versioning, and a release is a tag `vX.Y.Z` on
-  `main`. While the version is `0.x`, the minor number goes up for new
-  features and for breaking changes, the patch number for fixes only. A
-  breaking change asks the administrator to act on upgrade: a key of
-  `config.toml` or a file a controller keeps changes meaning, a requirement
-  is raised (a distribution, Cockpit, ansible-core), a command of `fleetctl`
-  or `fleet` changes or goes, or a feature is removed. From `1.0.0` breaking
-  changes raise the major number.
-- The kinds of change under `[Unreleased]` decide the next version:
-  `Added`, `Changed`, `Deprecated`, `Removed` and `Breaking` raise the
-  minor number (before 1.0.0), `Fixed` and `Security` alone the patch.
-  A change only of tests, CI or the lab goes in no entry.
-- The version is in several files (`scripts/versions.mjs`,
-  `docs/architecture/packaging.md`) and changes only in a release, never by
-  hand; builds between releases are named by `scripts/version.sh`.
-- A release is made only when the user asks, with `make release` on a clean
-  `main`: it runs the checks, moves the `[Unreleased]` entries under
-  `## [X.Y.Z] - YYYY-MM-DD` with the links at the end of the file, sets the
-  version in those files, commits `Release X.Y.Z` and tags `vX.Y.Z`.
-  `make next-version` says beforehand which version it will be;
-  `VERSION=X.Y.Z` only goes higher. Nothing is pushed unless asked: then
-  `git push origin main vX.Y.Z`. The mirror brings the tag to GitHub,
-  whose CI publishes the packages as the release of the tag; check that
-  it did (`gh release view vX.Y.Z -R lineadicomando/cockpit-fleet`).
+- Semantic Versioning; a release is a tag `vX.Y.Z` on `main`. Before
+  1.0.0 the minor number goes up for features and for breaking changes
+  (anything that asks the administrator to act on upgrade: a key of
+  `config.toml` or a kept file changes meaning, a requirement is raised, a
+  command of `fleetctl` or `fleet` changes or goes, a feature is removed),
+  the patch number for fixes only; from 1.0.0 breaking changes raise the
+  major number.
+- Under `[Unreleased]`: `Added`, `Changed`, `Deprecated`, `Removed`,
+  `Breaking` raise the minor number, `Fixed` and `Security` alone the
+  patch. Tests, CI or the lab alone go in no entry.
+- The version is never set by hand. A release is made only when the user
+  asks, with `make release` on a clean `main`; the procedure, the files
+  that carry the version and how to check the published release:
+  `docs/architecture/packaging.md`, "Releases".
 
 ## Repository
 

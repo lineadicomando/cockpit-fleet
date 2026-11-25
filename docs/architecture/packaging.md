@@ -74,6 +74,18 @@ to 17) it passed on the three on 25 October, and on the AlmaLinux VM, with
 no SELinux denial. In the Debian container the script removes the
 `policy-rc.d` of Debian's images, which forbids packages to start services.
 
+## Releases
+
+Made only when the user asks, with `make release` on a clean `main`. It
+runs the checks, moves the `[Unreleased]` entries of `CHANGELOG.md` under
+`## [X.Y.Z] - YYYY-MM-DD` with the links at the end of the file, sets the
+version in the files above, commits `Release X.Y.Z` and tags `vX.Y.Z`.
+`make next-version` says beforehand which version it will be;
+`VERSION=X.Y.Z` only goes higher. Nothing is pushed unless asked: then
+`git push origin main vX.Y.Z`. The mirror brings the tag to GitHub, whose
+CI publishes the packages as the release of the tag; check that it did
+(`gh release view vX.Y.Z -R lineadicomando/cockpit-fleet`).
+
 ## Other distributions
 
 The same code runs on the three controllers; what differs:
