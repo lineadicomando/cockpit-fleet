@@ -11,3 +11,6 @@ addFilter(r"spelling-error .*sandboxed")
 # starts is root's alone: see the security model.
 addFilter(r"non-standard-(uid|gid) .* cockpit-fleet$")
 addFilter(r"non-standard-dir-perm /(etc/cockpit-fleet/secrets|var/lib/cockpit-fleet|run/cockpit-fleet/answers|run/cockpit-fleet/creds)")
+# %pre asks rpm for the version installed and compares it: the percent signs
+# are rpm's query format and macro, escaped as such.
+addFilter(r"percent-in-%pre")

@@ -152,6 +152,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - Store: a folder of more than about a thousand files is downloaded whole;
   the browser saved an empty archive. A file deleted while the archive is
   being made is left out of it.
+- Upgrade: the packages deleted the listing of an inventory that a run had
+  read and that was not yet collected, so that run ended in error; they now
+  delete only those left by versions before 0.3.0, which held its
+  variables.
 
 ### Security
 

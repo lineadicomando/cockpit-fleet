@@ -80,20 +80,7 @@ known failures); on the VM `fed44` `runs`, `workflows`, `schedules`
 ## What the review of 16 November left
 
 Left by the user for another session; checked against the code on 18
-November, all still open.
-
-Fix:
-
-- [ ] `jobs.reconcile`: `fcntl.flock(LOCK_EX)` with no timeout; a
-  `fleetctl` suspended (Ctrl-Z) holding it stops every page and dispatch.
-  The documents' lock (`documents._locked`) is the same.
-- [ ] `fleet-secret answer` logs the ticket's name to the journal before a
-  run spends it: a journal reader with the operator role can spend it.
-- [ ] `store.archive` (`storage.py`) opens every file before the first
-  byte: past ~1000 files `EMFILE`, and the browser saves an empty tar.
-- [ ] Upgrade scriptlets (`debian/cockpit-fleet.postinst`,
-  `packaging/cockpit-fleet.spec`) delete every `runs/*/inventory.json`,
-  also of a reading ended and not collected: tie it to the old version.
+November. The four to fix were fixed on 26 November.
 
 Fix, or record in `limits.md`:
 

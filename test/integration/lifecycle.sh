@@ -59,8 +59,20 @@ quick=$(template quick)
 slow=$(template slow)
 expect_eq "a schedule is created" "$(get "$(admin schedule.create "{\"name\": \"nightly\", \"template_id\": \"$quick\", \"calendar\": \"*-*-* 03:00:00\"}")" 'a["ok"]')" True
 launch() { get "$(ctl itoperator run.start "{\"template_id\": \"$1\"}")" 'a["data"]["id"]'; }
-expect_run "a run of the older version ends" "$(launch "$quick")" 90 successful
+first=$(launch "$quick")
+expect_run "a run of the older version ends" "$first" 90 successful
 old_schema=$(schema)
+# What a reading of an inventory leaves until fleetctl takes it: removed on an
+# upgrade from before 0.3.0, whose listings held the variables, kept after.
+listing=/var/lib/cockpit-fleet/runs/$first/inventory.json
+printf '{}' > "$listing"
+chown cockpit-fleet: "$listing"
+if [ "$debian" = yes ]; then
+    dpkg --compare-versions "$(version_of "$IT_PKG_OLD")" lt 0.3.0 && listing_kept=no || listing_kept=yes
+else
+    [ "$(rpm --eval "%{lua: print(rpm.vercmp('$(version_of "$IT_PKG_OLD")', '0.3.0'))}")" = -1 ] \
+        && listing_kept=no || listing_kept=yes
+fi
 
 # --- upgrade, with a run going --------------------------------------------------
 going=$(launch "$slow")
@@ -71,6 +83,8 @@ expect_eq "the newer package is installed" "$(installed_version)" "$(version_of 
 expect_ok "the timer of the scheduler is active" active cockpit-fleet-scheduler.timer
 expect_ok "and the path unit of notifications" active cockpit-fleet-notify.path
 expect_eq "the configuration as it was changed is kept" "$(grep -c '^max_concurrent = 3' "$CONFIG")" 1
+expect_eq "the listing of an inventory is kept only if no older version left it ($listing_kept)" \
+    "$(test -e "$listing" && echo yes || echo no)" "$listing_kept"
 expect_run "the run going through the upgrade ends, and is recorded" "$going" 120 successful
 new_schema=$(python3 -c 'import sys; sys.path.insert(0, "/usr/lib/cockpit-fleet"); from cockpit_fleet import db; print(len(db.MIGRATIONS))')
 admin whoami >/dev/null

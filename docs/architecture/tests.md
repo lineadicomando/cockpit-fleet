@@ -50,8 +50,10 @@ controller that accepts password logins over SSH.
   account for `IT_SSH_USER`; other `IT_*` variables of the caller are
   passed on; logs in `it-results/DISTRO/`. `windows.sh`,
   `measure-events.sh` and `load.sh` run only when named; `lifecycle.sh`
-  only through `make ct-lifecycle`, which builds an older package too
-  (`CT_KEEP_PACKAGES=DIR` keeps both, to run it on a VM). It needs
+  only through `make ct-lifecycle`, which builds an older package too, as
+  version 0.0.0 (`CT_OLD_VERSION=0.3.0` gives it another, for what an
+  upgrade does only from some versions; `CT_KEEP_PACKAGES=DIR` keeps both,
+  to run it on a VM). It needs
   rootless podman on cgroup v2, nothing else of the host.
 - **The lab**: `test/vm/lab.sh deploy TARGET` installs the package of the
   work tree, `test/vm/lab.sh it TARGET SCRIPT...` runs scripts the same way,

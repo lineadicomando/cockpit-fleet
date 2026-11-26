@@ -10,7 +10,8 @@
 # The older package is built in a worktree of OLD_REF, with its version set
 # below the current one, so that installing the newer one is an upgrade.
 # Needs what make deb or make rpm needs, and rootless podman as ct-test.sh.
-# With CT_KEEP_PACKAGES=DIR the two packages are also copied to DIR.
+# With CT_KEEP_PACKAGES=DIR the two packages are also copied to DIR; with
+# CT_OLD_VERSION=X.Y.Z the older one has that version.
 # The log goes to it-results/DISTRO/lifecycle.log.
 set -eu
 
@@ -52,11 +53,14 @@ build() {  # build TREE: the bundle and the package of DISTRO
 echo "older package: $old_ref"
 git worktree add --detach --quiet "$work/old" "$old_ref"
 ln -s "$PWD/node_modules" "$work/old/node_modules"
-# Below any version of the project: 0.0.0. A tree with scripts/version.sh
-# takes it from FLEET_DESCRIBE, an older one from its packaging files.
-sed -i '1s/(\([^)]*\))/(0.0.0~old)/' "$work/old/debian/changelog"
-sed -i 's/^Version:.*/Version:        0.0.0/' "$work/old/packaging/cockpit-fleet.spec"
-(export FLEET_DESCRIBE=v0.0.0; build "$work/old")
+# Below any version of the project: 0.0.0, or CT_OLD_VERSION (below that of
+# the work tree) where what an upgrade does depends on the version it comes
+# from. A tree with scripts/version.sh takes it from FLEET_DESCRIBE, an older
+# one from its packaging files.
+old_version=${CT_OLD_VERSION:-0.0.0}
+sed -i "1s/(\([^)]*\))/($old_version)/" "$work/old/debian/changelog"
+sed -i "s/^Version:.*/Version:        $old_version/" "$work/old/packaging/cockpit-fleet.spec"
+(export FLEET_DESCRIBE=v$old_version; build "$work/old")
 cp "$(package_of "$work/old")" "$work/packages/old.$kind"
 echo "newer package: the work tree"
 build .

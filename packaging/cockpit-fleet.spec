@@ -56,6 +56,20 @@ install -d %{buildroot}%{_sysconfdir}/cockpit-fleet/secrets/notify \
     %{buildroot}/run/cockpit-fleet/creds
 install -D -m 0644 system/cockpit-fleet.preset %{buildroot}%{_presetdir}/80-cockpit-fleet.preset
 
+# On upgrade from before 0.3.0: the listing such a version left of an
+# inventory it read held its variables, those of a file encrypted with
+# Ansible Vault in clear. Those of later versions hold no variable, and one
+# not yet collected is still needed. In %%pre, where the old version is the
+# one installed.
+%pre
+if [ $1 -gt 1 ] && [ -d /var/lib/cockpit-fleet/runs ]; then
+    old=$(rpm -q --qf '%%{VERSION}' %{name} 2>/dev/null | head -n 1) || :
+    if [ -n "$old" ] && [ "$(rpm --eval "%%{lua: print(rpm.vercmp('$old', '0.3.0'))}")" = -1 ]; then
+        find /var/lib/cockpit-fleet/runs -mindepth 2 -maxdepth 2 -name inventory.json \
+            -type f -delete || :
+    fi
+fi
+
 # rpm creates the account and groups from the sysusers.d file before the files
 # that belong to them are installed.
 %post
@@ -63,12 +77,6 @@ install -D -m 0644 system/cockpit-fleet.preset %{buildroot}%{_presetdir}/80-cock
 %systemd_post cockpit-fleet-scheduler.timer cockpit-fleet-notify.path
 if [ $1 -eq 1 ]; then
     systemctl start cockpit-fleet-scheduler.timer cockpit-fleet-notify.path >/dev/null 2>&1 || :
-fi
-# On upgrade: the listing an older version left of an inventory it read held
-# its variables, those of a file encrypted with Ansible Vault in clear.
-if [ $1 -gt 1 ] && [ -d /var/lib/cockpit-fleet/runs ]; then
-    find /var/lib/cockpit-fleet/runs -mindepth 2 -maxdepth 2 -name inventory.json \
-        -type f -delete || :
 fi
 
 %preun

@@ -276,7 +276,9 @@ gone with the unit, and `fleet-run` writes to the run's directory only
 the hosts, the groups and the three variables that say how a host is
 reached (`runner.listing_hosts`), which fleetctl deletes once it has taken
 them. Until 0.2.0 the whole listing stayed there until the run was
-deleted; the packages remove those on upgrade.
+deleted; the packages remove those on an upgrade from a version before
+0.3.0 (`postinst`, `%pre` where rpm still has the old one installed), and
+leave alone those of later versions, which a run not yet collected needs.
 
 A file inventory serves templates, ad-hoc commands and checks of any
 project, not only its own: playbooks from a public git repository, say,
