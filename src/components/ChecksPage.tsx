@@ -15,6 +15,9 @@ import {
     HelperText,
     HelperTextItem,
     Label,
+    ModalBody,
+    ModalHeader,
+    ModalVariant,
     Radio,
     TextArea,
     TextInput,
@@ -29,13 +32,13 @@ import {
     readView, sortChecks, sumCounts, withGroupsOpen, withoutFilters, thresholdFields, thresholdsValid, toLocalInput,
     type CheckGroup, type ChecksView, type EnabledFilter, type KindCategory, type SortColumn, type StateFilter, type ThresholdField,
 } from "../lib/checks.ts";
-import { formatTime } from "../lib/format.ts";
-import { useLoad } from "../lib/hooks.ts";
+import { formatDuration, formatTime } from "../lib/format.ts";
+import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
-import type { CatalogEntry, CheckDef, CheckKind, Credential, FleetHost, Inventory, Maintenance, Project, StateCounts, StateName } from "../lib/types.ts";
-import { ConfirmDelete, FormModal, ListState, SectionHeader, message } from "./common.tsx";
+import type { CatalogEntry, CheckDef, CheckKind, Credential, CycleOutcome, FleetHost, Inventory, Maintenance, Project, Run, StateCounts, StateName } from "../lib/types.ts";
+import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, announceRun, isActiveRun, message, openRun } from "./common.tsx";
 import { FilterChips, GroupByChoice, GroupRow, NothingMatches, useStoredView } from "./ListView.tsx";
-import { ActionsColumn, Alert, SearchInput } from "./pf.tsx";
+import { ActionsColumn, Alert, Modal, SearchInput } from "./pf.tsx";
 
 const LOOK = {
     ok: { color: "green", icon: <CheckCircleIcon /> },
@@ -495,7 +498,7 @@ function ChecksToolbar({ view, onChange, inventories, groups, shown, total }: {
     );
 }
 
-function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRun, onEdit, onDelete }: {
+function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRun, onEdit, onDelete, onCycles }: {
     groups: CheckGroup[];
     view: ChecksView;
     onChange: (view: ChecksView) => void;
@@ -506,14 +509,15 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
     onRun: (check: CheckDef) => void;
     onEdit: (check: CheckDef) => void;
     onDelete: (check: CheckDef) => void;
+    onCycles: (check: CheckDef) => void;
 }) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const kindNames = useKindNames();
     const categoryNames = useCategoryNames();
     const stateNames = useStateNames();
     const grouped = view.groupBy !== "none";
     const columns: SortColumn[] = ["name", "interval", "states"];
-    const width = grouped ? 8 : 7;
+    const width = grouped ? 9 : 8;
 
     function sortBy(column: SortColumn, index: number) {
         return {
@@ -538,6 +542,7 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
             <Td dataLabel={t("Name")}>
                 {check.name}
                 {!check.enabled && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Not enabled")}</Label>}
+                {check.checking && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Checking")}</Label>}
             </Td>
             <Td dataLabel={t("What")}>{kindNames[check.kind] ?? check.kind}</Td>
             <Td dataLabel={t("Hosts")}>
@@ -545,16 +550,24 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
             </Td>
             <Td dataLabel={t("Every")}>{formatInterval(check.interval)}</Td>
             <Td dataLabel={t("States")}><StateCountLabels counts={check.states} /></Td>
+            <Td dataLabel={t("Last cycle")}>
+                {check.last_cycle && (
+                    <Button variant="link" isInline onClick={() => openRun(check.last_cycle!.id)}>
+                        <RunStatusLabel status={check.last_cycle.status} /> {formatTime(check.last_cycle.started_at ?? check.last_cycle.created_at, i18n.language)}
+                    </Button>
+                )}
+            </Td>
             <Td isActionCell style={{ whiteSpace: "nowrap" }}>
                 {canRun && check.enabled && <Button variant="secondary" size="sm" onClick={() => onRun(check)}>{t("Check now")}</Button>}
             </Td>
             <Td isActionCell>
-                {canEdit && (
-                    <ActionsColumn items={[
+                <ActionsColumn items={[
+                    { title: t("Recent cycles"), onClick: () => onCycles(check) },
+                    ...(canEdit ? [
                         { title: t("Edit"), onClick: () => onEdit(check), isDisabled: !canEditNow },
                         { title: t("Delete"), onClick: () => onDelete(check) },
-                    ]} />
-                )}
+                    ] : []),
+                ]} />
             </Td>
         </Tr>
     );
@@ -565,7 +578,7 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
                 <Tr>
                     {grouped && <Th screenReaderText={t("Group")} />}
                     <Th sort={sortBy("name", 0)}>{t("Name")}</Th><Th>{t("What")}</Th><Th>{t("Hosts")}</Th>
-                    <Th sort={sortBy("interval", 1)}>{t("Every")}</Th><Th sort={sortBy("states", 2)}>{t("States")}</Th>
+                    <Th sort={sortBy("interval", 1)}>{t("Every")}</Th><Th sort={sortBy("states", 2)}>{t("States")}</Th><Th>{t("Last cycle")}</Th>
                     <Th screenReaderText={t("Check now")} /><Th screenReaderText={t("Actions")} />
                 </Tr>
             </Thead>
@@ -591,6 +604,8 @@ export function ChecksPage() {
     const kindNames = useKindNames();
     const [stored, setView] = useStoredView("checks-view", readView);
     const list = useLoad(() => call<{ checks: CheckDef[] }>("check.list"));
+    // While a cycle holds a check, the page follows it to its end.
+    usePolling(list.reload, 5000, list.data?.checks.some(check => check.checking || (!!check.last_cycle && isActiveRun(check.last_cycle.status))) ?? false);
     const windows = useLoad(() => call<{ maintenances: Maintenance[]; now: number }>("maintenance.list"));
     const refs = useLoad(async () => {
         const [catalog, inventories, hosts, credentials, projects] = await Promise.all([
@@ -609,6 +624,7 @@ export function ChecksPage() {
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<CheckDef | null>(null);
     const [deleting, setDeleting] = useState<CheckDef | null>(null);
+    const [cyclesOf, setCyclesOf] = useState<CheckDef | null>(null);
     const [opening, setOpening] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
@@ -624,8 +640,11 @@ export function ChecksPage() {
         setError(null);
         setNotice(null);
         try {
-            await call("check.run", { id: check.id });
-            setNotice(t("{{name}} is being checked on its hosts: the results appear in Hosts.", { name: check.name }));
+            const queued = await call<{ runs: string[]; cycles: string[] }>("check.run", { id: check.id });
+            // The cycle opens from the notice; with none queued, the states say when it is due.
+            if (queued.cycles.length) queued.cycles.forEach(id => announceRun(id, check.name));
+            else setNotice(t("{{name}} is being checked on its hosts: the results appear in Hosts.", { name: check.name }));
+            list.reload();
         } catch (ex) {
             setError(message(ex));
         }
@@ -673,7 +692,7 @@ export function ChecksPage() {
                             ) : (
                                 <ChecksTable groups={groups} view={view} onChange={setView}
                                     canRun={can("check.run")} canEdit={can("check.update")} canEditNow={!!refs.data}
-                                    onRun={runNow} onEdit={setEditing} onDelete={setDeleting} />
+                                    onRun={runNow} onEdit={setEditing} onDelete={setDeleting} onCycles={setCyclesOf} />
                             )}
                         </>
                     );
@@ -748,11 +767,75 @@ export function ChecksPage() {
             {opening && refs.data && (
                 <MaintenanceModal inventories={refs.data.inventories} hosts={refs.data.hosts} onClose={() => setOpening(false)} onDone={windows.reload} />
             )}
+            {cyclesOf && <CyclesModal check={cyclesOf} onClose={() => setCyclesOf(null)} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The check is deleted, with the states of its hosts and their history.")}
                     onDelete={async () => { await call("check.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}
                     onClose={() => setDeleting(null)} />
             )}
         </>
+    );
+}
+
+// The cycles that held a check, newest first, each opening the page of its run.
+function CyclesModal({ check, onClose }: { check: CheckDef; onClose: () => void }) {
+    const { t, i18n } = useTranslation();
+    const cycles = useLoad(() => call<{ runs: Run[] }>("run.list", { check_id: check.id, limit: 100 }));
+    return (
+        <Modal variant={ModalVariant.medium} isOpen onClose={onClose} aria-labelledby="cycles-title">
+            <ModalHeader title={t("Recent cycles of {{name}}", { name: check.name })} labelId="cycles-title" />
+            <ModalBody>
+            <ListState loaded={cycles} isEmpty={data => data.runs.length === 0}
+                emptyTitle={t("No cycle kept")}
+                emptyBody={t("A cycle is kept for the days config.toml says ([checks] keep_days), then only what it found stays, in the states.")}>
+                {data => (
+                    <Table variant="compact" aria-label={t("Recent cycles")}>
+                        <Thead><Tr><Th>{t("Started")}</Th><Th>{t("Status")}</Th><Th>{t("Hosts")}</Th><Th>{t("Duration")}</Th></Tr></Thead>
+                        <Tbody>
+                            {data.runs.map(run => (
+                                <Tr key={run.id} isClickable onRowClick={() => { onClose(); openRun(run.id); }}>
+                                    <Td dataLabel={t("Started")}>
+                                        <Button variant="link" isInline onClick={event => { event.stopPropagation(); onClose(); openRun(run.id); }}>
+                                            {formatTime(run.started_at ?? run.created_at, i18n.language)}
+                                        </Button>
+                                    </Td>
+                                    <Td dataLabel={t("Status")}><RunStatusLabel status={run.status} /></Td>
+                                    <Td dataLabel={t("Hosts")}>{run.title}</Td>
+                                    <Td dataLabel={t("Duration")}>{run.started_at && run.finished_at ? formatDuration(run.finished_at - run.started_at) : ""}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                )}
+            </ListState>
+            </ModalBody>
+        </Modal>
+    );
+}
+
+// What a check cycle found on each host, the worst first: the page of its run shows it
+// to every role, beside the output that only operators read.
+export function CycleOutcomeTable({ id, status }: { id: string; status: string }) {
+    const { t } = useTranslation();
+    const outcome = useLoad(() => call<CycleOutcome>("check.cycle", { id }), [id, status]);
+    const rank: Record<StateName, number> = { critical: 0, unknown: 1, warning: 2, ok: 3 };
+    const results = [...(outcome.data?.results ?? [])].sort((a, b) =>
+        rank[a.state] - rank[b.state] || a.host.localeCompare(b.host, undefined, { numeric: true }) || a.check.localeCompare(b.check));
+    if (!outcome.data || isActiveRun(outcome.data.status)) return null;
+    if (results.length === 0) return <Content component="small">{t("What this cycle found on each host was not kept: the states of its checks have it.")}</Content>;
+    return (
+        <Table variant="compact" aria-label={t("What the cycle found")}>
+            <Thead><Tr><Th>{t("Host")}</Th><Th>{t("Which check")}</Th><Th>{t("State")}</Th><Th>{t("Summary")}</Th></Tr></Thead>
+            <Tbody>
+                {results.map(item => (
+                    <Tr key={`${item.host}/${item.check_id}`}>
+                        <Td dataLabel={t("Host")}>{item.host}</Td>
+                        <Td dataLabel={t("Which check")}>{item.check}</Td>
+                        <Td dataLabel={t("State")}><StateLabel state={item.state} /></Td>
+                        <Td dataLabel={t("Summary")}>{item.summary}</Td>
+                    </Tr>
+                ))}
+            </Tbody>
+        </Table>
     );
 }

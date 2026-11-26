@@ -97,6 +97,8 @@ class ConfigTest(unittest.TestCase):
     def test_runs_keep_their_output_90_days_unless_told(self):
         self.assertEqual(parse("").runs_keep_days, 90)
         self.assertEqual(parse("[runs]\nkeep_days = 0").runs_keep_days, 0)
+        self.assertEqual(parse("").checks_keep_days, 7)
+        self.assertEqual(parse("[checks]\nkeep_days = 1").checks_keep_days, 1)
 
     def test_check_cycles_take_half_the_memory_unless_told(self):
         self.assertEqual(parse("").checks_memory_mb, 0)
@@ -126,6 +128,7 @@ class ConfigTest(unittest.TestCase):
             "[inventories]\nscripts = 1": "inventories.scripts",
             "[inventories]\nscript = true": "unknown key in \\[inventories\\]",
             "[runs]\nkeep_days = -1": "runs.keep_days",
+            "[checks]\nkeep_days = 0": "checks.keep_days",
             "[metrics]\nraw_days = 0": "metrics.raw_days",
             "[metrics]\nraw_days = 100": "must not decrease",
             "[runs": "not valid TOML",

@@ -43,7 +43,7 @@ Chrome on `deb13` (25 November), all but printing.
 ## Toward a mature release
 
 Decided 26 November (`decisions.md`, "Freeze of features"): phases 21
-and 22 are the last ones that add features; then fixes, minor changes and
+to 23 are the last ones that add features; then fixes, minor changes and
 field use only, toward 1.0.0.
 
 ## Phase 21: inventory chosen at launch
@@ -62,7 +62,21 @@ enforcing, no denial), 26 November.
   inventories, a schedule each, a workflow launched on two, the agent
   choosing the inventory.
 
-## Phase 22: skills of projects
+## Phase 22: check cycles in view
+
+Decided 26 November (`decisions.md`, "Check cycles in view"); what exists:
+`checks.md` ("Following the cycles"), `architecture/checks.md` (the
+cycles' `check_ids`, `outcome.json`, `check.cycle`, `[checks]
+keep_days`); built on 26 November. `checks`, `runs`, `negative` pass in
+containers on Debian and Fedora, `checks` on the VM `alma10`: in a
+container on AlmaLinux `checks.sh` cannot build its nodes' image (podman's
+overlay over the build context: invalid argument), before Fleet is
+involved. The pages tried in Chrome on `fed44`.
+
+- [ ] Close: the user follows the cycles of the labs' checks on a
+  controller.
+
+## Phase 23: skills of projects
 
 Decided 26 November (`decisions.md`, "Skills"). To settle before
 building: where a collection carries its skills (a dot directory may not

@@ -425,15 +425,65 @@ class CycleTest(CheckBase):
                          [{"name": "offset", "value": 2.0, "unit": "s"}])
         self.assertEqual(states[("web02", "clock")]["state"], "critical")
 
-    def test_cycles_are_removed_after_a_day(self):
+    def test_cycles_are_removed_after_keep_days(self):
+        self.config = dataclasses.replace(self.config, checks_keep_days=2)
         inventory = self.inventory()
         self.check(inventory, group="web")
         run_id = self.tick()["queued"][0]
         self.answer(run_id, {"web01": {"disk": disk(1)}, "web02": {"disk": disk(1)}})
         self.ok("run.list")
-        self.tick(self.clock + checks.KEEP_CYCLES + 1)
+        self.tick(self.clock + 86400 + 1)
+        self.assertIn(run_id, [run["id"] for run in self.cycles()])
+        self.tick(self.clock + 86400)
         self.assertNotIn(run_id, [run["id"] for run in self.cycles()])
         self.assertFalse((paths.RUNS_DIR / run_id).exists())
+
+    def test_a_cycle_tells_its_checks_and_what_it_found_on_each_host(self):
+        inventory = self.inventory()
+        disk_check = self.check(inventory, group="web")
+        other = self.check(inventory, "memory", name="mem", group="web")
+        before = {one["id"]: one for one in self.ok("check.list", role="viewer")["checks"]}
+        self.assertEqual((before[disk_check["id"]]["checking"],
+                          before[disk_check["id"]]["last_cycle"]), (False, None))
+        run_id = self.tick()["queued"][0]
+        self.assertEqual(sorted(self.ok("run.get", {"id": run_id})["options"]["check_ids"]),
+                         sorted([disk_check["id"], other["id"]]))
+        listed = {one["id"]: one for one in self.ok("check.list", role="viewer")["checks"]}
+        self.assertTrue(listed[disk_check["id"]]["checking"])
+        self.assertEqual(listed[disk_check["id"]]["last_cycle"]["id"], run_id)
+        self.assertEqual(self.ok("check.cycle", {"id": run_id}, role="viewer")["results"], [])
+        self.answer(run_id, {"web01": {"disk": disk(97)}, "web02": "unreachable"})
+        listed = {one["id"]: one for one in self.ok("check.list", role="viewer")["checks"]}
+        self.assertFalse(listed[disk_check["id"]]["checking"])
+        found = {(item["host"], item["check"]): (item["state"], item["summary"])
+                 for item in self.ok("check.cycle", {"id": run_id}, role="viewer")["results"]}
+        self.assertEqual(found[("web01", "disk")][0], "critical")
+        self.assertEqual(found[("web01", "mem")], ("unknown",
+                                                   "the node sent no result for this check"))
+        self.assertEqual(found[("web02", "disk")], ("unknown", "the host is unreachable"))
+        # The cycles of one check, at the page of runs.
+        self.assertEqual([run["id"] for run in self.ok("run.list", {"check_id": other["id"]},
+                                                       role="viewer")["runs"]], [run_id])
+        self.assertEqual(self.ok("run.list", {"check_id": "k-none"}, role="viewer")["runs"], [])
+        templates_run = self.ok("run.list", role="viewer")["runs"]
+        self.assertNotIn(run_id, [run["id"] for run in templates_run])
+        self.assertEqual(self.code("check.cycle", {"id": templates_run[-1]["id"]}),
+                         "bad_request")
+        # Check now says which cycle it queued for the check.
+        queued = self.ok("check.run", {"id": disk_check["id"]}, role="operator")
+        self.assertEqual(len(queued["cycles"]), 1)
+        self.assertIn(queued["cycles"][0], queued["runs"])
+
+    def test_the_outcome_of_a_cycle_is_never_written_through_a_link(self):
+        inventory = self.inventory()
+        self.check(inventory, group="web")
+        run_id = self.tick()["queued"][0]
+        target = self.root / "elsewhere.json"
+        target.write_text("untouched")
+        (paths.RUNS_DIR / run_id / checks.OUTCOME_FILE).symlink_to(target)
+        self.answer(run_id, {"web01": {"disk": disk(1)}, "web02": {"disk": disk(1)}})
+        self.assertEqual(target.read_text(), "untouched")
+        self.assertEqual(len(self.ok("check.cycle", {"id": run_id})["results"]), 2)
 
 
 class PlaybookCheckTest(CheckBase):
@@ -759,7 +809,7 @@ class SizingTest(CheckBase):
         self.assertEqual((row["memory_peak"], row["cpu_usec"], row["finished_at"]),
                          (None, None, self.clock))
         # Kept a month, after the cycle itself is gone.
-        self.tick(self.clock + 2 * 86400)
+        self.tick(self.clock + 8 * 86400)
         self.assertNotIn(run_id, [run["id"] for run in self.cycles()])
         self.assertEqual(len(self.rows()), 2)
         self.tick(self.clock + 30 * 86400)

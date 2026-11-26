@@ -10,6 +10,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Checks: the cycles that check the hosts can be followed. A check shows
+  "Checking" while a cycle holds it and its last cycle, which opens the
+  page of that run; "Recent cycles" lists those that held it, and "Check
+  now" links to the cycle it queued. The page of a cycle has what it found
+  on each host for each check, for every role. Runs: a filter by type,
+  check cycles among them (`run.list` takes `check_id`; `check.cycle`,
+  `fleet check cycle`).
 - Job templates: an inventory chosen at launch. A template may allow other
   inventories beside its default, or any, and whoever launches it chooses
   one (`inventory_ids` and `any_inventory` of the template, `inventory_id`
@@ -100,6 +107,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Checks: a check cycle is kept a week after it ends instead of a day
+  (`[checks] keep_days` of `config.toml`, 7): lower it for a large fleet
+  checked often.
 - Assistant: an autonomous agent is told to launch one run on a group
   rather than one per host, and to stop and say so when its runs are
   spent.

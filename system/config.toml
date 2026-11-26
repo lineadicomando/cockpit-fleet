@@ -79,6 +79,10 @@
 # ended when they are due again, before it is said to fall behind: in the
 # journal at every skip, to the rules that ask for it after this many.
 #late_after = 3
+# Days a check cycle is kept, its output and its outcome per host and check,
+# after it ends: what the checks found stays in their states anyway. Lower it
+# for a large fleet checked often, whose cycles are many.
+#keep_days = 7
 
 [metrics]
 # Days the values the checks measure are kept as they came, then as hourly

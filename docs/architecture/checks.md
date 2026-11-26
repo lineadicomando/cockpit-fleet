@@ -106,10 +106,17 @@ journal gets a line per failure, not the results. The slow kinds (`cmdb`,
 `[checks] slow_timeout` (900 s) as the time limit and a lane of the dispatch
 of their own, as many as `[checks] max_concurrent`: a Windows Update search
 of some minutes does not hold back a disk check. The lane is the `slow`
-mark in the options of the run. Cycles are not in the
-list of runs unless asked for (`run.list` with `kind: check`), and are
-deleted with their directory after a day, by the tick: their results are in
-the states.
+mark in the options of the run, and `check_ids` the checks it holds. Cycles
+are not in the list of runs unless asked for (`run.list` with `kind: check`,
+or `check_id` for those that held one check), and are deleted with their
+directory after `[checks] keep_days` (7; a day until phase 22), by the
+tick: their results are in the states. What a cycle found, host by host and
+check by check, as judged when it was taken in, `ingest` writes beside it
+(`outcome.json`, read by `check.cycle`): the run wrote its own directory, so
+a file of that name there is unlinked and the new one created with
+`O_EXCL | O_NOFOLLOW`, never followed. `check.list` says whether a cycle
+holds a check (`checking`, from the states held by a run queued or running)
+and its last cycle.
 
 **Connections.** Within a run, SSH keeps one connection per host
 (`ControlMaster=auto`, `ControlPersist=60s`), its socket in the run's
@@ -206,8 +213,10 @@ and 0.75 s at most (`state.list` of the problems 0.17 s at p95, every
 state for the grid 0.38 s). The database grew by ~60 MB a day (raw
 metrics are kept 14 days, so it levels off later), the run directories
 by ~400 MB a day, which levels off after the first day: those of check
-cycles go after a day (Retention), so a test of 24 hours ends just
-before it shows.
+cycles went after a day then (Retention), so a test of 24 hours ended
+just before it showed. With `[checks] keep_days` at 7 since phase 22,
+such a fleet keeps about seven times that: lower it for a large fleet
+checked often.
 
 **Skipped, and falling behind.** A cycle answers the due time it was queued
 for; when one interval later it has not ended (still queued counts too),

@@ -199,6 +199,14 @@ wait_count http.jsonl "Recovered: disk on node$DATA" 1 90 >/dev/null
 expect_eq "the recovery is told about" "$(count http.jsonl "Recovered: disk on node$DATA")" 1
 expect_eq "and ends the acknowledgement" "$(db "SELECT ack_by FROM check_states WHERE host_id = '$host_id'")" ""
 expect_eq "a cycle is not told about as a failed run" "$(count http.jsonl 'Run failed')" 0
+cycle=$(get "$now" 'a["data"]["cycles"][0]')
+expect_eq "check now names the cycle it queued" "$(get "$now" 'a["data"]["cycles"] == a["data"]["runs"]')" True
+expect_eq "the cycle is among those of the check" \
+    "$(get "$(op run.list "{\"check_id\": \"$disk_id\"}")" "any(r['id'] == '$cycle' for r in a['data']['runs'])")" True
+expect_eq "the page of the cycle reads what it found on the host" \
+    "$(get "$(op check.cycle "{\"id\": \"$cycle\"}")" "[(r['host'], r['state']) for r in a['data']['results'] if r['check_id'] == '$disk_id']")" "[('node$DATA', 'ok')]"
+expect_eq "check.list gives its last cycle" \
+    "$(get "$(op check.list)" "[c['last_cycle']['id'] for c in a['data']['checks'] if c['id'] == '$disk_id'][0] != ''")" True
 series=$(op metric.query "{\"host_id\": \"$host_id\", \"check_id\": \"$disk_id\", \"name\": \"used_pct\", \"instance\": \"/data\"}")
 expect_eq "the use of the disk is kept as a time series" "$(get "$series" 'a["data"]["resolution"]')" raw
 expect_eq "with the full disk among its values" \

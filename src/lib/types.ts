@@ -675,6 +675,16 @@ export interface CheckDef {
     become: boolean;
     enabled: boolean;
     states: StateCounts;
+    // Whether a cycle holds it now, and its last cycle, queued, running or ended.
+    checking: boolean;
+    last_cycle: { id: string; status: RunStatus; created_at: number; started_at: number | null; finished_at: number | null } | null;
+}
+
+// What one check cycle found on each host, for each check it held.
+export interface CycleOutcome {
+    run_id: string;
+    status: RunStatus;
+    results: { host: string; check_id: string; check: string; state: StateName; summary: string }[];
 }
 
 export interface Metric {

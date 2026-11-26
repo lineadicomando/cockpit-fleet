@@ -40,7 +40,6 @@ _FLAP_END = 0.25
 # Inventories with checks are listed again this often, for hosts that came or went.
 REFRESH = 3600
 # Check cycles are kept this long, then removed with their directory.
-KEEP_CYCLES = 24 * 3600
 # What a cycle took is kept longer, without its run, and the planner sizes
 # the next cycles of the same checks on the last few.
 KEEP_MEASURES = 30 * 86400
@@ -335,6 +334,13 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
         events = _events(directory)
     hosts = {row["name"]: row for row in conn.execute(
         "SELECT id, name FROM hosts WHERE inventory_id = ?", (run["inventory_id"],))}
+    # What the cycle found, host by host, for its page: the states keep only the latest.
+    outcome: list[dict] = []
+
+    def found(row, host: str, state: int, summary: str) -> None:
+        outcome.append({"host": host, "check_id": row["check_id"], "state": STATE_NAMES[state],
+                        "summary": summary})
+
     for name, entries in plan.items():
         host = hosts.get(name)
         if host is None:
@@ -382,6 +388,7 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
                         (f" ({summary})" if summary else "")
                 apply(ctx, row, state, summary, values, details, now, since=since,
                       at_once=bool(changed))
+                found(row, name, state, summary)
                 metrics.record(ctx, host["id"], row["check_id"], values,
                                metrics.when(event.get("ts"), since, now))
             elif status == "host_ok":
@@ -389,19 +396,53 @@ def ingest(ctx: Context, run, directory, error: str = "") -> None:
                            " lineadicomando.fleet.fleet_result" if row["kind"] == PLAYBOOK
                            else "the node sent no result for this check")
                 apply(ctx, row, UNKNOWN, missing, [], {}, now, since=since)
+                found(row, name, UNKNOWN, missing)
             elif status == "host_unreachable":
                 if row["kind"] == "reachability":
                     apply(ctx, row, CRITICAL, f"unreachable: {message}", [], {}, now,
                           since=since)
+                    found(row, name, CRITICAL, f"unreachable: {message}")
                 else:
                     apply(ctx, row, UNKNOWN, "the host is unreachable", [], {}, now,
                           suppressed=True, since=since)
+                    found(row, name, UNKNOWN, "the host is unreachable")
             else:
                 apply(ctx, row, UNKNOWN, message, [], {}, now, since=since)
+                found(row, name, UNKNOWN, message)
     # Whatever this cycle held and did not answer is free for the next one.
+    names = {row["id"]: name for name, row in hosts.items()}
     for row in conn.execute(_STATE_ROW + " WHERE s.run_id = ?", (run["id"],)).fetchall():
-        apply(ctx, row, UNKNOWN, error or "the cycle ended without a result", [], {}, now)
+        summary = error or "the cycle ended without a result"
+        apply(ctx, row, UNKNOWN, summary, [], {}, now)
+        found(row, names.get(row["host_id"], ""), UNKNOWN, summary)
+    _write_outcome(directory, outcome)
     notify_states(ctx, now)
+
+
+OUTCOME_FILE = "outcome.json"
+
+
+def _write_outcome(directory, outcome: list[dict]) -> None:
+    """Keep what a cycle found beside it, until it is pruned. The run wrote
+    its own directory, so a file of that name there is replaced, never
+    followed; one that cannot be replaced leaves the cycle without it."""
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return
+    try:
+        try:
+            os.unlink(OUTCOME_FILE, dir_fd=dir_fd)
+        except FileNotFoundError:
+            pass
+        fd = os.open(OUTCOME_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+                     | os.O_CLOEXEC, 0o600, dir_fd=dir_fd)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            json.dump({"results": outcome}, out)
+    except OSError as error:
+        journal.send(f"checks: the outcome of a cycle was not kept: {error}", 4)
+    finally:
+        os.close(dir_fd)
 
 
 def _keep(ctx: Context, row, host_id: str, answer: dict, event: dict, now: float) -> list[str]:
@@ -593,6 +634,10 @@ def _queue_cycle(ctx: Context, inventory, credential_id: str | None, become: boo
                      "project_id": project["id"] if project else None,
                      "options": json.dumps({"hosts": count, "slow": slow,
                                             "checks": sum(len(e) for e in plan.values()),
+                                            # Which checks it holds, for the page of each.
+                                            "check_ids": sorted({entry["id"]
+                                                                 for entries in plan.values()
+                                                                 for entry in entries}),
                                             "group": group, "forks": spec["forks"]})},
                spec, directory)
     return run_id
@@ -784,10 +829,10 @@ def _refresh_inventories(ctx: Context, now: float) -> None:
 
 
 def prune_cycles(ctx: Context, now: float) -> int:
-    """Delete the check cycles past a day, with their directory: their
-    results are in the states. What they took goes after a month."""
+    """Delete the check cycles past [checks] keep_days, with their directory:
+    their results are in the states. What they took goes after a month."""
     rows = ctx.conn.execute("SELECT id FROM runs WHERE kind = 'check' AND finished_at < ?",
-                            (now - KEEP_CYCLES,)).fetchall()
+                            (now - ctx.config.checks_keep_days * 86400,)).fetchall()
     for row in rows:
         shutil.rmtree(jobs.run_dir(row["id"]), ignore_errors=True)
         ctx.conn.execute("DELETE FROM runs WHERE id = ?", (row["id"],))
@@ -942,7 +987,23 @@ def state_counts(ctx: Context, where: str, args: tuple) -> dict:
     return counts
 
 
-def _check(ctx: Context, row) -> dict:
+def _cycles(conn) -> tuple[dict, set]:
+    """The last cycle of each check, by its id, and the checks a cycle holds now."""
+    last: dict[str, dict] = {}
+    for run in conn.execute("SELECT id, status, created_at, started_at, finished_at, options"
+                            " FROM runs WHERE kind = 'check' ORDER BY rowid DESC"):
+        for check_id in store.loads(run["options"], {}).get("check_ids", []):
+            last.setdefault(check_id, {key: run[key] for key in
+                                       ("id", "status", "created_at", "started_at",
+                                        "finished_at")})
+    held = {row[0] for row in conn.execute(
+        "SELECT DISTINCT s.check_id FROM check_states s JOIN runs r ON r.id = s.run_id"
+        " WHERE r.status IN ('queued', 'running')")}
+    return last, held
+
+
+def _check(ctx: Context, row, cycles: tuple[dict, set] | None = None) -> dict:
+    last, held = cycles if cycles is not None else _cycles(ctx.conn)
     data = {key: row[key] for key in ("id", "name", "kind", "inventory_id", "interval",
                                       "retry_interval", "max_attempts", "machine_credential_id",
                                       "project_id", "playbook", "created_by", "created_at",
@@ -956,6 +1017,9 @@ def _check(ctx: Context, row) -> dict:
     inventory = ctx.conn.execute("SELECT name FROM inventories WHERE id = ?",
                                  (row["inventory_id"],)).fetchone()
     data["inventory"] = inventory["name"] if inventory else ""
+    # Whether a cycle holds it now, and its last cycle (queued, running or ended).
+    data["checking"] = row["id"] in held
+    data["last_cycle"] = last.get(row["id"])
     return data
 
 
@@ -967,9 +1031,12 @@ def check_catalog(ctx: Context, params: Values) -> dict:
 
 @command("check.list", role="viewer")
 def check_list(ctx: Context, params: Values) -> dict:
-    """The checks configured, with how many of their hosts are in each state."""
+    """The checks configured, with how many of their hosts are in each state,
+    whether a cycle is checking them now and their last cycle."""
+    jobs.reconcile(ctx)
     rows = ctx.conn.execute("SELECT * FROM checks ORDER BY name COLLATE NOCASE").fetchall()
-    return {"checks": [_check(ctx, row) for row in rows]}
+    cycles = _cycles(ctx.conn)
+    return {"checks": [_check(ctx, row, cycles) for row in rows]}
 
 
 _CHECK_PARAMS = {
@@ -1102,7 +1169,40 @@ def check_run(ctx: Context, params: Values) -> dict:
             raise Conflict("this host is not checked by this check, or is being checked now")
         queued = plan(ctx, now)
         jobs.dispatch(ctx)
-    return {"runs": queued}
+    # runs: every cycle the planning queued; cycles: those that hold this check.
+    mine = [run_id for run_id in queued if row["id"] in store.loads(
+        store.fetch(ctx.conn, "runs", run_id, "run")["options"], {}).get("check_ids", [])]
+    return {"runs": queued, "cycles": mine}
+
+
+@command("check.cycle", role="viewer",
+         params={
+             "id": Id("A check cycle: a run of the kind check"),
+         })
+def check_cycle(ctx: Context, params: Values) -> dict:
+    """What one check cycle found, host by host and check by check: the state
+    and the summary each got, as they were judged then. Empty while the cycle
+    runs, and for one that ended before this was kept."""
+    run = store.fetch(ctx.conn, "runs", params["id"], "run")
+    if run["kind"] != "check":
+        raise BadRequest("this run is not a check cycle")
+    try:
+        data = json.loads(jobs.read_run_file(jobs.run_dir(run["id"]), OUTCOME_FILE,
+                                             16 * 1024 * 1024))
+    except (OSError, ValueError):
+        data = {}
+    given = data.get("results") if isinstance(data, dict) else None
+    names = {row["id"]: row["name"] for row in ctx.conn.execute("SELECT id, name FROM checks")}
+    results = []
+    # Written by fleetctl, never by the run; still checked for its shape.
+    for item in given if isinstance(given, list) else []:
+        if not isinstance(item, dict) or item.get("state") not in STATE_NAMES:
+            continue
+        results.append({"host": str(item.get("host", ""))[:255],
+                        "check_id": str(item.get("check_id", ""))[:64],
+                        "check": names.get(item.get("check_id"), ""),
+                        "state": item["state"], "summary": str(item.get("summary", ""))[:500]})
+    return {"run_id": run["id"], "status": run["status"], "results": results}
 
 
 # --- commands: hosts and states ---------------------------------------------------------

@@ -7,7 +7,7 @@ and does not keep the others from running.
 
 | What | Kept | How |
 |---|---|---|
-| Check cycles | a day | row and directory deleted |
+| Check cycles | `[checks] keep_days` (7) | row and directory deleted, with what the cycle found |
 | What check cycles took | 30 days | deleted |
 | Output of other runs | `[runs] keep_days` (90) | directory deleted, 500 a tick at most; the row stays with its outcome and `pruned_at` |
 | Directories of `runs/` with no run | a day | deleted, the directory looked through once an hour (a stamp file) |

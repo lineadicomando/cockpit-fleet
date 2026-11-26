@@ -338,21 +338,28 @@ def run_cancel(ctx: Context, params: Values) -> dict:
              "before": Int(0, 2**62),
              "status": Str(default="", max_length=20),
              "kind": Str(default="", max_length=20),
+             "check_id": Id("Only the check cycles that held this check", required=False),
          })
 def run_list(ctx: Context, params: Values) -> dict:
     """The runs, newest first, with their status and outcome per host. Check
-    cycles are listed only when asked for by their kind, check."""
+    cycles are listed only when asked for by their kind, check, or by a
+    check they held (check_id)."""
     limit = params["limit"]
     before = params["before"]
     status = params["status"]
     kind = params["kind"]
+    check_id = params["check_id"]
+    if check_id:
+        kind = "check"
     if status and status not in STATUSES:
         raise BadRequest(f"status must be one of: {', '.join(STATUSES)}")
     jobs.reconcile(ctx)
     rows = ctx.conn.execute(
         "SELECT rowid, * FROM runs WHERE (? IS NULL OR rowid < ?) AND (? = '' OR status = ?)"
-        " AND (? = '' AND kind != 'check' OR kind = ?) ORDER BY rowid DESC LIMIT ?",
-        (before, before, status, status, kind, kind, limit),
+        " AND (? = '' AND kind != 'check' OR kind = ?)"
+        " AND (? IS NULL OR EXISTS (SELECT 1 FROM json_each(runs.options, '$.check_ids')"
+        " WHERE value = ?)) ORDER BY rowid DESC LIMIT ?",
+        (before, before, status, status, kind, kind, check_id, check_id, limit),
     ).fetchall()
     return {"runs": [{**run_row(row), "cursor": row["rowid"],
                       "waiting_for": jobs.waiting_for(ctx.conn, row["id"])

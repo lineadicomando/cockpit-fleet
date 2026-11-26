@@ -150,6 +150,24 @@ modules support check mode; the playbook needs no `fleet_result`.
 - A maintenance window (a host, or a group, up to 90 days) keeps its hosts
   from being told about; what is still a problem when it ends is told then.
 
+## Following the cycles
+
+The checks run in *cycles*: one run of Ansible over the hosts that are due,
+with every check due on each. A cycle is a run like the others, of the type
+"Check cycle", left out of **Runs** unless the filter by type asks for it.
+
+- In **Checks**, a check shows "Checking" while a cycle holds it, and its
+  last cycle, which opens the page of that run; "Recent cycles", in its
+  menu, lists the cycles that held it. "Check now" opens a notice with the
+  cycle it queued.
+- The page of a cycle has, for every role, what it found on each host for
+  each check (state and summary, as judged then), the worst first; its
+  output, for operators and administrators, has a line for each host that
+  did not go well.
+- A cycle is kept `[checks] keep_days` (7) after it ends, then deleted with
+  its output: what the checks found stays in their states and their
+  history.
+
 ## At a terminal
 
 ```sh
@@ -158,6 +176,8 @@ fleet check list
 fleet check create --kind disk --name disk --inventory-id lab --group all \
     --thresholds '{"used_pct": {"warning": 80, "critical": 90}}'
 fleet state list --problems
+fleet run list --check-id disk               # the cycles that held a check
+fleet check cycle RUN                      # what one cycle found, host by host
 ```
 
 `fleet help check create` lists every parameter; an id may be given by name.

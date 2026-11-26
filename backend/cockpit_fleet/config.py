@@ -115,6 +115,7 @@ class Config:
     checks_slow_timeout: int = 900
     checks_reminder_hours: int = 24
     checks_late_after: int = 3
+    checks_keep_days: int = 7
     # Days the values of the checks are kept as they came, then by the hour,
     # then by the day.
     metrics_raw_days: int = 14
@@ -315,7 +316,7 @@ def parse(text: str) -> Config:
 
     checks = _section(data, "checks", {"max_concurrent", "shard_size", "forks", "memory_mb",
                                        "timeout", "slow_timeout", "reminder_hours",
-                                       "late_after"})
+                                       "late_after", "keep_days"})
 
     metrics = _section(data, "metrics", {"raw_days", "hourly_days", "daily_days"})
     raw_days = _int(metrics, "metrics", "raw_days", Config.metrics_raw_days, 1, 366)
@@ -373,6 +374,7 @@ def parse(text: str) -> Config:
         checks_reminder_hours=_int(checks, "checks", "reminder_hours",
                                    Config.checks_reminder_hours, 0, 24 * 30),
         checks_late_after=_int(checks, "checks", "late_after", Config.checks_late_after, 1, 100),
+        checks_keep_days=_int(checks, "checks", "keep_days", Config.checks_keep_days, 1, 90),
         metrics_raw_days=raw_days,
         metrics_hourly_days=hourly_days,
         metrics_daily_days=daily_days,

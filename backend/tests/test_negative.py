@@ -46,7 +46,7 @@ chat.accept viewer M          chat.agents viewer -          chat.start viewer M
 chat.cancel_runs operator M   chat.grant_runs operator M    chat.limit_runs operator M
 chat.session viewer -
 check.catalog viewer -
-check.create admin M          check.delete admin M          check.list viewer -
+check.create admin M          check.delete admin M          check.list viewer -        check.cycle viewer -
 check.run operator M          check.update admin M          cmdb.get viewer -
 cmdb.list viewer -            cmdb.packages viewer -        config.export admin -
 config.import admin M         config.show admin -           credential.create admin M

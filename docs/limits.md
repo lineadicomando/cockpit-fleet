@@ -124,7 +124,9 @@ in [security.md](security.md); the decisions behind these limits in
   channels tried in sequence (a dead one delays the rest ≥ 15 s); a refused
   test retried 24 h; the default webhook body has no title; `fleet channel
   update` wants the name again.
-- Checks: host facts only from cycles; one `fleet_result` per host;
+- Checks: host facts only from cycles; "Recent cycles" lists the last
+  100 a check had; what a cycle found host by host is kept only for cycles
+  that ended after the upgrade to phase 22; one `fleet_result` per host;
   thresholds per check, not per host; `state.list` is not paged (the
   grid of the page of hosts asks for every state: 0.38 s at p95 for 5030;
   at many thousands more it will need paging);

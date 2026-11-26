@@ -34,6 +34,7 @@ import { runCommand } from "../lib/terminal.ts";
 import { AdhocModal } from "./AdhocModal.tsx";
 import { DecideButtons, PendingApprovals } from "./ApprovalsPage.tsx";
 import { WorkflowSteps } from "./WorkflowsPage.tsx";
+import { CycleOutcomeTable } from "./ChecksPage.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 import { Alert, Button, TabPanel, Tabs } from "./pf.tsx";
 
@@ -58,9 +59,11 @@ export function RunsPage() {
     const can = useCan();
     const kinds = useKinds();
     const [status, setStatus] = useState("");
+    // "": every kind but the check cycles, which are many and have the page of checks.
+    const [kind, setKind] = useState("");
     const [commanding, setCommanding] = useState(false);
     const [limit, setLimit] = useState(50);
-    const list = useLoad(() => call<{ runs: Run[]; more: boolean }>("run.list", { limit, status }), [status, limit]);
+    const list = useLoad(() => call<{ runs: Run[]; more: boolean }>("run.list", { limit, status, kind }), [status, kind, limit]);
     const anyActive = list.data?.runs.some(run => isActive(run.status)) ?? false;
     usePolling(list.reload, 3000, anyActive);
     const now = Date.now() / 1000;
@@ -75,6 +78,11 @@ export function RunsPage() {
         <>
             {can("approval.list") && <PendingApprovals />}
             <SectionHeader title={t("Runs")}>
+                <FormSelect value={kind} onChange={(_e, value) => setKind(value)} aria-label={t("Filter by type")} style={{ width: "14rem" }}>
+                    <FormSelectOption value="" label={t("Any type but check cycles")} />
+                    {Object.entries(kinds).sort((a, b) => a[1].localeCompare(b[1]))
+                        .map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
+                </FormSelect>
                 <FormSelect value={status} onChange={(_e, value) => setStatus(value)} aria-label={t("Filter by status")} style={{ width: "12rem" }}>
                     {Object.entries(statuses).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
                 </FormSelect>
@@ -82,7 +90,7 @@ export function RunsPage() {
                 {can("run.adhoc") && <Button variant="primary" onClick={() => setCommanding(true)}>{t("Run a command")}</Button>}
             </SectionHeader>
             <ListState loaded={list} isEmpty={data => data.runs.length === 0}
-                emptyTitle={status ? t("No runs with this status") : t("No runs yet")}
+                emptyTitle={status || kind ? t("No runs with this status and type") : t("No runs yet")}
                 emptyBody={t("Launch a job template to see its run here.")}>
                 {data => (
                     <>
@@ -528,6 +536,7 @@ export function RunDetailPage({ id }: { id: string }) {
                     </DescriptionList>
                 </FlexItem>
                 {isWorkflow && <FlexItem><WorkflowSteps id={data.id} /></FlexItem>}
+                {data.kind === "check" && <FlexItem><CycleOutcomeTable id={data.id} status={data.status} /></FlexItem>}
                 <FlexItem><Recap stats={data.stats} /></FlexItem>
                 <FlexItem>
                     {isWorkflow ? null : mayRead && data.pruned_at ? (

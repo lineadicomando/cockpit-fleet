@@ -576,9 +576,6 @@ msgstr "Nessun template"
 msgid "No projects"
 msgstr "Nessun progetto"
 
-msgid "No runs with this status"
-msgstr "Nessuna run con questo stato"
-
 msgid "No runs yet"
 msgstr "Ancora nessuna run"
 
@@ -4848,3 +4845,39 @@ msgid "labels_more_count"
 msgid_plural "labels_more_count_plural"
 msgstr[0] "altri {{count}}"
 msgstr[1] "altri {{count}}"
+
+msgid "A cycle is kept for the days config.toml says ([checks] keep_days), then only what it found stays, in the states."
+msgstr "Un ciclo è conservato per i giorni indicati in config.toml ([checks] keep_days); poi resta solo ciò che ha trovato, negli stati."
+
+msgid "Any type but check cycles"
+msgstr "Qualsiasi tipo tranne i cicli di check"
+
+msgid "Checking"
+msgstr "In corso"
+
+msgid "Filter by type"
+msgstr "Filtra per tipo"
+
+msgid "Last cycle"
+msgstr "Ultimo ciclo"
+
+msgid "No cycle kept"
+msgstr "Nessun ciclo conservato"
+
+msgid "No runs with this status and type"
+msgstr "Nessuna run con questo stato e tipo"
+
+msgid "Recent cycles"
+msgstr "Cicli recenti"
+
+msgid "Recent cycles of {{name}}"
+msgstr "Cicli recenti di {{name}}"
+
+msgid "Summary"
+msgstr "Riepilogo"
+
+msgid "What the cycle found"
+msgstr "Che cosa ha trovato il ciclo"
+
+msgid "What this cycle found on each host was not kept: the states of its checks have it."
+msgstr "Ciò che questo ciclo ha trovato su ciascun host non è stato conservato: lo riportano gli stati dei suoi check."

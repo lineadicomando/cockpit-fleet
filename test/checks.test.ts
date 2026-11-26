@@ -52,7 +52,7 @@ function check(name: string, kind: CheckKind, inventory: string, states: Partial
     return {
         id: name, name, kind, inventory_id: inventory, inventory: inventory.toUpperCase(), group: "all", interval: 300, retry_interval: 60,
         max_attempts: 3, params: {}, thresholds: {}, effective_thresholds: {}, machine_credential_id: null, project_id: null, playbook: "",
-        become: false, enabled: true, states: { ok: 0, warning: 0, critical: 0, unknown: 0, pending: 0, ...states }, ...more,
+        become: false, enabled: true, states: { ok: 0, warning: 0, critical: 0, unknown: 0, pending: 0, ...states }, checking: false, last_cycle: null, ...more,
     };
 }
 
