@@ -707,9 +707,11 @@ def moved_rows(conn, pairs: list[tuple[PurePosixPath, PurePosixPath]],
             for path, to in pairs:
                 if old == path or old.is_relative_to(path):
                     new = to / old.relative_to(path) if old != path else to
-                    conn.execute("UPDATE store_files SET path = ? WHERE path = ?",
+                    # The target was free on disk: a row there is stale (a file
+                    # removed by hand), and gives way.
+                    conn.execute("UPDATE OR REPLACE store_files SET path = ? WHERE path = ?",
                                  (str(new), row["path"]))
-                    conn.execute("UPDATE store_sources SET path = ? WHERE path = ?",
+                    conn.execute("UPDATE OR REPLACE store_sources SET path = ? WHERE path = ?",
                                  (str(new), row["path"]))
                     break
         conn.execute("COMMIT")

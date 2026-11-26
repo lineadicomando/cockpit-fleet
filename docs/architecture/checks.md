@@ -263,7 +263,9 @@ the state unknown with its message. Every task has `[checks] timeout`
 **Notifications.** After each ingest and at each tick, a hard state that
 differs from the last one told about is told: `problem`, or `recovery` from
 a problem told about. A problem nobody acknowledged is told again after
-`[checks] reminder_hours` (24; 0 never) as `reminder`. Nothing is told for a
+`[checks] reminder_hours` (24; 0 never) as `reminder`. Each row is claimed
+before it is told (an update on the state and time read), so two callers
+that read it together tell it once. Nothing is told for a
 check that flaps or whose host is unreachable, nor for a host in a
 maintenance window: what is still a problem when the window ends is told at
 the next tick. Rules have three more scopes: an inventory (its runs and its

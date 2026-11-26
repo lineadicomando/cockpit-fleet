@@ -4,7 +4,10 @@ The callback `lineadicomando.fleet.events` appends one JSON object per line:
 `playbook_start`, `play_start`, `task_start`, `host_ok`, `host_failed`,
 `host_skipped`, `host_unreachable`, `item_ok`, `item_failed`, `item_skipped`
 (one per element of a loop), `stats`. Results are trimmed (long strings cut,
-`invocation`, `diff` and, by default, `ansible_facts` dropped).
+`invocation`, `diff` and, by default, `ansible_facts` dropped). The backend
+takes the totals per host and the artifacts from the last line, `stats`, read
+backwards a chunk at a time (`jobs._last_line`, 64 MiB at most): about 130
+bytes a host, so the line of thousands of hosts is read whole.
 
 What a task changed, or would change in a dry run, is the field `diff` of the
 host's event, or of the element's for a loop: a unified diff as text, the same

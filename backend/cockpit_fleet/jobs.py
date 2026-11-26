@@ -584,13 +584,36 @@ def _unit_active(run_id: str) -> bool:
 MAX_ARTIFACTS = 64 * 1024
 
 
+# The longest last line of an events file read for its stats: about 130
+# bytes a host, so some hundred thousand hosts.
+MAX_STATS_LINE = 64 * 1024 * 1024
+
+
+def _last_line(events, chunk: int = 256 * 1024) -> bytes:
+    """The last line of an open file, read backwards a chunk at a time, so
+    that one long line (the stats of many hosts) is read whole."""
+    end = events.seek(0, os.SEEK_END)
+    data = b""
+    position = end
+    while position > 0 and len(data) <= MAX_STATS_LINE:
+        step = min(chunk, position)
+        position -= step
+        events.seek(position)
+        data = events.read(step) + data
+        # A newline before the last line's own end: that line is all here.
+        if b"\n" in data.rstrip(b"\n"):
+            break
+    if len(data) > MAX_STATS_LINE and b"\n" not in data.rstrip(b"\n"):
+        return b""
+    lines = data.splitlines()
+    return lines[-1] if lines else b""
+
+
 def _last_stats(directory: Path) -> dict:
     """The last line of the events file, if the play got to its stats."""
     try:
         with open_run_file(directory, "events.jsonl") as events:
-            events.seek(0, os.SEEK_END)
-            events.seek(max(events.tell() - 256 * 1024, 0))
-            last = events.read().splitlines()[-1]
+            last = _last_line(events)
         event = json.loads(last)
     except (OSError, ValueError, IndexError):
         return {}

@@ -166,6 +166,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
   read and that was not yet collected, so that run ended in error; they now
   delete only those left by versions before 0.3.0, which held its
   variables.
+- Runs on more than about 1900 hosts: their totals per host, and what the
+  playbook set with `set_stats` for the next steps of a workflow, are no
+  longer lost.
+- Store: a move to where a file had been deleted by hand failed after
+  moving the file.
 
 ### Security
 

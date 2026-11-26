@@ -897,6 +897,15 @@ def notify_states(ctx: Context, now: float) -> int:
             event = "recovery" if row["hard_state"] == OK else "problem"
         else:
             event = "reminder"
+        # Claimed first, on what was read: of two callers that read the row
+        # together, the second finds it taken and tells nothing.
+        claimed = conn.execute(
+            "UPDATE check_states SET notified_state = ?, notified_at = ? WHERE host_id = ?"
+            " AND check_id = ? AND notified_state = ? AND notified_at IS ?",
+            (row["hard_state"], now, row["host_id"], row["check_id"], row["notified_state"],
+             row["notified_at"])).rowcount
+        if not claimed:
+            continue
         payload = {
             "event": event, "title": f"{row['check_name']} on {row['host']}",
             "state": STATE_NAMES[row["hard_state"]], "summary": row["summary"][:500],
@@ -905,9 +914,6 @@ def notify_states(ctx: Context, now: float) -> int:
         }
         told += notify.check_event(ctx, event, payload, row["hid"], row["check_id"],
                                    row["inventory_id"], store.loads(row["groups"], []))
-        conn.execute("UPDATE check_states SET notified_state = ?, notified_at = ?"
-                     " WHERE host_id = ? AND check_id = ?",
-                     (row["hard_state"], now, row["host_id"], row["check_id"]))
     return told
 
 

@@ -29,6 +29,14 @@ class ManyTest(StoreBase):
         self.assertEqual(self.listed()["apps/iso/c.iso"]["origin"], "upload")
         self.assertEqual(len(audited(self, "store.move")), 1)
 
+    def test_a_stale_row_where_a_file_goes_gives_way(self):
+        # The file of apps/a.msi was removed by hand: its row is still there.
+        self.assertTrue(self.put("apps/a.msi", b"old")["ok"])
+        (paths.STORE_DIR / "apps" / "a.msi").unlink()
+        moves = [{"path": "win/a.msi", "to": "apps/a.msi"}]
+        self.assertEqual(self.ok("store.move", {"moves": moves}, role="operator")["moved"], moves)
+        self.assertEqual(self.listed()["apps/a.msi"]["size"], len(b"win/a.msi"))
+
     def test_nothing_moves_when_one_cannot(self):
         for moves, code in (
                 ([{"path": "win/a.msi", "to": "x.msi"}, {"path": "win/b.msi", "to": "iso/c.iso"}],

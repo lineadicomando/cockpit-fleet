@@ -202,7 +202,9 @@ def main(argv: list[str]) -> int:
             message = runner.mask(f"fleet-run: {error}\n".encode(), secrets)
             log.write(message)
             sys.stdout.buffer.write(message)
-            result = {"rc": 2, "error": str(error)}
+            # The masked text: the error is shown in the page and kept with the run.
+            result = {"rc": 2, "error": message.decode(errors="replace")
+                      .removeprefix("fleet-run: ").strip()}
 
     result["finished_at"] = time.time()
     # Read last, once every command has ended: the planner sizes check cycles on it.

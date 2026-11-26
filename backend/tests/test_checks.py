@@ -6,6 +6,7 @@ import dataclasses
 import fcntl
 import json
 import os
+import time
 from unittest import mock
 
 from test_notify import NotifyBase
@@ -15,6 +16,7 @@ from cockpit_fleet import (  # noqa: F401
     checks,
     health,
     jobs,
+    notify,
     paths,
     runner,
     schedules,
@@ -345,6 +347,30 @@ class CycleTest(CheckBase):
                          [("problem", "reachability on web01")])
         # Ansible says 4 for an unreachable host: the cycle itself went well.
         self.assertEqual(self.cycles()[0]["status"], "successful")
+
+    def test_two_callers_that_read_a_change_together_tell_it_once(self):
+        channel = self.channel()
+        self.rule(channel, events=("problem", "recovery"))
+        inventory = self.inventory()
+        self.check(inventory, "reachability", group="web", max_attempts=1)
+        real = notify.check_event
+        entered, again = [], []
+
+        def told_while_another_reads(ctx, *args):
+            # Another caller gets there while this one tells: it read the same row.
+            if not entered:
+                entered.append(True)
+                again.append(checks.notify_states(ctx, time.time()))
+            return real(ctx, *args)
+
+        with mock.patch.object(notify, "check_event", told_while_another_reads):
+            run_id = self.tick()["queued"][0]
+            self.answer(run_id, {"web01": "unreachable", "web02": {"reachability": {"state": 0}}},
+                        rc=4)
+        self.assertEqual(again, [0])
+        self.assertEqual([(n["event"], n["title"]) for n in
+                          self.ok("notification.list")["notifications"]],
+                         [("problem", "reachability on web01")])
 
     def test_a_check_that_keeps_changing_flaps_and_is_not_told_about(self):
         self.assertFalse(checks._flapping([0, 2, 2, 0, 0], False))

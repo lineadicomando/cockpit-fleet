@@ -2,8 +2,10 @@
 with the run unit replaced by a fake that just writes a result."""
 
 import dataclasses
+import io
 import json
 import os
+import sys
 import tempfile
 import time
 import unittest
@@ -1222,3 +1224,60 @@ class RunnerPhase2Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FleetRunErrorTest(unittest.TestCase):
+    """What fleet-run keeps of an error that stopped a run is masked."""
+
+    def test_the_error_kept_in_result_json_is_masked(self):
+        import importlib.machinery
+        import importlib.util
+        source = Path(__file__).resolve().parents[1] / "libexec" / "fleet-run"
+        loader = importlib.machinery.SourceFileLoader("fleet_run_under_test", str(source))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        module = importlib.util.module_from_spec(spec)
+        # Nothing written beside it: backend/libexec is installed as it is.
+        with mock.patch.object(sys, "dont_write_bytecode", True):
+            loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as root:
+            runs = Path(root) / "runs"
+            (runs / "r-0123456789ab").mkdir(parents=True)
+            (runs / "r-0123456789ab" / "spec.json").write_text('{"kind": "playbook"}')
+
+            def failing(*_args):
+                raise ValueError("cannot read hunter2 back")
+
+            with mock.patch.object(module, "RUNS_DIR", runs), \
+                    mock.patch.object(module, "run_job", failing), \
+                    mock.patch.object(module.runner, "secret_values", lambda _d: [b"hunter2"]), \
+                    mock.patch.object(module.runner, "usage", lambda: {}), \
+                    mock.patch.object(module.signal, "signal"), \
+                    mock.patch.dict(os.environ, {"RUNTIME_DIRECTORY": root,
+                                                 "CREDENTIALS_DIRECTORY": root}), \
+                    mock.patch.object(sys, "stdout", io.TextIOWrapper(io.BytesIO())):
+                self.assertEqual(module.main(["fleet-run", "r-0123456789ab"]), 2)
+            result = json.loads((runs / "r-0123456789ab" / "result.json").read_text())
+            log = (runs / "r-0123456789ab" / "stdout.log").read_bytes()
+        self.assertEqual(result["error"], "cannot read ******** back")
+        self.assertNotIn(b"hunter2", log)
+
+
+class LastStatsTest(unittest.TestCase):
+    def test_the_stats_of_many_hosts_are_read_whole(self):
+        hosts = {f"host{n:05}.lab.example": {"ok": 12, "changed": 3, "failures": 0,
+                                              "unreachable": 0, "skipped": 4}
+                 for n in range(5000)}
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            line = json.dumps({"event": "stats", "hosts": hosts, "artifacts": {"a": 1}})
+            self.assertGreater(len(line), 256 * 1024)
+            (directory / "events.jsonl").write_text('{"event": "x"}\n' * 3 + line + "\n")
+            self.assertEqual(len(jobs._stats(directory)), 5000)
+            self.assertEqual(jobs._artifacts(directory), '{"a": 1}')
+
+    def test_the_last_line(self):
+        for data, last in ((b"", b""), (b"\n", b""), (b"a", b"a"), (b"a\nbb\n", b"bb"),
+                           (b"a\n" + b"b" * 10 + b"\n", b"b" * 10), (b"x" * 25, b"x" * 25)):
+            self.assertEqual(jobs._last_line(io.BytesIO(data), chunk=4), last, data)
+        with mock.patch.object(jobs, "MAX_STATS_LINE", 8):
+            self.assertEqual(jobs._last_line(io.BytesIO(b"a\n" + b"y" * 20), chunk=4), b"")
