@@ -85,8 +85,8 @@ def _read_text(dir_fd: int, name: str) -> str:
 def frontmatter(text: str) -> dict[str, str]:
     """The keys of the frontmatter of a SKILL.md: name: value lines between
     two --- lines, a value quoted or not and folded on the indented lines
-    below it, or a block (> or |) whose lines are indented below it. Enough for name and description; nothing else of
-    YAML is read."""
+    below it, or a block (> or |) whose lines are indented below it. Enough
+    for name and description; nothing else of YAML is read."""
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
