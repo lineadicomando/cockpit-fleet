@@ -40,6 +40,32 @@ Chrome on `deb13` (25 November), all but printing.
   as the assistant, a report of a run written in a folder, edited by
   hand, the agent's version restored, printed to PDF from the page.
 
+## Toward a mature release
+
+Decided 26 November (`decisions.md`, "Freeze of features"): phases 21
+and 22 are the last ones that add features; then fixes, minor changes and
+field use only, toward 1.0.0.
+
+## Phase 21: inventory chosen at launch
+
+Decided 26 November (`decisions.md`, "Inventory at launch"). To settle
+before building, with the user: where the allowed inventories and the
+credential per inventory live (schema), what a schedule and a workflow
+step fix, how runs in series, approvals, rules of notifications by scope
+and the template's limit read the chosen inventory, the tool of an agent
+(the inventory as an enum), the launch form, `fleet launch`, export.
+
+## Phase 22: skills of projects
+
+Decided 26 November (`decisions.md`, "Skills"). To settle before
+building: where a collection carries its skills (a dot directory may not
+survive `ansible-galaxy collection build`), bounds (size and count of
+skills, of the index), which projects' skills a session sees, the
+commands and their class, the page. Acceptance: the work of a Windows
+lab's maintenance done from the chat, with the skills of
+`ansible-win_edulab` and the catalog of its collection, without going
+back to that repository.
+
 ## Integration since the review of 16 November
 
 `make ct-test` on AlmaLinux: `runs`, `checks`, `store`, `files`,
@@ -102,7 +128,6 @@ Not planned as phases yet; the user picks the next one.
 
 - Ad-hoc commands: sets of variables chosen for one (today only the
   inventory's).
-- Assistant: instructions per project.
 - External triggers (git webhooks, auto-remediation); `ansible-pull` for
   very large fleets.
 - Secrets on OpenBao or Bitwarden; export to Prometheus or InfluxDB.
