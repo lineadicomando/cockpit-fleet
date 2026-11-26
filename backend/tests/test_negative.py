@@ -98,7 +98,7 @@ doc.get viewer M              doc.render viewer -
 starter.list admin -
 project.duplicate admin M     inventory.duplicate admin M
 project.starter admin M       inventory.starter admin M
-overview.get viewer -
+overview.get viewer -         skill.list viewer -           skill.read viewer -
 netscan.subnets admin -       netscan.start admin M         netscan.result admin -
 netscan.inventory admin M     netscan.macs admin M          netscan.probe operator -
 """

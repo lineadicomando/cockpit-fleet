@@ -10,6 +10,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Assistant: skills, what a project, the collections it installs and this
+  controller teach it, in the format of Claude's skills
+  (`.fleet/skills/NAME/SKILL.md` in a project or a collection,
+  `/etc/cockpit-fleet/skills/NAME/SKILL.md`). Each session is told their
+  names and descriptions and reads one when its work is what it describes
+  (`skill.list`, `skill.read`, `fleet skill`). They are read by every role
+  and go to the provider of the model: no secret in them.
 - Checks: the cycles that check the hosts can be followed. A check shows
   "Checking" while a cycle holds it and its last cycle, which opens the
   page of that run; "Recent cycles" lists those that held it, and "Check

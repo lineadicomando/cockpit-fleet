@@ -90,6 +90,11 @@ in [security.md](security.md); the decisions behind these limits in
   for it), so an agent sees it with no hosts; `whoami` lists the commands
   of the role, not of the profile; the questions of the page show a tool's
   description in English.
+- Skills: the frontmatter of a `SKILL.md` is read for its name and
+  description only, not as YAML; only `.md` and `.txt` files beside it,
+  none in subdirectories; read when a session starts, so a change waits for
+  the next; a collection's only when installed for the project's present
+  requirements; no page of their own beyond the instructions of the chat.
 - Chat: plain text; conversations not deletable; model not choosable; a
   change of profile starts the agent again (seconds, and the replay of the
   conversation), restarts the count of an autonomous agent's runs (and

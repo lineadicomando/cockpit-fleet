@@ -13,7 +13,7 @@ from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import chat, chat_agent, cli, instructions, profiles
+from cockpit_fleet import chat, chat_agent, cli, instructions, profiles, skills
 from cockpit_fleet.config import ChatAgent, Config, ConfigError, parse
 from cockpit_fleet.mcp import Unreachable
 
@@ -97,7 +97,8 @@ class CommandsTest(Base):
         self.open = 1
         self.rules = self.root / "assistant.md"
         for patch in (mock.patch.object(chat, "open_sessions", lambda: self.open),
-                      mock.patch.object(instructions, "CONTROLLER_FILE", self.rules)):
+                      mock.patch.object(instructions, "CONTROLLER_FILE", self.rules),
+                      mock.patch.object(skills, "CONTROLLER_DIR", self.root / "skills")):
             patch.start()
             self.addCleanup(patch.stop)
 
@@ -269,6 +270,20 @@ class CommandsTest(Base):
         self.assertEqual(self.code("chat.start", {"agent": "claude"}), "unavailable")
         self.rules.write_bytes(b"x" * instructions.MAX_CONTROLLER)
         self.ok("chat.start", {"agent": "claude"})
+
+    def test_the_skills_are_a_layer_of_their_own_last(self):
+        skill = self.root / "skills" / "school-rules"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("---\nname: school-rules\ndescription: The labs and"
+                                        " their rules.\n---\nNever on Fridays.\n")
+        self.rules.write_text("Be brief.\n")
+        data = self.ok("chat.start", {"agent": "claude"}, role="viewer")
+        self.assertEqual([layer["layer"] for layer in data["layers"]],
+                         ["base", "profile", "controller", "skills"])
+        told = data["layers"][-1]["text"]
+        self.assertIn("- school-rules (source controller, the controller): The labs and their"
+                      " rules.", told)
+        self.assertNotIn("Never on Fridays", told)
 
     def test_every_profile_has_its_layer(self):
         self.assertEqual(set(instructions.PROFILES), set(profiles.PROFILES))

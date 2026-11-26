@@ -214,6 +214,27 @@ archive and downloading are left out there, since they read and write
 ending with the `fleet draft merge` line that quotes the revision shown;
 the draft commands take the name of a managed project or inventory.
 
+**Skills** (phase 23, `skills.py`). What a project, the collections
+installed for it and the controller teach the assistant, as data the
+backend reads, never code it runs: `.fleet/skills/NAME/SKILL.md` in a
+project's tree, in each collection under the project's
+`collections/<digest>/ansible_collections/NS/NAME/`, and
+`/etc/cockpit-fleet/skills/NAME/SKILL.md`. The format is Claude's skills',
+so one file can serve a developer's Claude Code and the assistant alike; a
+dot directory survives `ansible-galaxy collection build`, which leaves out
+only `.git` and built artifacts. The frontmatter is read for `name` and
+`description` only (plain, quoted, or a `>`/`|` block), not as YAML; the
+name must be the directory's. `chat.start` puts the index in a layer of its
+own after the controller's (`instructions.layers(..., skills=)`), at most
+16 kB, the rest left to `skill.list`; `skill.read` (viewer, class `read`)
+gives `SKILL.md` or a `.md`/`.txt` file beside it, 64 kB at most, each step
+of the path opened with `O_NOFOLLOW`: a project's tree may hold links, and
+fleetctl can read the database. A source is `controller`, `project:ID` or
+`collection:ID:NS.NAME`. They are no tool of their own per skill: two tools
+whatever the number of skills, so the list of tools does not grow with
+them. The MCP servers of projects stay discarded (they would run Ansible
+outside the sandbox): skills are what stands in for what they knew.
+
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
 runs and where, and its parameters are the questions of its survey, typed and

@@ -445,6 +445,7 @@ function Instructions({ state }: { state: ChatState }) {
         if (layer.layer === "base") return t("From Fleet");
         if (layer.layer === "profile") return t("From Fleet, for the profile");
         if (layer.layer === "controller") return t("From this controller ({{source}})", { source: layer.source });
+        if (layer.layer === "skills") return t("Skills of the projects, their collections and this controller");
         return layer.source;
     };
     return (

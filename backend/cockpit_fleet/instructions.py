@@ -3,7 +3,9 @@ in layers, composed by chat.start for the page and the terminal alike.
 
 The base and the layer of the profile come with the package and cannot be
 removed; then the controller's, a file an administrator writes
-(/etc/cockpit-fleet/assistant.md), if there is one. There is no layer of a
+(/etc/cockpit-fleet/assistant.md), if there is one; then the index of the
+skills of the projects, their collections and the controller (skills.py),
+if there are any. There is no layer of a
 user: they can say what they want in the conversation.
 
 Instructions are not a control: what an agent may do is held by the backend,
@@ -103,9 +105,10 @@ def _controller(path: Path) -> str:
         raise Unavailable(f"{path} is not UTF-8 text") from None
 
 
-def layers(profile: str, surface: str, path: Path | None = None) -> list[dict]:
+def layers(profile: str, surface: str, path: Path | None = None, skills: str = "") -> list[dict]:
     """The layers for a session in PROFILE on SURFACE (page or terminal), in
-    order: each with its name, where it comes from and its text."""
+    order: each with its name, where it comes from and its text. SKILLS: the
+    index of the skills, as skills.index gives it."""
     where, note = _SURFACES[surface]
     found = [
         {"layer": "base", "source": "package", "text": _BASE.format(where=where) + note},
@@ -115,6 +118,9 @@ def layers(profile: str, surface: str, path: Path | None = None) -> list[dict]:
     text = _controller(path)
     if text:
         found.append({"layer": "controller", "source": str(path), "text": text})
+    if skills:
+        found.append({"layer": "skills", "source": "projects, collections, controller",
+                      "text": skills})
     return found
 
 

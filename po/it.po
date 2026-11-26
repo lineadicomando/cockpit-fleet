@@ -4881,3 +4881,6 @@ msgstr "Che cosa ha trovato il ciclo"
 
 msgid "What this cycle found on each host was not kept: the states of its checks have it."
 msgstr "Ciò che questo ciclo ha trovato su ciascun host non è stato conservato: lo riportano gli stati dei suoi check."
+
+msgid "Skills of the projects, their collections and this controller"
+msgstr "Skill dei progetti, delle loro collection e di questo controller"

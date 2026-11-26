@@ -12,7 +12,7 @@ more runs, or cancel those not ended.
 import os
 from pathlib import Path
 
-from . import agents, autonomy, instructions, jobs, profiles, store
+from . import agents, autonomy, instructions, jobs, profiles, skills, store
 from .auth import ROLES
 from .cli import Bool, Choice, Context, Int, Str, Values, command
 from .errors import (
@@ -190,7 +190,8 @@ def chat_start(ctx: Context, params: Values) -> dict:
     if open_sessions() > limit:
         raise SessionsFull(f"{limit} chat sessions are open already, the most this controller"
                        " allows ([chat] max_sessions in config.toml)")
-    found = instructions.layers(profile, "terminal" if params["terminal"] else "page")
+    found = instructions.layers(profile, "terminal" if params["terminal"] else "page",
+                                skills=skills.index(ctx))
     # What the agent gets is under the ceiling for agents, as fleet-mcp has it.
     role = _agent_role(ctx)
     allowed = [tool["name"] for tool in agents.tools(ctx, role, profile)

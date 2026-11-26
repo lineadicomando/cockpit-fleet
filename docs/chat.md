@@ -246,6 +246,50 @@ decided by the role, the profile and `[chat]`, whatever it was told. And
 they are sent to the provider with every conversation: put no password,
 address or name in them that should not leave the controller.
 
+## Skills
+
+What a project, its collections and this controller know of their own
+work (how a role is driven, the conventions of the labs, how a report is
+written) reaches the assistant as *skills*, in the format of Claude's: a
+directory with a `SKILL.md` whose frontmatter names it and says when to use
+it.
+
+```
+.fleet/skills/lab-maintenance/SKILL.md     in the tree of a project
+.fleet/skills/task-strings/SKILL.md        in a collection a project installs
+/etc/cockpit-fleet/skills/site/SKILL.md    on this controller
+```
+
+```markdown
+---
+name: lab-maintenance
+description: Maintaining a lab: wake the PCs, update them, shut them down,
+  and write the report.
+---
+
+# Maintaining a lab
+...
+```
+
+- The name is the directory's: lower case letters, digits and hyphens, 64
+  at most; a frontmatter that says another name, or no description, leaves
+  the directory out. The description is what the assistant chooses by:
+  say *when* to use the skill, in a sentence or two (1024 characters at
+  most).
+- Each session is told the index, names and descriptions, after the
+  controller's instructions; it reads a skill's text, and the `.md` or
+  `.txt` files beside it that the text points to, with `skill_read` when
+  the work at hand is what the description says. A text is 64 kB at most;
+  the index, past 16 kB, says that the rest is in `skill_list`.
+- They are read as the project is now, when a session starts: a change
+  reaches the next one. A link is never followed, on the way or at the end.
+- Every role reads them, viewers included, and they go to the provider of
+  the model like the instructions: no password, address or name that
+  should not leave the controller. They guide the assistant; what it may
+  do is held by its role and profile, whatever a skill says.
+- At a terminal, `fleet skill list` and `fleet skill read --source ...
+  --name ...` show what the assistant sees.
+
 ## At a terminal
 
 `fleet assistant` starts the same agent in a terminal on the controller (an

@@ -6,7 +6,7 @@ What is left. Other documents: `CLAUDE.md`; how each closed phase was shown:
 
 ## Status (26 November 2026)
 
-Phases 0–18 closed; 19, 20 and 21 built, each waiting only for its close
+Phases 0–18 closed; 19 to 23 built, each waiting only for its close
 below. Last release 0.4.0 (18 November); `[Unreleased]` of `CHANGELOG.md`
 has what came since. `make release` only when asked.
 
@@ -78,14 +78,16 @@ involved. The pages tried in Chrome on `fed44`.
 
 ## Phase 23: skills of projects
 
-Decided 26 November (`decisions.md`, "Skills"). To settle before
-building: where a collection carries its skills (a dot directory may not
-survive `ansible-galaxy collection build`), bounds (size and count of
-skills, of the index), which projects' skills a session sees, the
-commands and their class, the page. Acceptance: the work of a Windows
-lab's maintenance done from the chat, with the skills of
-`ansible-win_edulab` and the catalog of its collection, without going
-back to that repository.
+Decided 26 November (`decisions.md`, "Skills"); what exists:
+`architecture/agents.md`, "Skills" (`skills.py`, the layer of
+`instructions.py`), `chat.md` for administrators; built on 26 November.
+
+- [ ] Integration: `chat`, `mcp`, `cli` in containers on the three.
+- [ ] `ansible-win_edulab` and `ansible-collection-win_workman` (their own
+  repositories): the operational skills rewritten for Fleet's tools, the
+  role catalog of the collection as a skill of its own.
+- [ ] Close: the work of a lab's maintenance done from the chat on a
+  controller, with those skills, without going back to the repository.
 
 ## Integration since the review of 16 November
 
