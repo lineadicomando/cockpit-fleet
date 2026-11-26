@@ -176,6 +176,14 @@ BROWSER_LAB=deb13 test/browser/browser.sh setup|test NAME   # on a VM of the lab
 |---|---|---|---|
 | `checks-cycles` | `checks` | container | phase 22: overview, checks, "Check now", a cycle's page, recent cycles, cycles among runs |
 | `network-scan` | `network` | `deb13`, `win11` up | phase 19: a part of the lab's subnet scanned, MAC written into an inventory, its hosts probed |
+| `labs-launch` | `labs` | `deb13`, `win11` up | phase 21: one template on two labs, Windows Update to its end, Wake-on-LAN, a schedule, the workflow |
+
+`labs-launch` runs Windows Update on `win11` for real (about 1 h 15 min):
+take a snapshot of it first and go back to it before running it again. Its
+setup takes the project ansible-win_edulab from GitHub and needs the
+secret `it-win-key` on the controller, as `windows.sh` does. A workflow
+that names an inventory starts at once when launched from its list: the
+setup's has none, so the page asks.
 
 ### The controller
 

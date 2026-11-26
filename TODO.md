@@ -31,7 +31,13 @@ Each is described in the file named; what remains is the close.
 - **21, inventory chosen at launch** (`architecture/inventories.md`, "The
   inventory chosen at launch"): on a controller `wu-run` and `wol` from the
   page on two inventories, a schedule each, a workflow launched on two, the
-  agent choosing the inventory.
+  agent choosing the inventory. Shown by the scenario `labs-launch` on
+  `deb13` (26 November): `wu-run` from the page on `aula-1`,
+  Windows Update on `win11` whole (1 h 14 min, a restart, two rounds), `wol`
+  on `aula-2` (the PC off, failed as it should), a schedule made in the
+  page for `aula-2` beside the one of `aula-1`, the workflow launched on
+  `aula-2`. What remains: the workflow launched on `aula-1` to its end,
+  and the agent choosing the inventory (the user, with Claude).
 - **22, check cycles in view** (`checks.md`, "Following the cycles";
   `architecture/checks.md`): the user follows the cycles of the labs'
   checks on a controller. The scenario `checks-cycles` goes through it in
@@ -40,11 +46,14 @@ Each is described in the file named; what remains is the close.
 
 ## Tests in a browser
 
-Done: `checks-cycles` (phase 22) and `network-scan` (phase 19, on `deb13`
-with `BROWSER_LAB=deb13`). Next: the scenario of the close of 21 on the
-lab's VMs (`win11` for `wu-run` and `wol`).
-Run titles of check cycles read "laboratorio: 4 hosts" in the Italian
-interface: the backend writes them in English (to look at).
+Done: `checks-cycles` (phase 22), `network-scan` (phase 19, on `deb13`
+with `BROWSER_LAB=deb13`) and `labs-launch` (phase 21).
+In the Italian interface some text the backend writes stays English: the
+titles of check cycles ("laboratorio: 4 hosts"), the error of a workflow
+("accensione: failed"). The list of checks, idle, does not poll: a cycle
+of the timer shows only once the page is loaded again. Under the group of
+an inventory, the list of templates shows a template's last run on any
+inventory. (All to look at.)
 - **23, skills of projects** (`architecture/agents.md`, "Skills";
   `chat.md`, "Skills"): the skills are pushed in `ansible-win_edulab`
   (`win-edulab-operations`, `-inventory`, `-reports`) and in
