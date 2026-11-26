@@ -133,7 +133,8 @@ needs the user's explicit agreement.
   `ActionsColumn` and the rest `src/components/pf.tsx` wraps from there,
   not from PatternFly: they carry translated text. Cockpit's policy
   refuses inline `<style>` and `style` attributes (React's `style` prop is
-  fine).
+  fine). What it does for a role, and what it sends the backend, tested in
+  `test/NAME.test.tsx` (`docs/architecture/tests.md`).
 - **A string**: English through `t()`, Italian in `po/it.po`, then
   `make pot && make po-compile`. Plurals: a symbolic key (`things_count`)
   whose English forms are edited by hand in `src/locales/en/translation.json`.

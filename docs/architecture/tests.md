@@ -3,8 +3,20 @@
 | What | Where | Runs on |
 |---|---|---|
 | Frontend unit tests | `test/*.test.ts` | development host, CI |
+| Frontend component tests | `test/*.test.tsx` | development host, CI |
 | Backend unit tests | `backend/tests/` | development host, CI |
 | Negative tests over the whole registry | `backend/tests/test_negative.py` | development host, CI |
+
+The component tests draw a component, or a whole page, in a document of
+happy-dom (`test/dom.ts`, imported first; English strings) and drive it as
+a person would, through Testing Library's roles and labels; the backend is
+the double of `cockpit.spawn` (`test/mocks/cockpit.ts`), so a test sees
+what the page sent to `fleetctl` or `fleet-secret`, on stdin and in argv,
+and gives the session the commands of a role. The loader of the tests
+(`test/cockpit-loader.mjs`, `cockpit-resolve.mjs`) turns `.tsx` into
+JavaScript with esbuild, as the bundle does, takes JSON imported without
+attributes and gives PatternFly's style sheets as nothing. `cleanup()` after
+each test: `node:test` does not call it.
 
 Integration scripts run as root on a controller with the package installed
 (a container of `make ct-test`, a VM of the lab, or another machine: see

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --import ./test/cockpit-loader.mjs --test test/*.test.ts",
+    "test": "node --experimental-strip-types --import ./test/cockpit-loader.mjs --test test/*.test.ts test/*.test.tsx",
     "build": "node build.js",
     "watch": "node build.js --watch",
     "pot": "i18next",
@@ -53,6 +53,9 @@
     "victory-zoom-container": "^37.3.6"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^25.6.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
