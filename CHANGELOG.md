@@ -146,6 +146,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   project or its playbook, in the steps of a workflow, in schedules and in
   the rules of notifications; so are a schedule's workflow and the target
   of a rule.
+- Store and Documents: a folder, or a search, of more than 50 entries is
+  shown a page at a time, 100 entries a page unless another number is
+  chosen; selecting all selects the entries of the page.
 
 ### Fixed
 

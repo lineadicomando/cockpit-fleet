@@ -393,6 +393,22 @@ export function readStoreSort(text: string | null): StoreSort {
     return { by: "name", ascending: true };
 }
 
+// How many entries of a folder a page of the list draws, as one may choose.
+export const PER_PAGE = [50, 100, 200, 500];
+
+export function readPerPage(text: string | null): number {
+    const value = Number(text);
+    return PER_PAGE.includes(value) ? value : 100;
+}
+
+// The entries of page PAGE (from 1), and that page: the last when PAGE is
+// beyond it, as when a folder shrank or a filter narrowed it.
+export function pageOf<T>(items: T[], page: number, perPage: number): { items: T[]; page: number } {
+    const last = Math.max(1, Math.ceil(items.length / perPage));
+    const shown = Math.min(Math.max(1, Math.floor(page)), last);
+    return { items: items.slice((shown - 1) * perPage, shown * perPage), page: shown };
+}
+
 // Folders always first, by name; files by the key asked, then by name.
 export function sortEntries<F extends Listed>(entries: Entry<F>[], sort: StoreSort): Entry<F>[] {
     const sign = sort.ascending ? 1 : -1;

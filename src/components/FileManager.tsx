@@ -23,14 +23,14 @@ import { formatBytes } from "../lib/checks.ts";
 import { basename, dirname, isInside, relocate, topmost } from "../lib/files.ts";
 import { useStoredState, type Loaded } from "../lib/hooks.ts";
 import {
-    chosenFolder, describe, droppedOf, filterEntries, indexStore, joinPath, moveInList, rangeBetween, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries,
+    chosenFolder, describe, droppedOf, filterEntries, indexStore, joinPath, moveInList, PER_PAGE, pageOf, rangeBetween, readPerPage, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries,
     type Clash, type Dropped, type Entry, type Listed, type Listing, type StoreSortKey, type Upload,
 } from "../lib/store.ts";
 import { ConfirmDelete, ListState, message } from "./common.tsx";
 import { ContextMenu, type MenuEntry } from "./ContextMenu.tsx";
 import { RelocateModal } from "./RelocateModal.tsx";
 import { ConflictModal, NewFolderModal, RenameModal } from "./StoreDialogs.tsx";
-import { ActionsColumn, Alert, SearchInput } from "./pf.tsx";
+import { ActionsColumn, Alert, Pagination, SearchInput } from "./pf.tsx";
 
 // A list of files and folders that works as a file manager does: many
 // entries selected, dragged onto a folder (copied with Ctrl), cut or copied
@@ -205,8 +205,18 @@ export function FileManager<F extends Listed>(props: Props<F>) {
     const taken = useMemo(() => new Set([...(data?.files ?? []).map(file => file.path), ...(data?.directories ?? [])]), [data]);
     const searching = everywhere && query.trim() !== "";
     const found = useMemo(() => (data && searching ? searchStore(data, query, FOUND) : null), [data, searching, query]);
-    const shown = useMemo(() => found ? found.entries : sortEntries(filterEntries(index.get(directory) ?? [], query), sort),
+    const matching = useMemo(() => found ? found.entries : sortEntries(filterEntries(index.get(directory) ?? [], query), sort),
         [found, index, directory, query, sort]);
+    // A folder of thousands of files is drawn a page at a time.
+    const [perPage, setPerPage] = useStoredState(`${kind}-per-page`, readPerPage);
+    const [wantedPage, setPage] = useState(1);
+    const { items: shown, page } = useMemo(() => pageOf(matching, wantedPage, perPage), [matching, wantedPage, perPage]);
+    const paging = (where: "top" | "bottom") => matching.length > PER_PAGE[0] && (
+        <Pagination widgetId={`${kind}-pages-${where}`} variant={where} isCompact={where === "top"}
+            itemCount={matching.length} page={page} perPage={perPage}
+            perPageOptions={PER_PAGE.map(value => ({ title: String(value), value }))}
+            onSetPage={(_e, value) => setPage(value)} onPerPageSelect={(_e, value) => { setPerPage(value); setPage(1); }} />
+    );
     const order = useMemo(() => shown.map(entry => entry.path), [shown]);
     // Only what is shown counts as selected: a filter hides the rest.
     const chosen = useMemo(() => order.filter(path => selected.has(path)), [order, selected]);
@@ -217,7 +227,12 @@ export function FileManager<F extends Listed>(props: Props<F>) {
         setSelected(new Set());
         setAnchor(null);
         setQuery("");
+        setPage(1);
     }, [directory]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [query, everywhere, sort]);
 
     useEffect(() => {
         folderChooser.current?.setAttribute("webkitdirectory", "");
@@ -708,6 +723,9 @@ export function FileManager<F extends Listed>(props: Props<F>) {
                         <ToolbarItem><Button variant="link" size="sm" onClick={() => setClip(null)}>{t("Cancel")}</Button></ToolbarItem>
                     </ToolbarGroup>
                 )}
+                {!missing && shown.length > 0 && matching.length > PER_PAGE[0] && (
+                    <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>{paging("top")}</ToolbarItem>
+                )}
             </ToolbarContent>
         </Toolbar>
     );
@@ -783,6 +801,7 @@ export function FileManager<F extends Listed>(props: Props<F>) {
                             )}
                     </ListState>
                 )}
+            {!missing && shown.length > 0 && paging("bottom")}
             {found && found.more > 0 && <Content component="p">{t("paths_more_count", { count: found.more })}</Content>}
             {(can.upload || can.move) && <p className="fleet-store-hint">{words.hint}</p>}
         </div>

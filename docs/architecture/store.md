@@ -242,8 +242,11 @@ selection, drags, clipboard, menus, keys, dialogs and the queue of uploads;
 the page gives it how each change is made, its columns and its panel), on what
 `store.list` gives (one listing of the whole tree, indexed by folder in the
 page): a filter of the folder or a search of the whole store by name,
-columns to sort by (kept in the browser), many entries selected (checkboxes,
-Ctrl or Shift and a click, Ctrl+A), moved by a drag onto a folder or onto
+columns to sort by (kept in the browser), a folder or a search of more
+than 50 entries drawn a page at a time (50 to 500 a page, kept in the
+browser; what the listing holds is the whole tree all the same, so paging
+saves drawing rows, not reading them), many entries selected (checkboxes,
+Ctrl or Shift and a click, Ctrl+A: of the page shown), moved by a drag onto a folder or onto
 the path above, by cut and paste (Ctrl+X, Ctrl+V: a clipboard of the page,
 not the system's, which cannot hold a file of the server) or by "Move to…"
 with the folders offered as one types; renamed in place (F2), deleted

@@ -14,6 +14,7 @@ import {
     MenuToggle,
     Modal as PfModal,
     NumberInput as PfNumberInput,
+    Pagination as PfPagination,
     SearchInput as PfSearchInput,
     Spinner as PfSpinner,
     Tabs as PfTabs,
@@ -26,6 +27,7 @@ import type {
     FileUploadProps,
     ModalProps,
     NumberInputProps,
+    PaginationProps,
     SearchInputProps,
     SpinnerProps,
     TabProps,
@@ -106,6 +108,19 @@ export function NumberInput({ id, inputProps, ...props }: NumberInputProps) {
     return (
         <PfNumberInput inputAriaLabel={id ? "" : props["aria-label"] ?? t("Number")} minusBtnAriaLabel={t("Less")}
             plusBtnAriaLabel={t("More")} inputProps={{ ...inputProps, id }} {...props} />
+    );
+}
+
+export function Pagination(props: PaginationProps) {
+    const { t } = useTranslation();
+    return (
+        <PfPagination titles={{
+            items: "", page: "", pages: "", ofWord: t("of"), perPageSuffix: t("per page"),
+            itemsPerPage: t("Items per page"), optionsToggleAriaLabel: t("Items per page"),
+            paginationAriaLabel: t("Pages"), currPageAriaLabel: t("Current page"),
+            toFirstPageAriaLabel: t("Go to the first page"), toPreviousPageAriaLabel: t("Go to the previous page"),
+            toNextPageAriaLabel: t("Go to the next page"), toLastPageAriaLabel: t("Go to the last page"),
+        }} {...props} />
     );
 }
 

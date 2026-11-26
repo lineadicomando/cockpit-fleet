@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { channels } from "./mocks/cockpit.ts";
 import {
     chosenFolder, describe, downloadUrl, entriesOf, filterEntries, freeName, indexStore, moveInList, nameFromUrl, playbookPath, putHeader,
-    rangeBetween, readDropped, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, type StoreFile, type StoreList,
+    pageOf, PER_PAGE, rangeBetween, readDropped, readPerPage, readStoreSort, removeFromList, searchStore, settle, sizeOf, sortEntries, uploadToStore, type StoreFile, type StoreList,
     archiveName, archiveUrl, storeChoices, storePathAt, endedDownloads, readClosed, visibleDownloads, type StoreDownload,
     SFTP_SERVER, sftpCommand,
 } from "../src/lib/store.ts";
@@ -257,4 +257,18 @@ test("an SFTP client names fleet store sftp as its server, quoted for a shell", 
     assert.equal(sftpCommand("anna", "fleet.example.org"),
                  "sftp -s '/usr/bin/fleet store sftp' anna@fleet.example.org");
     assert.equal(sftpCommand("anna", "[::1]"), "sftp -s '/usr/bin/fleet store sftp' 'anna@[::1]'");
+});
+
+test("a folder is drawn a page at a time", () => {
+    const items = Array.from({ length: 250 }, (_, i) => i);
+    assert.deepEqual(pageOf(items, 1, 100).items, items.slice(0, 100));
+    assert.deepEqual(pageOf(items, 3, 100), { items: items.slice(200), page: 3 });
+    // Beyond the last page, as when the folder shrank: the last one.
+    assert.deepEqual(pageOf(items, 9, 100), { items: items.slice(200), page: 3 });
+    assert.deepEqual(pageOf([], 4, 50), { items: [], page: 1 });
+    assert.equal(pageOf(items, 0, 50).page, 1);
+    assert.equal(readPerPage("200"), 200);
+    assert.equal(readPerPage("7"), 100);
+    assert.equal(readPerPage(null), 100);
+    assert.ok(PER_PAGE.includes(readPerPage(null)));
 });

@@ -4908,3 +4908,30 @@ msgstr "La skill {{name}} è in attesa di approvazione"
 
 msgid "This run no longer waits for a decision: someone else decided, or it expired."
 msgstr "Questa run non attende più una decisione: qualcun altro ha deciso, oppure è scaduta."
+
+msgid "Current page"
+msgstr "Pagina corrente"
+
+msgid "Go to the first page"
+msgstr "Vai alla prima pagina"
+
+msgid "Go to the last page"
+msgstr "Vai all'ultima pagina"
+
+msgid "Go to the next page"
+msgstr "Vai alla pagina successiva"
+
+msgid "Go to the previous page"
+msgstr "Vai alla pagina precedente"
+
+msgid "Items per page"
+msgstr "Elementi per pagina"
+
+msgid "of"
+msgstr "di"
+
+msgid "Pages"
+msgstr "Pagine"
+
+msgid "per page"
+msgstr "per pagina"
