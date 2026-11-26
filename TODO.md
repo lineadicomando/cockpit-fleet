@@ -43,7 +43,7 @@ Chrome on `deb13` (25 November), all but printing.
 ## Toward a mature release
 
 Decided 26 November (`decisions.md`, "Freeze of features"): phases 21
-to 23 are the last ones that add features; then fixes, minor changes and
+to 24 are the last ones that add features; then fixes, minor changes and
 field use only, toward 1.0.0.
 
 ## Phase 21: inventory chosen at launch
@@ -92,6 +92,25 @@ Decided 26 November (`decisions.md`, "Skills"); what exists:
   synchronised and its collections installed again on the controller.
 - [ ] Close: the work of a lab's maintenance done from the chat on a
   controller, with those skills, without going back to the repository.
+
+## Phase 24: skills in the documents
+
+Decided 26 November (`decisions.md`, "Skills in the documents").
+
+- [ ] Documents: a commit made through an agent says so (a trailer beside
+  the person's authorship), readable from the history.
+- [ ] Skills: `skills/NAME/SKILL.md` of the documents a source of
+  `skills.py`; one whose last change came from an agent left out of the
+  index and of `skill.read` until approved.
+- [ ] An approval: a command for operators and administrators, refused to
+  agents, recorded (in the history and the audit); a person's own save
+  approves too. What waits is listed.
+- [ ] Page of the documents: a skill marked as waiting, with "Approve" and
+  the differences since the last approved version.
+- [ ] Instructions: the assistant may propose a skill for a task that
+  recurs, written there, and says it waits for a person.
+- [ ] Docs (`chat.md`, `architecture/documents.md`, `agents.md`),
+  `CHANGELOG.md`, Italian strings; close in containers and in a browser.
 
 ## Integration since the review of 16 November
 
