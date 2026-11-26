@@ -244,9 +244,21 @@ def head() -> str | None:
     return found.strip() if found else None
 
 
-def _commit(message: str, author: str) -> str | None:
+# The trailer of a commit an agent made, beside the person it acts for (the
+# author): what it came through and the profile it was held to.
+AGENT_TRAILER = "Fleet-Agent"
+
+
+def _agent(ctx: Context) -> str:
+    """What an agent's change says it came through; "" for a person's."""
+    if not is_agent(ctx.via):
+        return ""
+    return f"{ctx.via} ({ctx.profile})" if ctx.profile else ctx.via
+
+
+def _commit(message: str, author: str, agent: str = "") -> str | None:
     """Commit whatever differs among the texts of the tree, and only them;
-    the commit main is then at."""
+    the commit main is then at. AGENT, when an agent made the change."""
     _repository()
     found, _directories, _whole = scan()
     tracked = (_git("ls-files", "-z") or "").split("\0")
@@ -262,7 +274,8 @@ def _commit(message: str, author: str) -> str | None:
         finally:
             listing.unlink(missing_ok=True)
     if _git("diff", "--cached", "--name-only", "-z"):
-        _git("commit", "--quiet", "--no-verify", f"--message={message}",
+        trailer = [f"--trailer={AGENT_TRAILER}: {agent}"] if agent else []
+        _git("commit", "--quiet", "--no-verify", f"--message={message}", *trailer,
              env=files.identity(author))
     return head()
 
@@ -517,7 +530,7 @@ def doc_write(ctx: Context, params: Values) -> dict:
         _room(ctx, len(data), status.st_size if status is not None else 0)
         _write(path, data)
         verb = "Write" if status is not None else "Create"
-        revision = _commit(_message(params, f"{verb} {path}"), ctx.caller.user)
+        revision = _commit(_message(params, f"{verb} {path}"), ctx.caller.user, _agent(ctx))
     return {"path": str(path), "sha256": _digest(data), "size": len(data),
             "created": status is None, "revision": revision}
 
@@ -596,7 +609,7 @@ def doc_move(ctx: Context, params: Values) -> dict:
                 _rename(to, path)
             raise
         _rows_moved(ctx.conn, pairs)
-        revision = _commit(_describe("Move", pairs), ctx.caller.user)
+        revision = _commit(_describe("Move", pairs), ctx.caller.user, _agent(ctx))
     return {"moved": [{"path": str(path), "to": str(to)} for path, to in pairs],
             "revision": revision}
 
@@ -646,7 +659,7 @@ def doc_copy(ctx: Context, params: Values) -> dict:
         for source, target in copies:
             _copy_file(source, target)
         _rows_moved(ctx.conn, [(path, to)], copy=True, user=ctx.caller.user)
-        revision = _commit(f"Copy {path} to {to}", ctx.caller.user)
+        revision = _commit(f"Copy {path} to {to}", ctx.caller.user, _agent(ctx))
     return {"path": str(to), "files": len(copies), "revision": revision}
 
 
@@ -677,7 +690,7 @@ def doc_delete(ctx: Context, params: Values) -> dict:
                 os.close(parent)
         _forget(ctx.conn, gone)
         message = f"Delete {gone[0]}" if len(gone) == 1 else f"Delete {len(gone)} files and folders"
-        revision = _commit(message, ctx.caller.user)
+        revision = _commit(message, ctx.caller.user, _agent(ctx))
     return {"deleted": [str(path) for path in gone], "revision": revision}
 
 
@@ -698,16 +711,22 @@ def doc_history(ctx: Context, params: Values) -> dict:
     follow = ["--follow"] if path is not None and is_text(path) else []
     output = _git("-c", "core.quotePath=false", "log", f"--max-count={params['limit']}",
                   f"--skip={params['skip']}", "--name-only", *follow,
-                  "--format=%x1e%H%x1f%an%x1f%at%x1f%s", "HEAD",
+                  f"--format=%x1e%H%x1f%an%x1f%at%x1f%s%x1f{_trailer(AGENT_TRAILER)}", "HEAD",
                   *(["--", str(path)] if path is not None else []), check=False) or ""
     commits = []
     for record in output.split("\x1e"):
         lines = record.strip("\n").split("\n")
         fields = lines[0].split("\x1f")
-        if len(fields) == 4:
+        if len(fields) == 5:
             commits.append({"revision": fields[0], "author": fields[1], "time": int(fields[2]),
-                            "subject": fields[3], "paths": [line for line in lines[1:] if line]})
+                            "subject": fields[3], "agent": fields[4],
+                            "paths": [line for line in lines[1:] if line]})
     return {"commits": commits}
+
+
+def _trailer(key: str) -> str:
+    """The format of git log that gives the value of the trailer KEY, on one line."""
+    return f"%(trailers:key={key},valueonly,separator=%x20)"
 
 
 @command("doc.diff", role="viewer", params={
@@ -759,7 +778,7 @@ def doc_restore(ctx: Context, params: Values) -> dict:
         _room(ctx, len(data), status.st_size if status is not None else 0)
         _write(target, data)
         name = f"{path}" if target == path else f"{path} to {target}"
-        new = _commit(f"Restore {name} as of {revision[:12]}", ctx.caller.user)
+        new = _commit(f"Restore {name} as of {revision[:12]}", ctx.caller.user, _agent(ctx))
     return {"path": str(target), "sha256": _digest(data), "revision": new}
 
 
@@ -842,7 +861,7 @@ def doc_put(ctx: Context, params: Values) -> dict:
                 os.close(target)
             if text:
                 ctx.conn.execute("DELETE FROM document_files WHERE path = ?", (str(path),))
-                revision = _commit(f"Upload {path}", ctx.caller.user)
+                revision = _commit(f"Upload {path}", ctx.caller.user, _agent(ctx))
             else:
                 _record(ctx.conn, path, size, found, params["origin"], params["source"],
                         ctx.caller.user)

@@ -4884,3 +4884,6 @@ msgstr "Ciò che questo ciclo ha trovato su ciascun host non è stato conservato
 
 msgid "Skills of the projects, their collections and this controller"
 msgstr "Skill dei progetti, delle loro collection e di questo controller"
+
+msgid "{{author}} through the assistant, {{agent}}"
+msgstr "{{author}} tramite l'assistente, {{agent}}"

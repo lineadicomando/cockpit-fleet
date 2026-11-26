@@ -241,6 +241,8 @@ expect_eq "and reads it" "$(answer "$out" 4 '"web01 rebooted" in a["result"]["co
 expect_eq "its write is the person's in the history, through an agent in the audit log" \
     "$(get "$(ctl itoperator doc.history)" 'a["data"]["commits"][0]["author"]') $(get "$(admin audit.list)" '[e["via"] for e in a["data"]["entries"] if e["command"] == "doc.write"][0]')" \
     "itoperator mcp:it-client"
+expect_eq "and the history says the agent made it, beside the person" \
+    "$(get "$(ctl itoperator doc.history)" 'a["data"]["commits"][0]["agent"]')" "mcp:it-client (assisted)"
 expect_eq "the text is the service's, in the history of the documents" \
     "$(stat -c %U /var/lib/cockpit-fleet/documents/reports/it.md) $(sudo -u cockpit-fleet git --git-dir=/var/lib/cockpit-fleet/documents.git ls-files)" \
     "cockpit-fleet reports/it.md"

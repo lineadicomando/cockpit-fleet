@@ -1684,5 +1684,6 @@
   "Summary": "Riepilogo",
   "What the cycle found": "Che cosa ha trovato il ciclo",
   "What this cycle found on each host was not kept: the states of its checks have it.": "Ciò che questo ciclo ha trovato su ciascun host non è stato conservato: lo riportano gli stati dei suoi check.",
-  "Skills of the projects, their collections and this controller": "Skill dei progetti, delle loro collection e di questo controller"
+  "Skills of the projects, their collections and this controller": "Skill dei progetti, delle loro collection e di questo controller",
+  "{{author}} through the assistant, {{agent}}": "{{author}} tramite l'assistente, {{agent}}"
 }

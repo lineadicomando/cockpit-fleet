@@ -33,8 +33,10 @@ an attachment never enters the history and a text gone leaves it. A text
 put in the tree by hand, or changed there, is committed by the service
 before the next change, so that the commit of a person holds only what
 they did. There are no drafts: an agent's write is a commit like a
-person's, with the person it acts for as its author and the audit trail
-saying it came through an agent.
+person's, with the person it acts for as its author, and a trailer
+`Fleet-Agent: VIA (PROFILE)` saying it came through an agent (phase 24;
+`doc.history` gives it as `agent`, the page as "through the assistant"),
+as the audit trail does.
 
 **A replacement quotes what was read.** `doc.read` gives the digest of the
 text; `doc.write` replacing a text takes it as `expected`, and a text

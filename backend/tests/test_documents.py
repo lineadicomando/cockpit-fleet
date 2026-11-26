@@ -56,6 +56,14 @@ class DocumentsTest(Base):
         self.assertEqual(audit["command"], "doc.write")
         self.assertNotIn("Disk full", json.dumps(audit))
 
+    def test_a_change_an_agent_made_says_so_beside_the_person(self):
+        self.written("a.md", "one")
+        answer = self.as_agent("doc.write", {"path": "b.md", "content": "two"})
+        self.assertTrue(answer["ok"], answer)
+        commits = self.history()
+        self.assertEqual([(c["author"], c["agent"]) for c in commits],
+                         [("anna", "mcp:test (assisted)"), ("anna", "")])
+
     def test_a_change_held_for_ever_does_not_hold_up_the_others(self):
         self.written("a.md", "one")
         documents._mkdirs()

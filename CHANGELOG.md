@@ -17,6 +17,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
   names and descriptions and reads one when its work is what it describes
   (`skill.list`, `skill.read`, `fleet skill`). They are read by every role
   and go to the provider of the model: no secret in them.
+- Documents: the history says which changes the assistant made, beside
+  the person it acted for.
 - Checks: the cycles that check the hosts can be followed. A check shows
   "Checking" while a cycle holds it and its last cycle, which opens the
   page of that run; "Recent cycles" lists those that held it, and "Check

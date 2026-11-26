@@ -1,5 +1,6 @@
 {
   "{{agent}} is not installed on this machine": "{{agent}} is not installed on this machine",
+  "{{author}} through the assistant, {{agent}}": "{{author}} through the assistant, {{agent}}",
   "{{author}}, {{time}}: {{changes}}": "{{author}}, {{time}}: {{changes}}",
   "{{forks}} forks, up to {{hosts}} hosts": "{{forks}} forks, up to {{hosts}} hosts",
   "{{from}} moved to {{to}}": "{{from}} moved to {{to}}",

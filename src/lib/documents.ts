@@ -43,6 +43,8 @@ export interface DocCommit {
     author: string;
     time: number;
     subject: string;
+    // What an agent's change came through, beside the person it acted for.
+    agent: string;
     paths: string[];
 }
 

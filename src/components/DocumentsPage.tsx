@@ -421,7 +421,8 @@ function CommitEntry({ path, commit, onRestore }: { path: string; commit: DocCom
                 <>
                     {commit.subject}
                     <Content component="small" style={{ display: "block" }}>
-                        {commit.author} · {formatTime(commit.time, i18n.language)} · <code>{commit.revision.slice(0, 10)}</code>
+                        {commit.agent ? t("{{author}} through the assistant, {{agent}}", { author: commit.author, agent: commit.agent }) : commit.author}
+                        {" · "}{formatTime(commit.time, i18n.language)} · <code>{commit.revision.slice(0, 10)}</code>
                     </Content>
                 </>
             )}>
