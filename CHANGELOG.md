@@ -189,6 +189,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
   journal, nor in the audit trail of a launch that fails: a reader of the
   journal could launch a run with it, and somebody else's secret, before
   the run it was meant for.
+- A playbook can no longer make a failed run pass for a successful one: it
+  could rewrite the outcome of its run, which is kept in the run's own
+  directory, from a process left running or through the memory of the
+  process that writes it. Nothing of the job outlives it now, and that
+  process is out of its reach.
 
 ## [0.4.0] - 2026-11-18
 

@@ -3,8 +3,15 @@
 
 Writes the human-readable output to stdout.log and to the journal, and the
 outcome to result.json, which is what the backend reads once the unit is gone.
+
+The job runs as this account and writes the run's directory, so the outcome
+is the job's word unless nothing of the job can touch it: this process is PID
+1 of the run's own PID namespace (PrivatePIDs), keeps its memory out of reach
+of the job's processes, and ends every one of them before it writes
+result.json.
 """
 
+import ctypes
 import json
 import os
 import shutil
@@ -48,6 +55,54 @@ def execute(command: list[str], env: dict, cwd: Path, log) -> int:
         sys.stdout.buffer.write(line)
         sys.stdout.buffer.flush()
     return current.wait()
+
+
+def guard_memory() -> None:
+    """Keep the job's processes, of the same account, out of this one.
+
+    Through /proc/1/mem a playbook could otherwise change the outcome before
+    it is written, or read the secrets held here. Not dumpable, /proc/1 is
+    root's; ptrace is refused anyway by the unit's filter of system calls.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(4, 0, 0, 0, 0) != 0:  # PR_SET_DUMPABLE, 0
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_DUMPABLE) failed")
+
+
+def end_job() -> None:
+    """Leave nothing of the job running, so that nothing can rewrite its outcome.
+
+    In the unit this is PID 1 of the run's namespace: kill(-1) reaches every
+    other process of the run and none outside it, and every one of them, left
+    behind or not, is a child of this one, so waiting for all of them means
+    that none is still in the middle of a write. Anywhere else kill(-1) would
+    reach every process of the account: the outcome is then not guarded.
+    """
+    if os.getpid() != 1:
+        return
+    try:
+        os.kill(-1, signal.SIGKILL)
+    except ProcessLookupError:
+        return  # nothing left
+    while True:
+        try:
+            os.waitpid(-1, 0)
+        except ChildProcessError:
+            return
+
+
+def write_result(run_dir: Path, result: dict) -> None:
+    """Replace whatever the job left under the names of the outcome."""
+    for name in ("result.json", "result.json.tmp"):
+        try:
+            (run_dir / name).unlink()
+        except FileNotFoundError:
+            pass
+    temporary = run_dir / "result.json.tmp"
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as out:
+        out.write(json.dumps(result))
+    temporary.replace(run_dir / "result.json")
 
 
 def start_agent(credentials: Path | None, runtime_dir: Path, prefix: str, log) -> str | None:
@@ -182,6 +237,7 @@ def main(argv: list[str]) -> int:
         return 2
     signal.signal(signal.SIGTERM, on_term)
     try:
+        guard_memory()
         run_id = check_id(argv[1], "run id")
         run_dir = RUNS_DIR / run_id
         runtime_dir = Path(os.environ["RUNTIME_DIRECTORY"])
@@ -206,13 +262,12 @@ def main(argv: list[str]) -> int:
             result = {"rc": 2, "error": message.decode(errors="replace")
                       .removeprefix("fleet-run: ").strip()}
 
+    end_job()
     result["finished_at"] = time.time()
     # Read last, once every command has ended: the planner sizes check cycles on it.
     result["usage"] = runner.usage()
     result["terminated"] = terminated
-    temporary = run_dir / "result.json.tmp"
-    temporary.write_text(json.dumps(result))
-    temporary.replace(run_dir / "result.json")
+    write_result(run_dir, result)
     if spec.get("kind") == "check" and result["rc"] in runner.CHECK_RCS:
         # The cycle ran: a host that failed is in its states, not in the unit's.
         return 0

@@ -9,10 +9,10 @@ require_root
 RUNS=/var/lib/cockpit-fleet/runs
 SECRETS=/etc/cockpit-fleet/secrets
 SECRET=/usr/libexec/cockpit-fleet/fleet-secret
-A=itsba B=itsbb C=itsbc
+A=itsba B=itsbb C=itsbc D=itsbd
 
 cleanup() {
-    for id in $A $B $C; do
+    for id in $A $B $C $D; do
         systemctl stop "cockpit-fleet-run@$id.service" 2>/dev/null
         systemctl reset-failed "cockpit-fleet-run@$id.service" 2>/dev/null
         rm -rf "${RUNS:?}/$id"
@@ -153,6 +153,41 @@ expect_ok "human-readable log is kept"   grep -q 'PLAY RECAP' "$RUNS/$A/stdout.l
 if grep -rq 'alpha-value' "$RUNS/$A/events.jsonl" "$RUNS/$A/stdout.log"; then fail "secret leaked into run output"; else pass "secret is not in run output"; fi
 if [ -e "/run/cockpit-fleet-run-$A" ]; then fail "runtime directory left behind"; else pass "runtime directory removed after the run"; fi
 if [ -e "/run/credentials/cockpit-fleet-run@$A.service" ]; then fail "credentials left behind"; else pass "credentials removed after the run"; fi
+
+# --- run D: a failed run that tries to pass for a successful one ----------------
+# The outcome is written in the run's directory, which the playbook can write:
+# what it leaves running, or what it does to fleet-run, must not change it.
+new_run $D
+cat > "$RUNS/$D/project/forge.sh" <<EOF2
+try() { name=\$1; shift; if "\$@" >/dev/null 2>&1; then echo "\$name=yes"; else echo "\$name=no"; fi; }
+try runner_mem   sh -c 'exec 3< /proc/1/mem'
+try runner_env   cat /proc/1/environ
+# It waits for fleet-run's outcome and replaces it at once, before the unit ends.
+nohup sh -c 'until grep -q finished_at $RUNS/$D/result.json 2>/dev/null; do :; done; printf "{\\"rc\\": 0, \\"forged\\": true}" > $RUNS/$D/forged && mv -f $RUNS/$D/forged $RUNS/$D/result.json' > /dev/null 2>&1 &
+EOF2
+cat > "$RUNS/$D/project/site.yml" <<'YAML'
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - ansible.builtin.shell: sh {{ playbook_dir }}/forge.sh > {{ playbook_dir }}/../forge.out 2>&1
+    - ansible.builtin.pause:
+        seconds: 1
+    - ansible.builtin.fail:
+        msg: this run fails
+YAML
+printf '{"playbook": "site.yml", "inventory": "hosts"}\n' > "$RUNS/$D/spec.json"
+start_run $D
+wait_run $D 120
+forge() { sed -n "s/^$1=//p" "$RUNS/$D/forge.out" 2>/dev/null; }
+for key in runner_mem runner_env; do
+    if [ "$(forge $key)" = no ]; then pass "the job cannot reach fleet-run ($key)"; else fail "the job reached fleet-run ($key: '$(forge $key)')"; fi
+done
+outcome() {  # outcome PYTHON-EXPRESSION on the result "r" of run D
+    python3 -c "import json, sys; r = json.load(open(sys.argv[1])); sys.exit(0 if ($1) else 1)" "$RUNS/$D/result.json"
+}
+expect_ok "a failed run's outcome is fleet-run's" outcome "r.get('rc') == 2 and 'forged' not in r and 'finished_at' in r"
+sleep 1
+expect_ok "nothing of the job outlives the outcome" outcome "'forged' not in r"
 
 # --- run C: SSH with a password secret and connection reuse ----------------------
 if [ -n "${IT_SSH_USER:-}" ] && [ -n "${IT_SSH_PASSWORD:-}" ]; then

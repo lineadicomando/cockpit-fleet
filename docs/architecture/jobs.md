@@ -45,6 +45,18 @@ another run's decrypted credentials through `/proc/PID/root`, both reachable
 by the account), without waiting on a FIFO, and with a size limit for the
 small files.
 
+The outcome, `result.json`, is in that directory too, so the job could
+write it: from a process it leaves running, or by changing `fleet-run` in
+memory (`/proc/1/mem`, same account), a playbook made a failed run
+successful (review of 16 November). `fleet-run` is PID 1 of the run's PID
+namespace: it makes itself not dumpable as it starts (`/proc/1` is then
+root's; ptrace is outside `@system-service`), and once the job is over it
+kills every other process of the namespace and waits for all of them, so
+none is in the middle of a write; then it removes whatever is under the
+names of the outcome and writes its own. `sandbox.sh`, run D, tries both
+ways. What the job writes for itself (events, artifacts, the data of a
+check) stays its word, which is what it is.
+
 The run then sees a self-contained directory and nothing else. `project/`,
 `creds/`, `collections/` and an uploaded `archive` are removed when the job
 ends; `stdout.log`, `events.jsonl` and `result.json` stay until
