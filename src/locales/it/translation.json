@@ -1691,5 +1691,6 @@
   "No version of it was ever approved: read all of its texts.": "Non ne è mai stata approvata una versione: leggine tutti i testi.",
   "Skill waiting for approval": "Skill in attesa di approvazione",
   "The assistant changed it last, through {{agent}}, for {{author}}, on {{time}}. It is not among the assistant's skills until an operator or an administrator approves it, or saves it.": "L'ultima modifica è dell'assistente, tramite {{agent}}, per conto di {{author}}, il {{time}}. Non è fra le skill dell'assistente finché un operatore o un amministratore non la approva o la salva.",
-  "The skill {{name}} waits for approval": "La skill {{name}} è in attesa di approvazione"
+  "The skill {{name}} waits for approval": "La skill {{name}} è in attesa di approvazione",
+  "This run no longer waits for a decision: someone else decided, or it expired.": "Questa run non attende più una decisione: qualcun altro ha deciso, oppure è scaduta."
 }

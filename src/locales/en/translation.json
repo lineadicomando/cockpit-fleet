@@ -1461,6 +1461,7 @@
   "This job template asks for a secret at launch, so it cannot be scheduled: a schedule never stores a secret.": "This job template asks for a secret at launch, so it cannot be scheduled: a schedule never stores a secret.",
   "This job template is not of the project or the inventory of the workflow: choose another one.": "This job template is not of the project or the inventory of the workflow: choose another one.",
   "This project has no files.": "This project has no files.",
+  "This run no longer waits for a decision: someone else decided, or it expired.": "This run no longer waits for a decision: someone else decided, or it expired.",
   "This run was not asked to show differences. Launch it as a dry run to see them.": "This run was not asked to show differences. Launch it as a dry run to see them.",
   "This subnet is beyond a router: MAC addresses come only from NetBIOS, from the hosts that give it.": "This subnet is beyond a router: MAC addresses come only from NetBIOS, from the hosts that give it.",
   "This template": "This template",

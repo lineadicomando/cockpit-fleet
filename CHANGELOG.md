@@ -166,6 +166,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   read and that was not yet collected, so that run ended in error; they now
   delete only those left by versions before 0.3.0, which held its
   variables.
+- Approvals: the dialog of an approval or a rejection stays open, with the
+  comment typed, when someone else decides first; it says so. It vanished
+  with the run from the list.
+- Files of a project or an inventory: a file whose tab was open while the
+  page was left for another tab of Fleet is read again on coming back; it
+  spun for ever.
+- Launch: an optional choice of a survey that has a default no longer
+  offers "None", which gave the default anyway.
 - Runs on more than about 1900 hosts: their totals per host, and what the
   playbook set with `set_stats` for the next steps of a workflow, are no
   longer lost.

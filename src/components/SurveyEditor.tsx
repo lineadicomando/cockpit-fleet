@@ -160,7 +160,8 @@ export function SurveyAnswers({ survey, answers, onChange }: { survey: SurveyFie
                         )}
                         {field.type === "choice" && (
                             <FormSelect id={id} value={text} onChange={(_e, chosen) => set(field.name, chosen)}>
-                                {!(field.required && field.default !== undefined) && <FormSelectOption value="" label={field.required ? t("Choose") : t("None")} isPlaceholder={field.required} />}
+                                {/* Left empty, a choice takes its default: no "None" beside one. */}
+                                {field.default === undefined && <FormSelectOption value="" label={field.required ? t("Choose") : t("None")} isPlaceholder={field.required} />}
                                 {(field.choices ?? []).map(choice => <FormSelectOption key={choice} value={choice} label={choice} />)}
                             </FormSelect>
                         )}

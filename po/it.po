@@ -4905,3 +4905,6 @@ msgstr "L'ultima modifica è dell'assistente, tramite {{agent}}, per conto di {{
 
 msgid "The skill {{name}} waits for approval"
 msgstr "La skill {{name}} è in attesa di approvazione"
+
+msgid "This run no longer waits for a decision: someone else decided, or it expired."
+msgstr "Questa run non attende più una decisione: qualcun altro ha deciso, oppure è scaduta."

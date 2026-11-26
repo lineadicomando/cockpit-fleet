@@ -361,6 +361,14 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
         }
     }
 
+    // A tab kept while its read was on its way: the answer went to the page
+    // that was left, so it is read again.
+    useEffect(() => {
+        for (const one of saved?.tabs ?? []) {
+            if (!one.file && !one.error) read(one.path);
+        }
+    }, []);
+
     function openFile(path: string) {
         setCheckId(null);
         setNote("");

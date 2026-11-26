@@ -10,6 +10,7 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan, useSession } from "../lib/session.tsx";
 import type { ApprovalEntry, ApprovalMode } from "../lib/types.ts";
 import { FormModal, ListState, SectionHeader, openRun } from "./common.tsx";
+import { Alert } from "./pf.tsx";
 import { Answered } from "./SurveyEditor.tsx";
 
 type Decision = "approve" | "reject";
@@ -61,10 +62,13 @@ export function ApprovalModeLabel({ mode, color = "purple" }: { mode: ApprovalMo
 }
 
 // Approve or reject one run, with a comment kept with the decision.
-export function DecideModal({ runId, title, decision, onDone, onClose }: {
+// With gone, the run no longer waits (another decided, or it expired): the
+// dialog stays, so that what was typed is not lost from under the hands.
+export function DecideModal({ runId, title, decision, gone = false, onDone, onClose }: {
     runId: string;
     title: string;
     decision: Decision;
+    gone?: boolean;
     onDone: () => void;
     onClose: () => void;
 }) {
@@ -75,6 +79,8 @@ export function DecideModal({ runId, title, decision, onDone, onClose }: {
             title={decision === "approve" ? t("Approve {{name}}?", { name: title }) : t("Reject {{name}}?", { name: title })}
             submitLabel={decision === "approve" ? t("Approve") : t("Reject")}
             isDanger={decision === "reject"}
+            isDisabled={gone}
+            cancelLabel={gone ? t("Close") : undefined}
             variant={ModalVariant.small}
             onSubmit={async () => {
                 await call(decision === "approve" ? "approval.approve" : "approval.reject", { id: runId, comment: comment.trim() });
@@ -83,6 +89,7 @@ export function DecideModal({ runId, title, decision, onDone, onClose }: {
             }}
             onClose={onClose}
         >
+            {gone && <Alert variant="info" isInline title={t("This run no longer waits for a decision: someone else decided, or it expired.")} />}
             <Content component="p">
                 {decision === "approve"
                     ? t("The run starts as it was launched: with the project as it was then, on the hosts and with the answers shown.")
@@ -95,14 +102,20 @@ export function DecideModal({ runId, title, decision, onDone, onClose }: {
     );
 }
 
-export function DecideButtons({ runId, title, onDone }: { runId: string; title: string; onDone: () => void }) {
+// The buttons while the run may be decided; a dialog opened stays when it
+// may no longer be (canDecide false).
+export function DecideButtons({ runId, title, canDecide = true, onDone }: { runId: string; title: string; canDecide?: boolean; onDone: () => void }) {
     const { t } = useTranslation();
     const [deciding, setDeciding] = useState<Decision | null>(null);
     return (
         <>
-            <Button variant="primary" size="sm" onClick={() => setDeciding("approve")}>{t("Approve")}</Button>{" "}
-            <Button variant="secondary" isDanger size="sm" onClick={() => setDeciding("reject")}>{t("Reject")}</Button>
-            {deciding && <DecideModal runId={runId} title={title} decision={deciding} onDone={onDone} onClose={() => setDeciding(null)} />}
+            {canDecide && (
+                <>
+                    <Button variant="primary" size="sm" onClick={() => setDeciding("approve")}>{t("Approve")}</Button>{" "}
+                    <Button variant="secondary" isDanger size="sm" onClick={() => setDeciding("reject")}>{t("Reject")}</Button>
+                </>
+            )}
+            {deciding && <DecideModal runId={runId} title={title} decision={deciding} gone={!canDecide} onDone={onDone} onClose={() => setDeciding(null)} />}
         </>
     );
 }
@@ -115,8 +128,15 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
     const session = useSession();
     const list = useLoad(() => call<{ approvals: ApprovalEntry[] }>("approval.list", { state: "pending" }));
     usePolling(list.reload, 5000, true);
+    // Kept here, not in the row: the row goes when another decides first.
+    const [deciding, setDeciding] = useState<{ runId: string; title: string; decision: Decision } | null>(null);
     const entries = list.data?.approvals ?? [];
-    if (!standalone && entries.length === 0) return null;
+    const dialog = deciding && (
+        <DecideModal runId={deciding.runId} title={deciding.title} decision={deciding.decision}
+            gone={!entries.some(entry => entry.id === deciding.runId && entry.can_decide)}
+            onDone={list.reload} onClose={() => setDeciding(null)} />
+    );
+    if (!standalone && entries.length === 0) return dialog || null;
     const mayOpen = can("run.get");
 
     const table = (rows: ApprovalEntry[]) => (
@@ -158,7 +178,10 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
                         <Td dataLabel={t("Expires")}>{formatTime(entry.approval.expires_at, i18n.language)}</Td>
                         <Td dataLabel={t("Actions")} isActionCell style={{ whiteSpace: "nowrap" }}>
                             {entry.can_decide
-                                ? <DecideButtons runId={entry.id} title={entry.title} onDone={list.reload} />
+                                ? <>
+                                    <Button variant="primary" size="sm" onClick={() => setDeciding({ runId: entry.id, title: entry.title, decision: "approve" })}>{t("Approve")}</Button>{" "}
+                                    <Button variant="secondary" isDanger size="sm" onClick={() => setDeciding({ runId: entry.id, title: entry.title, decision: "reject" })}>{t("Reject")}</Button>
+                                </>
                                 : <Content component="small">{entry.created_by === session.user ? t("Another user must approve it") : t("You cannot approve it")}</Content>}
                         </Td>
                     </Tr>
@@ -177,6 +200,7 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
                 emptyBody={t("The runs of job templates that need approval wait here until someone approves them.")}>
                 {data => table(data.approvals)}
             </ListState>
+            {dialog}
         </div>
     );
 }

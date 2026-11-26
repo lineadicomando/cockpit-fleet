@@ -386,7 +386,7 @@ export function RunDetailPage({ id }: { id: string }) {
                 data.kind === "netscan" && can("netscan.result") && { label: t("Hosts found"), onClick: () => cockpit.location.go(["network", data.id]) },
             ]} />
             <SectionHeader title={data.title}>
-                {data.approval?.can_decide && <DecideButtons runId={data.id} title={data.title} onDone={run.reload} />}
+                {data.approval && <DecideButtons runId={data.id} title={data.title} canDecide={!!data.approval.can_decide} onDone={run.reload} />}
                 {helped && <Button variant="secondary" onClick={askForHelp}>{t("Assistance")}</Button>}
                 {active && can("run.cancel") && (
                     <Button variant="secondary" isDanger onClick={() => setConfirmCancel(true)}>{t("Cancel run")}</Button>
