@@ -54,10 +54,13 @@ Decided 26 November (`decisions.md`, "Inventory at launch"); what exists:
 credential, the schedule's inventory), `workflows.md` and `schedules.md`
 for the rest; built on 26 November, backend and page.
 
-- [ ] Close: `runs`, `schedules`, `negative` on the three in containers;
-  on a controller `wu-run` and `wol` from the page on two inventories, a
-  schedule each, a workflow launched on two, the agent choosing the
-  inventory.
+`runs`, `schedules`, `workflows`, `negative` pass in containers on the
+three, and `runs`, `workflows`, `schedules` on the VM `fed44` (SELinux
+enforcing, no denial), 26 November.
+
+- [ ] Close: on a controller `wu-run` and `wol` from the page on two
+  inventories, a schedule each, a workflow launched on two, the agent
+  choosing the inventory.
 
 ## Phase 22: skills of projects
 
