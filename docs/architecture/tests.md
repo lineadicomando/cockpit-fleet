@@ -202,6 +202,10 @@ AlmaLinux 10 (`cockpit-fleet-fedora`, `cockpit-fleet-alma`), one job each.
 The runners are arm64 containers where jobs run directly, as a user that
 is not root; tools with a version (Node.js, ruff) are pinned in the
 workflow and installed once per runner by `scripts/ci-tool.sh`.
+Actions are pinned by the commit of their release, its version in a
+comment (`actions/checkout@<sha> # v7.0.1`): a tag can be moved by whoever
+holds the action's repository, and `release` may publish. They are raised
+by hand, both workflows together, to the commit of a newer release.
 `.github/workflows/ci.yml` runs the same steps on GitHub, each job in a
 container of its distribution (`debian:trixie`, `fedora:44`,
 `almalinux:10`) on `ubuntu-latest`, where the job is root and nothing

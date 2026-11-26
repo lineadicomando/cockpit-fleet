@@ -67,3 +67,4 @@ in [TODO.md](../TODO.md) until the phase closes.
 | Out of scope | External triggers (future) |
 | Outcome of a run | Fleet-run's alone: it ends every process of the job and keeps its own memory out of reach before writing `result.json`; what the job writes for itself stays its word (26 November) |
 | Long lists of files | A folder of the store or of the documents, or a search, is drawn a page at a time (50 to 500); the listing stays one of the whole tree (26 November) |
+| CI actions | Pinned by the commit of a release, in both workflows, raised by hand; triggers as they are: tests and packages at every push to `main`, publishing at a tag (26 November) |

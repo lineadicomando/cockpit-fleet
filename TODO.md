@@ -14,7 +14,7 @@ field use only, toward 1.0.0. Last release 0.4.0 (18 November);
 when asked.
 
 To resume: `git status`, `git log origin/main..`; `make check` (864
-backend, 214 frontend tests). Each backend module's docstring says what it
+backend, 224 frontend tests). Each backend module's docstring says what it
 is; `cli.py` is the registry of commands, `db.py` the schema (38
 migrations). Nothing is under way: the next work is a close below, a
 choice of the user's under "The review", or a fix from field use.
@@ -62,18 +62,15 @@ Last run, 26 November, in containers on the three distributions: `runs`,
 `schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`, `cli`,
 `documents`, `store`, and `make ct-lifecycle` on Debian (from 0.3.0); on
 the VM `fed44` `runs`, `workflows`, `schedules` (SELinux, no denial).
-Earlier: `files` in containers; `sandbox` on `deb13` and `alma10`.
+Then `sandbox`, `runs`, `checks` in containers on the three, with the
+outcome of a run guarded (run D of `sandbox` fails with the fleet-run of
+before). Earlier: `files` in containers; `sandbox` on `deb13` and `alma10`.
 
 ## The review of 16 November
 
-Its fixes were done on 26 November. Left for the user to decide:
-
-- [ ] A playbook can rewrite its `result.json` and turn a failed run into
-  a successful one (the run writes its own directory).
-- [ ] A store folder is drawn whole, without paging (the documents too:
-  the same `FileManager`).
-- [ ] No component tests for the frontend.
-- [ ] GitHub actions pinned by tag, not by commit.
+Its fixes and the four choices it left to the user were done on 26
+November (`decisions.md`: "Outcome of a run", "Long lists of files",
+"Tests", "CI actions").
 
 ## Future
 
