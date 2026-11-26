@@ -171,3 +171,17 @@ What each closed phase had to show, and how it was shown.
   (their text read on either theme), the links to each section and the
   card of access. The check found, and fixed, the screen-reader tables of
   the charts drawn over the title in Firefox.
+- **19, network discovery** (26 November): `netscan.sh` on the lab's
+  network (`IT_NETSCAN_SUBNET=192.168.140.0/27`, `win11` up) on `deb13`,
+  `alma10` and `fed44`: ICMP allowed to the service account as each is
+  installed, no denial of SELinux. `windows.sh` on `deb13` with `net_probe`
+  from `win11`, which found the gateway and the controller with their MAC
+  addresses once its bug was fixed (`network.md`). In a browser, the
+  scenario `network-scan` on `deb13`: a part of the
+  lab's subnet scanned from the page, `win11` found by TCP and the neighbour
+  table with its MAC address, its DNS and NetBIOS names (`CFLEET-WIN11`,
+  `WORKGROUP`) and known as the host of an inventory; its MAC address
+  written into that inventory after the preview; the inventory's hosts
+  probed, the PC that is off "Nothing answers", `win11` "Gives another
+  name". The check found, and fixed, a test of `netscan.sh` that canceled
+  a scan after a fixed 3 s, before the unit of a VM's first run had begun.

@@ -32,7 +32,8 @@ Ansible collection (the runs' callback, roles for the controller);
 `system/` units, sudoers, sysusers, tmpfiles, default config; `debian/`,
 `packaging/` (RPM spec); `starters/`; `test/` frontend tests,
 `test/integration/` scripts for a controller, `test/containers/` and
-`test/vm/` the controllers they run on; `.claude/skills/`; `po/`.
+`test/vm/` the controllers they run on, `test/browser/` scenarios driven in
+a browser, as tests; `.claude/skills/`; `po/`.
 
 ## Non-negotiable rules
 
@@ -128,6 +129,8 @@ make deb | rpm                  # packages, built in containers (podman), into d
 make ct-test DISTRO=alma TESTS="sandbox runs"   # integration scripts in containers (all by default)
 make ct-lifecycle DISTRO=alma OLD=<ref>   # upgrade from OLD (default: latest tag), removal, purge
 make ct-clean                   # remove the containers and images of ct-test
+make browser-up SETUP=checks    # a controller for the tests in a browser on 127.0.0.1:9093, with data
+make browser-test SCENARIO=checks-cycles  # a scenario in a browser, as a test
 make next-version               # version of the next release, from CHANGELOG.md
 make release                    # check, set the version, commit and tag it (only when asked)
 ```

@@ -6,7 +6,7 @@ What is left. How each closed phase was shown:
 
 ## Status (26 November 2026)
 
-Phases 0–18 closed; 19–24 built, each waiting only for the close below;
+Phases 0–19 closed; 20–24 built, each waiting only for the close below;
 no phase is next. Phases 21–24 were the last that add features
 (`decisions.md`, "Freeze of features"): then fixes, minor changes and
 field use only, toward 1.0.0. Last release 0.4.0 (18 November);
@@ -25,11 +25,6 @@ lists of files", "Tests", "CI actions").
 
 Each is described in the file named; what remains is the close.
 
-- **19, network discovery** (`architecture/network.md`): `win_net_probe` on
-  `win11` (on the workstation that has it); `netscan.sh` with
-  `IT_NETSCAN_SUBNET` on the lab's network with `win11` up (NetBIOS, its
-  MAC address), on `alma10` and `fed44` too, and whether ICMP is allowed as
-  installed (Debian 13 allows it); the page in a browser.
 - **20, documents** (`architecture/documents.md`): the user, with Claude as
   the assistant: a report of a run written in a folder, edited by hand, the
   agent's version restored, printed to PDF from the page.
@@ -39,7 +34,17 @@ Each is described in the file named; what remains is the close.
   agent choosing the inventory.
 - **22, check cycles in view** (`checks.md`, "Following the cycles";
   `architecture/checks.md`): the user follows the cycles of the labs'
-  checks on a controller.
+  checks on a controller. The scenario `checks-cycles` goes through it in
+  a container (26 November; `architecture/tests.md`, "Tests in a
+  browser"); then the user follows the cycles on a controller.
+
+## Tests in a browser
+
+Done: `checks-cycles` (phase 22) and `network-scan` (phase 19, on `deb13`
+with `BROWSER_LAB=deb13`). Next: the scenario of the close of 21 on the
+lab's VMs (`win11` for `wu-run` and `wol`).
+Run titles of check cycles read "laboratorio: 4 hosts" in the Italian
+interface: the backend writes them in English (to look at).
 - **23, skills of projects** (`architecture/agents.md`, "Skills";
   `chat.md`, "Skills"): the skills are pushed in `ansible-win_edulab`
   (`win-edulab-operations`, `-inventory`, `-reports`) and in

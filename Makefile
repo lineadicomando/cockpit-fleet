@@ -11,7 +11,7 @@ COLLECTION := ansible_collections/lineadicomando/fleet
 
 -include Makefile.local
 
-.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-lifecycle ct-clean pot po-compile next-version release help
+.PHONY: all clean distclean build watch install install-files uninstall devel-install devel-uninstall check check-ts check-py deb rpm ct-test ct-lifecycle ct-clean browser-up browser-test browser-down pot po-compile next-version release help
 
 all: build
 
@@ -114,6 +114,19 @@ ct-lifecycle: ## Upgrade from OLD (a commit or tag; the latest tag by default), 
 
 ct-clean: ## Remove the containers and images of ct-test
 	scripts/ct-test.sh clean
+
+SCENARIO ?=
+SETUP ?=
+browser-up: ## A controller for the tests in a browser on 127.0.0.1:9093, with the data of SETUP (test/browser/setup/SETUP.sh)
+	$(MAKE) $(if $(filter debian,$(DISTRO)),deb,rpm)
+	test/browser/browser.sh up $(DISTRO)
+	$(if $(SETUP),test/browser/browser.sh setup $(SETUP))
+
+browser-test: ## Go through test/browser/scenarios/SCENARIO.mjs, on the controller of browser-up
+	test/browser/browser.sh test $(SCENARIO)
+
+browser-down: ## Remove the controller of browser-up, its nodes and its data
+	test/browser/browser.sh down
 
 pot: ## Extract translatable strings from src/ into src/locales/*/translation.json
 	npm run pot
