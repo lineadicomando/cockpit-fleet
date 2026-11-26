@@ -33,16 +33,18 @@ class TransferTest(Base):
         managed = self.ok("inventory.create", {"name": "inv", "kind": "managed", "format": "ini",
                                                "content": "[all]\na\n",
                                                "vault_credential_id": vault["id"],
+                                               "machine_credential_id": machine["id"],
                                                "variable_set_ids": [school["id"]]})
-        self.ok("inventory.create", {"name": "file", "kind": "file", "project_id": project["id"],
-                                     "path": "inventories/hosts.yml"})
+        lab = self.ok("inventory.create", {"name": "file", "kind": "file",
+                                           "project_id": project["id"],
+                                           "path": "inventories/hosts.yml"})
         self.ok("hostkey.add", {"host": "10.0.0.5", "key_type": "ssh-ed25519", "key": KEY})
         self.ok("template.create", {
             "name": "deploy", "project_id": project["id"], "playbook": "site.yml",
             "inventory_id": managed["id"], "machine_credential_id": machine["id"],
             "vault_credential_ids": [vault["id"]], "limit_hosts": "web*", "tags": ["a"],
             "extra_vars": {"x": 1}, "forks": 7, "become": True,
-            "variable_set_ids": [school["id"]],
+            "variable_set_ids": [school["id"]], "inventory_ids": [lab["id"]],
             "survey": [{"name": "version", "type": "text", "required": True}]})
         template = self.ok("template.list")["templates"][0]
         with mock.patch.object(schedules, "analyze", lambda *args: ("", [2e9])):
@@ -50,7 +52,7 @@ class TransferTest(Base):
                 "name": "nightly", "template_id": template["id"], "calendar": "02:00",
                 "timezone": "Europe/Rome", "limit": "web01", "answers": {"version": "2"},
                 "overlap": "queue", "catch_up": True, "priority": 2, "random_delay": 60,
-                "skip_tags": ["slow"], "verbosity": 2})
+                "skip_tags": ["slow"], "verbosity": 2, "inventory_id": lab["id"]})
         self.ok("check.create", {"name": "space", "kind": "disk", "inventory_id": managed["id"],
                                  "interval": 600, "machine_credential_id": machine["id"],
                                  "params": {"mounts": ["/var"]},
@@ -85,6 +87,10 @@ class TransferTest(Base):
         self.assertEqual((template["project"], template["inventory"], template["machine_credential"],
                           template["vault_credentials"]), ("site", "inv", "ssh", ["vault"]))
         self.assertEqual(template["variable_sets"], ["school"])
+        self.assertEqual((template["inventories"], template["any_inventory"]), (["file"], False))
+        self.assertEqual(document["schedules"][0]["inventory"], "file")
+        self.assertEqual([one["machine_credential"] for one in document["inventories"]],
+                         ["", "ssh"])
         self.assertEqual(document["variable_sets"], [{"name": "school", "description": "the school",
                                                       "variables": {"domain": "school.edu"},
                                                       "secrets": ["license"]}])

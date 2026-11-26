@@ -51,8 +51,10 @@ def _field_schema(field: dict) -> dict:
     return out
 
 
-def template_tool(template, project: str, inventory: str) -> dict | None:
-    """A job template as a tool: its questions are the parameters.
+def template_tool(template, project: str, inventory: str,
+                  choices: dict[str, str] | None = None) -> dict | None:
+    """A job template as a tool: its questions are the parameters, and the
+    inventory when CHOICES (id: name) offers more than its default.
 
     A template that cannot start without a secret is not offered: a secret
     answer goes from a person to fleet-secret, never through an agent. An
@@ -70,17 +72,27 @@ def template_tool(template, project: str, inventory: str) -> dict | None:
         "additionalProperties": False,
     }
     limit = template["limit_hosts"]
+    properties: dict = {}
+    where = f"on inventory {inventory!r}"
+    if choices and len(choices) > 1:
+        where = (f"on the inventory chosen with inventory_id, {inventory!r} if none is"
+                 " chosen")
+        properties["inventory_id"] = {
+            "type": "string", "enum": list(choices),
+            "description": "The inventory to run on, by id: " + ", ".join(
+                f"{key} ({name})" for key, name in choices.items())}
     return {
         # The identifier keeps two templates with look-alike names apart.
         "name": f"launch_{slug}_{template['id'][-6:]}".replace("__", "_"),
         "description": (f"Launch the job template {template['name']!r}: playbook"
-                        f" {template['playbook']} of project {project!r} on inventory"
-                        f" {inventory!r}. Returns the run: follow it with run_result."),
+                        f" {template['playbook']} of project {project!r} {where}."
+                        " Returns the run: follow it with run_result."),
         "command": "run.start",
         "fixed": {"template_id": template["id"]},
         "inputSchema": {
             "type": "object",
             "properties": {
+                **properties,
                 "answers": answers,
                 "limit": {"type": "string", "maxLength": 512, "description":
                           "Host pattern that narrows the hosts of the template"
@@ -151,10 +163,16 @@ def tools(ctx: Context, role: str | None, profile: str) -> list[dict]:
         projects = {row["id"]: row["name"] for row in ctx.conn.execute(
             "SELECT id, name FROM projects")}
         inventories = {row["id"]: row["name"] for row in ctx.conn.execute(
-            "SELECT id, name FROM inventories")}
+            "SELECT id, name FROM inventories WHERE NOT starter ORDER BY name COLLATE NOCASE")}
+        others: dict[str, set[str]] = {}
+        for row in ctx.conn.execute("SELECT template_id, inventory_id FROM template_inventories"):
+            others.setdefault(row[0], set()).add(row[1])
         for template in ctx.conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE"):
+            allowed = {template["inventory_id"], *others.get(template["id"], ())}
+            choices = {key: name for key, name in inventories.items()
+                       if template["any_inventory"] or key in allowed}
             tool = template_tool(template, projects.get(template["project_id"], ""),
-                                 inventories.get(template["inventory_id"], ""))
+                                 inventories.get(template["inventory_id"], ""), choices)
             if tool is not None:
                 found.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
     for tool in found:

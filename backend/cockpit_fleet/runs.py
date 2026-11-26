@@ -9,7 +9,13 @@ from . import approvals, jobs, profiles, store, survey
 from . import variables as varsets
 from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command, is_agent
 from .errors import BadRequest, Conflict, Forbidden
-from .resources import credential_of_kind, place_inventory, template_vaults, vault_ids
+from .resources import (
+    credential_of_kind,
+    launch_inventory,
+    place_inventory,
+    template_vaults,
+    vault_ids,
+)
 from .validators import check_limit, check_module, check_tag
 
 _CHUNK = 256 * 1024
@@ -66,6 +72,8 @@ def run_row(row) -> dict:
 @command("run.start", role="operator", mutating=True,
          params={
              "template_id": Id(),
+             "inventory_id": Id("The inventory to run on, among those the template allows;"
+                                " left out, its default", required=False),
              "limit": Str(default="", max_length=512),
              "check": Bool(),
              "diff": Bool(),
@@ -81,27 +89,30 @@ def run_start(ctx: Context, params: Values) -> dict:
     approves it. One launched in series waits in the queue while another run is
     running on its inventory, or one launched before it is queued there. Tags,
     tags to skip, forks and verbosity, when given, replace the template's for
-    this run only."""
+    this run only. The inventory may be chosen among those the template
+    allows."""
     return launch(ctx, params["template_id"], params["limit"], params["check"], params["diff"],
-                  params["answers"], serial=params["serial"], given=overrides(ctx, params))
+                  params["answers"], serial=params["serial"], given=overrides(ctx, params),
+                  inventory_id=params["inventory_id"])
 
 
 def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, answers: dict,
            schedule=None, created_by: str | None = None, workflow: dict | None = None,
-           serial: bool = False, given: dict | None = None) -> dict:
+           serial: bool = False, given: dict | None = None,
+           inventory_id: str | None = None) -> dict:
     """Queue a run of a template: what run.start does, what a schedule does
     at its time, with the answers stored with it, and what a workflow does for
     one of its steps, with what the steps before it passed on. given: the
-    values that replace the template's (overrides())."""
+    values that replace the template's (overrides()); inventory_id: the one
+    chosen, which the template must allow (None: its default)."""
     given = given or {}
     template = store.fetch(ctx.conn, "templates", template_id, "template")
     project = store.usable(store.fetch(ctx.conn, "projects", template["project_id"], "project"),
                            "project")
-    inventory = store.usable(store.fetch(ctx.conn, "inventories", template["inventory_id"],
-                                         "inventory"), "inventory")
+    inventory = launch_inventory(ctx, template, inventory_id)
     limits = [template["limit_hosts"], check_limit(limit) if limit else ""]
     variables, tickets = survey.answer(store.loads(template["survey"], []), answers)
-    effective = varsets.effective(ctx.conn, template)
+    effective = varsets.effective(ctx.conn, template, inventory["id"])
 
     spec = {
         "kind": "playbook",
@@ -125,9 +136,11 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
         "workflow_vars": workflow["vars"] if workflow else {},
     }
     machine = None
-    if template["machine_credential_id"]:
-        machine = store.fetch(ctx.conn, "credentials", template["machine_credential_id"],
-                              "credential")
+    # The template's, else the inventory's: one template for labs whose
+    # accounts differ.
+    machine_id = template["machine_credential_id"] or inventory["machine_credential_id"]
+    if machine_id:
+        machine = store.fetch(ctx.conn, "credentials", machine_id, "credential")
         spec["user"] = machine["username"]
 
     run_id = store.new_id("r")
@@ -207,7 +220,8 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
              "vault_credential_ids": Strs(max_items=20),
              "module": Str(required=True, max_length=200),
              "limit": Str(required=True, max_length=512),
-             "machine_credential_id": Id(required=False),
+             "machine_credential_id": Id("Left out, the machine credential of the inventory",
+                                         required=False),
              "serial": Bool("Wait in the queue while another run is running on the same"
                             " inventory, or one launched before it is queued there,"
                             " whatever their outcome"),
@@ -243,6 +257,7 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
         raise BadRequest("args is too large")
     inventory = store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
                              "inventory")
+    machine_id = machine_id or inventory["machine_credential_id"]
     from . import netscan  # it builds on this module
     if module == netscan.PROBE_MODULE:
         args = netscan.check_probe_args(ctx.config, inventory, free_form, args)

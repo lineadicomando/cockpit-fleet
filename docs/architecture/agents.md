@@ -217,7 +217,9 @@ the draft commands take the name of a managed project or inventory.
 **Templates as tools.** Each job template is also a tool of its own,
 `launch_<name>_<id>`, for whoever may launch it: its description says what it
 runs and where, and its parameters are the questions of its survey, typed and
-bounded as the survey is, plus the limit and the dry run. The tool fixes the
+bounded as the survey is, plus the limit and the dry run, and `inventory_id`
+when the template allows more than one inventory (an enum of their ids, the
+description naming each). The tool fixes the
 template: what it fixes and `via` are set by `fleet-mcp` after the agent's
 arguments, so a call cannot replace them. A template that cannot start
 without a secret is not offered; an optional secret question is left out.

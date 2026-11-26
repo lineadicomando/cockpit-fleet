@@ -34,6 +34,7 @@ from . import (
 )
 from .cli import Bool, Choice, Context, Id, Int, Obj, Str, Values, command
 from .errors import BadRequest, FleetError, Forbidden, Unavailable
+from .resources import launch_inventory
 from .validators import check_limit
 
 OVERLAP = ("skip", "queue", "cancel")
@@ -228,7 +229,7 @@ def from_cron(line: str) -> str:
 
 def _schedule(ctx: Context, row) -> dict:
     data = {key: row[key] for key in ("id", "name", "template_id", "workflow_id",
-                                      "calendar", "timezone",
+                                      "inventory_id", "calendar", "timezone",
                                       "overlap", "priority", "random_delay", "next_at",
                                       "last_at", "last_outcome", "last_error", "last_run_id",
                                       "created_by", "created_at", "updated_at")}
@@ -236,7 +237,8 @@ def _schedule(ctx: Context, row) -> dict:
                 check=bool(row["check_mode"]), diff=bool(row["diff"]),
                 catch_up=bool(row["catch_up"]), answers=store.loads(row["answers"], {}),
                 overrides=store.loads(row["overrides"], {}))
-    for key, table in (("template", "templates"), ("workflow", "workflows")):
+    for key, table in (("template", "templates"), ("workflow", "workflows"),
+                       ("inventory", "inventories")):
         named = ctx.conn.execute(f"SELECT name FROM {table} WHERE id = ?",  # noqa: S608
                                  (row[f"{key}_id"],)).fetchone()
         data[key] = named["name"] if named else ""
@@ -257,6 +259,9 @@ _SCHEDULE_PARAMS = {
     "workflow_id": Id("Or the workflow to launch: none of its steps may need an approval;"
                       " limit, check, diff, answers and the values replaced do not apply",
                       required=False),
+    "inventory_id": Id("The inventory it launches on, among those the job template (or every"
+                       " step of the workflow) allows; left out, the template's default (or"
+                       " each step's)", required=False),
     "calendar": Str("When, as an OnCalendar expression of systemd: 'daily',"
                     " 'Mon..Fri *-*-* 02:00', '*:0/15'", required=True, max_length=256),
     "timezone": Str("A time zone such as Europe/Rome; empty for the controller's own",
@@ -289,12 +294,18 @@ def _target(ctx: Context, params: Values) -> dict:
     if params["workflow_id"] is not None:
         params.unused(*_TEMPLATE_ONLY)
         workflow = store.fetch(ctx.conn, "workflows", params["workflow_id"], "workflow")
-        workflows.unattended(ctx, store.loads(workflow["nodes"], []))
+        nodes = store.loads(workflow["nodes"], [])
+        workflows.unattended(ctx, nodes)
+        chosen = workflows.run_inventory(ctx, workflow, nodes, params["inventory_id"])
         return {"template_id": None, "workflow_id": workflow["id"], "limit_hosts": "",
-                "check_mode": 0, "diff": 0, "answers": "{}", "overrides": "{}"}
+                "check_mode": 0, "diff": 0, "answers": "{}", "overrides": "{}",
+                "inventory_id": chosen if chosen and not workflow["inventory_id"] else None}
     template = store.fetch(ctx.conn, "templates", params["template_id"], "template")
+    if params["inventory_id"]:
+        launch_inventory(ctx, template, params["inventory_id"])
     limit = params["limit"]
     return {"template_id": template["id"], "workflow_id": None,
+            "inventory_id": params["inventory_id"] or None,
             "limit_hosts": check_limit(limit) if limit else "",
             "check_mode": int(params["check"]),
             "diff": int(params["diff"] or params["check"]),
@@ -408,10 +419,12 @@ def schedule_disable(ctx: Context, params: Values) -> dict:
 def _launch(ctx: Context, row, created_by: str | None = None) -> dict:
     if row["workflow_id"]:
         workflow = store.fetch(ctx.conn, "workflows", row["workflow_id"], "workflow")
-        return workflows.launch(ctx, workflow, schedule=row, created_by=created_by)
+        return workflows.launch(ctx, workflow, schedule=row, created_by=created_by,
+                                inventory_id=row["inventory_id"])
     return runs.launch(ctx, row["template_id"], row["limit_hosts"], bool(row["check_mode"]),
                        bool(row["diff"]), store.loads(row["answers"], {}), schedule=row,
-                       created_by=created_by, given=store.loads(row["overrides"], {}))
+                       created_by=created_by, given=store.loads(row["overrides"], {}),
+                       inventory_id=row["inventory_id"])
 
 
 @command("schedule.run", role="operator", mutating=True,

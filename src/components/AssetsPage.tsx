@@ -313,11 +313,12 @@ function ChangeList({ changes }: { changes: CmdbChange[] }) {
     );
 }
 
-// A template of the host's inventory that applies its updates, launched on it alone.
+// A template that may run on the host's inventory and applies its updates, launched there on it alone.
 function ApplyUpdates({ host }: { host: CmdbDetail }) {
     const { t } = useTranslation();
     const templates = useLoad(() => call<{ templates: Template[] }>("template.list"));
-    const fitting = (templates.data?.templates ?? []).filter(item => item.inventory_id === host.inventory_id);
+    const fitting = (templates.data?.templates ?? []).filter(item => item.inventory_id === host.inventory_id
+        || item.any_inventory || item.inventory_ids.includes(host.inventory_id));
     const [chosen, setChosen] = useState("");
     const [launching, setLaunching] = useState(false);
     const guess = fitting.find(item => /updat|upgrad|patch|aggiorn/i.test(item.name)) ?? fitting[0];
@@ -332,7 +333,7 @@ function ApplyUpdates({ host }: { host: CmdbDetail }) {
                 {fitting.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
             </FormSelect>
             <Button variant="secondary" onClick={() => setLaunching(true)}>{t("Apply on this host…")}</Button>
-            {launching && <LaunchModal template={template} limit={host.name} onClose={() => setLaunching(false)} />}
+            {launching && <LaunchModal template={template} limit={host.name} inventory={host.inventory_id} onClose={() => setLaunching(false)} />}
         </Flex>
     );
 }

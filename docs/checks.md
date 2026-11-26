@@ -20,7 +20,8 @@ In **Checks**, "New check":
   interval**: a problem is *soft* until it has been seen that many times in
   a row, checked again at the retry interval meanwhile; then it is *hard*,
   and only a hard change is told about. A recovery is hard at once.
-- **Machine credential** and **become**: how Ansible logs in, as for a run.
+- **Machine credential** and **become**: how Ansible logs in, as for a run;
+  with no credential, the inventory's.
 - **Parameters** (some kinds of the catalog) and **thresholds**.
 
 Apply `reachability` to every host: a host Ansible cannot reach has that

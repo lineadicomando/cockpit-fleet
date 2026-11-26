@@ -36,10 +36,12 @@ export interface StepScope {
     inventory_id: string;
 }
 
-// Whether a template may be a step of a workflow of this project and inventory.
-export function inScope(template: { project_id: string; inventory_id: string }, scope: StepScope): boolean {
+// Whether a template may be a step of a workflow of this project and inventory:
+// of the project, and allowing the inventory, where every step runs.
+export function inScope(template: Pick<Template, "project_id" | "inventory_id" | "inventory_ids" | "any_inventory">, scope: StepScope): boolean {
     return (!scope.project_id || template.project_id === scope.project_id)
-        && (!scope.inventory_id || template.inventory_id === scope.inventory_id);
+        && (!scope.inventory_id || template.any_inventory || template.inventory_id === scope.inventory_id
+            || (template.inventory_ids ?? []).includes(scope.inventory_id));
 }
 
 // The job templates a step may take, by inventory unless the workflow names one, by name in each,

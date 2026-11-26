@@ -291,6 +291,28 @@ copied: an inventory plugin that comes from the collections of the
 inventory's project is not there. Until 0.1.0 such a template was
 refused.
 
+**The inventory chosen at launch.** A template's `inventory_id` is its
+default; `inventory_ids` lists the others whoever launches it may choose
+instead (table `template_inventories`, schema 38), and `any_inventory`
+lets them choose any. So one template serves several labs alike, instead
+of one template per inventory: `run.start` takes `inventory_id`, refused
+(`conflict`) when the template does not allow it, and the run records the
+inventory it is on, which is what runs in series, the rules of
+notifications, approvals and the filters read already. The template's
+limit applies to the inventory chosen; the sets of variables are that
+inventory's, then the template's. An inventory carries a machine
+credential of its own (`machine_credential_id`): a run takes the
+template's if it has one, else the inventory's, so the accounts of labs
+that differ need no template each; an ad-hoc command with none takes it
+too, and so does a check with none. An inventory that a template allows
+cannot be deleted (the answer names the templates), nor kept as a starter.
+The list of templates shows a template under each inventory it allows,
+"also on N others" beside it, and launches it there; the launch form
+offers the choice when there is one, and `fleet launch --inventory` takes
+a name. A schedule keeps the inventory it launches on (null: the default),
+and an agent's tool of the template takes `inventory_id`, an enum of the
+inventories allowed (every one not kept as a starter, for "any").
+
 **Inventories written in the interface** are a tree of files, like a managed
 project, with a git repository beside it:
 

@@ -73,6 +73,13 @@ its `created_by` and its priority. A workflow that a schedule launches cannot
 be deleted (a foreign key), and the exported document names it as
 `workflow` in place of `template`.
 
+**Inventory.** A schedule keeps the inventory it launches on
+(`inventory_id`, schema 38): one the template allows, or for a workflow
+that names none, one every step allows, checked when it is saved and
+again at each launch. Null is the template's default, or each step's own:
+what a schedule did before. So one template updates every lab, each on its
+own day, with a schedule each.
+
 **Answers.** They are checked against the survey when the schedule is saved,
 and again at each launch, as the template may have changed since: then the
 time is recorded as `error`, with the reason, and the schedule goes on. A

@@ -1,5 +1,5 @@
 {
-  "A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its vault and sets of variables. Templates and checks of this one are not copied.": "Un nuovo inventario interno parte dai file di questo, come sono ora, senza la cronologia delle modifiche, e con il suo vault e i suoi insiemi di variabili. I template e i check di questo non vengono copiati.",
+  "A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its credentials and sets of variables. Templates and checks of this one are not copied.": "Un nuovo inventario interno parte dai file di questo, come sono ora, senza la cronologia delle modifiche, e con le sue credenziali e i suoi insiemi di variabili. I template e i check di questo non vengono copiati.",
   "A new project written here begins with the files of this one, as they are now, without the record of their changes. Templates of this one are not copied.": "Un nuovo progetto interno parte dai file di questo, come sono ora, senza la cronologia delle modifiche. I template di questo non vengono copiati.",
   "Access is granted through three groups of this server: cockpit-fleet-viewer, cockpit-fleet-operator and cockpit-fleet-admin. Ask an administrator to add your account to one of them, then log in again.": "L'accesso si ottiene tramite tre gruppi di questo server: cockpit-fleet-viewer, cockpit-fleet-operator e cockpit-fleet-admin. Chiedi a un amministratore di aggiungere il tuo account a uno di questi, poi accedi di nuovo.",
   "Action": "Azione",
@@ -1364,7 +1364,6 @@
   "In place of the template's": "Al posto di quelli del template",
   "Any project": "Qualsiasi progetto",
   "Any inventory": "Qualsiasi inventario",
-  "With a project or an inventory, only their job templates can be steps: one alike elsewhere is not taken for one of them.": "Se si indica un progetto o un inventario, solo i relativi template possono essere passi: uno simile definito altrove non viene accettato.",
   "This job template is not of the project or the inventory of the workflow: choose another one.": "Questo template non appartiene al progetto o all'inventario del workflow: scegline un altro.",
   "All compliant": "Tutti conformi",
   "all hosts": "tutti gli host",
@@ -1654,5 +1653,17 @@
   "Write one, upload files or drop them here, or ask the assistant for a report.": "Scrivine uno, carica dei file o trascinali qui, oppure chiedi un rapporto all'assistente.",
   "images_refused_count_one": "{{count}} immagine non è mostrata",
   "images_refused_count_many": "{{count}} immagini non sono mostrate",
-  "images_refused_count_other": "{{count}} immagini non sono mostrate"
+  "images_refused_count_other": "{{count}} immagini non sono mostrate",
+  "{{name}} (default)": "{{name}} (predefinito)",
+  "Each step's own": "Quello di ciascun passo",
+  "Every step runs on the inventory chosen; the list has those all of its job templates allow.": "Ogni passo viene eseguito sull'inventario scelto; l'elenco contiene quelli ammessi da tutti i suoi template.",
+  "How to connect to its hosts when a job template or a check does not say; offered to ad-hoc commands.": "Come connettersi ai suoi host quando un template o un check non lo indicano; proposta anche ai comandi ad-hoc.",
+  "on {{inventory}}": "su {{inventory}}",
+  "Other inventories allowed at launch": "Altri inventari ammessi al lancio",
+  "The inventory's": "Quella dell'inventario",
+  "Whoever launches it may choose one of these instead of the inventory above, which is the default.": "Chi lo lancia può scegliere uno di questi al posto dell'inventario indicato sopra, che resta il predefinito.",
+  "With a project, only its job templates can be steps; with an inventory, every step runs on it, and only job templates that allow it can be steps. Without an inventory, one may be chosen at launch.": "Con un progetto, solo i suoi template possono essere passi; con un inventario, ogni passo viene eseguito su di esso e possono essere passi solo i template che lo ammettono. Senza inventario, se ne può scegliere uno al lancio.",
+  "inventories_others_count_one": "anche su {{count}} altro",
+  "inventories_others_count_many": "anche su {{count}} altri",
+  "inventories_others_count_other": "anche su {{count}} altri"
 }

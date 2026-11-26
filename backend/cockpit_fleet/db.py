@@ -953,6 +953,24 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The inventory chosen at launch: a template's inventory_id is its
+        # default, these the others it allows (or any, with any_inventory);
+        # the machine credential of an inventory serves a run whose template
+        # has none, and a check with none; a schedule keeps the inventory it
+        # launches on (none: the template's default, or each step's).
+        "ALTER TABLE inventories ADD COLUMN machine_credential_id TEXT REFERENCES credentials (id)",
+        "ALTER TABLE templates ADD COLUMN any_inventory INTEGER NOT NULL DEFAULT 0",
+        """
+        CREATE TABLE template_inventories (
+            template_id   TEXT NOT NULL REFERENCES templates (id) ON DELETE CASCADE,
+            inventory_id  TEXT NOT NULL REFERENCES inventories (id),
+            PRIMARY KEY (template_id, inventory_id)
+        )
+        """,
+        "CREATE INDEX template_inventories_of ON template_inventories (inventory_id)",
+        "ALTER TABLE schedules ADD COLUMN inventory_id TEXT REFERENCES inventories (id)",
+    ],
 ]
 
 

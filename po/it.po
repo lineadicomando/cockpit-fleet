@@ -16,8 +16,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its vault and sets of variables. Templates and checks of this one are not copied."
-msgstr "Un nuovo inventario interno parte dai file di questo, come sono ora, senza la cronologia delle modifiche, e con il suo vault e i suoi insiemi di variabili. I template e i check di questo non vengono copiati."
+msgid "A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its credentials and sets of variables. Templates and checks of this one are not copied."
+msgstr "Un nuovo inventario interno parte dai file di questo, come sono ora, senza la cronologia delle modifiche, e con le sue credenziali e i suoi insiemi di variabili. I template e i check di questo non vengono copiati."
 
 msgid "A new project written here begins with the files of this one, as they are now, without the record of their changes. Templates of this one are not copied."
 msgstr "Un nuovo progetto interno parte dai file di questo, come sono ora, senza la cronologia delle modifiche. I template di questo non vengono copiati."
@@ -4042,9 +4042,6 @@ msgstr "Qualsiasi progetto"
 msgid "Any inventory"
 msgstr "Qualsiasi inventario"
 
-msgid "With a project or an inventory, only their job templates can be steps: one alike elsewhere is not taken for one of them."
-msgstr "Se si indica un progetto o un inventario, solo i relativi template possono essere passi: uno simile definito altrove non viene accettato."
-
 msgid "This job template is not of the project or the inventory of the workflow: choose another one."
 msgstr "Questo template non appartiene al progetto o all'inventario del workflow: scegline un altro."
 
@@ -4802,3 +4799,35 @@ msgid "images_refused_count"
 msgid_plural "images_refused_count_plural"
 msgstr[0] "{{count}} immagine non è mostrata"
 msgstr[1] "{{count}} immagini non sono mostrate"
+
+msgid "{{name}} (default)"
+msgstr "{{name}} (predefinito)"
+
+msgid "Each step's own"
+msgstr "Quello di ciascun passo"
+
+msgid "Every step runs on the inventory chosen; the list has those all of its job templates allow."
+msgstr "Ogni passo viene eseguito sull'inventario scelto; l'elenco contiene quelli ammessi da tutti i suoi template."
+
+msgid "How to connect to its hosts when a job template or a check does not say; offered to ad-hoc commands."
+msgstr "Come connettersi ai suoi host quando un template o un check non lo indicano; proposta anche ai comandi ad-hoc."
+
+msgid "on {{inventory}}"
+msgstr "su {{inventory}}"
+
+msgid "Other inventories allowed at launch"
+msgstr "Altri inventari ammessi al lancio"
+
+msgid "The inventory's"
+msgstr "Quella dell'inventario"
+
+msgid "Whoever launches it may choose one of these instead of the inventory above, which is the default."
+msgstr "Chi lo lancia può scegliere uno di questi al posto dell'inventario indicato sopra, che resta il predefinito."
+
+msgid "With a project, only its job templates can be steps; with an inventory, every step runs on it, and only job templates that allow it can be steps. Without an inventory, one may be chosen at launch."
+msgstr "Con un progetto, solo i suoi template possono essere passi; con un inventario, ogni passo viene eseguito su di esso e possono essere passi solo i template che lo ammettono. Senza inventario, se ne può scegliere uno al lancio."
+
+msgid "inventories_others_count"
+msgid_plural "inventories_others_count_plural"
+msgstr[0] "anche su {{count}} altro"
+msgstr[1] "anche su {{count}} altri"

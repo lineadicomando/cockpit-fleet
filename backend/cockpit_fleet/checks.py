@@ -671,8 +671,11 @@ def plan(ctx: Context, now: float) -> list[str]:
     count_skips(ctx, now)
     rows = conn.execute(
         "SELECT s.host_id, s.check_id, h.name AS host, h.inventory_id, c.kind, c.params,"
-        " c.machine_credential_id, c.become, c.interval FROM check_states s"
+        # The check's credential, else its inventory's.
+        " coalesce(c.machine_credential_id, i.machine_credential_id) AS machine_credential_id,"
+        " c.become, c.interval FROM check_states s"
         " JOIN hosts h ON h.id = s.host_id JOIN checks c ON c.id = s.check_id"
+        " JOIN inventories i ON i.id = c.inventory_id"
         " WHERE c.enabled = 1 AND s.run_id IS NULL AND (s.next_at IS NULL OR s.next_at <= ?)"
         " ORDER BY s.next_at, h.name", (now + SLACK,)).fetchall()
     groups: dict[tuple, dict[str, list]] = defaultdict(lambda: defaultdict(list))
@@ -980,8 +983,8 @@ _CHECK_PARAMS = {
                         default=3),
     "params": Obj("The parameters of the kind, as check.catalog lists them"),
     "thresholds": Obj("By metric, {warning, critical}, either null; in place of the defaults"),
-    "machine_credential_id": Id("How to connect, if the inventory does not say",
-                                required=False),
+    "machine_credential_id": Id("How to connect; left out, the machine credential of the"
+                                " inventory, if it has one", required=False),
     "become": Bool(),
     "enabled": Bool(default=True),
     "project_id": Id("For a check of the kind playbook or compliance: the project of the"

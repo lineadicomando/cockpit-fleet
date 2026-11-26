@@ -683,6 +683,28 @@ class ToolsTest(Base):
         self.assertEqual([t for t in self.ok("mcp.tools", role="viewer")["tools"]
                           if t["name"].startswith("launch_")], [])
 
+    def test_a_template_on_several_inventories_takes_one_as_a_parameter(self):
+        template = self.template()
+        one = self.ok("inventory.create", {"name": "lab1", "kind": "managed", "content": ""})
+
+        def tool():
+            return next(tool for tool in self.ok("mcp.tools", role="operator")["tools"]
+                        if tool["name"].startswith("launch_"))
+
+        self.assertNotIn("inventory_id", tool()["inputSchema"]["properties"])
+        params = {key: template[key] for key in ("name", "project_id", "playbook",
+                                                 "inventory_id")}
+        self.ok("template.update", {"id": template["id"], **params, "inventory_ids": [one["id"]]})
+        choice = tool()["inputSchema"]["properties"]["inventory_id"]
+        self.assertEqual(sorted(choice["enum"]), sorted([template["inventory_id"], one["id"]]))
+        self.assertIn(f"{one['id']} (lab1)", choice["description"])
+        self.assertIn("chosen with inventory_id", tool()["description"])
+        # Any inventory: every one that is no starter.
+        kept = self.ok("inventory.create", {"name": "kept", "kind": "managed", "content": ""})
+        self.ok("inventory.starter", {"id": kept["id"], "starter": True})
+        self.ok("template.update", {"id": template["id"], **params, "any_inventory": True})
+        self.assertNotIn(kept["id"], tool()["inputSchema"]["properties"]["inventory_id"]["enum"])
+
     def test_a_template_that_needs_a_secret_is_not_a_tool(self):
         self.template(survey=[{"name": "token", "type": "secret", "required": True}])
         self.assertEqual([tool for tool in self.ok("mcp.tools")["tools"]

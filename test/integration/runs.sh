@@ -286,6 +286,18 @@ done
 run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$limited_id\", \"limit\": \"b1\"}")" 'a["data"]["id"]')
 expect_run "a limit with no host of the template's fails the run" "$run_id" 120 failed
 
+# --- an inventory chosen at launch --------------------------------------------------
+other=$(get "$(admin inventory.create '{"name": "other", "kind": "managed", "format": "ini", "content": "[web]\nc1\n[all:vars]\nansible_connection=local\n"}')" 'a["data"]["id"]')
+spread=$(get "$(admin template.create "{\"name\": \"spread\", \"project_id\": \"$project_id\", \"playbook\": \"hosts.yml\", \"inventory_id\": \"$(get "$many" 'a["data"]["id"]')\", \"inventory_ids\": [\"$other\"], \"limit_hosts\": \"web\"}")" 'a["data"]["id"]')
+run_id=$(get "$(ctl itoperator run.start "{\"template_id\": \"$spread\", \"inventory_id\": \"$other\"}")" 'a["data"]["id"]')
+expect_run "a run on another inventory the template allows" "$run_id" 120 successful
+expect_eq "it reached that inventory's hosts" \
+    "$(get "$(ctl itoperator run.get "{\"id\": \"$run_id\"}")" 'a["data"]["inventory_id"], sorted(a["data"]["stats"])')" "$other ['c1']"
+expect_eq "an inventory the template does not allow is refused" \
+    "$(get "$(ctl itoperator run.start "{\"template_id\": \"$spread\", \"inventory_id\": \"$inventory_id\"}")" 'a["error"]["code"]')" conflict
+expect_eq "an inventory a template allows is not deleted" \
+    "$(get "$(admin inventory.delete "{\"id\": \"$other\"}")" 'a["error"]["code"]')" conflict
+
 # --- queue and cancel ----------------------------------------------------------
 admin template.create "{\"name\": \"wait\", \"project_id\": \"$project_id\", \"playbook\": \"wait.yml\", \"inventory_id\": \"$inventory_id\"}" > /tmp/fleet-it-wait.json
 wait_id=$(get "$(cat /tmp/fleet-it-wait.json)" 'a["data"]["id"]'); rm -f /tmp/fleet-it-wait.json
@@ -334,7 +346,7 @@ expect_eq "and exports the same again" \
     "$(get "$(admin config.export)" '{k: v for k, v in a["data"].items() if k != "exported_at"}')" \
     "$(get "$exported" '{k: v for k, v in a["data"].items() if k != "exported_at"}')"
 expect_eq "an imported credential has no secret" "$(get "$(admin credential.list)" '[c["secrets"]["password"] for c in a["data"]["credentials"] if c["name"] == "local ssh"]')" "[False]"
-expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 6
+expect_eq "each thing imported is in the audit log" "$(get "$(admin audit.list)" 'sum(1 for e in a["data"]["entries"] if e["command"] == "template.create")')" 7
 
 # --- git project ---------------------------------------------------------------
 if [ -n "${IT_GIT_URL:-}" ]; then

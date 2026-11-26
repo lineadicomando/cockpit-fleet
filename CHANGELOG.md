@@ -10,6 +10,20 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Job templates: an inventory chosen at launch. A template may allow other
+  inventories beside its default, or any, and whoever launches it chooses
+  one (`inventory_ids` and `any_inventory` of the template, `inventory_id`
+  of `run.start`, `fleet launch --inventory`): one template serves every
+  lab instead of one each. The list shows a template under each inventory
+  it allows and launches it there; an agent's tool of it takes the
+  inventory as a parameter. A schedule keeps the inventory it launches on.
+- Workflows: one that names an inventory runs every step there, each
+  template allowing it; one that names none may be launched on an
+  inventory every step allows (`inventory_id` of `workflow.launch`, and of
+  its schedule).
+- Inventories: a machine credential of their own, which a run takes when
+  its template has none, a check when it has none, and an ad-hoc command
+  when none is given.
 - Documents: texts in Markdown and their attachments, in folders, kept on
   the controller apart from the store and never given to runs. Every
   change to a text is kept in a history of its own, with who made it,

@@ -20,9 +20,11 @@ steps before it in the graph, the latest last, as extra variables tagged
 unsafe: above the template's variables and the answers of its node.
 
 A workflow may name a project, an inventory or both: its steps are then
-templates of those, so that a template alike on another inventory is not
-taken for one of them. A run holds a copy of that too, and checks each step
-again as it starts it.
+templates of that project, and every step runs on that inventory, which
+each template must allow. A run holds a copy of that too, and checks each
+step again as it starts it. One that names no inventory may be given one
+at launch, among those every step allows; without, each step runs on its
+template's default.
 """
 
 import fcntl
@@ -33,6 +35,7 @@ from . import approvals, jobs, journal, runs, store, survey
 from .cli import Context, Id, Objs, Str, Values, command
 from .errors import BadRequest, Conflict, FleetError
 from .names import check_id
+from .resources import allows
 from .validators import check_limit
 
 MAX_NODES = 50
@@ -61,12 +64,54 @@ def scope_of(row) -> dict:
     return {column: row[column] for column, _, _ in _SCOPE if row[column]}
 
 
-def check_scope(template, scope: dict) -> None:
-    """Refuse a template that is not of the project or of the inventory of a workflow."""
-    for column, _, what in _SCOPE:
-        if scope.get(column) and template[column] != scope[column]:
-            raise BadRequest(f"the job template {template['name']} is not of the {what}"
-                             " this workflow takes its steps from")
+def check_scope(conn, template, scope: dict) -> None:
+    """Refuse a template that is not of the project of a workflow, or that
+    does not allow its inventory."""
+    if scope.get("project_id") and template["project_id"] != scope["project_id"]:
+        raise BadRequest(f"the job template {template['name']} is not of the project"
+                         " this workflow takes its steps from")
+    if scope.get("inventory_id") and not allows(conn, template, scope["inventory_id"]):
+        raise BadRequest(f"the job template {template['name']} is not launched on the"
+                         " inventory this workflow runs on")
+
+
+def run_inventory(ctx: Context, workflow, nodes: list[dict],
+                  inventory_id: str | None) -> str | None:
+    """The inventory every step of a run of WORKFLOW runs on: its own, or
+    the one chosen at launch, which every step must allow; None: each
+    step's default."""
+    if workflow["inventory_id"]:
+        if inventory_id and inventory_id != workflow["inventory_id"]:
+            raise Conflict(f"the workflow {workflow['name']} runs on its own inventory")
+        return workflow["inventory_id"]
+    if not inventory_id:
+        return None
+    inventory = store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
+                             "inventory")
+    for node in nodes:
+        template = store.fetch(ctx.conn, "templates", node["template_id"], "template")
+        if not allows(ctx.conn, template, inventory_id):
+            raise Conflict(f"the step {node['name'] or node['id']} of the workflow"
+                           f" {workflow['name']} is not launched on the inventory"
+                           f" {inventory['name']}")
+    return inventory_id
+
+
+def choices(conn, nodes: list[dict]) -> list[str] | None:
+    """The inventories every step allows, by id; None: any."""
+    allowed: set[str] | None = None
+    for node in nodes:
+        template = conn.execute("SELECT * FROM templates WHERE id = ?",
+                                (node["template_id"],)).fetchone()
+        if template is None:
+            return []
+        if template["any_inventory"]:
+            continue
+        mine = {template["inventory_id"], *(row[0] for row in conn.execute(
+            "SELECT inventory_id FROM template_inventories WHERE template_id = ?",
+            (template["id"],)))}
+        allowed = mine if allowed is None else allowed & mine
+    return None if allowed is None else sorted(allowed)
 
 
 def _check_nodes(ctx: Context, nodes: list[dict], scope: dict) -> list[dict]:
@@ -100,7 +145,7 @@ def _check_nodes(ctx: Context, nodes: list[dict], scope: dict) -> list[dict]:
         if not isinstance(answers, dict):
             raise BadRequest("the answers of a step are an object")
         template = store.fetch(ctx.conn, "templates", template_id, "template")
-        check_scope(template, scope)
+        check_scope(ctx.conn, template, scope)
         checked.append({
             "id": node_id, "name": name.strip(), "template_id": template_id,
             "limit": check_limit(limit) if limit.strip() else "",
@@ -171,9 +216,17 @@ def _workflow(ctx: Context, row) -> dict:
         " ORDER BY created_at DESC LIMIT 1", (row["id"],)).fetchone()
     return {"id": row["id"], "name": row["name"], "description": row["description"],
             "project_id": row["project_id"], "inventory_id": row["inventory_id"],
+            "inventory_ids": _offered(ctx.conn, row),
             "nodes": [node_out(node) for node in store.loads(row["nodes"], [])],
             "edges": store.loads(row["edges"], []), "created_at": row["created_at"],
             "updated_at": row["updated_at"], "last_run": dict(last) if last else None}
+
+
+def _offered(conn, row) -> list[str] | None:
+    """The inventories a launch of a workflow may choose, by id; None: any."""
+    if row["inventory_id"]:
+        return [row["inventory_id"]]
+    return choices(conn, store.loads(row["nodes"], []))
 
 
 _WORKFLOW_PARAMS = {
@@ -181,7 +234,8 @@ _WORKFLOW_PARAMS = {
     "description": Str(default="", max_length=2000),
     "project_id": Id("If given, every step is a job template of this project",
                      required=False),
-    "inventory_id": Id("If given, every step is a job template on this inventory",
+    "inventory_id": Id("If given, every step runs on this inventory, which its job template"
+                       " must allow; if not, one may be chosen at launch",
                        required=False),
     "nodes": Objs("The steps: id (a-z, 0-9, - and _), name, template_id, limit (a host"
                   " pattern that narrows the template's), answers (to its survey, no secret),"
@@ -218,7 +272,8 @@ def workflow_list(ctx: Context, params: Values) -> dict:
 @command("workflow.create", role="admin", mutating=True, params=_WORKFLOW_PARAMS)
 def workflow_create(ctx: Context, params: Values) -> dict:
     """Create a workflow: job templates run one after the other, by how each
-    ends. With a project, an inventory or both, only their templates are steps."""
+    ends. With a project, only its templates are steps; with an inventory,
+    every step runs there, and only templates that allow it are steps."""
     workflow_id = store.new_id("w")
     store.insert(ctx.conn, "workflows", {"id": workflow_id, "created_at": store.now(),
                                          **_values(ctx, params)}, "workflow")
@@ -290,22 +345,30 @@ def _start(ctx: Context, workflow, options: dict, schedule=None,
 @command("workflow.launch", role="operator", mutating=True,
          params={
              "id": Id(),
+             "inventory_id": Id("For a workflow that names no inventory: the one every step"
+                                " runs on, among those all of them allow; left out, each"
+                                " step runs on its template's default", required=False),
          })
 def workflow_launch(ctx: Context, params: Values) -> dict:
     """Launch a workflow: its first steps start now, the others as the steps
     before them end. A step whose template needs approval waits for it."""
     workflow = store.fetch(ctx.conn, "workflows", params["id"], "workflow")
-    return launch(ctx, workflow)
+    return launch(ctx, workflow, inventory_id=params["inventory_id"])
 
 
-def launch(ctx: Context, workflow, schedule=None, created_by: str | None = None) -> dict:
+def launch(ctx: Context, workflow, schedule=None, created_by: str | None = None,
+           inventory_id: str | None = None) -> dict:
     """Start a run of a workflow: what workflow.launch does, and what a
     schedule does at its time, after checking that no step needs approval."""
     nodes = store.loads(workflow["nodes"], [])
     if schedule is not None:
         unattended(ctx, nodes)
-    return _start(ctx, workflow, {"nodes": nodes, "edges": store.loads(workflow["edges"], []),
-                                  "scope": scope_of(workflow)}, schedule, created_by)
+    options = {"nodes": nodes, "edges": store.loads(workflow["edges"], []),
+               "scope": scope_of(workflow)}
+    chosen = run_inventory(ctx, workflow, nodes, inventory_id)
+    if chosen and not workflow["inventory_id"]:
+        options["inventory"] = chosen
+    return _start(ctx, workflow, options, schedule, created_by)
 
 
 @command("workflow.resume", role="operator", mutating=True,
@@ -330,6 +393,8 @@ def workflow_resume(ctx: Context, params: Values) -> dict:
     return _start(ctx, workflow, {"nodes": options.get("nodes", []),
                                   "edges": options.get("edges", []),
                                   "scope": options.get("scope", {}),
+                                  **({"inventory": options["inventory"]}
+                                     if options.get("inventory") else {}),
                                   "resumed_from": old["id"], "carried": done})
 
 
@@ -442,7 +507,7 @@ def _advance(ctx: Context, run_id: str) -> None:
         for node in ready:
             try:
                 _launch_step(ctx, run, nodes[node], _artifacts(options, steps, node),
-                             options.get("scope", {}))
+                             options.get("scope", {}), options.get("inventory"))
             except FleetError as error:
                 # It could not start: as if it had failed, for the links after it.
                 failures[node] = str(error)
@@ -474,16 +539,19 @@ def _label(node: dict, step) -> str:
     return node["name"] or (step["title"] if step is not None else node["id"])
 
 
-def _launch_step(ctx: Context, run, node: dict, artifacts: dict, scope: dict) -> None:
+def _launch_step(ctx: Context, run, node: dict, artifacts: dict, scope: dict,
+                 chosen: str | None) -> None:
     if scope:
         # Its template may have changed since: the run checks for itself.
-        check_scope(store.fetch(ctx.conn, "templates", node["template_id"], "template"), scope)
+        check_scope(ctx.conn, store.fetch(ctx.conn, "templates", node["template_id"],
+                                          "template"), scope)
     if run["schedule_id"]:
         # Nobody is there to approve: a template that has come to need an
         # approval since the launch fails the step instead of holding it.
         unattended(ctx, [node])
     runs.launch(ctx, node["template_id"], node["limit"], False, False, node["answers"],
                 created_by=run["created_by"],
+                inventory_id=chosen or scope.get("inventory_id"),
                 workflow={"run_id": run["id"], "node": node["id"], "title": node["name"],
                           "vars": artifacts, "approval": step_mode(node),
                           "priority": run["priority"]})
@@ -510,8 +578,9 @@ def cancel(ctx: Context, run_id: str) -> str:
          })
 def workflow_progress(ctx: Context, params: Values) -> dict:
     """The steps of a workflow run: each with its state, its run if it has
-    one, the inventory it ran on (or will run on, its template's now), and
-    the links between them."""
+    one, the inventory it ran on (or will run on: the workflow's, the one
+    chosen at launch, or its template's default now), and the links
+    between them."""
     run = store.fetch(ctx.conn, "runs", params["id"], "run")
     if run["kind"] != "workflow":
         raise BadRequest("this run is not a workflow run")
@@ -528,6 +597,8 @@ def workflow_progress(ctx: Context, params: Values) -> dict:
         state = states[node["id"]]
         if step is not None:
             inventory_id = step["inventory_id"]
+        elif options.get("inventory") or options.get("scope", {}).get("inventory_id"):
+            inventory_id = options.get("inventory") or options["scope"]["inventory_id"]
         else:
             row = ctx.conn.execute("SELECT inventory_id FROM templates WHERE id = ?",
                                    (node["template_id"],)).fetchone()

@@ -44,7 +44,8 @@ CREDENTIAL_FIELDS = {
 # What may use a credential, by kind: one query each, of the credential's id.
 _CREDENTIAL_USERS = (
     ("project", "SELECT name FROM projects WHERE credential_id = ?1"),
-    ("inventory", "SELECT name FROM inventories WHERE vault_credential_id = ?1"),
+    ("inventory", "SELECT name FROM inventories WHERE vault_credential_id = ?1"
+     " OR machine_credential_id = ?1"),
     ("template", "SELECT name FROM templates WHERE machine_credential_id = ?1"
      " OR vault_credential_id = ?1"
      " OR id IN (SELECT template_id FROM template_vaults WHERE credential_id = ?1)"),
@@ -441,8 +442,8 @@ NOT_READ = "the inventory could not be read: an administrator can see why"
 def _inventory(conn, row, with_hosts: bool = False, admin: bool = True) -> dict:
     hosts = store.loads(row["hosts"], [])
     data = {key: row[key] for key in ("id", "name", "kind", "project_id", "path", "format",
-                                      "vault_credential_id", "parsed_at", "parse_error",
-                                      "revision")}
+                                      "vault_credential_id", "machine_credential_id",
+                                      "parsed_at", "parse_error", "revision")}
     data["variable_set_ids"] = [one["id"] for one in variables.inventory_sets(conn, row["id"])]
     data["starter"] = bool(row["starter"])
     if not admin and data["parse_error"]:
@@ -458,6 +459,10 @@ def _inventory(conn, row, with_hosts: bool = False, admin: bool = True) -> dict:
 # its path is the source inside its tree, empty for all of it.
 _INVENTORY_PARAMS = {
     "vault_credential_id": Id(required=False),
+    "machine_credential_id": Id("The machine credential of a run on the inventory whose job"
+                                " template has none, of a check with none, and the one an"
+                                " ad-hoc command is offered. Left out of an update: unchanged.",
+                                required=False),
     "project_id": Id(required=False),
     "path": Str("For a file inventory, its file or directory in the project; for one written"
                 " here, the file or directory of its tree Ansible reads, empty for all of it",
@@ -480,6 +485,9 @@ def _inventory_values(ctx: Context, params: Values, kind: str, row=None) -> dict
     """What a create, or an update of ROW, writes; a format not given is kept."""
     values: dict = {"vault_credential_id":
                     credential_of_kind(ctx, params["vault_credential_id"], "vault")}
+    if row is None or "machine_credential_id" in params.given:
+        values["machine_credential_id"] = credential_of_kind(
+            ctx, params["machine_credential_id"], "machine")
     if kind == "file":
         params.unused("format", "content")
         values["project_id"] = params.need("project_id")
@@ -664,9 +672,15 @@ def inventory_update(ctx: Context, params: Values) -> dict:
              "id": Id(),
          })
 def inventory_delete(ctx: Context, params: Values) -> dict:
-    """Delete an inventory that no template uses, and the files of one
-    written here."""
+    """Delete an inventory that no template uses, nor allows at launch, and
+    the files of one written here."""
     inventory_id = params["id"]
+    allowing = [row["name"] for row in ctx.conn.execute(
+        "SELECT t.name FROM template_inventories i JOIN templates t ON t.id = i.template_id"
+        " WHERE i.inventory_id = ? ORDER BY t.name COLLATE NOCASE", (inventory_id,))]
+    if allowing:
+        raise Conflict("job templates allow it at launch: " + ", ".join(allowing[:5])
+                       + (" and others" if len(allowing) > 5 else ""))
     store.delete(ctx.conn, "inventories", inventory_id, "inventory")
     shutil.rmtree(paths.INVENTORIES_DIR / check_id(inventory_id, "inventory id"),
                   ignore_errors=True)
@@ -677,8 +691,8 @@ def inventory_delete(ctx: Context, params: Values) -> dict:
          params={"id": Id(), "name": Str(required=True, max_length=200)})
 def inventory_duplicate(ctx: Context, params: Values) -> dict:
     """Make a new inventory written here with the files of another as they
-    are on main, as its first commit, and its format, path, vault and sets
-    of variables; the history is not copied, nor what uses the original
+    are on main, as its first commit, and its format, path, credentials and
+    sets of variables; the history is not copied, nor what uses the original
     (templates, checks). It is read once made."""
     source = store.fetch(ctx.conn, "inventories", params["id"], "inventory")
     if source["kind"] != "managed":
@@ -687,7 +701,8 @@ def inventory_duplicate(ctx: Context, params: Values) -> dict:
     operations = files.copy_operations(ctx, source)
     sets = [one["id"] for one in variables.inventory_sets(ctx.conn, source["id"])]
     inventory_id = store.new_id("i")
-    values = {key: source[key] for key in ("format", "path", "vault_credential_id")}
+    values = {key: source[key] for key in ("format", "path", "vault_credential_id",
+                                           "machine_credential_id")}
     _save_inventory(ctx, inventory_id, {"name": name, "kind": "managed",
                                         "created_at": store.now(), **values}, sets, create=True)
     try:
@@ -715,7 +730,8 @@ def inventory_starter(ctx: Context, params: Values) -> dict:
     starter = params["starter"]
     if starter:
         users = _users(ctx, (
-            ("template", "SELECT name FROM templates WHERE inventory_id = ?"),
+            ("template", "SELECT name FROM templates WHERE inventory_id = ?1 OR id IN"
+             " (SELECT template_id FROM template_inventories WHERE inventory_id = ?1)"),
             ("check", "SELECT name FROM checks WHERE inventory_id = ?"),
             ("maintenance window", "SELECT coalesce(nullif(comment, ''), id) AS name"
              " FROM maintenances WHERE inventory_id = ?")), inventory["id"])
@@ -1060,6 +1076,8 @@ def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
     data = {key: row[key] for key in ("id", "name", "project_id", "playbook", "inventory_id",
                                       "machine_credential_id", "limit_hosts", "forks",
                                       "verbosity")}
+    data["inventory_ids"] = other_inventories(ctx.conn, row["id"])
+    data["any_inventory"] = bool(row["any_inventory"])
     data["vault_credential_ids"] = [vault["id"] for vault in template_vaults(ctx, row["id"])]
     data["become"] = bool(row["become"])
     data["approval"] = row["approval"]
@@ -1074,12 +1092,19 @@ def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
     return data
 
 
+# The inventories a template may allow at launch beside its default.
+MAX_INVENTORIES = 200
+
 _TEMPLATE_PARAMS = {
     "name": Str(required=True, max_length=200),
     "project_id": Id(),
     "playbook": Str(required=True, max_length=1024),
-    "inventory_id": Id(),
-    "machine_credential_id": Id(required=False),
+    "inventory_id": Id("The inventory a run takes when its launch names none"),
+    "inventory_ids": Strs("Other inventories whoever launches it may choose instead",
+                          max_items=MAX_INVENTORIES),
+    "any_inventory": Bool("Whoever launches it may choose any inventory"),
+    "machine_credential_id": Id("Left out, a run takes the machine credential of its"
+                                " inventory", required=False),
     "vault_credential_ids": Strs(max_items=20),
     "limit_hosts": Str(default="", max_length=512),
     "tags": Strs(),
@@ -1117,6 +1142,7 @@ def _template_values(ctx: Context, params: Values) -> dict:
         "playbook": str(check_relative_path(params["playbook"],
                                             "playbook")),
         "inventory_id": inventory_id,
+        "any_inventory": int(params["any_inventory"]),
         "machine_credential_id":
             credential_of_kind(ctx, params["machine_credential_id"], "machine"),
         "limit_hosts": check_limit(limit) if limit else "",
@@ -1151,8 +1177,50 @@ def vault_ids(ctx: Context, params: Values) -> list[str]:
     return ids
 
 
+def other_inventories(conn, template_id: str) -> list[str]:
+    """The inventories a template allows at launch beside its default, by name."""
+    return [row[0] for row in conn.execute(
+        "SELECT i.inventory_id FROM template_inventories i JOIN inventories v"
+        " ON v.id = i.inventory_id WHERE i.template_id = ? ORDER BY v.name COLLATE NOCASE",
+        (template_id,))]
+
+
+def allows(conn, template, inventory_id: str) -> bool:
+    """Whether a run of TEMPLATE may be on INVENTORY_ID."""
+    return (inventory_id == template["inventory_id"] or bool(template["any_inventory"])
+            or conn.execute("SELECT 1 FROM template_inventories WHERE template_id = ?"
+                            " AND inventory_id = ?", (template["id"], inventory_id)).fetchone()
+            is not None)
+
+
+def launch_inventory(ctx: Context, template, inventory_id: str | None):
+    """The inventory of a run of TEMPLATE: the one its launch chose, if the
+    template allows it, else its default."""
+    if inventory_id is None:
+        inventory_id = template["inventory_id"]
+    inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
+    if not allows(ctx.conn, template, inventory_id):
+        raise Conflict(f"the job template {template['name']} is not launched on the"
+                       f" inventory {inventory['name']}")
+    return store.usable(inventory, "inventory")
+
+
+def _inventory_ids(ctx: Context, params: Values, default: str) -> list[str]:
+    ids = []
+    for inventory_id in params["inventory_ids"]:
+        try:
+            check_id(inventory_id, "inventory id")
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
+                     "inventory")
+        if inventory_id != default and inventory_id not in ids:
+            ids.append(inventory_id)
+    return ids
+
+
 def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[str],
-                   create: bool, sets: list[str]) -> dict:
+                   create: bool, sets: list[str], inventories: list[str]) -> dict:
     conn = ctx.conn
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -1164,6 +1232,11 @@ def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[st
             conn.execute("DELETE FROM template_vaults WHERE template_id = ?", (template_id,))
             conn.execute("DELETE FROM template_variable_sets WHERE template_id = ?",
                          (template_id,))
+            conn.execute("DELETE FROM template_inventories WHERE template_id = ?",
+                         (template_id,))
+        for inventory_id in inventories:
+            conn.execute("INSERT INTO template_inventories (template_id, inventory_id)"
+                         " VALUES (?, ?)", (template_id, inventory_id))
         for position, credential_id in enumerate(vaults):
             conn.execute("INSERT INTO template_vaults (template_id, credential_id, position)"
                          " VALUES (?, ?, ?)", (template_id, credential_id, position))
@@ -1192,7 +1265,9 @@ def template_create(ctx: Context, params: Values) -> dict:
     values = _template_values(ctx, params)
     vaults = vault_ids(ctx, params)
     sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"])
-    return _save_template(ctx, store.new_id("t"), values, vaults, create=True, sets=sets)
+    inventories = _inventory_ids(ctx, params, values["inventory_id"])
+    return _save_template(ctx, store.new_id("t"), values, vaults, create=True, sets=sets,
+                          inventories=inventories)
 
 
 @command("template.update", role="admin", mutating=True,
@@ -1202,22 +1277,24 @@ def template_update(ctx: Context, params: Values) -> dict:
     template_id = params["id"]
     store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
+    inventories = _inventory_ids(ctx, params, values["inventory_id"])
+    allowed = {values["inventory_id"], *inventories}
     # A workflow that takes its steps from one project or inventory keeps them there.
-    held = ctx.conn.execute(
-        "SELECT workflows.name FROM workflows JOIN workflow_templates"
-        " ON workflow_templates.workflow_id = workflows.id"
-        " WHERE workflow_templates.template_id = ?"
-        " AND (workflows.project_id IS NOT NULL AND workflows.project_id != ?"
-        " OR workflows.inventory_id IS NOT NULL AND workflows.inventory_id != ?)"
-        " ORDER BY workflows.name COLLATE NOCASE LIMIT 1",
-        (template_id, values["project_id"], values["inventory_id"])).fetchone()
-    if held is not None:
-        raise Conflict(f"this job template is a step of the workflow {held['name']}, which"
-                       " takes its steps from one project or inventory: make another"
-                       " job template instead")
+    for held in ctx.conn.execute(
+            "SELECT workflows.name, workflows.project_id, workflows.inventory_id FROM workflows"
+            " JOIN workflow_templates ON workflow_templates.workflow_id = workflows.id"
+            " WHERE workflow_templates.template_id = ?"
+            " ORDER BY workflows.name COLLATE NOCASE", (template_id,)):
+        if held["project_id"] is not None and held["project_id"] != values["project_id"] \
+                or held["inventory_id"] is not None and not values["any_inventory"] \
+                and held["inventory_id"] not in allowed:
+            raise Conflict(f"this job template is a step of the workflow {held['name']},"
+                           " which takes its steps from one project or inventory: make"
+                           " another job template instead")
     vaults = vault_ids(ctx, params)
     sets = variables.check_set_ids(ctx.conn, params["variable_set_ids"])
-    return _save_template(ctx, template_id, values, vaults, create=False, sets=sets)
+    return _save_template(ctx, template_id, values, vaults, create=False, sets=sets,
+                          inventories=inventories)
 
 
 @command("template.delete", role="admin", mutating=True, agent="code",

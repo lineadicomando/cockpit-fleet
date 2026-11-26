@@ -53,6 +53,7 @@ def config_export(ctx: Context, params: Values) -> dict:
                 "project": projects.get(row["project_id"], ""), "path": row["path"],
                 "format": row["format"], "content": "",
                 "vault_credential": credentials.get(row["vault_credential_id"], ""),
+                "machine_credential": credentials.get(row["machine_credential_id"], ""),
                 "variable_sets": [one["name"]
                                   for one in variables.inventory_sets(conn, row["id"])],
                 "starter": bool(row["starter"])}
@@ -75,6 +76,10 @@ def config_export(ctx: Context, params: Values) -> dict:
         document["templates"].append({
             "name": row["name"], "project": projects.get(row["project_id"], ""),
             "playbook": row["playbook"], "inventory": inventories.get(row["inventory_id"], ""),
+            # The others it allows at launch, by name.
+            "inventories": [inventories.get(one, "")
+                            for one in resources.other_inventories(conn, row["id"])],
+            "any_inventory": bool(row["any_inventory"]),
             "machine_credential": credentials.get(row["machine_credential_id"], ""),
             "vault_credentials": [credentials.get(vault["id"], "")
                                   for vault in resources.template_vaults(ctx, row["id"])],
@@ -107,6 +112,8 @@ def config_export(ctx: Context, params: Values) -> dict:
             {"template": templates.get(row["template_id"], ""), "limit": row["limit_hosts"],
              "check": bool(row["check_mode"]), "diff": bool(row["diff"]),
              "answers": store.loads(row["answers"], {}), **store.loads(row["overrides"], {})}),
+         **({"inventory": inventories.get(row["inventory_id"], "")}
+            if row["inventory_id"] else {}),
          "calendar": row["calendar"], "timezone": row["timezone"],
          "enabled": bool(row["enabled"]), "overlap": row["overlap"],
          "catch_up": bool(row["catch_up"]), "priority": row["priority"],
@@ -218,6 +225,9 @@ class _Importer:
         params = {"name": item.get("name"), "kind": kind,
                   "vault_credential_id": self._id("credentials", item.get("vault_credential"),
                                                   "credential"),
+                  "machine_credential_id": self._id("credentials",
+                                                    item.get("machine_credential"),
+                                                    "credential"),
                   "variable_set_ids": [self._id("variable_sets", name, "set of variables", True)
                                        for name in sets]}
         if kind == "file":
@@ -261,8 +271,13 @@ class _Importer:
         sets = item.get("variable_sets") or []
         if not isinstance(sets, list):
             raise BadRequest("variable_sets must be a list")
+        others = item.get("inventories") or []
+        if not isinstance(others, list):
+            raise BadRequest("inventories must be a list")
         params = {
             "name": item.get("name"), "playbook": item.get("playbook"),
+            "inventory_ids": [self._id("inventories", name, "inventory", True)
+                              for name in others],
             "project_id": self._id("projects", item.get("project"), "project", True),
             "inventory_id": self._id("inventories", item.get("inventory"), "inventory", True),
             "machine_credential_id": self._id("credentials", item.get("machine_credential"),
@@ -273,7 +288,7 @@ class _Importer:
                                  for name in sets],
         }
         for key in ("limit_hosts", "tags", "skip_tags", "extra_vars", "survey", "verbosity",
-                    "become", "approval", "needs_approval"):
+                    "become", "approval", "needs_approval", "any_inventory"):
             if key in item:
                 params[key] = item[key]
         if item.get("forks") is not None:
@@ -301,6 +316,8 @@ class _Importer:
             params["workflow_id"] = self._id("workflows", item.get("workflow"), "workflow", True)
         else:
             params["template_id"] = self._id("templates", item.get("template"), "template", True)
+        if item.get("inventory"):
+            params["inventory_id"] = self._id("inventories", item["inventory"], "inventory", True)
         for key in ("timezone", "enabled", "limit", "check", "diff", "answers", "overlap",
                     "catch_up", "priority", "random_delay", "tags", "skip_tags", "forks",
                     "verbosity"):

@@ -12,24 +12,32 @@ runs at most once.
 
 **Where its steps are from.** A workflow may name a project, an inventory
 or both (`project_id`, `inventory_id`, each null for any): its steps are
-then templates of that project and on that inventory, both when both are
-named. It is there so that a template alike on another inventory is not
-taken for one of them, and it is checked three times: when the workflow is
+then templates of that project, and every step runs on that inventory,
+which each template must allow (its default, one of the others it allows
+at launch, or any; see "The inventory chosen at launch" in
+[Projects](projects.md)). It is checked three times: when the workflow is
 saved (`bad_request`); when a template that is a step of it is moved to
-another project or inventory (`template.update` answers `conflict`: another
-template is made instead, as a template in use is not deleted); and when a
-run starts a step, against the copy the run holds (`options.scope`), since a
-run may outlive the workflow's use of a template: the step then counts as
-one that could not start. A starter is not named. The run of the workflow
-itself keeps `project_id` and `inventory_id` empty: runs in series wait by
-inventory, and its own steps would wait for it.
+another project or stops allowing the inventory (`template.update` answers
+`conflict`: another template is made instead, as a template in use is not
+deleted); and when a run starts a step, against the copy the run holds
+(`options.scope`), since a run may outlive the workflow's use of a
+template: the step then counts as one that could not start. A starter is
+not named. The run of the workflow itself keeps `project_id` and
+`inventory_id` empty: runs in series wait by inventory, and its own steps
+would wait for it.
 
-With no inventory named, the steps of one workflow may be on several
+With no inventory named, a launch may choose one (`inventory_id` of
+`workflow.launch`) among those every step allows (`inventory_ids` of the
+workflow, null when every step allows any): every step then runs there,
+the run keeping it as `options.inventory`, which a resume carries. So one
+workflow (wake the hosts, update them, maintain them, shut them down)
+serves every lab. Refused (`conflict`, naming the step) when a step does
+not allow it. Without a choice, the steps of one workflow may be on several
 inventories (rooms, or a staging inventory before the real one, or the
-hypervisors before their guests): the form groups the templates it offers by
-inventory and says under each step the one it runs on, and
-`workflow.progress` gives each step's inventory, the one its run took or,
-for a step not started, its template's now.
+hypervisors before their guests), each on its template's default: the form
+groups the templates it offers by inventory and says under each step the
+one it runs on, and `workflow.progress` gives each step's inventory, the
+one its run took or, for a step not started, the one it will take.
 
 **Runs.** `workflow.launch` (operator) records a run of kind `workflow`.
 It has no unit and no place in the queue (the lanes of `dispatch` leave it

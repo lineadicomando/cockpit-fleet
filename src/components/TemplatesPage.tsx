@@ -10,7 +10,7 @@ import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers,
 import { playbookChoices } from "../lib/files.ts";
 import { formatTime } from "../lib/format.ts";
 import {
-    filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, overrideFields, overridesOf, readTemplatesView, sortTemplates, withoutTemplateFilters,
+    allowedInventories, filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, overrideFields, overridesOf, readTemplatesView, sortTemplates, withoutTemplateFilters,
     withTemplateGroupsOpen, type Outcome, type TemplateGroup, type TemplateNames, type TemplateSort, type TemplatesView, type Trait,
 } from "../lib/templates.ts";
 import type { ApprovalMode, Credential, Inventory, Overrides, Project, ProjectPaths, Run, Schedule, Template, VariableSet } from "../lib/types.ts";
@@ -54,6 +54,8 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const [projectId, setProjectId] = useState(template?.project_id ?? "");
     const [playbook, setPlaybook] = useState(template?.playbook ?? "");
     const [inventoryId, setInventoryId] = useState(template?.inventory_id ?? "");
+    const [otherIds, setOtherIds] = useState<string[]>(template?.inventory_ids ?? []);
+    const [anyInventory, setAnyInventory] = useState(template?.any_inventory ?? false);
     const [machineId, setMachineId] = useState(template?.machine_credential_id ?? "");
     const [vaultIds, setVaultIds] = useState<string[]>(template?.vault_credential_ids ?? []);
     const [limit, setLimit] = useState(template?.limit_hosts ?? "");
@@ -75,6 +77,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
         if (vars === null) throw new Error(t("Extra variables must be a JSON object, for example {\"version\": \"1.2\"}."));
         const params = {
             name, project_id: projectId, playbook: playbook.trim(), inventory_id: inventoryId,
+            inventory_ids: anyInventory ? [] : otherIds.filter(id => id !== inventoryId), any_inventory: anyInventory,
             machine_credential_id: machineId, vault_credential_ids: vaultIds,
             limit_hosts: limit.trim(), tags: words(tags), skip_tags: words(skipTags), extra_vars: vars, variable_set_ids: setIds,
             survey: survey.map(fromDraft),
@@ -127,6 +130,19 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                     </FormGroup>
                 </GridItem>
                 <GridItem>
+                    <FormGroup label={t("Other inventories allowed at launch")} role="group" fieldId="tpl-inventories">
+                        <Checkbox id="tpl-any-inventory" label={t("Any inventory")} isChecked={anyInventory} onChange={(_e, value) => setAnyInventory(value)} />
+                        {!anyInventory && inventories.filter(inventory => inventory.id !== inventoryId).map(inventory => (
+                            <Checkbox key={inventory.id} id={`tpl-inventory-${inventory.id}`} label={inventory.name}
+                                isChecked={otherIds.includes(inventory.id)}
+                                onChange={(_e, checked) => setOtherIds(current => checked
+                                    ? [...current, inventory.id]
+                                    : current.filter(id => id !== inventory.id))} />
+                        ))}
+                        <FormHelperText><HelperText><HelperTextItem>{t("Whoever launches it may choose one of these instead of the inventory above, which is the default.")}</HelperTextItem></HelperText></FormHelperText>
+                    </FormGroup>
+                </GridItem>
+                <GridItem>
                     <FormGroup label={t("Limit to hosts")} fieldId="tpl-limit">
                         <TextInput id="tpl-limit" value={limit} onChange={(_e, value) => setLimit(value)} placeholder="web*:!web03" />
                     </FormGroup>
@@ -134,7 +150,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <GridItem>
                     <FormGroup label={t("Machine credential")} fieldId="tpl-machine">
                         <FormSelect id="tpl-machine" value={machineId} onChange={(_e, value) => setMachineId(value)}>
-                            <FormSelectOption value="" label={t("None")} />
+                            <FormSelectOption value="" label={t("The inventory's")} />
                             {ofKind("machine").map(credential => <FormSelectOption key={credential.id} value={credential.id} label={credential.name} />)}
                         </FormSelect>
                     </FormGroup>
@@ -195,9 +211,20 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
 
 // limit: what the hosts are narrowed to at first, such as the host whose updates are applied.
 // onLaunched: what shows the template's last run, to load again.
-export function LaunchModal({ template, limit: initialLimit = "", onClose, onLaunched }: { template: Template; limit?: string; onClose: () => void; onLaunched?: () => void }) {
+// inventory: the one chosen at first, such as the group the template was launched from.
+export function LaunchModal({ template, limit: initialLimit = "", inventory: initialInventory, onClose, onLaunched }: {
+    template: Template; limit?: string; inventory?: string; onClose: () => void; onLaunched?: () => void;
+}) {
     const { t } = useTranslation();
     const [limit, setLimit] = useState(initialLimit);
+    const several = template.any_inventory || template.inventory_ids.length > 0;
+    const listed = useLoad(() => several
+        ? call<{ inventories: Inventory[] }>("inventory.list").then(data => data.inventories.filter(one => !one.starter))
+        : Promise.resolve<Inventory[]>([]), [several]);
+    const allInventories = listed.data ?? [];
+    const allowed = allowedInventories(template, allInventories.map(one => one.id));
+    const [inventoryId, setInventoryId] = useState(initialInventory ?? template.inventory_id);
+    const inventoryName = (id: string) => allInventories.find(one => one.id === id)?.name ?? "";
     const [check, setCheck] = useState(false);
     const [serial, setSerial] = useState(true);
     const [answers, setAnswers] = useState(() => initialAnswers(template.survey));
@@ -209,7 +236,10 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose, onLau
         // A secret goes to the helper that encrypts it; the launch carries a ticket.
         for (const [name, value] of Object.entries(secretAnswers(template.survey, answers)))
             given[name] = await answerSecret(value);
-        const run = await call<Run>("run.start", { template_id: template.id, limit: limit.trim(), check, answers: given, serial, ...overrides });
+        const run = await call<Run>("run.start", {
+            template_id: template.id, limit: limit.trim(), check, answers: given, serial, ...overrides,
+            ...(inventoryId !== template.inventory_id ? { inventory_id: inventoryId } : {}),
+        });
         announceRun(run.id, run.title);
         onLaunched?.();
         onClose();
@@ -218,6 +248,14 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose, onLau
     return (
         <FormModal title={t("Launch {{name}}", { name: template.name })} submitLabel={check ? t("Launch dry run") : t("Launch")} onSubmit={submit} onClose={onClose}
             isDisabled={template.survey.some(field => answerProblem(field, answers[field.name]))}>
+            {several && (
+                <FormGroup label={t("Inventory")} fieldId="launch-inventory">
+                    <FormSelect id="launch-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
+                        {allowed.map(id => <FormSelectOption key={id} value={id}
+                            label={id === template.inventory_id ? t("{{name}} (default)", { name: inventoryName(id) }) : inventoryName(id)} />)}
+                    </FormSelect>
+                </FormGroup>
+            )}
             <SurveyAnswers survey={template.survey} answers={answers} onChange={setAnswers} />
             <FormGroup label={t("Limit to hosts")} fieldId="launch-limit">
                 <TextInput id="launch-limit" value={limit} onChange={(_e, value) => setLimit(value)} placeholder={template.limit_hosts || "web01,web02"} />
@@ -239,7 +277,8 @@ export function LaunchModal({ template, limit: initialLimit = "", onClose, onLau
                     description={t("It waits in the queue while another run is running on the inventory, or one launched before it is queued there, whatever their outcome.")} />
             </FormGroup>
             <OverridesSection id="launch" template={template} fields={fields} onChange={setFields} />
-            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check, serial, overrides)} />
+            <AtTerminal text={launchCommand(template.name, collectAnswers(template.survey, answers), limit, check, serial, overrides,
+                inventoryId !== template.inventory_id ? inventoryName(inventoryId) : "")} />
         </FormModal>
     );
 }
@@ -351,7 +390,7 @@ export function TemplatesPage() {
     const choices = useLoad(loadChoices);
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<Template | null>(null);
-    const [launching, setLaunching] = useState<Template | null>(null);
+    const [launching, setLaunching] = useState<{ template: Template; inventory?: string } | null>(null);
     const [deleting, setDeleting] = useState<Template | null>(null);
 
     function reload() {
@@ -380,11 +419,12 @@ export function TemplatesPage() {
                         project: id => projectName.get(id) ?? "",
                         inventory: id => inventoryName.get(id) ?? "",
                         schedules: id => scheduleCount.get(id) ?? 0,
+                        inventories: data.inventories.filter(item => !item.starter).map(item => item.id),
                     };
                     const used = (ids: string[], name: (id: string) => string) => [...new Set(ids)]
                         .map(id => ({ id, name: name(id) })).sort((a, b) => a.name.localeCompare(b.name));
                     const projects = used(data.templates.map(item => item.project_id), names.project);
-                    const inventories = used(data.templates.map(item => item.inventory_id), names.inventory);
+                    const inventories = used(data.templates.flatMap(item => allowedInventories(item, names.inventories)), names.inventory);
                     // A stored project or inventory that no template uses any more is not a
                     // filter, nor is the only one, whose select is not shown.
                     const view = {
@@ -404,8 +444,10 @@ export function TemplatesPage() {
                     });
                     const title = (group: TemplateGroup) => view.groupBy === "outcome" ? outcomeNames[group.key as Outcome] : group.name;
 
-                    const row = (template: Template, open: boolean) => {
+                    // where: the inventory of the group it is listed under, if grouped by inventory.
+                    const row = (template: Template, open: boolean, where?: string) => {
                         const count = names.schedules(template.id);
+                        const others = allowedInventories(template, names.inventories).length - 1;
                         return (
                             <Tr key={template.id} isExpanded={grouped ? open : undefined}>
                                 {grouped && <Td />}
@@ -419,7 +461,10 @@ export function TemplatesPage() {
                                 </Td>
                                 <Td dataLabel={t("Project")}>{names.project(template.project_id)}</Td>
                                 <Td dataLabel={t("Playbook")}><code>{template.playbook}</code></Td>
-                                <Td dataLabel={t("Inventory")}>{names.inventory(template.inventory_id)}</Td>
+                                <Td dataLabel={t("Inventory")}>
+                                    {names.inventory(where ?? template.inventory_id)}
+                                    {others > 0 && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("inventories_others_count", { count: others })}</Label>}
+                                </Td>
                                 <Td dataLabel={t("Last run")}>
                                     {template.last_run
                                         ? (
@@ -433,7 +478,7 @@ export function TemplatesPage() {
                                     {count > 0 && <Button variant="link" isInline onClick={() => cockpit.location.go(["schedules"])}>{count}</Button>}
                                 </Td>
                                 <Td isActionCell style={{ whiteSpace: "nowrap" }}>
-                                    {can("run.start") && <Button variant="secondary" size="sm" onClick={() => setLaunching(template)}>{t("Launch")}</Button>}
+                                    {can("run.start") && <Button variant="secondary" size="sm" onClick={() => setLaunching({ template, inventory: where })}>{t("Launch")}</Button>}
                                 </Td>
                                 <Td isActionCell>
                                     {can("template.update") && (
@@ -469,7 +514,7 @@ export function TemplatesPage() {
                                             <Tbody key={group.key} isExpanded={open}>
                                                 <GroupRow title={title(group)} count={t("templates_count", { count: group.items.length })} open={open} width={width}
                                                     onToggle={() => setView(withTemplateGroupsOpen(view, [group], !open))} />
-                                                {group.items.map(template => row(template, open))}
+                                                {group.items.map(template => row(template, open, view.groupBy === "inventory" ? group.key : undefined))}
                                             </Tbody>
                                         );
                                     }) : <Tbody>{groups[0].items.map(template => row(template, true))}</Tbody>}
@@ -481,7 +526,7 @@ export function TemplatesPage() {
             </ListState>
             {creating && choices.data && <TemplateModal choices={choices.data} onClose={() => setCreating(false)} onDone={reload} />}
             {editing && choices.data && <TemplateModal template={editing} choices={choices.data} onClose={() => setEditing(null)} onDone={reload} />}
-            {launching && <LaunchModal template={launching} onClose={() => setLaunching(null)} onLaunched={reload} />}
+            {launching && <LaunchModal template={launching.template} inventory={launching.inventory} onClose={() => setLaunching(null)} onLaunched={reload} />}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The job template is deleted. Its past runs stay in the history.")}
                     onDelete={async () => { await call("template.delete", { id: deleting.id }); setDeleting(null); reload(); }}

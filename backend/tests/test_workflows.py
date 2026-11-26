@@ -315,6 +315,53 @@ class WorkflowTest(WorkflowBase):
         self.assertEqual((nodes["b"]["inventory_id"], nodes["b"]["inventory"]),
                          (other["inventory_id"], "other"))
 
+    def test_a_workflow_runs_every_step_on_its_inventory_or_the_one_chosen(self):
+        lab = self.ok("inventory.create", {"name": "lab", "kind": "managed",
+                                           "content": "all:\n  hosts:\n    a:\n"})
+        alone = self.ok("inventory.create", {"name": "alone", "kind": "managed", "content": ""})
+        params = {key: self.first[key] for key in ("name", "project_id", "playbook",
+                                                   "inventory_id")}
+        self.ok("template.update", {"id": self.first["id"], **params,
+                                    "inventory_ids": [lab["id"], alone["id"]]})
+        params = {key: self.third[key] for key in ("name", "project_id", "playbook",
+                                                   "inventory_id")}
+        self.ok("template.update", {"id": self.third["id"], **params, "any_inventory": True})
+        nodes = {"nodes": [{"id": "a", "template_id": self.first["id"]},
+                           {"id": "b", "template_id": self.third["id"]}],
+                 "edges": [{"from": "a", "to": "b", "condition": "success"}]}
+        free = self.ok("workflow.create", {"name": "free", **nodes})
+        self.assertEqual(sorted(free["inventory_ids"]),
+                         sorted([self.first["inventory_id"], lab["id"], alone["id"]]))
+        run = self.ok("workflow.launch", {"id": free["id"], "inventory_id": lab["id"]})
+        steps = self.steps(run["id"])
+        self.assertEqual(self.ok("run.get", {"id": steps["a"][1]})["inventory_id"], lab["id"])
+        progress = self.ok("workflow.progress", {"id": run["id"]}, role="viewer")["nodes"]
+        self.assertEqual([node["inventory"] for node in progress], ["lab", "lab"])
+        self.end(steps["a"][1])
+        self.assertEqual(self.ok("run.get", {"id": self.steps(run["id"])["b"][1]})
+                         ["inventory_id"], lab["id"])
+        # A step that does not allow it: refused at launch, naming the step.
+        nodes["nodes"].append({"id": "c", "name": "migrate", "template_id": self.second["id"],
+                               "answers": {"colour": "red"}})
+        self.ok("workflow.update", {"id": free["id"], "name": "free", **nodes})
+        answer = self.call("workflow.launch", {"id": free["id"], "inventory_id": lab["id"]})
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("migrate", answer["error"]["message"])
+        # A workflow on an inventory takes the templates that allow it, and no other.
+        nodes["nodes"].pop()
+        fixed = self.ok("workflow.create", {"name": "fixed", "inventory_id": alone["id"], **nodes})
+        self.assertEqual(fixed["inventory_ids"], [alone["id"]])
+        self.assertEqual(self.code("workflow.launch", {"id": fixed["id"],
+                                                       "inventory_id": lab["id"]}), "conflict")
+        run = self.ok("workflow.launch", {"id": fixed["id"]})
+        self.assertEqual(self.ok("run.get", {"id": self.steps(run["id"])["a"][1]})
+                         ["inventory_id"], alone["id"])
+        # Its templates keep allowing it.
+        self.assertEqual(self.code("template.update", {
+            "id": self.first["id"], **{key: self.first[key] for key in
+                                       ("name", "project_id", "playbook", "inventory_id")},
+            "inventory_ids": [lab["id"]]}), "conflict")
+
     def test_a_template_stays_where_a_workflow_takes_its_steps_from(self):
         other = self.elsewhere()
         workflow = self.ok("workflow.create", {

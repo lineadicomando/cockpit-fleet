@@ -177,9 +177,12 @@ As an administrator, in the page:
 4. **Projects**: a git repository, a project written in the interface
    (empty, or from a starter: see below), or an archive.
 5. **Inventories**: a file or directory of a project, or one written in the
-   interface (empty, or from a starter).
-6. **Job templates**: a playbook of a project, an inventory, a credential,
-   and a survey if the launch needs answers. Then launch it.
+   interface (empty, or from a starter), with the machine credential its
+   hosts take when a template or a check does not name one.
+6. **Job templates**: a playbook of a project, an inventory, a credential
+   (or the inventory's), and a survey if the launch needs answers. A
+   template may allow other inventories, chosen at launch: one template
+   then serves several alike. Then launch it.
 
 The **Overview**, the first tab, then shows the state of the fleet at a
 glance to every role: hosts, open problems, runs by day and outcome, what

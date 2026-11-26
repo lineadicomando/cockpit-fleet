@@ -277,6 +277,16 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual((params["tags"], params["skip_tags"], params["forks"], params["verbosity"]),
                          (["db", "web"], [], 8, 2))
 
+    def test_a_launch_names_the_inventory_to_run_on(self):
+        fake = Fake({"template.list": {"templates": [{**TEMPLATE, "survey": []}]},
+                     "inventory.list": {"inventories": [{"id": "i1", "name": "lab"},
+                                                        {"id": "i2", "name": "Spalla"}]},
+                     "run.start": RUN})
+        terminal.run(term(fake), COMMANDS, ["launch", "t1", "--detach", "--inventory", "spalla"])
+        self.assertEqual(fake.calls[-1][1]["inventory_id"], "i2")
+        terminal.run(term(fake), COMMANDS, ["launch", "t1", "--detach"])
+        self.assertNotIn("inventory_id", fake.calls[-1][1])
+
     def test_a_launch_that_waits_says_who_decides(self):
         for approval, said in (({"mode": "confirm", "can_decide": True},
                                 "It waits for your confirmation"),

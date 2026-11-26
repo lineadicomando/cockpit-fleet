@@ -48,26 +48,40 @@ def _inventories(conn, name: str, params: dict) -> set[str]:
     """The inventories a launch reaches; empty when its parameters name
     nothing that exists, which the command itself then refuses."""
     if name == "run.start":
+        if _text(params.get("inventory_id")):
+            return {_text(params.get("inventory_id"))}
         rows = conn.execute("SELECT inventory_id FROM templates WHERE id = ?",
                             (_text(params.get("template_id")),))
     elif name == "run.adhoc":
         return {_text(params.get("inventory_id"))}
     elif name in ("workflow.launch", "workflow.resume"):
+        if name == "workflow.launch" and _text(params.get("inventory_id")):
+            return {_text(params.get("inventory_id"))}
         workflow = _text(params.get("id"))
         if name == "workflow.resume":
             row = conn.execute("SELECT workflow_id FROM runs WHERE id = ?", (workflow,)).fetchone()
             workflow = row["workflow_id"] if row and row["workflow_id"] else ""
-        rows = conn.execute("SELECT t.inventory_id FROM workflow_templates w"
-                            " JOIN templates t ON t.id = w.template_id WHERE w.workflow_id = ?",
-                            (workflow,))
+        rows = conn.execute("SELECT inventory_id FROM workflows WHERE id = ?1"
+                            " AND inventory_id IS NOT NULL UNION SELECT t.inventory_id"
+                            " FROM workflow_templates w JOIN templates t ON t.id = w.template_id"
+                            " WHERE w.workflow_id = ?1 AND NOT EXISTS (SELECT 1 FROM workflows"
+                            " WHERE id = ?1 AND inventory_id IS NOT NULL)", (workflow,))
     elif name == "schedule.run":
         schedule = _text(params.get("id"))
-        rows = conn.execute("SELECT t.inventory_id FROM schedules s"
-                            " JOIN templates t ON t.id = s.template_id WHERE s.id = ?"
+        rows = conn.execute("SELECT s.inventory_id FROM schedules s WHERE s.id = ?1"
+                            " AND s.inventory_id IS NOT NULL"
+                            " UNION SELECT f.inventory_id FROM schedules s JOIN workflows f"
+                            " ON f.id = s.workflow_id WHERE s.id = ?1"
+                            " AND f.inventory_id IS NOT NULL"
                             " UNION SELECT t.inventory_id FROM schedules s"
+                            " JOIN templates t ON t.id = s.template_id WHERE s.id = ?1"
+                            " AND s.inventory_id IS NULL"
+                            " UNION SELECT t.inventory_id FROM schedules s"
+                            " JOIN workflows f ON f.id = s.workflow_id"
                             " JOIN workflow_templates w ON w.workflow_id = s.workflow_id"
-                            " JOIN templates t ON t.id = w.template_id WHERE s.id = ?",
-                            (schedule, schedule))
+                            " JOIN templates t ON t.id = w.template_id WHERE s.id = ?1"
+                            " AND s.inventory_id IS NULL AND f.inventory_id IS NULL",
+                            (schedule,))
     else:
         rows = conn.execute("SELECT inventory_id FROM checks WHERE id = ?",
                             (_text(params.get("id")),))

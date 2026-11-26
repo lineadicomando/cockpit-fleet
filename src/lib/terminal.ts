@@ -15,7 +15,8 @@ export function shellLine(words: string[]): string {
 
 // fleet launch, with the answers a person may type: never those of secret
 // questions, which fleet asks for at the terminal.
-export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean, serial = false, overrides: Overrides = {}): string {
+// inventory: the name of the one chosen, "" for the template's default.
+export function launchCommand(template: string, answers: Record<string, unknown>, limit: string, check: boolean, serial = false, overrides: Overrides = {}, inventory = ""): string {
     // A name that begins with "-" would be read as an option: it goes last, after "--".
     const dashed = template.startsWith("-");
     const words = dashed ? ["fleet", "launch"] : ["fleet", "launch", template];
@@ -23,6 +24,7 @@ export function launchCommand(template: string, answers: Record<string, unknown>
         if (value === undefined || value === null || value === "") continue;
         words.push("-a", `${name}=${Array.isArray(value) ? value.join(",") : String(value)}`);
     }
+    if (inventory) words.push("--inventory", inventory);
     if (limit.trim()) words.push("--limit", limit.trim());
     if (check) words.push("--check");
     if (serial) words.push("--serial");

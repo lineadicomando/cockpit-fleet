@@ -213,7 +213,9 @@ in [security.md](security.md); the decisions behind these limits in
   tools of fleet-mcp like any other (deciding an approval is not); no rule
   scope for a workflow; an approval at a step is seen on the page of runs,
   not on the workflow's.
-- Terminal: survey choices not pickable or completed; pushed commits keep
+- Terminal: survey choices not pickable or completed; the lists of ids of
+  a command (`--inventory-ids`, `--vault-credential-ids`) take ids, not
+  names; pushed commits keep
   the authors of the clone (who pushed is audited).
 - Security review (24 October), left as they are: a run directory swapped
   for a link between `fleet-unit`'s check and the start binds another

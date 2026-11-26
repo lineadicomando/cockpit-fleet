@@ -224,6 +224,19 @@ class CycleTest(CheckBase):
         self.assertEqual((paths.RUNS_DIR / queued[0] / "creds" / "secret_var_0").read_text(),
                          "pw")
 
+    def test_a_check_with_no_credential_takes_its_inventorys(self):
+        inventory = self.inventory()
+        lab = self.ok("credential.create", {"name": "lab", "kind": "machine",
+                                            "username": "maint"})
+        own = self.ok("credential.create", {"name": "own", "kind": "machine",
+                                            "username": "root"})
+        self.ok("inventory.update", {"id": inventory["id"], "machine_credential_id": lab["id"]})
+        self.check(inventory, "reachability")
+        self.check(inventory, "disk", machine_credential_id=own["id"])
+        users = sorted(json.loads((paths.RUNS_DIR / run_id / "spec.json").read_text())["user"]
+                       for run_id in self.tick()["queued"])
+        self.assertEqual(users, ["maint", "root"])
+
     def test_the_tick_plans_one_cycle_per_shard_with_a_limit_of_its_own(self):
         self.config = dataclasses.replace(self.config, checks_shard_size=2,
                                           checks_max_concurrent=1, max_concurrent_runs=1)

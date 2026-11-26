@@ -155,6 +155,22 @@ class TickTest(ScheduleBase):
                                               "calendar": "hourly"})
         self.assertEqual(updated["overrides"], {})
 
+    def test_a_schedule_launches_on_the_inventory_it_keeps(self):
+        other = self.ok("inventory.create", {"name": "lab2", "kind": "managed", "content": ""})
+        third = self.ok("inventory.create", {"name": "lab3", "kind": "managed", "content": ""})
+        template = self.template(inventory_ids=[other["id"]])
+        schedule = self.schedule(template, inventory_id=other["id"])
+        self.assertEqual((schedule["inventory_id"], schedule["inventory"]), (other["id"], "lab2"))
+        run = self.ok("schedule.run", {"id": schedule["id"]})
+        self.assertEqual(run["inventory_id"], other["id"])
+        self.assertEqual(self.code("schedule.create", {
+            "name": "x", "template_id": template["id"], "calendar": "hourly",
+            "inventory_id": third["id"]}), "conflict")
+        default = self.schedule(template, name="default")
+        self.assertIsNone(default["inventory_id"])
+        self.assertEqual(self.ok("schedule.run", {"id": default["id"]})["inventory_id"],
+                         template["inventory_id"])
+
     def test_a_due_schedule_is_launched_as_itself_and_planned_again(self):
         schedule = self.schedule(limit="a", priority=3)
         self.assertEqual(self.tick(START + HOUR - 1), [])

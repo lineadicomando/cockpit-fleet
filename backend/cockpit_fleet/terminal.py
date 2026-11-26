@@ -755,6 +755,8 @@ def _launch(term: Terminal, args: list[str]) -> int:
     parser.add_argument("-a", "--answer", action="append", default=[], metavar="NAME=VALUE",
                         help="the answer to a question of the survey")
     parser.add_argument("--limit", default="", help="a host pattern that narrows the hosts")
+    parser.add_argument("--inventory", help="the inventory to run on, by name or id, among"
+                        " those the template allows; left out, its default")
     parser.add_argument("--check", action="store_true", help="dry run: change nothing")
     parser.add_argument("--diff", action="store_true", help="show the differences")
     parser.add_argument("--serial", action="store_true",
@@ -774,6 +776,9 @@ def _launch(term: Terminal, args: list[str]) -> int:
     answers = _answers(term, template, options.answer)
     params = {"template_id": template["id"], "limit": options.limit, "check": options.check,
               "diff": options.diff, "answers": answers, "serial": options.serial}
+    if options.inventory:
+        params["inventory_id"] = _one(term("inventory.list")["inventories"], options.inventory,
+                                      "inventory", "fleet inventory list")["id"]
     for key in ("tags", "skip_tags"):
         if getattr(options, key) is not None:
             params[key] = [tag for tag in re.split(r"[\s,]+", getattr(options, key)) if tag]

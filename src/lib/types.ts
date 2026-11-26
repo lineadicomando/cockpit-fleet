@@ -209,6 +209,9 @@ export interface Inventory {
     path: string;
     format: "yaml" | "ini";
     vault_credential_id: string | null;
+    // The machine credential of a run whose template has none, of a check
+    // with none, and the one an ad-hoc command is offered.
+    machine_credential_id: string | null;
     // The sets of variables every job on it takes, in order.
     variable_set_ids: string[];
     parsed_at: number | null;
@@ -299,7 +302,11 @@ export interface Template {
     name: string;
     project_id: string;
     playbook: string;
+    // The inventory of a launch that chooses none; the others it allows; or any.
     inventory_id: string;
+    inventory_ids: string[];
+    any_inventory: boolean;
+    // null: the machine credential of the inventory a run is on.
     machine_credential_id: string | null;
     vault_credential_ids: string[];
     limit_hosts: string;
@@ -357,6 +364,8 @@ export interface Workflow {
     // What it takes all its steps from, each if it has one: null is anywhere.
     project_id: string | null;
     inventory_id: string | null;
+    // The inventories a launch may choose (all steps allow them); null: any.
+    inventory_ids: string[] | null;
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     created_at: number;
@@ -384,9 +393,12 @@ export interface Schedule {
     // What it launches: a job template or a workflow, one of the two.
     template_id: string | null;
     workflow_id: string | null;
+    // The inventory it launches on; null: the template's default (or each step's).
+    inventory_id: string | null;
     // Their names, "" for the one it does not launch.
     template: string;
     workflow: string;
+    inventory: string;
     calendar: string;
     timezone: string;
     enabled: boolean;

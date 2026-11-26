@@ -2,14 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { byGroupOrder, groupItems, isOpen, readOpen, withOpen } from "../src/lib/listview.ts";
 import {
-    DEFAULT_TEMPLATES_VIEW, filterTemplates, groupTemplates, isTemplateGroupOpen, outcomeOf, overrideFields, overridesOf, readTemplatesView, sortTemplates,
+    allowedInventories, DEFAULT_TEMPLATES_VIEW, filterTemplates, groupTemplates, isTemplateGroupOpen, outcomeOf, overrideFields, overridesOf, readTemplatesView, sortTemplates,
     withoutTemplateFilters, withTemplateGroupsOpen, type TemplatesView,
 } from "../src/lib/templates.ts";
 import type { RunStatus, Template } from "../src/lib/types.ts";
 
 function template(name: string, project: string, inventory: string, more: Partial<Template> = {}, last?: [RunStatus, number]): Template {
     return {
-        id: name, name, project_id: project, playbook: `${name}.yml`, inventory_id: inventory, machine_credential_id: null,
+        id: name, name, project_id: project, playbook: `${name}.yml`, inventory_id: inventory, inventory_ids: [], any_inventory: false, machine_credential_id: null,
         vault_credential_ids: [], limit_hosts: "", tags: [], skip_tags: [], extra_vars: {}, variable_set_ids: [], survey: [], forks: null, verbosity: 0,
         become: false, approval: "none", needs_approval: false, ...more,
         last_run: last ? { id: `r-${name}`, status: last[0], created_at: last[1], finished_at: null } : null,
@@ -27,6 +27,7 @@ const NAMES = {
     project: (id: string) => ({ p1: "infra", p2: "apps" })[id] ?? "",
     inventory: (id: string) => ({ i1: "prod", i2: "lab" })[id] ?? "",
     schedules: (id: string) => id === "backup" ? 2 : 0,
+    inventories: ["i1", "i2"],
 };
 const names = (items: Template[]) => items.map(item => item.name);
 const view = (more: Partial<TemplatesView> = {}) => ({ ...DEFAULT_TEMPLATES_VIEW, ...more });
@@ -78,6 +79,20 @@ test("templates group by project, inventory or outcome, every group open at firs
     const closed = withTemplateGroupsOpen(shown, projects, false);
     assert.deepEqual(projects.map(group => isTemplateGroupOpen(closed, group)), [false, false]);
     assert.equal(isTemplateGroupOpen({ ...closed, groupBy: "inventory" }, { key: "p1", name: "", items: [] }), true);
+});
+
+test("a template that allows other inventories is under each of them", () => {
+    const spread = [
+        template("wol", "p1", "i1", { inventory_ids: ["i2"] }),
+        template("anywhere", "p1", "i2", { any_inventory: true }),
+        template("here", "p1", "i1"),
+    ];
+    const names3 = { ...NAMES, inventory: (id: string) => ({ i1: "prod", i2: "lab", i3: "test" })[id] ?? "", inventories: ["i1", "i2", "i3"] };
+    assert.deepEqual(allowedInventories(spread[1], names3.inventories), ["i2", "i1", "i3"]);
+    assert.deepEqual(groupTemplates(spread, "inventory", names3).map(group => [group.name, names(group.items)]),
+        [["lab", ["wol", "anywhere"]], ["prod", ["wol", "anywhere", "here"]], ["test", ["anywhere"]]]);
+    assert.deepEqual(names(filterTemplates(spread, view({ inventory: "i3" }), names3)), ["anywhere"]);
+    assert.deepEqual(names(filterTemplates(spread, view({ search: "lab" }), names3)), ["wol", "anywhere"]);
 });
 
 test("groups of any list keep the order asked for and what was opened by hand", () => {

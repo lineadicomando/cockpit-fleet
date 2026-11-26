@@ -28,6 +28,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     const [projectId, setProjectId] = useState(inventory?.project_id ?? "");
     const [path, setPath] = useState(inventory?.path ?? "");
     const [vaultId, setVaultId] = useState(inventory?.vault_credential_id ?? "");
+    const [machineId, setMachineId] = useState(inventory?.machine_credential_id ?? "");
     const sets = useLoad(() => call<{ variable_sets: VariableSet[] }>("varset.list"));
     const [setIds, setSetIds] = useState<string[]>(inventory?.variable_set_ids ?? []);
     const [starter, setStarter] = useState<Starter | null>(null);
@@ -49,7 +50,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
             // Written here: the text of its main file when it is created, then
             // its files are changed on their own page.
             : inventory ? { path: path.trim() } : starter ? { starter: starter.ref } : { format, content };
-        const params = { name, vault_credential_id: vaultId, variable_set_ids: setIds, ...source };
+        const params = { name, vault_credential_id: vaultId, machine_credential_id: machineId || null, variable_set_ids: setIds, ...source };
         const saved = inventory
             ? await call<Inventory>("inventory.update", { id: inventory.id, ...params })
             : await call<Inventory>("inventory.create", { kind, ...params });
@@ -67,6 +68,7 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
     }
 
     const vaults = (credentials.data?.credentials ?? []).filter(credential => credential.kind === "vault");
+    const machines = (credentials.data?.credentials ?? []).filter(credential => credential.kind === "machine");
     return (
         <FormModal title={inventory ? t("Edit inventory") : t("New inventory")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
             isDisabled={!name.trim() || (kind === "file" && (!projectId || !path.trim()))}>
@@ -118,6 +120,13 @@ function InventoryModal({ inventory, onClose, onDone }: { inventory?: Inventory;
                     </FormGroup>
                 </>
             )}
+            <FormGroup label={t("Machine credential")} fieldId="inv-machine">
+                <FormSelect id="inv-machine" value={machineId} onChange={(_e, value) => setMachineId(value)}>
+                    <FormSelectOption value="" label={t("None")} />
+                    {machines.map(credential => <FormSelectOption key={credential.id} value={credential.id} label={credential.name} />)}
+                </FormSelect>
+                <FormHelperText><HelperText><HelperTextItem>{t("How to connect to its hosts when a job template or a check does not say; offered to ad-hoc commands.")}</HelperTextItem></HelperText></FormHelperText>
+            </FormGroup>
             <FormGroup label={t("Vault credential")} fieldId="inv-vault">
                 <FormSelect id="inv-vault" value={vaultId} onChange={(_e, value) => setVaultId(value)}>
                     <FormSelectOption value="" label={t("None")} />
@@ -257,7 +266,7 @@ export function InventoriesPage() {
             )}
             {duplicating && (
                 <DuplicateModal name={duplicating.name}
-                    what={t("A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its vault and sets of variables. Templates and checks of this one are not copied.")}
+                    what={t("A new inventory written here begins with the files of this one, as they are now, without the record of their changes, and with its credentials and sets of variables. Templates and checks of this one are not copied.")}
                     onDuplicate={async name => { await call("inventory.duplicate", { id: duplicating.id, name }); setDuplicating(null); refresh(); }}
                     onClose={() => setDuplicating(null)} />
             )}

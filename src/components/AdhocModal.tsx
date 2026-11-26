@@ -111,7 +111,7 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
                         <GridItem>
                             <FormGroup label={t("Machine credential")} fieldId="adhoc-machine">
                                 <FormSelect id="adhoc-machine" value={machineId} onChange={(_e, value) => setMachineId(value)}>
-                                    <FormSelectOption value="" label={t("None")} />
+                                    <FormSelectOption value="" label={t("The inventory's")} />
                                     {ofKind("machine").map(credential => <FormSelectOption key={credential.id} value={credential.id} label={credential.name} />)}
                                 </FormSelect>
                             </FormGroup>

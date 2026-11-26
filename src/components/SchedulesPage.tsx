@@ -26,7 +26,7 @@ import { useLoad, usePolling } from "../lib/hooks.ts";
 import { DEFAULT_SHAPE, EVERY_MINUTES, WEEKDAYS, calendarOf, shapeOf, type Repeat, type Shape } from "../lib/schedule.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
-import { overrideFields, overridesOf } from "../lib/templates.ts";
+import { allowedInventories, overrideFields, overridesOf } from "../lib/templates.ts";
 import { templateGroups } from "../lib/workflow.ts";
 import type { Inventory, Overlap, Project, Run, Schedule, SchedulePreview, Template, Workflow } from "../lib/types.ts";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
@@ -198,6 +198,7 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
     const [launches, setLaunches] = useState<"template" | "workflow">(schedule?.workflow_id ? "workflow" : "template");
     const [templateId, setTemplateId] = useState(schedule?.template_id ?? "");
     const [workflowId, setWorkflowId] = useState(schedule?.workflow_id ?? "");
+    const [inventoryId, setInventoryId] = useState(schedule?.inventory_id ?? "");
     const [calendar, setCalendar] = useState(schedule?.calendar ?? calendarOf(DEFAULT_SHAPE)!);
     const [timezone, setTimezone] = useState(schedule?.timezone ?? "");
     const [enabled, setEnabled] = useState(schedule?.enabled ?? true);
@@ -216,7 +217,15 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
     ]).then(([p, i]) => ({
         projects: new Map(p.projects.map(item => [item.id, item.name])),
         inventories: new Map(i.inventories.map(item => [item.id, item.name])),
+        usable: i.inventories.filter(item => !item.starter).map(item => item.id),
     })));
+    // The inventories it may launch on besides the default ("" below): none
+    // to choose for a template that allows one only, nor for a workflow on its own.
+    const usable = places.data?.usable ?? [];
+    const inventoryChoices = template
+        ? allowedInventories(template, usable).slice(1)
+        : workflow && !workflow.inventory_id ? (workflow.inventory_ids ?? usable) : [];
+    const inventoryName = (id: string) => places.data?.inventories.get(id) ?? id;
     const templateChoices = templateGroups(templates, { project_id: "", inventory_id: "" },
         places.data?.inventories ?? new Map(), places.data?.projects ?? new Map());
     const workflowGroups = [{
@@ -238,9 +247,10 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
         };
         // A workflow takes no limit, answers or values of its own: they are not sent.
         const params = launches === "workflow"
-            ? { ...common, workflow_id: workflowId }
+            ? { ...common, workflow_id: workflowId, inventory_id: inventoryId || null }
             : {
-                ...common, template_id: templateId, limit: limit.trim(), check, answers: collectAnswers(survey, answers),
+                ...common, template_id: templateId, inventory_id: inventoryId || null,
+                limit: limit.trim(), check, answers: collectAnswers(survey, answers),
                 ...overridesOf(template, fields),
             };
         await call(schedule ? "schedule.update" : "schedule.create", schedule ? { id: schedule.id, ...params } : params);
@@ -266,7 +276,8 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
                 <GridItem>
                     {launches === "workflow" ? (
                         <FormGroup label={t("Workflow")} isRequired fieldId="sch-workflow">
-                            <SearchSelect id="sch-workflow" label={t("Workflow")} value={workflowId} onChange={setWorkflowId}
+                            <SearchSelect id="sch-workflow" label={t("Workflow")} value={workflowId}
+                                onChange={value => { setWorkflowId(value); setInventoryId(""); }}
                                 groups={workflowGroups} placeholder={t("Choose a workflow")} toggleLabel={t("Show the workflows")}
                                 emptyText={t("No workflow matches what was typed")} />
                         </FormGroup>
@@ -278,6 +289,7 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
                                 onChange={value => {
                                     const chosen = templates.find(item => item.id === value);
                                     setTemplateId(value);
+                                    setInventoryId("");
                                     setAnswers(storedAnswers(chosen, {}));
                                     setFields(overrideFields(chosen));
                                 }} />
@@ -285,6 +297,17 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
                     )}
                 </GridItem>
             </Grid>
+            {inventoryChoices.length > 0 && (
+                <FormGroup label={t("Inventory")} fieldId="sch-inventory">
+                    <FormSelect id="sch-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
+                        <FormSelectOption value="" label={template
+                            ? t("{{name}} (default)", { name: inventoryName(template.inventory_id) })
+                            : t("Each step's own")} />
+                        {inventoryChoices.filter(id => !template || id !== template.inventory_id)
+                            .map(id => <FormSelectOption key={id} value={id} label={inventoryName(id)} />)}
+                    </FormSelect>
+                </FormGroup>
+            )}
             {waiting !== null && <Alert variant="warning" isInline title={t("The step {{step}} of this workflow waits for an approval, so it cannot be scheduled: nobody would be there to give it.", { step: waiting })} />}
             {launches === "workflow" && <Content component="small">{t("A scheduled workflow runs its steps as they are: no limit, answers or values of its own. A step whose job template comes to need an approval fails instead of waiting.")}</Content>}
             {needsSecret && <Alert variant="warning" isInline title={t("This job template asks for a secret at launch, so it cannot be scheduled: a schedule never stores a secret.")} />}
@@ -423,6 +446,7 @@ export function SchedulesPage() {
                                         {schedule.workflow_id
                                             ? <>{schedule.workflow} <Content component="small">({t("workflow")})</Content></>
                                             : schedule.template}
+                                        {schedule.inventory && <Content component="small"> {t("on {{inventory}}", { inventory: schedule.inventory })}</Content>}
                                     </Td>
                                     <Td dataLabel={t("Calendar")}>
                                         <code>{schedule.calendar}</code>

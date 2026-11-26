@@ -59,25 +59,34 @@ export function withoutTemplateFilters(view: TemplatesView): TemplatesView {
     return { ...view, search: "", project: "", inventory: "", trait: "", outcome: "" };
 }
 
-// The names the page knows the ids by, and how many schedules launch each template.
+// The names the page knows the ids by, how many schedules launch each
+// template, and the inventories runs may be on (those kept as starters left out).
 export interface TemplateNames {
     project: (id: string) => string;
     inventory: (id: string) => string;
     schedules: (id: string) => number;
+    inventories: string[];
+}
+
+// The inventories a template may run on, its default first.
+export function allowedInventories(template: Template, inventories: string[]): string[] {
+    const others = template.any_inventory ? inventories : template.inventory_ids;
+    return [template.inventory_id, ...others.filter(id => id !== template.inventory_id)];
 }
 
 export function filterTemplates(templates: Template[], view: TemplatesView, names: TemplateNames): Template[] {
     const needle = view.search.trim().toLowerCase();
     return templates.filter(template => {
         if (view.project && template.project_id !== view.project) return false;
-        if (view.inventory && template.inventory_id !== view.inventory) return false;
+        if (view.inventory && !allowedInventories(template, names.inventories).includes(view.inventory)) return false;
         if (view.outcome && outcomeOf(template) !== view.outcome) return false;
         if (view.trait === "approval" && template.approval === "none") return false;
         if (view.trait === "survey" && template.survey.length === 0) return false;
         if (view.trait === "scheduled" && names.schedules(template.id) === 0) return false;
         if (view.trait === "unscheduled" && names.schedules(template.id) > 0) return false;
         if (needle) {
-            const text = [template.name, template.playbook, names.project(template.project_id), names.inventory(template.inventory_id),
+            const text = [template.name, template.playbook, names.project(template.project_id),
+                ...allowedInventories(template, names.inventories).map(names.inventory),
                 ...template.tags, ...template.skip_tags].join("\n").toLowerCase();
             if (!text.includes(needle)) return false;
         }
@@ -105,7 +114,18 @@ export type TemplateGroup = Group<Template>;
 export function groupTemplates(templates: Template[], by: TemplateGroupBy, names: TemplateNames): TemplateGroup[] {
     if (by === "none") return [{ key: "", name: "", items: templates }];
     if (by === "project") return byGroupName(groupItems(templates, item => item.project_id, item => names.project(item.project_id)));
-    if (by === "inventory") return byGroupName(groupItems(templates, item => item.inventory_id, item => names.inventory(item.inventory_id)));
+    if (by === "inventory") {
+        // Under each inventory it may run on: what can be launched there is all in one place.
+        const groups = new Map<string, TemplateGroup>();
+        for (const template of templates) {
+            for (const id of allowedInventories(template, names.inventories)) {
+                const group = groups.get(id) ?? { key: id, name: names.inventory(id), items: [] };
+                group.items.push(template);
+                groups.set(id, group);
+            }
+        }
+        return byGroupName([...groups.values()]);
+    }
     return byGroupOrder(groupItems(templates, outcomeOf), OUTCOMES);
 }
 

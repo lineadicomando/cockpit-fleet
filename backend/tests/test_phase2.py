@@ -289,6 +289,86 @@ class RunTest(Base):
             self.assertEqual(self.code("run.start", {"template_id": template["id"], **bad}),
                              "bad_request", bad)
 
+    def test_a_template_runs_on_an_inventory_chosen_among_those_it_allows(self):
+        spalla = self.ok("credential.create", {"name": "spalla", "kind": "machine",
+                                               "username": "utente"})
+        other = self.ok("inventory.create", {"name": "lab2", "kind": "managed",
+                                             "content": "all:\n  hosts:\n    b:\n",
+                                             "machine_credential_id": spalla["id"]})
+        third = self.ok("inventory.create", {"name": "lab3", "kind": "managed", "content": ""})
+        template = self.template(inventory_ids=[other["id"]])
+        self.assertEqual((template["inventory_ids"], template["any_inventory"]),
+                         ([other["id"]], False))
+        self.assertEqual(other["machine_credential_id"], spalla["id"])
+
+        def spec_of(run):
+            return json.loads((paths.RUNS_DIR / run["id"] / "spec.json").read_text())
+
+        default = self.ok("run.start", {"template_id": template["id"]}, role="operator")
+        self.assertEqual(default["inventory_id"], template["inventory_id"])
+        self.assertNotIn("user", spec_of(default))
+        chosen = self.ok("run.start", {"template_id": template["id"],
+                                       "inventory_id": other["id"]}, role="operator")
+        self.assertEqual(chosen["inventory_id"], other["id"])
+        # The template has no credential: the inventory's serves.
+        self.assertEqual(spec_of(chosen)["user"], "utente")
+        self.assertEqual((paths.RUNS_DIR / chosen["id"] / "inventory" / "hosts.yaml").read_text(),
+                         "all:\n  hosts:\n    b:\n")
+        answer = self.call("run.start", {"template_id": template["id"],
+                                         "inventory_id": third["id"]}, role="operator")
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("lab3", answer["error"]["message"])
+
+        # The template's own credential wins over the inventory's.
+        own = self.ok("credential.create", {"name": "own", "kind": "machine",
+                                            "username": "tecnico"})
+        params = {key: template[key] for key in ("name", "project_id", "playbook",
+                                                 "inventory_id")}
+        self.ok("template.update", {"id": template["id"], **params, "any_inventory": True,
+                                    "machine_credential_id": own["id"]})
+        anywhere = self.ok("run.start", {"template_id": template["id"],
+                                         "inventory_id": third["id"]})
+        self.assertEqual(spec_of(anywhere)["user"], "tecnico")
+        self.assertEqual(self.ok("template.list", role="viewer")["templates"][0]["inventory_ids"],
+                         [])
+
+    def test_an_inventory_a_template_allows_is_kept_and_its_credential_tells_it(self):
+        machine = self.ok("credential.create", {"name": "ssh", "kind": "machine"})
+        other = self.ok("inventory.create", {"name": "lab2", "kind": "managed", "content": "",
+                                             "machine_credential_id": machine["id"]})
+        template = self.template(inventory_ids=[other["id"], other["id"]])
+        self.assertEqual(template["inventory_ids"], [other["id"]])
+        answer = self.call("inventory.delete", {"id": other["id"]})
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("deploy", answer["error"]["message"])
+        listed = {one["name"]: one["used_by"]
+                  for one in self.ok("credential.list", role="viewer")["credentials"]}
+        self.assertEqual(listed["ssh"], [{"kind": "inventory", "name": "lab2"}])
+        # Left out of an update, the inventory's credential stays.
+        kept = self.ok("inventory.update", {"id": other["id"], "name": "lab2b"})
+        self.assertEqual(kept["machine_credential_id"], machine["id"])
+        cleared = self.ok("inventory.update", {"id": other["id"], "machine_credential_id": None})
+        self.assertIsNone(cleared["machine_credential_id"])
+        vault = self.ok("credential.create", {"name": "v", "kind": "vault"})
+        self.assertEqual(self.code("inventory.update", {"id": other["id"],
+                                                        "machine_credential_id": vault["id"]}),
+                         "bad_request")
+        params = {key: template[key] for key in ("name", "project_id", "playbook",
+                                                 "inventory_id")}
+        self.ok("template.update", {"id": template["id"], **params})
+        self.ok("inventory.delete", {"id": other["id"]})
+
+    def test_an_adhoc_command_takes_the_credential_of_its_inventory(self):
+        machine = self.ok("credential.create", {"name": "ssh", "kind": "machine",
+                                                "username": "maint"})
+        inventory = self.ok("inventory.create", {"name": "lab", "kind": "managed",
+                                                 "content": "all:\n  hosts:\n    a:\n",
+                                                 "machine_credential_id": machine["id"]})
+        run = self.ok("run.adhoc", {"inventory_id": inventory["id"], "limit": "all",
+                                    "module": "ansible.builtin.ping"})
+        spec = json.loads((paths.RUNS_DIR / run["id"] / "spec.json").read_text())
+        self.assertEqual(spec["user"], "maint")
+
     def test_a_run_that_leaves_garbage_does_not_keep_the_others_from_ending(self):
         self.config = dataclasses.replace(self.config, max_concurrent_runs=5)
         template = self.template()

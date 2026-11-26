@@ -20,8 +20,10 @@ test("a new step takes the first id not taken", () => {
 });
 
 test("a workflow of a project or an inventory takes only their templates", () => {
-    const template = { project_id: "p1", inventory_id: "i1" };
+    const template = { project_id: "p1", inventory_id: "i1", inventory_ids: [], any_inventory: false };
     assert.ok(inScope(template, { project_id: "", inventory_id: "" }));
+    assert.ok(inScope({ ...template, inventory_ids: ["i2"] }, { project_id: "p1", inventory_id: "i2" }));
+    assert.ok(inScope({ ...template, any_inventory: true }, { project_id: "p1", inventory_id: "i3" }));
     assert.ok(inScope(template, { project_id: "p1", inventory_id: "" }));
     assert.ok(inScope(template, { project_id: "p1", inventory_id: "i1" }));
     assert.ok(!inScope(template, { project_id: "p1", inventory_id: "i2" }));
