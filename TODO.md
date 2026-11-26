@@ -80,9 +80,9 @@ involved. The pages tried in Chrome on `fed44`.
 
 Decided 26 November (`decisions.md`, "Skills"); what exists:
 `architecture/agents.md`, "Skills" (`skills.py`, the layer of
-`instructions.py`), `chat.md` for administrators; built on 26 November.
+`instructions.py`), `chat.md` for administrators; built on 26 November;
+`chat`, `mcp`, `cli` pass in containers on the three.
 
-- [ ] Integration: `chat`, `mcp`, `cli` in containers on the three.
 - [ ] `ansible-win_edulab` and `ansible-collection-win_workman` (their own
   repositories): the operational skills rewritten for Fleet's tools, the
   role catalog of the collection as a skill of its own.
