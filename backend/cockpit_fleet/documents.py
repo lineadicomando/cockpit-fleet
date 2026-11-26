@@ -247,6 +247,10 @@ def head() -> str | None:
 # The trailer of a commit an agent made, beside the person it acts for (the
 # author): what it came through and the profile it was held to.
 AGENT_TRAILER = "Fleet-Agent"
+# The trailer of the approval of a skill of the documents: its name and the
+# change approved.
+APPROVES_TRAILER = "Fleet-Approves"
+SKILLS_FOLDER = "skills"
 
 
 def _agent(ctx: Context) -> str:
@@ -704,29 +708,117 @@ def doc_delete(ctx: Context, params: Values) -> dict:
 def doc_history(ctx: Context, params: Values) -> dict:
     """The changes of the texts of the documents, newest first: who made
     each, when, and which texts it touched; of one text or folder if asked.
-    A text that was moved is followed back under its old name."""
+    A text that was moved is followed back under its old name. Of a skill's
+    folder or text, the approvals of the skill too."""
     path = check_file_path(params["path"]) if params["path"] else None
     if head() is None:
         return {"commits": []}
     follow = ["--follow"] if path is not None and is_text(path) else []
-    output = _git("-c", "core.quotePath=false", "log", f"--max-count={params['limit']}",
-                  f"--skip={params['skip']}", "--name-only", *follow,
-                  f"--format=%x1e%H%x1f%an%x1f%at%x1f%s%x1f{_trailer(AGENT_TRAILER)}", "HEAD",
-                  *(["--", str(path)] if path is not None else []), check=False) or ""
+    skill = path.parts[1] if path is not None and len(path.parts) >= 2 \
+        and path.parts[0] == SKILLS_FOLDER else None
+    if skill is None:
+        return {"commits": _log(f"--max-count={params['limit']}", f"--skip={params['skip']}",
+                                *follow, "HEAD",
+                                *(["--", str(path)] if path is not None else []))}
+    # An approval changes no file, so git leaves it out of a path's history:
+    # both, newest first, the approval before the change of the same second.
+    wanted = params["limit"] + params["skip"]
+    changes = _log(f"--max-count={wanted}", *follow, "HEAD", "--", str(path))
+    approvals = _log(f"--max-count={wanted}", "--fixed-strings",
+                     f"--grep={APPROVES_TRAILER}: {skill} ", "HEAD")
+    approvals = [one for one in approvals if one["approves"] == skill]
+    merged = sorted(changes + approvals, key=lambda one: (one["time"], bool(one["approves"])),
+                    reverse=True)
+    return {"commits": merged[params["skip"]:wanted]}
+
+
+def _log(*args: str) -> list[dict]:
+    """The commits git log gives for ARGS, as doc.history gives them."""
+    output = _git("-c", "core.quotePath=false", "log", "--name-only",
+                  f"--format=%x1e%H%x1f%an%x1f%at%x1f%s%x1f{_trailer(AGENT_TRAILER)}"
+                  f"%x1f{_trailer(APPROVES_TRAILER)}", *args, check=False) or ""
     commits = []
     for record in output.split("\x1e"):
         lines = record.strip("\n").split("\n")
         fields = lines[0].split("\x1f")
-        if len(fields) == 5:
+        if len(fields) == 6:
             commits.append({"revision": fields[0], "author": fields[1], "time": int(fields[2]),
                             "subject": fields[3], "agent": fields[4],
+                            "approves": fields[5].split(" ")[0],
                             "paths": [line for line in lines[1:] if line]})
-    return {"commits": commits}
+    return commits
 
 
 def _trailer(key: str) -> str:
     """The format of git log that gives the value of the trailer KEY, on one line."""
     return f"%(trailers:key={key},valueonly,separator=%x20)"
+
+
+# --- skills -------------------------------------------------------------------------
+
+def skill_states() -> dict[str, dict]:
+    """The skills of the documents (skills/NAME/) that have a history, by
+    name: the last change to the files of each, the last approved, and
+    whether one waits. A change is approved when a person made it, or when an
+    approval names it afterwards; never by the agent that made it."""
+    if head() is None:
+        return {}
+    changes = _git("-c", "core.quotePath=false", "log", "--name-only",
+                   f"--format=%x1e%H%x1f%an%x1f%at%x1f{_trailer(AGENT_TRAILER)}", "HEAD", "--",
+                   f"{SKILLS_FOLDER}/", check=False) or ""
+    approvals = _git("log", f"--grep=^{APPROVES_TRAILER}: ",
+                     f"--format=%x1e%an%x1f%at%x1f{_trailer(APPROVES_TRAILER)}", "HEAD",
+                     check=False) or ""
+    approved: dict[tuple[str, str], tuple[str, int]] = {}
+    for record in approvals.split("\x1e"):
+        fields = record.strip("\n").split("\x1f")
+        if len(fields) == 3:
+            words = fields[2].split()
+            for name, revision in zip(words[::2], words[1::2], strict=False):
+                approved.setdefault((name, revision), (fields[0], int(fields[1])))
+    states: dict[str, dict] = {}
+    for record in changes.split("\x1e"):
+        lines = record.strip("\n").split("\n")
+        fields = lines[0].split("\x1f")
+        if len(fields) != 4:
+            continue
+        revision, author, when, agent = fields[0], fields[1], int(fields[2]), fields[3]
+        names = {parts[1] for parts in (PurePosixPath(line).parts for line in lines[1:] if line)
+                 if len(parts) >= 3 and parts[0] == SKILLS_FOLDER}
+        for name in names:
+            state = states.get(name)
+            if state is None:  # the newest change of it
+                state = states[name] = {"name": name, "revision": revision, "author": author,
+                                        "agent": agent, "time": when,
+                                        "approved_revision": None, "approved_by": "",
+                                        "approved_at": None}
+            if state["approved_revision"] is None:
+                by = approved.get((name, revision))
+                if not agent or by:
+                    state["approved_revision"] = revision
+                    state["approved_by"], state["approved_at"] = by or (author, when)
+    for state in states.values():
+        state["waiting"] = state["approved_revision"] != state["revision"]
+    return states
+
+
+def approve_skill(ctx: Context, name: str, revision: str) -> str:
+    """Record that a person approves the change REVISION of the skill NAME,
+    the last one: a commit of no change, saying so."""
+    with _locked():
+        _settle()
+        state = skill_states().get(name)
+        if state is None:
+            raise NotFound(f"no skill {name} among the documents")
+        if not state["waiting"]:
+            raise Conflict(f"the skill {name} waits for no approval")
+        if not revision or not state["revision"].startswith(revision.lower()):
+            raise Conflict(f"the skill {name} changed since it was read: look at it again")
+        _git("commit", "--quiet", "--no-verify", "--allow-empty",
+             f"--message=Approve the skill {name}",
+             f"--trailer={APPROVES_TRAILER}: {name} {state['revision']}",
+             env=files.identity(ctx.caller.user))
+        return head() or ""
 
 
 @command("doc.diff", role="viewer", params={

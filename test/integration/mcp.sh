@@ -243,8 +243,26 @@ expect_eq "its write is the person's in the history, through an agent in the aud
     "itoperator mcp:it-client"
 expect_eq "and the history says the agent made it, beside the person" \
     "$(get "$(ctl itoperator doc.history)" 'a["data"]["commits"][0]["agent"]')" "mcp:it-client (assisted)"
+# A skill the agent writes in the documents waits for a person.
+out=$(mcp itoperator "$LIST" "$(call 2 doc_write '{"path": "skills/it-skill/SKILL.md", "content": "---\nname: it-skill\ndescription: When a test asks for it.\n---\n\nDo it.\n"}')" \
+    "$(call 3 skill_list '{}')" "$(call 4 skill_read '{"source": "documents", "name": "it-skill"}')")
+expect_eq "an agent writes a skill" "$(answer "$out" 2 'a["result"]["isError"]')" False
+expect_eq "which is not among its skills, but waits" \
+    "$(answer "$out" 3 '[(k, [s["name"] for s in v if s["source"] == "documents"]) for k, v in sorted(__import__("json").loads(a["result"]["content"][0]["text"]).items())]')" \
+    "[('skills', []), ('waiting', ['it-skill'])]"
+expect_eq "nor read as one" "$(answer "$out" 4 '"waits for a person" in a["result"]["content"][0]["text"]')" True
+expect_eq "and it has no tool to approve it" "$(answer "$out" 1 'any(t["name"] == "skill_approve" for t in a["result"]["tools"])')" False
+waiting=$(ctl itoperator skill.list)
+revision=$(get "$waiting" '[w["revision"] for w in a["data"]["waiting"] if w["name"] == "it-skill"][0]')
+expect_eq "nor may it approve it through fleetctl" \
+    "$(get "$(ctl itoperator skill.approve "{\"name\": \"it-skill\", \"revision\": \"$revision\", \"via\": \"mcp:it-client\"}")" 'a["error"]["code"]')" forbidden
+expect_eq "a person approves it" \
+    "$(get "$(ctl itoperator skill.approve "{\"name\": \"it-skill\", \"revision\": \"$revision\"}")" 'a["ok"]')" True
+expect_eq "then it is a skill, and the approval is in the history" \
+    "$(get "$(ctl itoperator skill.list)" '[s["source"] for s in a["data"]["skills"] if s["name"] == "it-skill"]') $(get "$(ctl itoperator doc.history)" 'a["data"]["commits"][0]["subject"]')" \
+    "['documents'] Approve the skill it-skill"
 expect_eq "the text is the service's, in the history of the documents" \
-    "$(stat -c %U /var/lib/cockpit-fleet/documents/reports/it.md) $(sudo -u cockpit-fleet git --git-dir=/var/lib/cockpit-fleet/documents.git ls-files)" \
+    "$(stat -c %U /var/lib/cockpit-fleet/documents/reports/it.md) $(sudo -u cockpit-fleet git --git-dir=/var/lib/cockpit-fleet/documents.git ls-files | grep "^reports/")" \
     "cockpit-fleet reports/it.md"
 PROFILE=autonomous
 out=$(mcp itoperator "$(call 2 doc_write '{"path": "a.md", "content": "a"}')" "$(call 3 doc_write '{"path": "b.md", "content": "b"}')")

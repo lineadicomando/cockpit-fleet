@@ -259,6 +259,7 @@ it.
 .fleet/skills/lab-maintenance/SKILL.md     in the tree of a project
 .fleet/skills/task-strings/SKILL.md        in a collection a project installs
 /etc/cockpit-fleet/skills/site/SKILL.md    on this controller
+skills/patching/SKILL.md                   in the documents
 ```
 
 ```markdown
@@ -290,6 +291,17 @@ description: Maintaining a lab: wake the PCs, update them, shut them down,
   do is held by its role and profile, whatever a skill says.
 - At a terminal, `fleet skill list` and `fleet skill read --source ...
   --name ...` show what the assistant sees.
+- The skills of the documents (Resources, Documents, the folder `skills`)
+  are written and corrected there like any document, with their history,
+  and only their texts (`.md`) count. The assistant may propose one, for a
+  task that recurs: it writes it there and says so. A skill whose last
+  change the assistant made waits for a person: it is not in the index,
+  nor read with `skill_read`, until an operator or an administrator opens
+  it and chooses "Approve", after reading it or the changes since the last
+  approved version, or saves it themselves. The approval is in the history
+  of the documents and in the audit log (`skill.approve`; `fleet skill
+  approve --name NAME --revision ID` at a terminal, the revision that
+  `fleet skill list` gives); an agent can never give it.
 
 ## At a terminal
 

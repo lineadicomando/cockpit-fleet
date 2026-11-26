@@ -37,6 +37,12 @@ _BASE = (
     " before you write about a host, a run or a subject, and add to a document that is there"
     " rather than writing another; write one when asked, or at the end of work worth"
     " keeping. Never put a secret in a document: a password, a key, a token."
+    " When a task recurs and no skill covers it, you may propose one: write it as the"
+    " document skills/NAME/SKILL.md (NAME in lower case letters, digits and hyphens; a"
+    " frontmatter with name and a description of when to use it, then what to do), and tell"
+    " the person that it waits for an operator or an administrator to approve it in the"
+    " page of the documents. Until then it is not among your skills, nor after you change"
+    " it again; you cannot approve it yourself."
 )
 _SURFACES = {
     "page": (" in the chat page", " Your answers are shown as plain text: do not use Markdown."),
@@ -119,7 +125,7 @@ def layers(profile: str, surface: str, path: Path | None = None, skills: str = "
     if text:
         found.append({"layer": "controller", "source": str(path), "text": text})
     if skills:
-        found.append({"layer": "skills", "source": "projects, collections, controller",
+        found.append({"layer": "skills", "source": "projects, collections, controller, documents",
                       "text": skills})
     return found
 

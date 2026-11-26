@@ -6,38 +6,17 @@ What is left. Other documents: `CLAUDE.md`; how each closed phase was shown:
 
 ## Status (26 November 2026)
 
-Phases 0–18 closed; 19–23 built, each waiting only for the close below;
-**next: phase 24**. Phases 21–24 are the last that add features
+Phases 0–18 closed; 19–24 built, each waiting only for the close below;
+no phase is next. Phases 21–24 were the last that add features
 (`decisions.md`, "Freeze of features"): then fixes, minor changes and
 field use only, toward 1.0.0. Last release 0.4.0 (18 November);
 `[Unreleased]` of `CHANGELOG.md` has what came since. `make release` only
 when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (847
-backend, 213 frontend tests). Each backend module's docstring says what it
+To resume: `git status`, `git log origin/main..`; `make check` (856
+backend, 214 frontend tests). Each backend module's docstring says what it
 is; `cli.py` is the registry of commands, `db.py` the schema (38
 migrations).
-
-## Phase 24: skills in the documents (next)
-
-Decided 26 November (`decisions.md`, "Skills in the documents"). Builds on
-`skills.py` (phase 23) and `documents.py` (phase 20).
-
-- [ ] Documents: a commit made through an agent says so (a trailer beside
-  the person's authorship; today only the audit trail knows), readable from
-  the history.
-- [ ] Skills: `skills/NAME/SKILL.md` of the documents a source of
-  `skills.py`; one whose last change came from an agent left out of the
-  index and of `skill.read` until approved.
-- [ ] An approval: a command for operators and administrators, refused to
-  agents, recorded (history and audit); a person's own save approves too.
-  What waits is listed.
-- [ ] Page of the documents: a skill marked as waiting, "Approve", and the
-  differences since the last approved version.
-- [ ] Instructions: the assistant may propose a skill for a task that
-  recurs, written there, saying that it waits for a person.
-- [ ] Docs (`chat.md`, `architecture/documents.md`, `agents.md`),
-  `CHANGELOG.md`, Italian strings; close in containers and in a browser.
 
 ## Built, waiting for their close
 
@@ -67,6 +46,14 @@ Each is described in the file named; what remains is the close.
   Then, on a controller, the project synchronised and its collections
   installed again, and the work of a lab's maintenance done from the chat
   with those skills, without going back to the repository.
+
+- **24, skills in the documents** (`architecture/documents.md`, "Skills
+  of the documents"; `chat.md`, "Skills"): shown in containers (`mcp`,
+  `documents`, `chat`, the three distributions) and in a browser on
+  `deb13` with an agent's writes made through `fleetctl` (26 November).
+  What remains: the user, with Claude as the assistant, asks it to
+  propose a skill for a task that recurs, approves it in the page, and a
+  new session uses it.
 
 ## Integration
 

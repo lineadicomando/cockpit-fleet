@@ -45,7 +45,27 @@ export interface DocCommit {
     subject: string;
     // What an agent's change came through, beside the person it acted for.
     agent: string;
+    // The skill an approval approves.
+    approves: string;
     paths: string[];
+}
+
+// A skill of the documents that an agent wrote or changed last.
+export interface WaitingSkill {
+    name: string;
+    description: string;
+    path: string;
+    revision: string;
+    author: string;
+    agent: string;
+    time: number;
+    approved_revision: string | null;
+}
+
+// The name of the skill of the documents a path is in (skills/NAME/...), or null.
+export function skillOf(path: string): string | null {
+    const parts = path.split("/");
+    return parts.length >= 2 && parts[0] === "skills" && parts[1] ? parts[1] : null;
 }
 
 export function isText(path: string): boolean {

@@ -2,12 +2,13 @@
 found where they are, read without following a link, listed for the
 instructions of the assistant."""
 
+import dataclasses
 import os
 from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import jobs, skills
+from cockpit_fleet import jobs, paths, skills
 
 SKILL = "---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nDo it this way.\n"
 
@@ -130,3 +131,108 @@ class SkillTest(Base):
                                             "  and more.\nother: b\n---\n"),
                          {"name": "a", "description": "Managing workstations, and more.",
                           "other": "b"})
+
+
+class DocumentSkillTest(Base):
+    """Skills of the documents, which the assistant may write and a person approves."""
+
+    def setUp(self):
+        super().setUp()
+        patch = mock.patch.object(skills, "CONTROLLER_DIR", self.root / "controller-skills")
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.config = dataclasses.replace(self.config, mcp_enabled=True, mcp_max_role="operator")
+
+    def write(self, text, by_agent=False, expected="", role="operator"):
+        params = {"path": "skills/patching/SKILL.md", "content": text, "expected": expected}
+        if by_agent:
+            params["via"] = "mcp:test"
+        answer = self.call("doc.write", params, role)
+        self.assertTrue(answer["ok"], answer)
+        return answer["data"]
+
+    def listed(self):
+        data = self.ok("skill.list", role="viewer")
+        return ([one["name"] for one in data["skills"] if one["source"] == "documents"],
+                data["waiting"])
+
+    def test_a_skill_the_agent_wrote_waits_for_a_person(self):
+        first = self.write(SKILL.format(name="patching", description="Patching a lab."),
+                           by_agent=True)
+        commit = self.ok("doc.history", role="viewer")["commits"][0]
+        self.assertEqual(commit["author"], "anna")
+        self.assertTrue(commit["agent"].startswith("mcp:test"), commit)
+        names, waiting = self.listed()
+        self.assertEqual(names, [])
+        self.assertEqual([(one["name"], one["revision"], one["approved_revision"])
+                          for one in waiting], [("patching", first["revision"], None)])
+        self.assertEqual(self.code("skill.read", {"source": "documents", "name": "patching"},
+                                   role="viewer"), "conflict")
+        self.assertNotIn("patching", skills.index(self.ctx()))
+
+        # Never by an agent, nor by a viewer, nor for a version not looked at.
+        self.assertEqual(self.code("skill.approve", {"name": "patching", "revision":
+                                   first["revision"], "via": "mcp:test"}, role="operator"),
+                         "forbidden")
+        self.assertEqual(self.code("skill.approve", {"name": "patching",
+                                                     "revision": first["revision"]},
+                                   role="viewer"), "forbidden")
+        self.assertEqual(self.code("skill.approve", {"name": "patching", "revision": "0" * 40},
+                                   role="operator"), "conflict")
+        approved = self.ok("skill.approve", {"name": "patching", "revision": first["revision"]},
+                           role="operator")
+        self.assertEqual(self.listed(), (["patching"], []))
+        read = self.ok("skill.read", {"source": "documents", "name": "patching"}, role="viewer")
+        self.assertIn("Do it this way.", read["text"])
+        self.assertIn("patching (source documents", skills.index(self.ctx()))
+        commit = self.ok("doc.history", role="viewer")["commits"][0]
+        self.assertEqual((commit["revision"], commit["subject"], commit["author"],
+                          commit["approves"], commit["agent"], commit["paths"]),
+                         (approved["revision"], "Approve the skill patching", "anna",
+                          "patching", "", []))
+        self.assertEqual(self.code("skill.approve", {"name": "patching",
+                                                     "revision": first["revision"]},
+                                   role="operator"), "conflict")  # nothing waits
+        own = self.ok("doc.history", {"path": "skills/patching/SKILL.md"}, role="viewer")
+        self.assertEqual([(one["subject"], one["approves"]) for one in own["commits"]],
+                         [("Approve the skill patching", "patching"),
+                          ("Create skills/patching/SKILL.md", "")])
+
+        # Changed again by the agent, it waits again; the last approved is the first.
+        second = self.write(SKILL.format(name="patching", description="Patching a lab, safely."),
+                            by_agent=True, expected=read_digest(self))
+        names, waiting = self.listed()
+        self.assertEqual(names, [])
+        self.assertEqual((waiting[0]["revision"], waiting[0]["approved_revision"]),
+                         (second["revision"], first["revision"]))
+        diff = self.ok("doc.diff", {"revision": second["revision"],
+                                    "against": first["revision"],
+                                    "path": "skills/patching"}, role="viewer")["text"]
+        self.assertIn("+description: Patching a lab, safely.", diff)
+
+        # A person's own save approves it.
+        self.write(SKILL.format(name="patching", description="Patching a lab."),
+                   expected=read_digest(self))
+        self.assertEqual(self.listed(), (["patching"], []))
+
+    def test_a_skill_a_person_wrote_is_a_skill_at_once_with_its_texts_only(self):
+        self.write(SKILL.format(name="patching", description="Patching a lab."))
+        (paths.DOCUMENTS_DIR / "skills" / "patching" / "notes.txt").write_text("not a text\n")
+        self.ok("doc.write", {"path": "skills/patching/steps.md", "content": "1. wol\n"},
+                role="operator")
+        found = [one for one in self.ok("skill.list", role="viewer")["skills"]
+                 if one["source"] == "documents"]
+        self.assertEqual([(one["name"], one["files"]) for one in found],
+                         [("patching", ["steps.md"])])
+        self.assertEqual(self.code("skill.read", {"source": "documents", "name": "patching",
+                                                  "file": "notes.txt"}, role="viewer"),
+                         "bad_request")
+        self.assertEqual(self.ok("skill.read", {"source": "documents", "name": "patching",
+                                                "file": "steps.md"}, role="viewer")["text"],
+                         "1. wol\n")
+        self.assertEqual(self.code("skill.approve", {"name": "nothing", "revision": "0" * 40},
+                                   role="operator"), "not_found")
+
+
+def read_digest(test):
+    return test.ok("doc.read", {"path": "skills/patching/SKILL.md"}, role="viewer")["sha256"]

@@ -30,8 +30,8 @@ import { useCockpitLocation, useLoad } from "../lib/hooks.ts";
 import { saveBlob } from "../lib/cmdb.ts";
 import { useCan } from "../lib/session.tsx";
 import {
-    DOCUMENT_CSS, documentLocation, documentPage, exportName, isText, linkTarget,
-    type DocCommit, type DocFile, type DocList, type DocText, type Rendered,
+    DOCUMENT_CSS, documentLocation, documentPage, exportName, isText, linkTarget, skillOf,
+    type DocCommit, type DocFile, type DocList, type DocText, type Rendered, type WaitingSkill,
 } from "../lib/documents.ts";
 import { downloadUrl, joinPath, save, uploadToStore } from "../lib/store.ts";
 import { shellLine } from "../lib/terminal.ts";
@@ -50,6 +50,13 @@ export function DocumentsPage({ path }: { path: string }) {
     return <DocumentsFolder directory={path} />;
 }
 
+// The skills of the documents that wait for a person, when PATH is among them.
+function useWaitingSkills(path: string) {
+    return useLoad(() => (skillOf(path) || path === "skills"
+        ? call<{ waiting: WaitingSkill[] }>("skill.list").then(data => data.waiting)
+        : Promise.resolve([] as WaitingSkill[])), [path]);
+}
+
 function getDocument(path: string) {
     save(downloadUrl(path, "doc.get"), basename(path));
 }
@@ -58,6 +65,8 @@ function DocumentsFolder({ directory }: { directory: string }) {
     const { t, i18n } = useTranslation();
     const can = useCan();
     const list = useLoad(() => call<DocList>("doc.list"));
+    const waiting = useWaitingSkills(directory);
+    const waits = new Set((waiting.data ?? []).map(skill => skill.name));
     const tools = useRef<FileTools | null>(null);
     const [creating, setCreating] = useState(false);
     const canWrite = can("doc.write");
@@ -105,7 +114,14 @@ function DocumentsFolder({ directory }: { directory: string }) {
                 }}
                 columns={[
                     { title: t("Size"), sort: "size", cell: entry => (entry.file ? formatBytes(entry.file.size) : "") },
-                    { title: t("Kind"), cell: entry => entry.file && <DocKind file={entry.file} /> },
+                    {
+                        title: t("Kind"),
+                        cell: entry => {
+                            const skill = skillOf(entry.path);
+                            const label = skill && waits.has(skill) && <Label isCompact color="orange">{t("Skill waiting for approval")}</Label>;
+                            return entry.file ? <>{label && <>{label} </>}<DocKind file={entry.file} /></> : label;
+                        },
+                    },
                     { title: t("Updated"), sort: "updated", cell: entry => (entry.file ? formatTime(entry.file.updated_at, i18n.language) : "") },
                 ]}
                 openFile={path => (isText(path) ? go(path) : getDocument(path))}
@@ -215,14 +231,15 @@ function DocumentFrame({ html, title, label, fill, at, frameRef }: {
     const dark = useDarkTheme();
 
     useEffect(() => {
-        own.current?.contentDocument?.documentElement.classList.toggle("dark", dark);
+        // Before the frame has its document there is none: loaded() sets it then.
+        own.current?.contentDocument?.documentElement?.classList.toggle("dark", dark);
     }, [dark]);
 
     function loaded() {
         const frame = own.current;
         const inside = frame?.contentDocument;
         const view = frame?.contentWindow as (Window & typeof globalThis) | null;
-        if (!frame || !inside || !view) return;
+        if (!frame || !inside?.documentElement || !view) return;
         const sheet = new view.CSSStyleSheet();
         sheet.replaceSync(DOCUMENT_CSS);
         inside.adoptedStyleSheets = [sheet];
@@ -254,6 +271,8 @@ function DocumentView({ path }: { path: string }) {
     const fresh = options.new === "1";
     const rendered = useLoad(() => (editing ? Promise.resolve(null) : call<Rendered>("doc.render", { path })), [editing]);
     const frame = useRef<HTMLIFrameElement | null>(null);
+    const waiting = useWaitingSkills(path);
+    const skill = (waiting.data ?? []).find(one => one.name === skillOf(path));
     const [dialog, setDialog] = useState<"history" | "delete" | null>(null);
     const [error, setError] = useState<string | null>(null);
     const folder = dirname(path);
@@ -298,6 +317,7 @@ function DocumentView({ path }: { path: string }) {
                 </ToolbarContent>
             </Toolbar>
             {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
+            {skill && <SkillWaiting skill={skill} onApproved={waiting.reload} />}
             {rendered.error
                 ? <Alert variant="danger" isInline title={rendered.error.message} />
                 : !rendered.data
@@ -323,7 +343,7 @@ function DocumentView({ path }: { path: string }) {
                     )}
             {dialog === "history" && (
                 <DocumentHistory path={path} editable={can("doc.restore")} onClose={() => setDialog(null)}
-                    onRestored={() => { setDialog(null); rendered.reload(); }} />
+                    onRestored={() => { setDialog(null); rendered.reload(); waiting.reload(); }} />
             )}
             {dialog === "delete" && (
                 <ConfirmDelete name={basename(path)} what={t("The text can be restored from the history afterwards.")}
@@ -338,6 +358,66 @@ function DocumentView({ path }: { path: string }) {
                         }
                     }} />
             )}
+        </>
+    );
+}
+
+// A skill the assistant wrote or changed last: not among its skills until a
+// person approves it, here or by saving it.
+function SkillWaiting({ skill, onApproved }: { skill: WaitingSkill; onApproved: () => void }) {
+    const { t, i18n } = useTranslation();
+    const can = useCan();
+    const [showing, setShowing] = useState(false);
+    const [approving, setApproving] = useState(false);
+    const [problem, setProblem] = useState<string | null>(null);
+
+    async function approve() {
+        setApproving(true);
+        setProblem(null);
+        try {
+            await call("skill.approve", { name: skill.name, revision: skill.revision });
+            onApproved();
+        } catch (ex) {
+            setProblem(message(ex));
+        } finally {
+            setApproving(false);
+        }
+    }
+
+    return (
+        <Alert variant="warning" isInline style={{ marginBottom: "1rem" }}
+            title={t("The skill {{name}} waits for approval", { name: skill.name })}
+            actionLinks={(
+                <>
+                    {can("skill.approve") && <Button variant="primary" size="sm" isLoading={approving} isDisabled={approving} onClick={approve}>{t("Approve")}</Button>}
+                    {" "}
+                    <Button variant="link" size="sm" onClick={() => setShowing(!showing)}>
+                        {showing ? t("Hide the changes") : t("Changes since the last approved version")}
+                    </Button>
+                </>
+            )}>
+            <Content component="p">
+                {t("The assistant changed it last, through {{agent}}, for {{author}}, on {{time}}. It is not among the assistant's skills until an operator or an administrator approves it, or saves it.", {
+                    agent: skill.agent, author: skill.author, time: formatTime(skill.time, i18n.language),
+                })}
+            </Content>
+            {problem && <Alert variant="danger" isInline title={problem} />}
+            {showing && (skill.approved_revision
+                ? <SkillChanges skill={skill} />
+                : <Content component="p">{t("No version of it was ever approved: read all of its texts.")}</Content>)}
+        </Alert>
+    );
+}
+
+function SkillChanges({ skill }: { skill: WaitingSkill }) {
+    const { t } = useTranslation();
+    const diff = useLoad(() => call<{ text: string; cut: boolean }>("doc.diff", { revision: skill.revision, against: skill.approved_revision, path: skill.path }));
+    if (diff.error) return <Alert variant="danger" isInline title={diff.error.message} />;
+    if (!diff.data) return <Spinner size="md" aria-label={t("Loading")} />;
+    return (
+        <>
+            <Diff text={diff.data.text} />
+            {diff.data.cut && <Content component="small">{t("This is only the beginning of the change.")}</Content>}
         </>
     );
 }
@@ -477,7 +557,7 @@ function DocumentHistory({ path, editable, onRestored, onClose }: {
                     emptyBody={t("Every change saved here is recorded with its author.")}>
                     {data => data.commits.map((commit, index) => (
                         <CommitEntry key={commit.revision} path={path} commit={commit}
-                            onRestore={editable && index > 0 ? restore : undefined} />
+                            onRestore={editable && index > 0 && !commit.approves ? restore : undefined} />
                     ))}
                 </ListState>
             </ModalBody>

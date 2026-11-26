@@ -4882,8 +4882,26 @@ msgstr "Che cosa ha trovato il ciclo"
 msgid "What this cycle found on each host was not kept: the states of its checks have it."
 msgstr "Ciò che questo ciclo ha trovato su ciascun host non è stato conservato: lo riportano gli stati dei suoi check."
 
-msgid "Skills of the projects, their collections and this controller"
-msgstr "Skill dei progetti, delle loro collection e di questo controller"
+msgid "Skills of the projects, their collections, this controller and the documents"
+msgstr "Skill dei progetti, delle loro collection, di questo controller e dei documenti"
 
 msgid "{{author}} through the assistant, {{agent}}"
 msgstr "{{author}} tramite l'assistente, {{agent}}"
+
+msgid "Changes since the last approved version"
+msgstr "Modifiche dall'ultima versione approvata"
+
+msgid "Hide the changes"
+msgstr "Nascondi le modifiche"
+
+msgid "No version of it was ever approved: read all of its texts."
+msgstr "Non ne è mai stata approvata una versione: leggine tutti i testi."
+
+msgid "Skill waiting for approval"
+msgstr "Skill in attesa di approvazione"
+
+msgid "The assistant changed it last, through {{agent}}, for {{author}}, on {{time}}. It is not among the assistant's skills until an operator or an administrator approves it, or saves it."
+msgstr "L'ultima modifica è dell'assistente, tramite {{agent}}, per conto di {{author}}, il {{time}}. Non è fra le skill dell'assistente finché un operatore o un amministratore non la approva o la salva."
+
+msgid "The skill {{name}} waits for approval"
+msgstr "La skill {{name}} è in attesa di approvazione"

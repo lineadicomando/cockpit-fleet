@@ -230,7 +230,10 @@ own after the controller's (`instructions.layers(..., skills=)`), at most
 gives `SKILL.md` or a `.md`/`.txt` file beside it, 64 kB at most, each step
 of the path opened with `O_NOFOLLOW`: a project's tree may hold links, and
 fleetctl can read the database. A source is `controller`, `project:ID` or
-`collection:ID:NS.NAME`. They are no tool of their own per skill: two tools
+`collection:ID:NS.NAME`, or `documents` for `skills/NAME/` of the documents
+(phase 24), which an agent may write and whose last change, when an agent
+made it, waits for a person's approval (`skill.approve`, never an agent's;
+`architecture/documents.md`). They are no tool of their own per skill: two tools
 whatever the number of skills, so the list of tools does not grow with
 them. The MCP servers of projects stay discarded (they would run Ansible
 outside the sandbox): skills are what stands in for what they knew.

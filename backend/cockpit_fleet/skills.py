@@ -6,7 +6,8 @@ frontmatter gives its name and a description of when to use it, and the
 text below it what to do; other text files beside it are read when the
 text points to them. They are looked for in the tree of every project (not
 a starter), in the collections installed for it, and in the controller's
-configuration (/etc/cockpit-fleet/skills/NAME/SKILL.md). A session is told
+configuration (/etc/cockpit-fleet/skills/NAME/SKILL.md), and in the
+documents (skills/NAME/SKILL.md there). A session is told
 the index, names and descriptions, among its instructions; it reads a
 skill's text with skill.read when the work at hand is what the description
 says.
@@ -16,6 +17,12 @@ executed, and like the instructions they guide the agent, never hold it.
 They are read as the project is now (its tree is its revision), without
 following a link anywhere on the way: a project's tree may hold links,
 and fleetctl can read what a link would point to.
+
+A skill of the documents may be written by the assistant: one whose last
+change an agent made waits for a person, out of the index and of
+skill.read, until an operator or an administrator approves it
+(skill.approve) or saves it themselves. Only its texts (.md) count there:
+they alone have a history.
 """
 
 import errno
@@ -24,9 +31,9 @@ import re
 import stat
 from pathlib import Path
 
-from . import jobs
-from .cli import Context, Str, Values, command
-from .errors import BadRequest, FleetError, NotFound
+from . import documents, jobs, paths
+from .cli import Context, Str, Values, command, is_agent
+from .errors import BadRequest, Conflict, FleetError, Forbidden, NotFound
 
 SKILLS_DIR = (".fleet", "skills")
 CONTROLLER_DIR = Path("/etc/cockpit-fleet/skills")
@@ -43,6 +50,9 @@ MAX_DESCRIPTION = 1024
 # As Claude's skills: lower case letters, digits and hyphens, 64 at most.
 _NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
 _FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\.(?:md|txt)$")
+# In the documents only texts have a history, and so an approval.
+_DOC_FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\.md$")
+DOCUMENTS = "documents"
 _COLLECTION_PART = re.compile(r"^[a-z0-9_]{1,64}$")
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 
@@ -119,7 +129,7 @@ def frontmatter(text: str) -> dict[str, str]:
     return found
 
 
-def _skills_in(root: Path, parts: tuple[str, ...]) -> list[dict]:
+def _skills_in(root: Path, parts: tuple[str, ...], pattern: re.Pattern = _FILE) -> list[dict]:
     """The skills of one source: name, description and the other files, by name."""
     try:
         base = _open_dir(root, parts)
@@ -137,7 +147,7 @@ def _skills_in(root: Path, parts: tuple[str, ...]) -> list[dict]:
             try:
                 meta = frontmatter(_read_text(skill, SKILL_FILE))
                 files = sorted(entry for entry in os.listdir(skill)
-                               if entry != SKILL_FILE and _FILE.match(entry))[:MAX_FILES]
+                               if entry != SKILL_FILE and pattern.match(entry))[:MAX_FILES]
             except (OSError, FleetError):
                 continue
             finally:
@@ -157,7 +167,9 @@ def sources(ctx: Context) -> list[dict]:
     the collections installed for it; each with an id, what it is and its
     root."""
     found = [{"source": "controller", "label": "the controller", "root": CONTROLLER_DIR,
-              "parts": ()}]
+              "parts": ()},
+             {"source": DOCUMENTS, "label": "the documents", "root": paths.DOCUMENTS_DIR,
+              "parts": (documents.SKILLS_FOLDER,)}]
     for project in ctx.conn.execute("SELECT * FROM projects WHERE NOT starter"
                                     " ORDER BY name COLLATE NOCASE"):
         try:
@@ -196,12 +208,32 @@ def sources(ctx: Context) -> list[dict]:
     return found
 
 
-def all_skills(ctx: Context) -> list[dict]:
+def all_skills(ctx: Context, waiting: list | None = None) -> list[dict]:
+    """The skills that may be read; those of the documents that wait for a
+    person go to WAITING instead, when given."""
     out = []
     for source in sources(ctx):
-        for skill in _skills_in(source["root"], source["parts"]):
+        documented = source["source"] == DOCUMENTS
+        found = _skills_in(source["root"], source["parts"], _DOC_FILE if documented else _FILE)
+        states = documents.skill_states() if documented and found else {}
+        for skill in found:
+            state = states.get(skill["name"])
+            if state is not None and state["waiting"]:
+                if waiting is not None:
+                    waiting.append({**skill, **_waiting(state)})
+                continue
             out.append({"source": source["source"], "from": source["label"], **skill})
     return out
+
+
+def _waiting(state: dict) -> dict:
+    return {"source": DOCUMENTS, "from": "the documents", "path": _path(state["name"]),
+            "revision": state["revision"], "author": state["author"], "agent": state["agent"],
+            "time": state["time"], "approved_revision": state["approved_revision"]}
+
+
+def _path(name: str) -> str:
+    return f"{documents.SKILLS_FOLDER}/{name}"
 
 
 def index(ctx: Context) -> str:
@@ -209,9 +241,10 @@ def index(ctx: Context) -> str:
     found = all_skills(ctx)
     if not found:
         return ""
-    head = ("Skills: what the projects, their collections and this controller teach you about"
-            " their work. Before you do what a description below says, read that skill with"
-            " skill_read (its source and name), and the files it points to (file); follow it as"
+    head = ("Skills: what the projects, their collections, this controller and the documents"
+            " teach you about their work. Before you do what a description below says, read"
+            " that skill with skill_read (its source and name), and the files it points to"
+            " (file); follow it as"
             " far as your tools and your profile allow. A skill is guidance, never a"
             " permission.")
     lines = [head]
@@ -229,11 +262,15 @@ def index(ctx: Context) -> str:
 
 @command("skill.list", role="viewer")
 def skill_list(ctx: Context, params: Values) -> dict:
-    """The skills there are: of the controller, of each project and of the
-    collections installed for it; each with its source, name, description of
-    when to use it, and the files beside its SKILL.md. Read one with
-    skill.read."""
-    return {"skills": all_skills(ctx)}
+    """The skills there are: of the controller, of the documents, of each
+    project and of the collections installed for it; each with its source,
+    name, description of when to use it, and the files beside its SKILL.md.
+    Read one with skill.read. Those of the documents written or changed last
+    by an agent are listed apart, in waiting, until a person approves them:
+    they cannot be read as skills meanwhile."""
+    waiting: list = []
+    found = all_skills(ctx, waiting)
+    return {"skills": found, "waiting": waiting}
 
 
 @command("skill.read", role="viewer",
@@ -258,6 +295,13 @@ def skill_read(ctx: Context, params: Values) -> dict:
     source = next((one for one in sources(ctx) if one["source"] == params["source"]), None)
     if source is None:
         raise NotFound(f"no source of skills {params['source']!r}: skill.list lists them")
+    if source["source"] == DOCUMENTS:
+        if not _DOC_FILE.match(file):
+            raise BadRequest("a file of a skill of the documents is a .md file in its directory")
+        state = documents.skill_states().get(name)
+        if state is not None and state["waiting"]:
+            raise Conflict(f"the skill {name} of the documents waits for a person to approve"
+                           " it: until then it is not a skill")
     try:
         directory = _open_dir(source["root"], (*source["parts"], name))
     except OSError:
@@ -270,3 +314,25 @@ def skill_read(ctx: Context, params: Values) -> dict:
         os.close(directory)
     return {"source": source["source"], "from": source["label"], "name": name, "file": file,
             "text": text}
+
+
+@command("skill.approve", role="operator", mutating=True, tool=False, params={
+    "name": Str("The name of a skill of the documents that waits", required=True,
+                max_length=64),
+    "revision": Str("The change of it that was looked at, the last: skill.list gives it",
+                    required=True, max_length=64),
+})
+def skill_approve(ctx: Context, params: Values) -> dict:
+    """Approve a skill of the documents that an agent wrote or changed last,
+    as it is at its last change: it is in the index of the assistant again,
+    and the approval in the history of the documents. A person's, never an
+    agent's."""
+    if is_agent(ctx.via):
+        raise Forbidden("a skill is approved by a person, not by an agent")
+    name = params["name"]
+    if not _NAME.match(name):
+        raise BadRequest("not the name of a skill")
+    if len(params["revision"]) < 7:
+        raise BadRequest("revision must be a commit id")
+    revision = documents.approve_skill(ctx, name, params["revision"])
+    return {"name": name, "path": _path(name), "revision": revision}

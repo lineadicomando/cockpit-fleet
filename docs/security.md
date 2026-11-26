@@ -180,7 +180,12 @@ Skills (the `.fleet/skills/` of projects and their collections,
 `/etc/cockpit-fleet/skills/`) are read by every role and sent to the
 provider of the model, and they guide an agent without holding it: whoever
 may write a project's files or a collection it installs can steer the
-assistant through them, as they can its playbooks.
+assistant through them, as they can its playbooks. The skills of the
+documents (`skills/NAME/`) the assistant may write itself, as any document;
+so that a session cannot leave instructions for the next ones unseen, a
+skill whose last change came from an agent is out of the index and of
+`skill_read` until an operator or an administrator approves it, which no
+agent can do.
 The agent of
 an administrator may scan a subnet in the profiles `diagnostic` and
 `administrator`, asked every time: only those subnets an administrator

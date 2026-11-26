@@ -19,6 +19,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
   and go to the provider of the model: no secret in them.
 - Documents: the history says which changes the assistant made, beside
   the person it acted for.
+- Documents: skills in the folder `skills` of the documents
+  (`skills/NAME/SKILL.md`), which the assistant may propose for a task
+  that recurs and people correct, compare and restore there. One whose
+  last change came from the assistant waits for a person: out of its
+  skills until an operator or an administrator chooses "Approve" on it,
+  after the changes since the last approved version, or saves it
+  (`skill.approve`, `fleet skill approve`, never an agent; `skill.list`
+  lists those waiting).
 - Checks: the cycles that check the hosts can be followed. A check shows
   "Checking" while a cycle holds it and its last cycle, which opens the
   page of that run; "Recent cycles" lists those that held it, and "Check

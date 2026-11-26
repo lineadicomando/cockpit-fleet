@@ -38,6 +38,31 @@ person's, with the person it acts for as its author, and a trailer
 `doc.history` gives it as `agent`, the page as "through the assistant"),
 as the audit trail does.
 
+**Skills of the documents** (phase 24; `decisions.md`, "Skills in the
+documents"). `skills/NAME/SKILL.md` and the `.md` beside it are a source of
+`skills.py`, `documents`, so that the assistant may write a skill for a
+task that recurs and people correct, compare and restore it here. Only the
+texts count (the `.txt` of other sources is an attachment here, out of the
+history). `documents.skill_states` reads, in two `git log`, the changes
+under `skills/` with their trailers and the approvals: a change is
+approved when a person made it (the service's commit of a change by hand
+included), or when an approval names it; a skill whose last change is not
+approved waits, out of the index and refused by `skill.read`, and
+`skill.list` lists it apart (`waiting`, with its last approved change).
+`skill.approve` (operator; `tool=False`, and refused to a call through an
+agent) takes the name and the last change the person looked at, refused
+if another came since, and commits nothing but its message and a trailer
+`Fleet-Approves: NAME REVISION`, by the person (`--allow-empty`): in the
+history and in the audit trail. A person's own save approves without it.
+git leaves a commit that changes no file out of a path's history, so
+`doc.history` of a skill's folder or text adds the approvals that name it
+(a second `git log --grep`, merged by time).
+State is in git alone, never in the database: what is restored from a
+backup of the documents carries its approvals. The page marks a waiting
+skill in its folder and, on each of its texts, says who changed it,
+"Approve" and the differences since the last approved change
+(`doc.diff` of the folder of the skill).
+
 **A replacement quotes what was read.** `doc.read` gives the digest of the
 text; `doc.write` replacing a text takes it as `expected`, and a text
 someone changed meanwhile, or deleted, is not overwritten. A new text is

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { channels } from "./mocks/cockpit.ts";
-import { DOCUMENT_CSS, SAVED_CSS, documentLocation, documentPage, exportName, isText, linkTarget, writtenDocument } from "../src/lib/documents.ts";
+import { DOCUMENT_CSS, SAVED_CSS, documentLocation, documentPage, exportName, isText, linkTarget, skillOf, writtenDocument } from "../src/lib/documents.ts";
 import { uploadToStore } from "../src/lib/store.ts";
 
 test("the links of a rendered document go where the renderer said, and nowhere else", () => {
@@ -59,4 +59,11 @@ test("the chat links to the text an agent wrote", () => {
     assert.equal(done("doc_write", { path: "a.png" }), null);
     assert.equal(done("doc_delete", { path: "a.md" }), null);
     assert.equal(writtenDocument({ tool: "doc_write", status: "failed", input: { path: "a.md" } }), null);
+});
+
+test("the skill a path of the documents is in", () => {
+    assert.equal(skillOf("skills/patching/SKILL.md"), "patching");
+    assert.equal(skillOf("skills/patching"), "patching");
+    assert.equal(skillOf("skills"), null);
+    assert.equal(skillOf("reports/skills/a.md"), null);
 });
