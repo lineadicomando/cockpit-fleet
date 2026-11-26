@@ -45,7 +45,9 @@ else. An administrator of the machine can, of course, do anything.
 5. **Each run is a systemd unit**, under the service account, sandboxed.
    It sees its own directory, its own decrypted secrets and the network;
    not the database, the projects the backend keeps, other runs, the
-   system bus or `/home`. The directories of `[projects] local_roots` are
+   system bus or `/home`. Its outcome is the runner's, not the playbook's:
+   nothing of a run outlives it, and none of its processes can change
+   whether it succeeded. The directories of `[projects] local_roots` are
    the exception: a run works on a copy of its project, but the roots
    themselves stay readable in the sandbox, as everywhere else on the
    machine outside `/home`, so a playbook of any project can read every

@@ -16,8 +16,10 @@ when asked.
 To resume: `git status`, `git log origin/main..`; `make check` (864
 backend, 224 frontend tests). Each backend module's docstring says what it
 is; `cli.py` is the registry of commands, `db.py` the schema (38
-migrations). Nothing is under way: the next work is a close below, a
-choice of the user's under "The review", or a fix from field use.
+migrations). Nothing is under way: the next work is a close below or a
+fix from field use. The review of 16 November is closed: its fixes, and
+the four choices it left (`decisions.md`: "Outcome of a run", "Long
+lists of files", "Tests", "CI actions").
 
 ## Built, waiting for their close
 
@@ -31,7 +33,7 @@ Each is described in the file named; what remains is the close.
 - **20, documents** (`architecture/documents.md`): the user, with Claude as
   the assistant: a report of a run written in a folder, edited by hand, the
   agent's version restored, printed to PDF from the page.
-- **21, inventory chosen at launch** (`architecture/projects.md`, "The
+- **21, inventory chosen at launch** (`architecture/inventories.md`, "The
   inventory chosen at launch"): on a controller `wu-run` and `wol` from the
   page on two inventories, a schedule each, a workflow launched on two, the
   agent choosing the inventory.
@@ -47,7 +49,6 @@ Each is described in the file named; what remains is the close.
   Then, on a controller, the project synchronised and its collections
   installed again, and the work of a lab's maintenance done from the chat
   with those skills, without going back to the repository.
-
 - **24, skills in the documents** (`architecture/documents.md`, "Skills
   of the documents"; `chat.md`, "Skills"): shown in containers (`mcp`,
   `documents`, `chat`, the three distributions) and in a browser on
@@ -58,19 +59,13 @@ Each is described in the file named; what remains is the close.
 
 ## Integration
 
-Last run, 26 November, in containers on the three distributions: `runs`,
-`schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`, `cli`,
-`documents`, `store`, and `make ct-lifecycle` on Debian (from 0.3.0); on
-the VM `fed44` `runs`, `workflows`, `schedules` (SELinux, no denial).
-Then `sandbox`, `runs`, `checks` in containers on the three, with the
-outcome of a run guarded (run D of `sandbox` fails with the fleet-run of
-before). Earlier: `files` in containers; `sandbox` on `deb13` and `alma10`.
-
-## The review of 16 November
-
-Its fixes and the four choices it left to the user were done on 26
-November (`decisions.md`: "Outcome of a run", "Long lists of files",
-"Tests", "CI actions").
+Last runs, 26 November, in containers on the three distributions:
+`runs`, `schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`,
+`cli`, `documents`, `store`, `sandbox` (its run D, the outcome of a run
+guarded, in containers only); `make ct-lifecycle` on Debian (from 0.3.0).
+On VMs: `runs`, `workflows`, `schedules` on `fed44` (SELinux, no denial);
+`sandbox` on `deb13` and `alma10` before run D. Earlier: `files` in
+containers.
 
 ## Future
 

@@ -102,7 +102,7 @@ waiting for approval does. `run.get` and `run.list` say what it waits for
 starts it but `dispatch`, which runs when a unit ends, so no process waits.
 
 Projects and inventories, where the files of a run come from, are in
-[projects.md](projects.md).
+[projects.md](projects.md) and [inventories.md](inventories.md).
 
 **Host keys.** `hostkey.scan` returns the keys offered by one host, or by every
 SSH host of an inventory, with their fingerprints; nothing is trusted until an

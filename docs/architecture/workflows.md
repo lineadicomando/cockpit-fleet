@@ -15,7 +15,7 @@ or both (`project_id`, `inventory_id`, each null for any): its steps are
 then templates of that project, and every step runs on that inventory,
 which each template must allow (its default, one of the others it allows
 at launch, or any; see "The inventory chosen at launch" in
-[Projects](projects.md)). It is checked three times: when the workflow is
+[Inventories](inventories.md)). It is checked three times: when the workflow is
 saved (`bad_request`); when a template that is a step of it is moved to
 another project or stops allowing the inventory (`template.update` answers
 `conflict`: another template is made instead, as a template in use is not
