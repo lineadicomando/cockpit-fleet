@@ -219,6 +219,24 @@ class GalaxyTest(Base):
         self.assertEqual(self.listed()["state"], "installed")
 
 
+    def test_a_lock_held_for_ever_holds_up_neither_the_pages_nor_the_end_of_a_run(self):
+        project = self.project()
+        self.install(project)
+        run_id = self.ok("project.collections", {"id": project["id"]})["run_id"]
+        (paths.RUNS_DIR / run_id / "galaxy").mkdir()
+        self.finish(run_id)
+        # A fleetctl stopped with Ctrl-Z while it collects.
+        holder = os.open(paths.RUNS_DIR, os.O_RDONLY)
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        try:
+            with mock.patch.multiple(jobs, RECONCILE_WAIT=0.2, RECONCILE_WAIT_ENDED=0.2):
+                self.assertEqual(self.ok("run.get", {"id": run_id})["status"], "running")
+                self.assertEqual(self.code("run.reconcile"), "unavailable")
+        finally:
+            os.close(holder)
+        self.ok("run.reconcile")
+        self.assertEqual(self.ok("run.get", {"id": run_id})["status"], "successful")
+
 class BuildGalaxyTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

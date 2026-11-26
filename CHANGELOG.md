@@ -144,6 +144,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
   Debian 13 has it ("flush of closed file"), though the file arrived.
 - Assistant: a message written and not sent is still there after a
   visit to another tab of Fleet (not after reloading the page).
+- A `fleetctl` stopped (Ctrl-Z) or hung while it collected the runs that
+  ended no longer holds up every page and the start of queued runs: the
+  pages go on after a few seconds, the end of a run is recorded by a later
+  reading. A change of the documents waits at most 30 seconds for another
+  ("try again in a while").
 
 ## [0.4.0] - 2026-11-18
 

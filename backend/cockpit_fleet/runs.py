@@ -518,5 +518,5 @@ def run_events(ctx: Context, params: Values) -> dict:
 @command("run.reconcile", role="admin", tool=False)
 def run_reconcile(ctx: Context, params: Values) -> dict:
     """Called when a run unit ends, to record the outcome and start what waits."""
-    jobs.reconcile(ctx)
+    jobs.reconcile(ctx, ended=True)
     return {}

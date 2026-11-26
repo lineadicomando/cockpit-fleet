@@ -1,5 +1,6 @@
 """Small helpers shared by the modules that keep things in the database."""
 
+import fcntl
 import json
 import secrets
 import sqlite3
@@ -16,6 +17,22 @@ def new_id(prefix: str) -> str:
 
 def now() -> float:
     return time.time()
+
+
+def flock_within(fd: int, wait: float, exclusive: bool = True) -> bool:
+    """Take the lock of FD, waiting at most WAIT seconds: one held by a
+    process that is stopped (Ctrl-Z) or hung must not hold up the others for
+    ever. False when it was not free in time."""
+    flags = (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            fcntl.flock(fd, flags)
+            return True
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.1)
 
 
 def check_name(value: str, what: str = "name") -> str:

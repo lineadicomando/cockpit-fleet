@@ -8,7 +8,7 @@ Decided on 25 November (`decisions.md`, "Documents").
 /var/lib/cockpit-fleet/documents/           the tree: texts (.md) and attachments
 /var/lib/cockpit-fleet/documents.git/       the repository of the texts
 /var/lib/cockpit-fleet/documents-uploads/   uploads on their way in
-/var/lib/cockpit-fleet/documents.lock       one change at a time
+/var/lib/cockpit-fleet/documents.lock       one change at a time (waited for 30 s at most)
 document_files (database)                   path, size, sha256, origin, source, who
 ```
 

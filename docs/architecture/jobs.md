@@ -60,7 +60,12 @@ runs are read. It also starts queued runs while fewer than
 schedule gives its own to its runs; a launch by hand has 0), then the oldest. Only one `reconcile` works at a time (a
 lock on the directory of the runs): the unit that ends and a page that polls
 get there together, and what a job left can be moved only once; found with
-the galaxy job, whose result takes longer to take in. A unit that is gone without a
+the galaxy job, whose result takes longer to take in. The lock is waited
+for a while, not for ever: a `fleetctl` stopped with Ctrl-Z while it holds
+it would otherwise stop every page and every start. A page waits 5 s, then
+goes on without collecting (the holder collects; queued runs still start);
+`run.reconcile` of the unit that ends waits 2 minutes, then fails, and a
+later reading collects the run (`store.flock_within`). A unit that is gone without a
 `result.json` is recorded as an error, or as canceled if that was asked.
 
 **Runs in series.** Two templates on one inventory launched one after the

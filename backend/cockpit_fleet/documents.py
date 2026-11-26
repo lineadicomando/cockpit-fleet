@@ -19,7 +19,6 @@ someone changed meanwhile is not overwritten. An agent reads a text in
 chunks, writes it whole.
 """
 
-import fcntl
 import hashlib
 import json
 import os
@@ -67,6 +66,11 @@ def _mkdirs() -> None:
     paths.DOCUMENTS_UPLOADS.mkdir(mode=0o700, exist_ok=True)
 
 
+# How long a change waits for the one under way: one held by a command that is
+# stopped must not hold up the documents for ever.
+LOCK_WAIT = 30
+
+
 @contextmanager
 def _locked() -> Iterator[None]:
     """One change at a time: a commit holds what one caller did."""
@@ -74,7 +78,8 @@ def _locked() -> Iterator[None]:
     fd = os.open(paths.DOCUMENTS_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
                  0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if not store.flock_within(fd, LOCK_WAIT):
+            raise Unavailable("the documents are being changed: try again in a while")
         yield
     finally:
         os.close(fd)

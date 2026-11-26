@@ -1,10 +1,12 @@
 """Documents: texts in a history of their own, attachments beside them."""
 
 import dataclasses
+import fcntl
 import hashlib
 import io
 import json
 import os
+from unittest import mock
 
 from test_phase2 import Base
 
@@ -53,6 +55,19 @@ class DocumentsTest(Base):
         audit = self.ok("audit.list")["entries"][0]
         self.assertEqual(audit["command"], "doc.write")
         self.assertNotIn("Disk full", json.dumps(audit))
+
+    def test_a_change_held_for_ever_does_not_hold_up_the_others(self):
+        self.written("a.md", "one")
+        documents._mkdirs()
+        holder = os.open(paths.DOCUMENTS_LOCK, os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        try:
+            with mock.patch.object(documents, "LOCK_WAIT", 0.2):
+                self.assertEqual(self.code("doc.mkdir", {"path": "b"}, role="operator"),
+                                 "unavailable")
+        finally:
+            os.close(holder)
+        self.call("doc.mkdir", {"path": "b"}, "operator")
 
     def test_a_replacement_quotes_the_digest_of_what_was_read(self):
         first = self.written("a.md", "one\n")

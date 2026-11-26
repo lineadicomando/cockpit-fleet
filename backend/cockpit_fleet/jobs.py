@@ -6,7 +6,6 @@ ends (cockpit-fleet-finish@.service) and whenever runs are read.
 """
 
 import errno
-import fcntl
 import hashlib
 import json
 import os
@@ -14,7 +13,6 @@ import re
 import shutil
 import stat
 import subprocess
-import time
 import traceback
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -215,16 +213,8 @@ def tree_locked(home: Path | None, exclusive: bool) -> Iterator[None]:
         return
     fd = os.open(home / "lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
-        deadline = time.monotonic() + TREE_LOCK_WAIT
-        while True:
-            try:
-                fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() > deadline:
-                    message = "the files are being changed: try again in a while"
-                    raise Unavailable(message) from None
-                time.sleep(0.1)
+        if not store.flock_within(fd, TREE_LOCK_WAIT, exclusive):
+            raise Unavailable("the files are being changed: try again in a while")
         yield
     finally:
         os.close(fd)
@@ -920,19 +910,32 @@ def _lost(ctx, run_id: str) -> None:
                      FLEET_TRACEBACK=traceback.format_exc())
 
 
-def reconcile(ctx) -> None:
+# How long reconcile() waits for another caller to end collecting: a page
+# goes on without collecting (who holds the lock does it), the unit that
+# records the end of a run waits longer, then fails rather than hang.
+RECONCILE_WAIT = 5
+RECONCILE_WAIT_ENDED = 120
+
+
+def reconcile(ctx, ended: bool = False) -> None:
     # One at a time: the unit that ends and a page that reads the runs get here
     # together, and what a job left can be taken only once. The rows are read
     # under the lock, so the second one finds the run already recorded.
     descriptor = os.open(paths.RUNS_DIR, os.O_RDONLY | os.O_DIRECTORY)
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
-        for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'"
-                                    " AND kind != 'workflow'").fetchall():
-            try:
-                _collect(ctx, run)
-            except Exception:  # noqa: BLE001  (one run must not keep the others from ending)
-                _lost(ctx, run["id"])
+        if not store.flock_within(descriptor, RECONCILE_WAIT_ENDED if ended else RECONCILE_WAIT):
+            if ended:
+                raise Unavailable("another command is collecting the runs that ended;"
+                                  " a later reading of the runs collects this one")
+            # What waits to start still starts.
+            journal.send("runs not collected: another command holds their lock", 4)
+        else:
+            for run in ctx.conn.execute("SELECT * FROM runs WHERE status = 'running'"
+                                        " AND kind != 'workflow'").fetchall():
+                try:
+                    _collect(ctx, run)
+                except Exception:  # noqa: BLE001  (one run must not keep the others from ending)
+                    _lost(ctx, run["id"])
     finally:
         os.close(descriptor)
     # A workflow whose step ended while nothing advanced it, after a crash.
