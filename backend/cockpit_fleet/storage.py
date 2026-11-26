@@ -337,38 +337,41 @@ def store_read(ctx: Context, params: Values) -> dict:
 
 class _Archive:
     """A tar of entries of the store, made as it is read: a thread writes it
-    into a pipe, whose end main() copies out. Nothing of it is held whole."""
+    into a pipe, whose end main() copies out. Nothing of it is held whole,
+    and one file is open at a time: a folder of thousands is no more files
+    open than one."""
 
-    def __init__(self, entries: list[tuple[str, int | None, os.stat_result]]):
+    def __init__(self, entries: list[tuple[str, PurePosixPath | None, os.stat_result]]):
         reader, writer = os.pipe()
         self._reader = os.fdopen(reader, "rb")
         self._writer = os.fdopen(writer, "wb")
         self._entries = entries
-        # The files not yet handed to the tar, which closes those it has read.
-        self._open = {fd for _name, fd, _status in entries if fd is not None}
         self._thread = threading.Thread(target=self._write, daemon=True)
         self._thread.start()
 
     def _write(self) -> None:
         try:
             with tarfile.open(fileobj=self._writer, mode="w|", format=tarfile.PAX_FORMAT) as tar:
-                for name, fd, status in self._entries:
+                for name, path, status in self._entries:
                     info = tarfile.TarInfo(name)
                     info.mtime = int(status.st_mtime)
-                    if fd is None:
+                    if path is None:
                         info.type, info.mode = tarfile.DIRTYPE, 0o755
                         tar.addfile(info)
                         continue
-                    info.size, info.mode = status.st_size, 0o644
-                    self._open.discard(fd)
+                    try:
+                        fd = _open_file(path)
+                    except (NotFound, Conflict):
+                        continue  # gone or replaced since it was listed
                     with os.fdopen(fd, "rb") as source:
+                        # What is sent is what was opened: its size then.
+                        opened = os.fstat(source.fileno())
+                        info.size, info.mode = opened.st_size, 0o644
+                        info.mtime = int(opened.st_mtime)
                         tar.addfile(info, source)
         except (OSError, tarfile.TarError):
             pass  # the reader sees the tar end short: the browser's file is broken
         finally:
-            for fd in self._open:
-                os.close(fd)
-            self._open.clear()
             try:
                 self._writer.close()
             except OSError:
@@ -400,42 +403,36 @@ def store_archive(ctx: Context, params: Values) -> dict:
     names = [path.name for path in chosen]
     if len(set(names)) != len(names):
         raise BadRequest("two of them have the same name: archive their folder instead")
-    # Every file opened now: what fails, fails before the first byte.
-    entries: list[tuple[str, int | None, os.stat_result]] = []
-    try:
-        for path in chosen:
-            status = _kind(path)
-            if stat.S_ISREG(status.st_mode):
-                entries.append((path.name, _open_file(path), status))
-                continue
-            fd = _open_dir(path.parts)
-            files: dict[str, os.stat_result] = {}
-            directories: list[str] = []
-            try:
-                if not _walk(fd, "", files, directories):
-                    raise BadRequest(f"{path} holds too many entries to archive")
-            finally:
-                os.close(fd)
-            entries.append((path.name, None, status))
-            inside = sorted([(name, None) for name in directories]
-                            + [(name, files[name]) for name in files])
-            for name, file_status in inside:
-                if file_status is None:
-                    entries.append((f"{path.name}/{name}", None, status))
-                else:
-                    entries.append((f"{path.name}/{name}", _open_file(path / name),
-                                    file_status))
-    except BaseException:
-        for _name, fd, _status in entries:
-            if fd is not None:
-                os.close(fd)
-        raise
-    # What was opened is what is sent: its size as it was opened.
-    entries = [(name, fd, os.fstat(fd) if fd is not None else status)
-               for name, fd, status in entries]
+    # Every entry listed, and every file opened and closed, now: what fails,
+    # fails before the first byte. The tar opens them again as it gets to
+    # them, one at a time.
+    entries: list[tuple[str, PurePosixPath | None, os.stat_result]] = []
+    for path in chosen:
+        status = _kind(path)
+        if stat.S_ISREG(status.st_mode):
+            os.close(_open_file(path))
+            entries.append((path.name, path, status))
+            continue
+        fd = _open_dir(path.parts)
+        files: dict[str, os.stat_result] = {}
+        directories: list[str] = []
+        try:
+            if not _walk(fd, "", files, directories):
+                raise BadRequest(f"{path} holds too many entries to archive")
+        finally:
+            os.close(fd)
+        entries.append((path.name, None, status))
+        inside = sorted([(name, None) for name in directories]
+                        + [(name, files[name]) for name in files])
+        for name, file_status in inside:
+            if file_status is None:
+                entries.append((f"{path.name}/{name}", None, status))
+            else:
+                os.close(_open_file(path / name))
+                entries.append((f"{path.name}/{name}", path / name, file_status))
     ctx.output = _Archive(entries)
     return {"paths": [str(path) for path in chosen],
-            "size": sum(status.st_size for _name, fd, status in entries if fd is not None)}
+            "size": sum(status.st_size for _name, path, status in entries if path is not None)}
 
 
 def _open_file(path: PurePosixPath) -> int:

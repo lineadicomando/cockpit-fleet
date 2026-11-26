@@ -309,9 +309,12 @@ the store holds is installers and images, which do not compress), named in
 it from their own name down. It streams out as `store.read` does, through
 the link of an external channel, so its paths come in argv: `fleetctl
 COMMAND PATH...` takes several for a command that declares `paths`. Every
-file is opened before the first byte, so that a path that is not there
-fails while the answer can still say so; then a thread writes the tar into
-a pipe that `main()` copies out, nothing of it held whole. The paths of a
+entry is listed, and every file opened and closed, before the first byte,
+so that a path that is not there or not readable fails while the answer
+can still say so; then a thread writes the tar into a pipe that `main()`
+copies out, nothing of it held whole, opening each file again as it gets
+to it: one open at a time (all of them kept open ran out of descriptors
+past about a thousand). A file gone meanwhile is left out. The paths of a
 link are bounded by the length of a URL: the page refuses a selection whose
 link would pass 6000 characters and asks for its folder instead.
 

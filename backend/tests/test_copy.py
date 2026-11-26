@@ -2,11 +2,13 @@
 
 import hashlib
 import os
+import threading
 from unittest import mock
 
 from test_storage import StoreBase
 
-from cockpit_fleet import cli, copier, jobs, paths
+from cockpit_fleet import cli, copier, jobs, paths, storage
+from cockpit_fleet.errors import NotFound
 
 
 def audited(test, command):
@@ -203,6 +205,36 @@ class ArchiveTest(StoreBase):
                                "readme.txt": b"read me"})
         audit = self.ok("audit.list")["entries"][0]
         self.assertEqual((audit["command"], audit["user"]), ("store.archive", "anna"))
+
+    def test_a_folder_of_many_files_is_archived_with_one_open_at_a_time(self):
+        import resource
+        many = paths.STORE_DIR / "many"
+        many.mkdir()
+        for index in range(300):
+            (many / f"f{index:03}").write_bytes(b"%d" % index)
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (128, hard))
+        try:
+            got = self.archive(["many"])
+        finally:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+        self.assertEqual(len(got), 301)
+        self.assertEqual(got["many/f299"], b"299")
+
+    def test_a_file_gone_meanwhile_is_left_out(self):
+        original = storage._open_file
+
+        def gone(path):
+            # Listed by the command, gone when the tar gets to it.
+            writing = threading.current_thread() is not threading.main_thread()
+            if writing and str(path) == "win/sub/b.cfg":
+                raise NotFound("gone")
+            return original(path)
+
+        with mock.patch.object(storage, "_open_file", gone):
+            got = self.archive(["win"])
+        self.assertNotIn("win/sub/b.cfg", got)
+        self.assertEqual(got["win/a.msi"], b"installer")
 
     def test_what_cannot_be_archived_fails_before_the_first_byte(self):
         self.assertTrue(self.put("other/a.msi", b"x")["ok"])
