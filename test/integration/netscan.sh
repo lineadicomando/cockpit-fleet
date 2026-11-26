@@ -111,7 +111,13 @@ expect_eq "the scan is in the audit trail" "$(db "SELECT count(*) FROM audit WHE
 # A larger scan, canceled while it runs: what it found until then is kept.
 run=$(admin netscan.start "{\"subnet\": \"$wide\"}")
 id=$(get "$run" "a['data']['id']")
-sleep 3
+# Canceled once the sweep has begun: a run canceled before its unit started
+# rightly has no result at all (a VM's first run can take that long).
+n=0
+until grep -q '^scanning ' "/var/lib/cockpit-fleet/runs/$id/stdout.log" 2>/dev/null || [ "$n" -ge 60 ]; do
+    sleep 0.5; n=$((n + 1))
+done
+sleep 1
 admin run.cancel "{\"id\": \"$id\"}" >/dev/null
 expect_run "a scan canceled" "$id" 60 canceled
 result=$(admin netscan.result "{\"id\": \"$id\"}")
