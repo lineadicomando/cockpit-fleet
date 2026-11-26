@@ -48,12 +48,41 @@ field use only, toward 1.0.0.
 
 ## Phase 21: inventory chosen at launch
 
-Decided 26 November (`decisions.md`, "Inventory at launch"). To settle
-before building, with the user: where the allowed inventories and the
-credential per inventory live (schema), what a schedule and a workflow
-step fix, how runs in series, approvals, rules of notifications by scope
-and the template's limit read the chosen inventory, the tool of an agent
-(the inventory as an enum), the launch form, `fleet launch`, export.
+Decided 26 November (`decisions.md`, "Inventory at launch"). What reads
+the run's `inventory_id` already follows the choice (runs in series,
+rules of notifications, approvals, filters); `varsets.effective` takes an
+inventory.
+
+- [ ] Schema: `templates.inventory_id` stays, the default; a table
+  `template_inventories` of the others allowed; a flag "any inventory".
+  A machine credential on the inventory: a run takes the template's if
+  set, else the inventory's; ad-hoc offers it by default; a check's
+  credential becomes optional, the inventory's by default.
+- [ ] Launch: `run.start` takes `inventory_id` (default the template's),
+  refused when not allowed; the template's limit applies to it;
+  `autonomy._inventories` reads the chosen one.
+- [ ] Schedules keep the inventory they launch on (the template's
+  default for those that exist).
+- [ ] Workflows: one that names an inventory runs every step there, each
+  template allowing it; one that does not may take its inventory at launch,
+  among those every step allows, its schedule too.
+- [ ] Agents: the template's tool takes `inventory`, an enum of the names
+  allowed, when there are more than one ("any": the inventories there
+  are); the workflow's likewise.
+- [ ] `fleet launch --inventory`; export `inventories` (and "any") beside
+  `inventory`, the schedule's `inventory`; older exports import as before.
+- [ ] Interface: the template's form (default, others allowed, any); the
+  launch form's choice; the templates listed under each inventory they
+  allow, "also on N others"; the inventory's credential in its form;
+  the workflow's and the schedule's choice.
+- [ ] An inventory a template allows cannot be deleted (the message names
+  the templates).
+- [ ] Docs (`projects.md`, `workflows.md`, `schedules.md`, `agents.md`,
+  `limits.md` "Workflows"), `CHANGELOG.md`, Italian strings.
+- [ ] Close: `runs`, `schedules`, `negative` on the three in containers;
+  on a controller `wu-run` and `wol` from the page on two inventories, a
+  schedule each, a workflow launched on two, the agent choosing the
+  inventory.
 
 ## Phase 22: skills of projects
 
