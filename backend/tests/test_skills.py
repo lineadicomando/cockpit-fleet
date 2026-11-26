@@ -126,3 +126,7 @@ class SkillTest(Base):
                          {"name": "a", "description": "one\ntwo"})
         self.assertEqual(skills.frontmatter("no\n---\nname: a\n---"), {})
         self.assertEqual(skills.frontmatter('---\ndescription: "x: y"\n---'), {"description": "x: y"})
+        self.assertEqual(skills.frontmatter("---\nname: a\ndescription: Managing\n  workstations,\n"
+                                            "  and more.\nother: b\n---\n"),
+                         {"name": "a", "description": "Managing workstations, and more.",
+                          "other": "b"})

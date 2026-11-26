@@ -84,8 +84,8 @@ def _read_text(dir_fd: int, name: str) -> str:
 
 def frontmatter(text: str) -> dict[str, str]:
     """The keys of the frontmatter of a SKILL.md: name: value lines between
-    two --- lines, a value quoted or not, or a block (> or |) whose lines
-    are indented below it. Enough for name and description; nothing else of
+    two --- lines, a value quoted or not and folded on the indented lines
+    below it, or a block (> or |) whose lines are indented below it. Enough for name and description; nothing else of
     YAML is read."""
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -107,8 +107,14 @@ def frontmatter(text: str) -> dict[str, str]:
                 index += 1
             joiner = "\n" if value.startswith("|") else " "
             value = joiner.join(part for part in block if part).strip()
-        elif len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
+        else:
+            # A plain value may go on, folded, on the indented lines below it.
+            while index < len(lines) and lines[index].startswith((" ", "\t")) \
+                    and lines[index].strip():
+                value += " " + lines[index].strip()
+                index += 1
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
         found[key] = value
     return found
 

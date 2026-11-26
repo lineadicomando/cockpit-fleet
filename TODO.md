@@ -83,9 +83,13 @@ Decided 26 November (`decisions.md`, "Skills"); what exists:
 `instructions.py`), `chat.md` for administrators; built on 26 November;
 `chat`, `mcp`, `cli` pass in containers on the three.
 
-- [ ] `ansible-win_edulab` and `ansible-collection-win_workman` (their own
-  repositories): the operational skills rewritten for Fleet's tools, the
-  role catalog of the collection as a skill of its own.
+- [ ] Publish what the other repositories have, committed there on 26
+  November and not pushed: `ansible-win_edulab` three skills
+  (`win-edulab-operations`, `-inventory`, `-reports`);
+  `ansible-collection-win_workman` the skill `win-workman` with the catalog
+  of its roles, written by `tools/fleet_skills.py` (a tag, then
+  `requirements.yaml` of win_edulab pointing to it). Then the project
+  synchronised and its collections installed again on the controller.
 - [ ] Close: the work of a lab's maintenance done from the chat on a
   controller, with those skills, without going back to the repository.
 
