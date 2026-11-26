@@ -233,7 +233,8 @@ started stays as it is: once logged in, send the message again.
 Before the first message, the agent is given instructions in layers: a base
 and a part for its profile, which come with the package and cannot be
 removed, then the controller's own, if there is a file
-`/etc/cockpit-fleet/assistant.md`. Write there what every assistant of this
+`/etc/cockpit-fleet/assistant.md`, and last the index of the skills, if
+there are any (see "Skills" below). Write there what every assistant of this
 controller should know: the inventories not to touch, who to ask about what,
 the conventions of the projects. Plain text or Markdown, up to 8 kB, in
 UTF-8; it is read at the start of each session, so a change applies to the

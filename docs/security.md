@@ -173,6 +173,11 @@ launch is (a deletion every time), and `autonomous` at most
 `[chat] autonomous_writes` times a session; each change is in their
 history with the person the agent acts for as its author, and in the audit
 log as coming through an agent, so that a text can be put back as it was.
+Skills (the `.fleet/skills/` of projects and their collections,
+`/etc/cockpit-fleet/skills/`) are read by every role and sent to the
+provider of the model, and they guide an agent without holding it: whoever
+may write a project's files or a collection it installs can steer the
+assistant through them, as they can its playbooks.
 The agent of
 an administrator may scan a subnet in the profiles `diagnostic` and
 `administrator`, asked every time: only those subnets an administrator

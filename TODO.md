@@ -6,121 +6,76 @@ What is left. Other documents: `CLAUDE.md`; how each closed phase was shown:
 
 ## Status (26 November 2026)
 
-Phases 0–18 closed; 19 to 23 built, each waiting only for its close
-below. Last release 0.4.0 (18 November); `[Unreleased]` of `CHANGELOG.md`
-has what came since. `make release` only when asked.
+Phases 0–18 closed; 19–23 built, each waiting only for the close below;
+**next: phase 24**. Phases 21–24 are the last that add features
+(`decisions.md`, "Freeze of features"): then fixes, minor changes and
+field use only, toward 1.0.0. Last release 0.4.0 (18 November);
+`[Unreleased]` of `CHANGELOG.md` has what came since. `make release` only
+when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (839
+To resume: `git status`, `git log origin/main..`; `make check` (847
 backend, 213 frontend tests). Each backend module's docstring says what it
 is; `cli.py` is the registry of commands, `db.py` the schema (38
 migrations).
 
-## Phase 19: network discovery
+## Phase 24: skills in the documents (next)
 
-Decided 20 November (`decisions.md`, "Network discovery"); what exists:
-`architecture/network.md` (scan, inventory from a scan, MAC addresses,
-`netscan.probe`, `net_probe` from a node). `netscan.sh` passes in
-containers on the three distributions.
-
-- [ ] Close: `win_net_probe` on `win11` (on the workstation that has it);
-  `netscan.sh` with `IT_NETSCAN_SUBNET` on the lab's network with `win11`
-  up (NetBIOS, its MAC address); on `alma10` and `fed44` the same, and
-  whether ICMP is allowed as installed (Debian 13 allows it: `deb13`, 20
-  November); the page in a browser.
-
-## Phase 20: documents
-
-Decided 25 November (`decisions.md`, "Documents"); what exists:
-`architecture/documents.md` (`documents.py`, `docrender.py`, the class
-`doc`, `FileManager` shared with the store, `DocumentsPage`). `documents.sh`
-passes in containers on the three distributions; the page was tried in
-Chrome on `deb13` (25 November), all but printing.
-
-- [ ] Close (the user does it, 25 November): with Claude
-  as the assistant, a report of a run written in a folder, edited by
-  hand, the agent's version restored, printed to PDF from the page.
-
-## Toward a mature release
-
-Decided 26 November (`decisions.md`, "Freeze of features"): phases 21
-to 24 are the last ones that add features; then fixes, minor changes and
-field use only, toward 1.0.0.
-
-## Phase 21: inventory chosen at launch
-
-Decided 26 November (`decisions.md`, "Inventory at launch"); what exists:
-`architecture/projects.md`, "The inventory chosen at launch" (schema 38:
-`template_inventories`, `any_inventory`, the inventory's machine
-credential, the schedule's inventory), `workflows.md` and `schedules.md`
-for the rest; built on 26 November, backend and page.
-
-`runs`, `schedules`, `workflows`, `negative` pass in containers on the
-three, and `runs`, `workflows`, `schedules` on the VM `fed44` (SELinux
-enforcing, no denial), 26 November.
-
-- [ ] Close: on a controller `wu-run` and `wol` from the page on two
-  inventories, a schedule each, a workflow launched on two, the agent
-  choosing the inventory.
-
-## Phase 22: check cycles in view
-
-Decided 26 November (`decisions.md`, "Check cycles in view"); what exists:
-`checks.md` ("Following the cycles"), `architecture/checks.md` (the
-cycles' `check_ids`, `outcome.json`, `check.cycle`, `[checks]
-keep_days`); built on 26 November. `checks`, `runs`, `negative` pass in
-containers on Debian and Fedora, `checks` on the VM `alma10`: in a
-container on AlmaLinux `checks.sh` cannot build its nodes' image (podman's
-overlay over the build context: invalid argument), before Fleet is
-involved. The pages tried in Chrome on `fed44`.
-
-- [ ] Close: the user follows the cycles of the labs' checks on a
-  controller.
-
-## Phase 23: skills of projects
-
-Decided 26 November (`decisions.md`, "Skills"); what exists:
-`architecture/agents.md`, "Skills" (`skills.py`, the layer of
-`instructions.py`), `chat.md` for administrators; built on 26 November;
-`chat`, `mcp`, `cli` pass in containers on the three.
-
-- [ ] Publish what the other repositories have, committed there on 26
-  November and not pushed: `ansible-win_edulab` three skills
-  (`win-edulab-operations`, `-inventory`, `-reports`);
-  `ansible-collection-win_workman` the skill `win-workman` with the catalog
-  of its roles, written by `tools/fleet_skills.py` (a tag, then
-  `requirements.yaml` of win_edulab pointing to it). Then the project
-  synchronised and its collections installed again on the controller.
-- [ ] Close: the work of a lab's maintenance done from the chat on a
-  controller, with those skills, without going back to the repository.
-
-## Phase 24: skills in the documents
-
-Decided 26 November (`decisions.md`, "Skills in the documents").
+Decided 26 November (`decisions.md`, "Skills in the documents"). Builds on
+`skills.py` (phase 23) and `documents.py` (phase 20).
 
 - [ ] Documents: a commit made through an agent says so (a trailer beside
-  the person's authorship), readable from the history.
+  the person's authorship; today only the audit trail knows), readable from
+  the history.
 - [ ] Skills: `skills/NAME/SKILL.md` of the documents a source of
   `skills.py`; one whose last change came from an agent left out of the
   index and of `skill.read` until approved.
 - [ ] An approval: a command for operators and administrators, refused to
-  agents, recorded (in the history and the audit); a person's own save
-  approves too. What waits is listed.
-- [ ] Page of the documents: a skill marked as waiting, with "Approve" and
-  the differences since the last approved version.
+  agents, recorded (history and audit); a person's own save approves too.
+  What waits is listed.
+- [ ] Page of the documents: a skill marked as waiting, "Approve", and the
+  differences since the last approved version.
 - [ ] Instructions: the assistant may propose a skill for a task that
-  recurs, written there, and says it waits for a person.
+  recurs, written there, saying that it waits for a person.
 - [ ] Docs (`chat.md`, `architecture/documents.md`, `agents.md`),
   `CHANGELOG.md`, Italian strings; close in containers and in a browser.
 
-## Integration since the review of 16 November
+## Built, waiting for their close
 
-`make ct-test` on AlmaLinux: `runs`, `checks`, `store`, `files`,
-`schedules`, `cli`, `mcp`, `chat`, `negative`; on Debian `chat`, `mcp`,
-`documents`, `cli`, `store`; on Fedora `chat`, `mcp`, `documents`;
-`make ct-lifecycle` on Debian. On the VMs `deb13` and `alma10`: `sandbox`,
-`runs`, `files`, `store`, `chat`, `schedules`, `negative`. The rest on
-Fedora not since phase 17. `cmdb.sh` fails on Fedora in a container (known:
-`architecture/tests.md`).
+Each is described in the file named; what remains is the close.
+
+- **19, network discovery** (`architecture/network.md`): `win_net_probe` on
+  `win11` (on the workstation that has it); `netscan.sh` with
+  `IT_NETSCAN_SUBNET` on the lab's network with `win11` up (NetBIOS, its
+  MAC address), on `alma10` and `fed44` too, and whether ICMP is allowed as
+  installed (Debian 13 allows it); the page in a browser.
+- **20, documents** (`architecture/documents.md`): the user, with Claude as
+  the assistant: a report of a run written in a folder, edited by hand, the
+  agent's version restored, printed to PDF from the page.
+- **21, inventory chosen at launch** (`architecture/projects.md`, "The
+  inventory chosen at launch"): on a controller `wu-run` and `wol` from the
+  page on two inventories, a schedule each, a workflow launched on two, the
+  agent choosing the inventory.
+- **22, check cycles in view** (`checks.md`, "Following the cycles";
+  `architecture/checks.md`): the user follows the cycles of the labs'
+  checks on a controller.
+- **23, skills of projects** (`architecture/agents.md`, "Skills";
+  `chat.md`, "Skills"): the skills are pushed in `ansible-win_edulab`
+  (`win-edulab-operations`, `-inventory`, `-reports`) and in
+  `ansible-collection-win_workman` (`win-workman`, its catalog written by
+  `tools/fleet_skills.py`), but the collection's came after its tag v0.9.1:
+  it needs a new tag and `requirements.yaml` of win_edulab pointing to it.
+  Then, on a controller, the project synchronised and its collections
+  installed again, and the work of a lab's maintenance done from the chat
+  with those skills, without going back to the repository.
+
+## Integration
+
+Last run, 26 November, in containers on the three distributions: `runs`,
+`schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`, `cli` (on
+AlmaLinux `checks` on the VM `alma10` instead: `architecture/tests.md`,
+known failures); on the VM `fed44` `runs`, `workflows`, `schedules`
+(SELinux, no denial). Earlier: `documents`, `store`, `files` in containers;
+`make ct-lifecycle` on Debian; `sandbox` on `deb13` and `alma10`.
 
 ## What the review of 16 November left
 
@@ -170,7 +125,8 @@ For the user to decide:
 
 ## Future
 
-Not planned as phases yet; the user picks the next one.
+Not planned as phases; after the freeze, only if field use shows one
+blocking (`decisions.md`, "Freeze of features").
 
 - Ad-hoc commands: sets of variables chosen for one (today only the
   inventory's).
