@@ -106,7 +106,11 @@ diff and restore are a dialog as for projects. Exports: "Print or save as
 PDF" prints the frame (the stylesheet has print rules: page margins, no
 breaks inside code and rows), "Download the text" is `doc.get`, "Download
 as a web page" is the rendered page saved from the browser with the
-stylesheet and its policy inside it, the images in it. In the chat, a write
+stylesheet and its policy inside it, the images in it (a `blob:` link
+clicked in the shell's document, `saveBlob`: Firefox refuses it from the
+page's frame). The document follows the theme: the page sets a class on
+the frame's root as Cockpit's theme changes, a saved page follows the
+system's `prefers-color-scheme`, and on paper it is always light. In the chat, a write
 of the agent that went through (`doc_write`, `doc_restore`, a copy or a
 move to a text) has "Open the document".
 

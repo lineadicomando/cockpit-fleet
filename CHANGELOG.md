@@ -107,6 +107,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Documents: a document follows the theme of Cockpit, dark included; a
+  page saved from it follows the theme of the system it is opened on.
+  Printed, it stays light.
 - Checks: a check cycle is kept a week after it ends instead of a day
   (`[checks] keep_days` of `config.toml`, 7): lower it for a large fleet
   checked often.
@@ -129,6 +132,7 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- Documents: "Download as a web page" did nothing in Firefox.
 - `fleet store put` failed after sending the file, with Python 3.13 as
   Debian 13 has it ("flush of closed file"), though the file arrived.
 - Assistant: a message written and not sent is still there after a

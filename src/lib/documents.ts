@@ -94,36 +94,46 @@ function escape(text: string): string {
     return text.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
 }
 
-// What a document looks like, on the page and on paper: the same in the
-// light and the dark theme, as a sheet of paper is.
+// The colours of a document in the dark theme: set on the frame's root by
+// the page as Cockpit's theme changes, and taken from the reader's system
+// by a saved page. On paper a document is always light.
+const DARK = `
+  color-scheme: dark; --text: #e0e0e0; --page: #1b1d21; --muted: #a3a3a3; --rule: #4d4d4d; --rule-light: #3c3f42;
+  --code: #2b2e33; --pre: #26292d; --head: #2b2e33; --link: #92c5f9; --refused: #a3a3a3;`;
+
+// What a document looks like, on the page and on paper.
 export const DOCUMENT_CSS = `
-:root { color-scheme: light; }
-body { margin: 0; padding: 1.5rem 2rem; color: #1f1f1f; background: #fff;
+:root { color-scheme: light; --text: #1f1f1f; --page: #fff; --muted: #4d4d4d; --rule: #d2d2d2; --rule-light: #e0e0e0;
+  --code: #f2f2f2; --pre: #f5f5f5; --head: #f5f5f5; --link: #0066cc; --refused: #6a6e73; }
+:root.dark {${DARK} }
+body { margin: 0; padding: 1.5rem 2rem; color: var(--text); background: var(--page);
   font: 15px/1.6 "Red Hat Text", "RedHatText", "Noto Sans", "Helvetica Neue", Arial, sans-serif; overflow-wrap: break-word; }
 h1, h2, h3, h4, h5, h6 { font-family: "Red Hat Display", "RedHatDisplay", "Noto Sans", Arial, sans-serif; line-height: 1.25; margin: 1.4em 0 0.5em; }
-h1 { font-size: 1.9em; border-bottom: 1px solid #d2d2d2; padding-bottom: 0.2em; }
-h2 { font-size: 1.45em; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.15em; }
+h1 { font-size: 1.9em; border-bottom: 1px solid var(--rule); padding-bottom: 0.2em; }
+h2 { font-size: 1.45em; border-bottom: 1px solid var(--rule-light); padding-bottom: 0.15em; }
 h3 { font-size: 1.2em; } h4 { font-size: 1.05em; } h5, h6 { font-size: 1em; }
 body > :first-child { margin-top: 0; }
 p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
-a { color: #0066cc; }
-code { font-family: "Red Hat Mono", "RedHatMono", "Liberation Mono", Menlo, monospace; font-size: 0.9em; background: #f2f2f2; border-radius: 3px; padding: 0.1em 0.3em; }
-pre { background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 4px; padding: 0.75em 1em; overflow-x: auto; }
+a { color: var(--link); }
+code { font-family: "Red Hat Mono", "RedHatMono", "Liberation Mono", Menlo, monospace; font-size: 0.9em; background: var(--code); border-radius: 3px; padding: 0.1em 0.3em; }
+pre { background: var(--pre); border: 1px solid var(--rule-light); border-radius: 4px; padding: 0.75em 1em; overflow-x: auto; }
 pre code { background: none; padding: 0; font-size: 0.85em; }
-blockquote { margin-left: 0; padding: 0 1em; color: #4d4d4d; border-left: 4px solid #d2d2d2; }
+blockquote { margin-left: 0; padding: 0 1em; color: var(--muted); border-left: 4px solid var(--rule); }
 ul, ol { padding-left: 2em; }
 li > ul, li > ol { margin-bottom: 0; }
 li.task { list-style: none; margin-left: -1.4em; }
 li.task > input { margin-right: 0.4em; }
 table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; }
-th, td { border: 1px solid #d2d2d2; padding: 0.35em 0.7em; }
-th { background: #f5f5f5; font-weight: 600; }
+th, td { border: 1px solid var(--rule); padding: 0.35em 0.7em; }
+th { background: var(--head); font-weight: 600; }
 .align-left { text-align: left; } .align-center { text-align: center; } .align-right { text-align: right; }
-hr { border: 0; border-top: 1px solid #d2d2d2; margin: 1.5em 0; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 1.5em 0; }
 img { max-width: 100%; }
-.image-refused { color: #6a6e73; font-style: italic; }
+.image-refused { color: var(--refused); font-style: italic; }
 @page { margin: 18mm 16mm; }
 @media print {
+  :root, :root.dark { color-scheme: light; --text: #1f1f1f; --page: #fff; --muted: #4d4d4d; --rule: #d2d2d2; --rule-light: #e0e0e0;
+    --code: #f2f2f2; --pre: #f5f5f5; --head: #f5f5f5; --link: #0066cc; --refused: #6a6e73; }
   body { padding: 0; font-size: 11pt; }
   a { color: inherit; }
   pre, blockquote, tr, img { break-inside: avoid; }
@@ -132,6 +142,9 @@ img { max-width: 100%; }
   pre { white-space: pre-wrap; }
 }
 `;
+
+// A saved page follows the theme of the system it is opened on.
+export const SAVED_CSS = `@media screen and (prefers-color-scheme: dark) { :root {${DARK} } }\n`;
 
 // The page a rendered document is shown in. In the frame of the page no
 // style can be written in it (Cockpit's policy, which the frame inherits,
@@ -146,7 +159,7 @@ export function documentPage(html: string, title: string, standalone: boolean): 
         `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         `<title>${escape(title)}</title>`,
-        standalone ? `<style>${DOCUMENT_CSS}</style>` : "",
+        standalone ? `<style>${DOCUMENT_CSS}${SAVED_CSS}</style>` : "",
         "</head><body>",
         html,
         "</body></html>",

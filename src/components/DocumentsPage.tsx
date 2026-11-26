@@ -27,6 +27,7 @@ import { formatBytes } from "../lib/checks.ts";
 import { basename, dirname } from "../lib/files.ts";
 import { formatTime } from "../lib/format.ts";
 import { useCockpitLocation, useLoad } from "../lib/hooks.ts";
+import { saveBlob } from "../lib/cmdb.ts";
 import { useCan } from "../lib/session.tsx";
 import {
     DOCUMENT_CSS, documentLocation, documentPage, exportName, isText, linkTarget,
@@ -184,6 +185,18 @@ function follow(href: string, frame: HTMLIFrameElement | null) {
     else window.open(target.url, "_blank", "noopener,noreferrer");
 }
 
+// Whether the page is in the dark theme (index.tsx mirrors Cockpit's on it).
+function useDarkTheme(): boolean {
+    const root = document.documentElement;
+    const [dark, setDark] = useState(() => root.classList.contains("pf-v6-theme-dark"));
+    useEffect(() => {
+        const observer = new MutationObserver(() => setDark(root.classList.contains("pf-v6-theme-dark")));
+        observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+        return () => observer.disconnect();
+    }, [root]);
+    return dark;
+}
+
 // A rendered document, in a frame where nothing can run: no scripts, and a
 // policy that lets in only the images it carries. Its style is adopted into
 // it from here, and its links are followed from here.
@@ -199,6 +212,11 @@ function DocumentFrame({ html, title, label, fill, at, frameRef }: {
 }) {
     const own = useRef<HTMLIFrameElement | null>(null);
     const [height, setHeight] = useState(400);
+    const dark = useDarkTheme();
+
+    useEffect(() => {
+        own.current?.contentDocument?.documentElement.classList.toggle("dark", dark);
+    }, [dark]);
 
     function loaded() {
         const frame = own.current;
@@ -208,6 +226,7 @@ function DocumentFrame({ html, title, label, fill, at, frameRef }: {
         const sheet = new view.CSSStyleSheet();
         sheet.replaceSync(DOCUMENT_CSS);
         inside.adoptedStyleSheets = [sheet];
+        inside.documentElement.classList.toggle("dark", dark);
         inside.addEventListener("click", event => {
             const link = (event.target as Element | null)?.closest?.("a");
             if (!link) return;
@@ -254,10 +273,7 @@ function DocumentView({ path }: { path: string }) {
     async function saveHtml() {
         const data = rendered.data;
         if (!data) return;
-        const blob = new Blob([documentPage(data.html, data.title || basename(path), true)], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        save(url, exportName(path, ".html"));
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        saveBlob(new Blob([documentPage(data.html, data.title || basename(path), true)], { type: "text/html" }), exportName(path, ".html"));
     }
 
     return (

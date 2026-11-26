@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { channels } from "./mocks/cockpit.ts";
-import { DOCUMENT_CSS, documentLocation, documentPage, exportName, isText, linkTarget, writtenDocument } from "../src/lib/documents.ts";
+import { DOCUMENT_CSS, SAVED_CSS, documentLocation, documentPage, exportName, isText, linkTarget, writtenDocument } from "../src/lib/documents.ts";
 import { uploadToStore } from "../src/lib/store.ts";
 
 test("the links of a rendered document go where the renderer said, and nowhere else", () => {
@@ -23,7 +23,7 @@ test("a document's page: in the frame no style of its own, saved with its sheet 
     assert.ok(shown.includes(`content="default-src 'none'; img-src data:"`));
     assert.ok(shown.includes("<title>A &#60;b&#62; title</title>"));
     const saved = documentPage("<p>x</p>", "T", true);
-    assert.ok(saved.includes(`<style>${DOCUMENT_CSS}</style>`));
+    assert.ok(saved.includes(`<style>${DOCUMENT_CSS}${SAVED_CSS}</style>`));
     assert.ok(saved.includes("style-src 'unsafe-inline'"));
     assert.ok(saved.includes("<p>x</p>"));
 });
