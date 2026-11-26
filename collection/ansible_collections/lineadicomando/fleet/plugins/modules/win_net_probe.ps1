@@ -20,6 +20,8 @@ $spec = @{
 $module = [Ansible.Basic.AnsibleModule]::Create($args, $spec)
 
 $MaxAddresses = 1024
+# Addresses tried at once. PowerShell does not tell names apart by case: no
+# other variable may be called $batch.
 $Batch = 32
 $Settle = 9
 
@@ -81,10 +83,10 @@ $milliseconds = [int]($timeout * 1000)
 
 $found = @{}
 for ($start = 0; $start -lt $targets.Count; $start += $Batch) {
-    $batch = $targets[$start..([math]::Min($start + $Batch, $targets.Count) - 1)]
+    $chunk = $targets[$start..([math]::Min($start + $Batch, $targets.Count) - 1)]
     $pings = @{}
     $connections = [System.Collections.Generic.List[object]]::new()
-    foreach ($address in $batch) {
+    foreach ($address in $chunk) {
         $pings[$address] = ([System.Net.NetworkInformation.Ping]::new()).SendPingAsync($address, $milliseconds)
         foreach ($port in $ports) {
             $client = [System.Net.Sockets.TcpClient]::new()
@@ -93,7 +95,7 @@ for ($start = 0; $start -lt $targets.Count; $start += $Batch) {
     }
     $tasks = @($pings.Values) + @($connections | ForEach-Object { $_.task })
     try { [void][System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]$tasks, $milliseconds + 200) } catch { }
-    foreach ($address in $batch) {
+    foreach ($address in $chunk) {
         $seen = [System.Collections.Generic.List[string]]::new()
         $open = [System.Collections.Generic.List[int]]::new()
         $answered = $false

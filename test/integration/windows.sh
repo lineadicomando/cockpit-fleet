@@ -148,4 +148,28 @@ done = next(e for e in events if e["event"] == "host_ok")
 print(f"  eight checks in one task: {done['ts'] - start:.1f} s")
 PY
 
+# net_probe from the node: the action runs win_net_probe where the shell is
+# PowerShell. A /27 around the node, which a scan may take (it is attached to
+# the controller), so that the controller is on the node's segment.
+around=$(python3 -c "import ipaddress, sys; print(ipaddress.ip_network(sys.argv[1] + '/27', strict=False))" "$IT_WIN_HOST")
+me=$(python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect((sys.argv[1], 9)); print(s.getsockname()[0])" "$IT_WIN_HOST")
+got=$(admin run.adhoc "{\"inventory_id\": \"$inventory_id\", \"limit\": \"all\", \"machine_credential_id\": \"$cred_id\", \"module\": \"lineadicomando.fleet.net_probe\", \"args\": {\"subnet\": \"$around\"}}")
+run=$(get "$got" "a['data']['id']")
+expect_run "net_probe runs on the Windows node ($around)" "$run" 180 successful
+found=$(python3 - "/var/lib/cockpit-fleet/runs/$run/events.jsonl" "$me" <<'PY'
+import json, sys
+for line in open(sys.argv[1]):
+    event = json.loads(line)
+    if event.get("event") == "host_ok":
+        probe = event["result"]["net_probe"]
+        mine = [h for h in probe["hosts"] if h["address"] == sys.argv[2]]
+        print(len(probe["hosts"]), bool(mine and mine[0]["mac"]), sorted(mine[0]["seen"]) if mine else [])
+PY
+)
+echo "      | hosts found by the node, the controller with a MAC address, how: $found"
+expect_ok "the node finds the controller on its segment, with its MAC address" \
+    sh -c "echo '$found' | grep -q ' True '"
+
 finish

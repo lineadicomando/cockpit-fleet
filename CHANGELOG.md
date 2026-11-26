@@ -152,6 +152,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- `net_probe` on a Windows node always failed ("[System.Object[]] does not
+  contain a method named 'op_Addition'").
 - Documents: "Download as a web page" did nothing in Firefox.
 - `fleet store put` failed after sending the file, with Python 3.13 as
   Debian 13 has it ("flush of closed file"), though the file arrived.
