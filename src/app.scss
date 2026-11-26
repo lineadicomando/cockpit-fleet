@@ -182,3 +182,8 @@
     font-size: var(--pf-t--global--font--size--xs);
     color: var(--pf-t--global--text--color--subtle);
 }
+
+// A field of several choices: what is typed stays on the line of the labels
+// while there is room, instead of the input's own width pushing it below.
+.fleet-multi-select .pf-v6-c-text-input-group__text { min-width: 4rem; }
+.fleet-multi-select .pf-v6-c-text-input-group__text-input { min-width: 0; width: 100%; }

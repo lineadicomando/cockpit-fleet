@@ -1665,5 +1665,12 @@
   "With a project, only its job templates can be steps; with an inventory, every step runs on it, and only job templates that allow it can be steps. Without an inventory, one may be chosen at launch.": "Con un progetto, solo i suoi template possono essere passi; con un inventario, ogni passo viene eseguito su di esso e possono essere passi solo i template che lo ammettono. Senza inventario, se ne può scegliere uno al lancio.",
   "inventories_others_count_one": "anche su {{count}} altro",
   "inventories_others_count_many": "anche su {{count}} altri",
-  "inventories_others_count_other": "anche su {{count}} altri"
+  "inventories_others_count_other": "anche su {{count}} altri",
+  "No inventory matches what was typed": "Nessun inventario corrisponde a quanto digitato",
+  "Search inventories": "Cerca inventari",
+  "Show less": "Mostra meno",
+  "Show the inventories": "Mostra gli inventari",
+  "labels_more_count_one": "altri {{count}}",
+  "labels_more_count_many": "altri {{count}}",
+  "labels_more_count_other": "altri {{count}}"
 }

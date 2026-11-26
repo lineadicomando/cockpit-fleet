@@ -4831,3 +4831,20 @@ msgid "inventories_others_count"
 msgid_plural "inventories_others_count_plural"
 msgstr[0] "anche su {{count}} altro"
 msgstr[1] "anche su {{count}} altri"
+
+msgid "No inventory matches what was typed"
+msgstr "Nessun inventario corrisponde a quanto digitato"
+
+msgid "Search inventories"
+msgstr "Cerca inventari"
+
+msgid "Show less"
+msgstr "Mostra meno"
+
+msgid "Show the inventories"
+msgstr "Mostra gli inventari"
+
+msgid "labels_more_count"
+msgid_plural "labels_more_count_plural"
+msgstr[0] "altri {{count}}"
+msgstr[1] "altri {{count}}"

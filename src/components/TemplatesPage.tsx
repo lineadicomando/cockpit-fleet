@@ -22,6 +22,7 @@ import { AtTerminal, ConfirmDelete, FormModal, ListState, RunStatusLabel, Sectio
 import { launchCommand } from "../lib/terminal.ts";
 import { SurveyAnswers, SurveyEditor } from "./SurveyEditor.tsx";
 import { PathInput } from "./PathInput.tsx";
+import { MultiSearchSelect } from "./SearchSelect.tsx";
 import { OverridesSection } from "./Overrides.tsx";
 import { FilterChips, GroupByChoice, GroupRow, NothingMatches, useStoredView } from "./ListView.tsx";
 import { ActionsColumn, SearchInput } from "./pf.tsx";
@@ -132,13 +133,15 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                 <GridItem>
                     <FormGroup label={t("Other inventories allowed at launch")} role="group" fieldId="tpl-inventories">
                         <Checkbox id="tpl-any-inventory" label={t("Any inventory")} isChecked={anyInventory} onChange={(_e, value) => setAnyInventory(value)} />
-                        {!anyInventory && inventories.filter(inventory => inventory.id !== inventoryId).map(inventory => (
-                            <Checkbox key={inventory.id} id={`tpl-inventory-${inventory.id}`} label={inventory.name}
-                                isChecked={otherIds.includes(inventory.id)}
-                                onChange={(_e, checked) => setOtherIds(current => checked
-                                    ? [...current, inventory.id]
-                                    : current.filter(id => id !== inventory.id))} />
-                        ))}
+                        {!anyInventory && (
+                            <MultiSearchSelect id="tpl-inventories" label={t("Other inventories allowed at launch")}
+                                values={otherIds.filter(id => id !== inventoryId)} onChange={setOtherIds}
+                                groups={[{ label: "", options: inventories.filter(inventory => inventory.id !== inventoryId)
+                                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                                    .map(inventory => ({ id: inventory.id, label: inventory.name })) }]}
+                                placeholder={t("Search inventories")} toggleLabel={t("Show the inventories")}
+                                emptyText={t("No inventory matches what was typed")} />
+                        )}
                         <FormHelperText><HelperText><HelperTextItem>{t("Whoever launches it may choose one of these instead of the inventory above, which is the default.")}</HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>
                 </GridItem>
