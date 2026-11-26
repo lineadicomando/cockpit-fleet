@@ -101,7 +101,9 @@ Anything beyond the frontend (unit, helpers, sudoers) needs the package
 installed. The integration tests in `test/integration/` run as root on a
 controller and check the privilege boundaries and the run sandbox. `make
 ct-test DISTRO=debian|fedora|alma` runs them in containers of that
-distribution, with rootless podman.
+distribution, with rootless podman. Scenarios in `test/browser/` drive the
+interface in a browser, as tests (`make browser-up`, `browser-test`;
+`docs/architecture/browser-tests.md`).
 
 Translations: strings are English in the source; `make pot` extracts them,
 `po/it.po` holds the Italian text and `make po-compile` compiles it.

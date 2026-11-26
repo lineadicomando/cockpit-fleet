@@ -101,7 +101,25 @@ of the admin account (the password on stdin), and passes on the caller's
 better in the background. For `windows.sh`, authorise a key pair made for
 the test on `win11` (in `C:\ProgramData\ssh\administrators_authorized_keys`)
 and store its private half as the secret that `IT_WIN_KEY` names; remove
-the key afterwards, or `reset win11`.
+the key afterwards, or `reset win11`. As done on 26 November, the key
+made in a private directory, the group names by SID (the ISO may be
+Italian):
+
+```bash
+d=$(mktemp -d) && ssh-keygen -q -t ed25519 -N '' -C it-win -f $d/key
+lab.sh ssh win11 "Add-Content C:\\ProgramData\\ssh\\administrators_authorized_keys '$(cat $d/key.pub)';
+  icacls C:\\ProgramData\\ssh\\administrators_authorized_keys /inheritance:r /grant '*S-1-5-32-544:F' /grant '*S-1-5-18:F'"
+lab.sh root deb13 '/usr/libexec/cockpit-fleet/fleet-secret set it-win-key' < $d/key; rm -rf $d
+```
+
+## Tests in a browser on a VM
+
+`BROWSER_LAB=deb13 test/browser/browser.sh setup|test NAME` drives a VM
+with the package deployed (`docs/architecture/browser-tests.md`): the
+account `tester` and the tunnel are made for it. A scenario that changes `win11`
+for good (`labs-launch` installs Windows Update) wants a snapshot first,
+taken shut off (`virsh snapshot-create-as cockpit-fleet-win11 NAME`),
+reverted before running it again and deleted at the end.
 
 ## The interface in the browser tools
 

@@ -36,4 +36,5 @@ hand.
 | [packaging.md](architecture/packaging.md) | `.deb`, `.rpm`, versions, other distributions |
 | [interface.md](architecture/interface.md) | Language, accessibility, navigation, long lists |
 | [tests.md](architecture/tests.md) | Unit, frontend and integration tests, containers and the lab |
+| [browser-tests.md](architecture/browser-tests.md) | Tests in a browser: scenarios driven by Playwright |
 | [acceptance.md](architecture/acceptance.md) | What each closed phase had to show, and how it was shown |

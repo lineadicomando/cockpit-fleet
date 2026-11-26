@@ -149,9 +149,12 @@ the package installed; what each shows, its variables, whether it wipes:
   first. An agent may build, rebuild, revert and destroy `cockpit-fleet-*`
   without asking; never another VM without the user's agreement.
   `lab.sh resources` before starting VMs; shut down what you started.
-- The browser tools refuse Cockpit's self-signed certificate: `lab.sh
-  tunnel` to `http://127.0.0.1:9091` (skill `vm-lab`, "The interface in
-  the browser tools").
+- The interface in a browser: a scenario (`test/browser/`,
+  `docs/architecture/browser-tests.md`) logs in by itself, on a container
+  or a VM (`BROWSER_LAB`); a throwaway scenario that saves
+  screenshots and `ariaSnapshot()` explores a page (a click may launch a
+  real run: a workflow's "Launch" starts at once). The browser tools need
+  `lab.sh tunnel` (skill `vm-lab`, "The interface in the browser tools").
 - Never `pkill -f` or `pgrep -f` with a pattern that is also in your own
   command line: it matches the shell that runs it.
 
