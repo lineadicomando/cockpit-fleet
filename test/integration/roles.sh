@@ -81,6 +81,7 @@ expect_ok     "operator hands over a secret answer and gets a ticket" sh -c "pri
 expect_eq     "the answer waits as a file of root, readable by the service account" \
     "$(stat -c '%U %G %a' "/run/cockpit-fleet/answers/$ticket.cred" 2>&1)" "root cockpit-fleet 640"
 expect_denied "the waiting answer is not in clear" grep -q AnswerValue "/run/cockpit-fleet/answers/$ticket.cred"
+expect_denied "the journal does not name the waiting answer" sh -c "journalctl -q --no-pager --since -10min | grep -q '$ticket'"
 expect_denied "operator cannot choose the name of an answer" sh -c "printf value | sudo -u itoperator sudo -n $SECRET answer it-role2"
 expect_denied "operator still cannot replace a stored secret" sh -c "printf value | sudo -u itoperator sudo -n $SECRET set it-role"
 expect_denied "operator cannot delete a secret" sudo -u itoperator sudo -n "$SECRET" delete it-role

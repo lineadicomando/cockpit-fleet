@@ -107,7 +107,10 @@ else. An administrator of the machine can, of course, do anything.
   appears in a command line, the environment, the database, the journal or
   an answer of the backend.
 - The secret answer to a survey goes the same way, under a name
-  `fleet-secret` chooses, and serves one run. A secret typed where a ticket
+  `fleet-secret` chooses, and serves one run. That name, the ticket,
+  launches a run with the secret until a run takes it, so it is in no
+  record: `fleet-secret` logs that an answer was stored, not its name, and
+  the audit trail masks every ticket in the parameters of a call. A secret typed where a ticket
   was expected (in the answers of a launch, of a schedule, of a step of a
   workflow, as a default) is refused, and masked in the record of the
   refusal.

@@ -201,6 +201,23 @@ class SurveyRunTest(Base):
         self.assertEqual(self.code("run.start", {"template_id": template["id"]}, role="operator"),
                          "bad_request")
 
+    def test_a_waiting_ticket_is_never_recorded(self):
+        # Read in the journal or the audit trail, a ticket not yet spent would
+        # launch a run with somebody else's secret.
+        template = self.template(survey=[{"name": "token", "type": "secret", "required": True}])
+        (paths.ANSWERS_DIR / f"{TICKET}.cred").write_bytes(b"CIPHERTEXT")
+        launch = {"template_id": template["id"], "answers": {"token": TICKET}}
+        with mock.patch("cockpit_fleet.journal.send") as send:
+            self.assertEqual(self.code("run.start", launch, role="viewer"), "forbidden")
+            self.assertEqual(self.code("run.start", {**launch, "limit": "("}, role="operator"),
+                             "bad_request")
+        self.assertTrue((paths.ANSWERS_DIR / f"{TICKET}.cred").exists())
+        self.assertNotIn(TICKET, repr(send.call_args_list))
+        recorded = [row[0] for row in self.ctx().conn.execute(
+            "SELECT params FROM audit WHERE command = 'run.start'")]
+        self.assertEqual(len(recorded), 2)
+        self.assertNotIn(TICKET, repr(recorded))
+
     def test_template_keeps_its_survey_and_only_an_admin_defines_it(self):
         template = self.template(survey=FIELDS)
         self.assertEqual([field["name"] for field in template["survey"]],

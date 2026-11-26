@@ -150,6 +150,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   reading. A change of the documents waits at most 30 seconds for another
   ("try again in a while").
 
+### Security
+
+- The ticket of a secret answer to a survey no longer appears in the
+  journal, nor in the audit trail of a launch that fails: a reader of the
+  journal could launch a run with it, and somebody else's secret, before
+  the run it was meant for.
+
 ## [0.4.0] - 2026-11-18
 
 ### Added

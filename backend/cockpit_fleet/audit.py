@@ -1,6 +1,7 @@
 """The audit trail: who did what, and what was refused."""
 
 import json
+import re
 import sqlite3
 import time
 
@@ -12,6 +13,9 @@ _PRIORITY = {"ok": 6, "denied": 4, "error": 3}
 
 
 _MAX_VALUE = 200
+# The ticket of a secret answer (survey.TICKET_RE) launches a run with it
+# until a run takes it: never recorded, whatever the outcome of the call.
+_TICKET_RE = re.compile(r"a-[0-9a-f]{32}")
 
 
 def _short(value: object, depth: int = 0) -> object:
@@ -27,16 +31,19 @@ def _short(value: object, depth: int = 0) -> object:
     return value
 
 
-def _masked(value: object, secrets: tuple[str, ...]) -> object:
-    """VALUE with every one of SECRETS in its strings replaced by ***."""
+def _masked(value: object, secrets: tuple[str, ...], depth: int = 0) -> object:
+    """VALUE with every one of SECRETS in its strings, and every ticket of a
+    secret answer, replaced by ***. Deeper than _short() keeps, "…"."""
     if isinstance(value, str):
         for secret in sorted(secrets, key=len, reverse=True):
             value = value.replace(secret, "***")
-        return value
+        return _TICKET_RE.sub("a-***", value)
+    if isinstance(value, (list, dict)) and depth > 4:
+        return "…"
     if isinstance(value, list):
-        return [_masked(item, secrets) for item in value]
+        return [_masked(item, secrets, depth + 1) for item in value]
     if isinstance(value, dict):
-        return {key: _masked(item, secrets) for key, item in value.items()}
+        return {key: _masked(item, secrets, depth + 1) for key, item in value.items()}
     return value
 
 
@@ -53,8 +60,7 @@ def _redacted_items(params: dict, redact: tuple[str, ...]) -> dict:
 
 
 def _params_text(params: dict, redact: tuple[str, ...], secrets: tuple[str, ...] = ()) -> str:
-    if secrets:
-        params = _masked(params, secrets)
+    params = _masked(params, secrets)
     params = _redacted_items(params, redact)
     # Identifiers and limits first and whole: they say what the call was about.
     order = sorted(params, key=lambda key: (not (key == "id" or key.endswith("_id")
