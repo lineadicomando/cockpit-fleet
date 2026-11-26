@@ -1,6 +1,6 @@
 # cockpit-fleet — plan
 
-What is left. Other documents: `CLAUDE.md`; how each closed phase was shown:
+What is left. How each closed phase was shown:
 `docs/architecture/acceptance.md`; this workstation and its lab VMs:
 `CLAUDE.local.md` (not tracked).
 
@@ -13,10 +13,11 @@ field use only, toward 1.0.0. Last release 0.4.0 (18 November);
 `[Unreleased]` of `CHANGELOG.md` has what came since. `make release` only
 when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (856
+To resume: `git status`, `git log origin/main..`; `make check` (864
 backend, 214 frontend tests). Each backend module's docstring says what it
 is; `cli.py` is the registry of commands, `db.py` the schema (38
-migrations).
+migrations). Nothing is under way: the next work is a close below, a
+choice of the user's under "The review", or a fix from field use.
 
 ## Built, waiting for their close
 
@@ -58,19 +59,14 @@ Each is described in the file named; what remains is the close.
 ## Integration
 
 Last run, 26 November, in containers on the three distributions: `runs`,
-`schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`, `cli` (on
-AlmaLinux `checks` on the VM `alma10` instead: `architecture/tests.md`,
-known failures); on the VM `fed44` `runs`, `workflows`, `schedules`
-(SELinux, no denial). Earlier: `documents`, `store`, `files` in containers;
-`make ct-lifecycle` on Debian; `sandbox` on `deb13` and `alma10`.
+`schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`, `cli`,
+`documents`, `store`, and `make ct-lifecycle` on Debian (from 0.3.0); on
+the VM `fed44` `runs`, `workflows`, `schedules` (SELinux, no denial).
+Earlier: `files` in containers; `sandbox` on `deb13` and `alma10`.
 
-## What the review of 16 November left
+## The review of 16 November
 
-Left by the user for another session; checked against the code on 18
-November. The four to fix, and the nine to fix or record, were done on
-26 November.
-
-For the user to decide:
+Its fixes were done on 26 November. Left for the user to decide:
 
 - [ ] A playbook can rewrite its `result.json` and turn a failed run into
   a successful one (the run writes its own directory).

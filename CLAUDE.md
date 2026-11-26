@@ -28,6 +28,11 @@ Documents of the project, each with one job; do not repeat one in another:
   administrator would notice, in the commit that makes it.
 - This file: how to work on the project.
 
+To keep the context small: at the start of a session read `TODO.md`
+alone; then only the architecture file of the area at hand; of
+`CHANGELOG.md` only `[Unreleased]` (the top); search `decisions.md` and
+`limits.md` for the topic rather than reading them whole.
+
 `docs/install.md`, `security.md`, `checks.md`, `backup.md` and `chat.md`
 are for the administrator of a controller; keep them in step with what they
 describe (roles, `config.toml`, the catalog, `fleet_result`, the files a

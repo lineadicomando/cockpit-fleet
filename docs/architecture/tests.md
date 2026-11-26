@@ -118,11 +118,11 @@ Known failure: since 1 November `cmdb.sh` fails on Fedora in a container
 passes on the other two and on machines. Run the `ct-test` of two
 distributions one after the other, not together.
 
-Known failure: on 26 November `checks.sh` failed on AlmaLinux in a container
-on a Fedora 44 host: podman in the container could not build the image of its
-nodes ("mounting an overlay over build context directory ... invalid
-argument"), so no node existed and every check was unknown. It passes on the
-other two and on the VM `alma10`.
+Intermittent failure: once on 26 November `checks.sh` failed on AlmaLinux
+in a container on a Fedora 44 host: podman in the container could not build
+the image of its nodes ("mounting an overlay over build context directory
+... invalid argument"), so no node existed and every check was unknown. It
+passed there later the same day, and on the VM `alma10`: run it again.
 
 The containers run in UTC, which the test machines did not, and that found a
 bug: `systemd-analyze calendar` prints a time "(in UTC)" only when the local
