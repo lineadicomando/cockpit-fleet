@@ -40,7 +40,8 @@ account; no daemon is left running and no network port is opened.
 %build
 test -f dist/index.js || { echo "dist/ is missing: run 'make build' first"; exit 1; }
 # The screenshots are for the README on the web, and the decisions for those
-# who work on the project, not for %{_docdir}.
+# who work on the project, not for %{_docdir}: the documents installed link
+# to them, and to TODO.md, in the repository.
 rm -rf docs/screenshots docs/decisions.md
 
 %install
@@ -102,7 +103,7 @@ fi
 
 %files
 %license LICENSE
-%doc README.md SECURITY.md docs
+%doc README.md SECURITY.md CHANGELOG.md docs
 %{_datadir}/cockpit/fleet
 %{_prefix}/lib/cockpit-fleet
 %{_libexecdir}/cockpit-fleet

@@ -67,26 +67,8 @@ known failures); on the VM `fed44` `runs`, `workflows`, `schedules`
 ## What the review of 16 November left
 
 Left by the user for another session; checked against the code on 18
-November. The four to fix were fixed on 26 November.
-
-Fix, or record in `limits.md`:
-
-- [ ] `fleet-run` keeps the unmasked error in `result.json` (no message
-  holds a secret today).
-- [ ] Two `notify_states` (`checks.py`) together notify twice.
-- [ ] `_last_stats` (`jobs.py`) reads the last 256 KiB of `events.jsonl`:
-  stats and artifacts lost past ~1900 hosts.
-- [ ] `moved_rows` (`storage.py`) can fail on a stale row after
-  `store.move` moved the file.
-- [ ] Files: a tab kept while its read was pending spins for ever (`kept`
-  in `FilesPage.tsx`).
-- [ ] Approvals: the decide modal vanishes when another decides
-  (`PendingApprovals`).
-- [ ] Survey: "None" on an optional choice with a default gives the
-  default (`collectAnswers`).
-- [ ] Installed docs (`%doc ... docs` in the spec) link to `decisions.md`
-  and `TODO.md`, not packaged; the rpm has no `CHANGELOG.md`.
-- [ ] `security.md` repeats limits of `limits.md`.
+November. The four to fix, and the nine to fix or record, were done on
+26 November.
 
 For the user to decide:
 

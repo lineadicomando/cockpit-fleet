@@ -3,7 +3,7 @@
 What is left as it is, by area: none of it blocks the use of a
 controller. What is protected and what is not, for an administrator, is
 in [security.md](security.md); the decisions behind these limits in
-[decisions.md](decisions.md).
+[decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md).
 
 - Runs: a failed run leaves its unit failed, so the system is `degraded`
   until `reset-failed`
@@ -230,8 +230,11 @@ in [security.md](security.md); the decisions behind these limits in
   so anything of a run it followed would reach their credentials through
   `/proc/PID/root` (the files of a run are read without following links);
   webhook bodies carry what nodes said unescaped (Slack and Discord markup,
-  mentions); `http://` allowed for channels with a secret; webhook URLs and
-  template `extra_vars` visible to viewers (neither is for secrets);
+  mentions); `http://` allowed for channels with a secret; webhook URLs,
+  template `extra_vars` and the plain variables of a set visible to viewers
+  (none is for secrets); an administrator who writes a template or an
+  ad-hoc command can have a run print or send elsewhere a secret it takes
+  (masking the output is a net);
   `config.export` and `inventory.get` by an administrator not audited; an
   operator can fill the 500 waiting secret answers for an hour; `fleet`
   shows run output with its colours raw (escape sequences of nodes); unpack

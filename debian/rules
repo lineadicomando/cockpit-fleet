@@ -13,9 +13,17 @@ override_dh_auto_build:
 override_dh_auto_test:
 
 # The screenshots are for the README on the web, and the decisions for those
-# who work on the project, not for /usr/share/doc.
+# who work on the project, not for /usr/share/doc: the documents installed
+# link to them, and to TODO.md, in the repository.
 override_dh_installdocs:
 	dh_installdocs -Xscreenshots -Xdecisions.md
+
+# CHANGELOG.md after the Debian changelog, by its own name: found earlier,
+# dh_installchangelogs would make it the changelog, in place of the Debian
+# one a native package must have.
+override_dh_installchangelogs:
+	dh_installchangelogs
+	install -m 0644 CHANGELOG.md debian/cockpit-fleet/usr/share/doc/cockpit-fleet/
 
 override_dh_auto_install:
 	$(MAKE) install-files DESTDIR=$(CURDIR)/debian/cockpit-fleet

@@ -179,6 +179,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   longer lost.
 - Store: a move to where a file had been deleted by hand failed after
   moving the file.
+- The packages install `CHANGELOG.md` with the rest of the documentation,
+  and the documents installed link to those of the repository they do not
+  hold.
 
 ### Security
 

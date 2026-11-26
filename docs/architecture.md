@@ -2,8 +2,8 @@
 
 How cockpit-fleet is put together on the controller, why, and what was
 measured before building on it: one file per area in
-[architecture/](architecture/). The plan is in [TODO.md](../TODO.md); the
-decisions in [decisions.md](decisions.md). Read only the file of the area at
+[architecture/](architecture/). The plan is in [TODO.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/TODO.md); the
+decisions in [decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md). Read only the file of the area at
 hand.
 
 | File | What it covers |

@@ -216,29 +216,16 @@ remove it from `[mcp] adhoc_modules` to keep it from agents.
 
 ## What it does not do
 
-Known limits, none of which lets a role do more than this page says:
+What the design leaves to the administrator, none of which lets a role do
+more than this page says:
 
 - All runs share one account. A run is kept from the others by its sandbox,
   not by a user of its own; a controller is one domain of trust, and nodes
   that must not share administrators should have controllers of their own.
 - The backend runs as that same account, so the sandbox is what keeps a
   playbook from the database; a flaw in the sandbox would be a flaw here.
-- Webhook bodies carry what nodes said as it is (a Slack or Discord message
-  may get their markup); `http://` is allowed for a channel with a secret;
-  webhook URLs, the extra variables of a template and the plain variables of
-  a set are visible to viewers (none is meant for secrets; a set's secret
-  variables are). An administrator who can write a template or an ad-hoc
-  command can have a run print or send elsewhere a secret variable it
-  takes, as a credential's password: masking the output is a net.
-- `config.export` and `inventory.get` by an administrator are not audited.
-- An operator can fill the 500 places for waiting secret answers for an
-  hour, which would hold up other launches that need one.
-- `fleet` shows the output of a run with its colours, escape sequences of
-  the nodes included.
-- A failed run leaves its unit failed until `systemctl reset-failed`, which
-  makes the system "degraded" meanwhile.
 
-The full list, with what is left in every area, is in
+The known limits, of security and of every other area, are in
 [limits.md](limits.md).
 
 ## Advice

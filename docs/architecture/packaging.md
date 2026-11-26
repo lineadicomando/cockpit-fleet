@@ -10,6 +10,13 @@ bundled collection, and `fleet` with its completion for bash and its manual.
 Of the units only `cockpit-fleet-scheduler.timer` and `cockpit-fleet-notify.path`
 are enabled and started.
 
+The documentation installed is `README.md`, `SECURITY.md`, `CHANGELOG.md`
+and `docs/`, less the screenshots and `decisions.md`, which are for the
+repository: the documents link to it, and to `TODO.md`, by their address
+on GitHub. On Debian `CHANGELOG.md` is copied after `dh_installchangelogs`,
+which would otherwise install it as the changelog of a native package, in
+place of `debian/changelog` (lintian refuses that).
+
 A package carries its version in what it installs, so that a controller says
 which build it runs. At a release tag that is the release, `X.Y.Z`. Between
 two releases `scripts/version.sh` derives it from `git describe`:

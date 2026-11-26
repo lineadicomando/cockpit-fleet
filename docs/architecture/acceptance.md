@@ -118,7 +118,7 @@ What each closed phase had to show, and how it was shown.
   the role and the playbook made with "New file", all successful.
   Following the user, `ansible_remote_tmp` is left commented out in the
   Windows starters, and the YAML files the project makes end in `.yaml`
-  (done on 15 November, [decisions.md](../decisions.md), "YAML
+  (done on 15 November, [decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md), "YAML
   extension"): `make ct-test` on the three passed but the known failure
   in [tests.md](tests.md).
 - **15, secret variables** (14 November): in a browser on Debian 13, as an
