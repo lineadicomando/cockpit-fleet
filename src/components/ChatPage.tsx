@@ -35,6 +35,7 @@ import type { ChatAgentInfo, ChatGuide, ChatInfo, ChatSessionRuns } from "../lib
 import { FormModal, SectionHeader, TerminalCommand as Command } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { PendingDrafts } from "./Drafts.tsx";
+import { ChatApprovals } from "./ApprovalsPage.tsx";
 import { Alert, Button, Modal, Spinner } from "./pf.tsx";
 
 // The profiles beyond assisted, whose risks are told (profiles.RISKY).
@@ -560,6 +561,7 @@ function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
     return (
         <div className="fleet-chat-runs">
             {error && <Alert variant="danger" isInline title={error} style={{ marginBlockEnd: "0.5rem" }} />}
+            <ChatApprovals runIds={runs.not_ended.filter(run => run.status === "pending_approval").map(run => run.id)} />
             <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
                 {autonomous && (
                     <FlexItem>

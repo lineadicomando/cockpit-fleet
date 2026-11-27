@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Button, Content, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, ModalVariant, TextInput,
+    Button, Content, Flex, FlexItem, FormGroup, FormHelperText, FormSelect, FormSelectOption, HelperText, HelperTextItem, Label, ModalVariant, TextInput,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
@@ -202,5 +202,59 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
             </ListState>
             {dialog}
         </div>
+    );
+}
+
+// The runs the assistant launched in a conversation that wait for a
+// decision, on the page of the chat: an answer in the chat confirms nothing,
+// so the person decides here, as on the page of approvals.
+export function ChatApprovals({ runIds }: { runIds: string[] }) {
+    const { t } = useTranslation();
+    const can = useCan();
+    const session = useSession();
+    const allowed = can("approval.list");
+    const key = runIds.join(" ");
+    const list = useLoad(async () => key && allowed
+        ? (await call<{ approvals: ApprovalEntry[] }>("approval.list", { state: "pending" })).approvals
+        : [], [key, allowed]);
+    usePolling(list.reload, 5000, !!key && allowed);
+    const [deciding, setDeciding] = useState<{ runId: string; title: string; decision: Decision } | null>(null);
+    const entries = (list.data ?? []).filter(entry => runIds.includes(entry.id));
+    const dialog = deciding && (
+        <DecideModal runId={deciding.runId} title={deciding.title} decision={deciding.decision}
+            gone={!entries.some(entry => entry.id === deciding.runId && entry.can_decide)}
+            onDone={list.reload} onClose={() => setDeciding(null)} />
+    );
+    if (entries.length === 0) return dialog || null;
+    return (
+        <>
+            <Alert variant="warning" isInline title={t("chat_runs_waiting", { count: entries.length })}
+                style={{ marginBlockEnd: "0.5rem" }}>
+                <Content component="p">{t("Writing in the chat confirms nothing: decide here, or on the page of approvals.")}</Content>
+                {entries.map(entry => (
+                    <Flex key={entry.id} gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}
+                        style={{ marginBlockStart: "0.5rem" }}>
+                        <FlexItem grow={{ default: "grow" }}>
+                            <strong>{entry.title}</strong>
+                            {entry.options.become && <Label isCompact color="orange" style={{ marginInlineStart: "0.5rem" }}>{t("become")}</Label>}
+                            {entry.options.check && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Dry run")}</Label>}
+                            {entry.kind === "adhoc" && Object.keys(entry.options.args ?? {}).length > 0 &&
+                                <code style={{ display: "block" }}>{JSON.stringify(entry.options.args)}</code>}
+                            {entry.kind === "adhoc" && entry.options.free_form &&
+                                <code style={{ display: "block" }}>{entry.options.free_form}</code>}
+                        </FlexItem>
+                        <FlexItem style={{ whiteSpace: "nowrap" }}>
+                            {entry.can_decide
+                                ? <>
+                                    <Button variant="primary" size="sm" onClick={() => setDeciding({ runId: entry.id, title: entry.title, decision: "approve" })}>{t("Approve")}</Button>{" "}
+                                    <Button variant="secondary" isDanger size="sm" onClick={() => setDeciding({ runId: entry.id, title: entry.title, decision: "reject" })}>{t("Reject")}</Button>
+                                </>
+                                : <Content component="small">{entry.created_by === session.user ? t("Another user must approve it") : t("You cannot approve it")}</Content>}
+                        </FlexItem>
+                    </Flex>
+                ))}
+            </Alert>
+            {dialog}
+        </>
     );
 }

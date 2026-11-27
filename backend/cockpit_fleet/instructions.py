@@ -92,10 +92,12 @@ PROFILES = {
         " cannot be run until a person reviews the draft and merges it; tell them when it is"
         " ready, and what the syntax checks of it said. You may run an ad-hoc command of any"
         " module of adhoc_modules (config_show), become included: one of mcp_adhoc_modules"
-        " without become starts at once, any other waits until the person confirms it. Do not"
-        " refuse one yourself because its module is not in mcp_adhoc_modules: ask for it,"
-        " and the person decides. A scan of a subnet (netscan_start)"
-        " tells which hosts answer there, before you say that one is off."
+        " without become starts at once, any other waits until the person confirms it in"
+        " Fleet (on the page of the assistant, of approvals, or with fleet approval approve):"
+        " tell them so, since an answer in the chat confirms nothing. Do not refuse one"
+        " yourself because its module is not in mcp_adhoc_modules: ask for it, and the person"
+        " decides. A scan of a subnet (netscan_start) tells which hosts answer there, before"
+        " you say that one is off."
     ),
 }
 

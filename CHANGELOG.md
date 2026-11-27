@@ -121,6 +121,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   the change to that profile) has a field for the runs it may launch in
   each conversation, lower or higher than `[chat] autonomous_runs`
   (command `chat.limit_runs`, which agents cannot call).
+- Assistant: the runs it launched in the conversation that wait for a
+  confirmation or an approval are shown above the message box, with what
+  they would run, and are approved or rejected there; the page says that
+  writing in the chat confirms nothing.
 
 ### Changed
 

@@ -297,6 +297,7 @@ class CommandsTest(Base):
         told = instructions.PROFILES["administrator"]
         self.assertIn("any module of adhoc_modules", told)
         self.assertIn("Do not refuse one yourself", told)
+        self.assertIn("an answer in the chat confirms nothing", told)
 
     def test_unknown_agent(self):
         self.assertEqual(self.code("chat.start", {"agent": "nope"}), "not_found")

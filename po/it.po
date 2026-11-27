@@ -4203,6 +4203,14 @@ msgid_plural "chat_runs_not_ended_plural"
 msgstr[0] "{{count}} run lanciata non è ancora finita"
 msgstr[1] "{{count}} run lanciate non sono ancora finite"
 
+msgid "chat_runs_waiting"
+msgid_plural "chat_runs_waiting_plural"
+msgstr[0] "Una run lanciata dall'assistente aspetta la tua decisione"
+msgstr[1] "{{count}} run lanciate dall'assistente aspettano la tua decisione"
+
+msgid "Writing in the chat confirms nothing: decide here, or on the page of approvals."
+msgstr "Scriverlo nella chat non conferma niente: decidi qui o nella pagina delle approvazioni."
+
 msgid "Runs without asking, in each conversation"
 msgstr "Run senza chiedere, per ogni conversazione"
 

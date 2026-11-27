@@ -212,7 +212,10 @@ started stays as it is: once logged in, send the message again.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
   adhoc_modules`, does not start until the user confirms it, in the list of
   runs waiting for approval or with `fleet approval approve`; the assistant
-  cannot confirm it, and it expires as approvals do.
+  cannot confirm it, and it expires as approvals do. The page of the
+  assistant shows the runs of the conversation that wait, with what they
+  would run, and lets the user decide there: an answer written in the chat
+  confirms nothing.
 - Files the assistant writes in a project or inventory written in Fleet
   (profile `administrator`) go to a draft of its session, which no run
   uses. The page of the assistant and the files of the project say when a
