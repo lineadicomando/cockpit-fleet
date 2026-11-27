@@ -580,10 +580,14 @@ function Composer({ state }: { state: ChatState }) {
         write("");
     }
 
+    // Without questions, said by the box itself and one line under it: the
+    // conversation above gives up the room, not the box.
+    const unattended = state.unattended && state.phase === "ready";
     return (
+        <div>
         <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsFlexEnd" }} flexWrap={{ default: "nowrap" }}>
             <FlexItem grow={{ default: "grow" }}>
-                <TextArea ref={box} value={text} onChange={(_event, value) => write(value)} rows={2} resizeOrientation="vertical"
+                <TextArea ref={box} value={text} className={unattended ? "fleet-chat-unattended" : undefined} onChange={(_event, value) => write(value)} rows={2} resizeOrientation="vertical"
                     aria-label={t("Message")} placeholder={t("Write a message; Enter sends it, Shift+Enter goes to a new line")}
                     onKeyDown={event => {
                         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -596,6 +600,12 @@ function Composer({ state }: { state: ChatState }) {
                 ? <Button variant="secondary" onClick={() => chat.cancel()}>{t("Stop")}</Button>
                 : <Button variant="primary" onClick={send} isDisabled={!idle || !text.trim()}>{t("Send")}</Button>}
         </Flex>
+        {unattended && (
+            <div className="fleet-chat-unattended-note">
+                {t("Without questions: the assistant runs commands, changes and deletes without asking you.")}
+            </div>
+        )}
+        </div>
     );
 }
 
@@ -819,11 +829,6 @@ export function ChatPage() {
                 </Conversation>
             )}
             {running && state.needsLogin && <Login agent={agent} />}
-            {running && state.unattended && (
-                <Alert variant="warning" isInline title={t("The assistant acts without asking you")} style={{ marginBlockEnd: "0.5rem" }}>
-                    {t("In this session it runs ad-hoc commands, changes and deletes without a question. Turn off Without questions to be asked again; Stop everything cancels its runs.")}
-                </Alert>
-            )}
             {running && <SessionRuns state={state} info={info.data} />}
             {shown && <Composer state={state} />}
             {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} onAccepted={reload} />}

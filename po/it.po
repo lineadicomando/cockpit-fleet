@@ -4993,8 +4993,7 @@ msgstr "Agisci senza chiedere"
 msgid "Without questions"
 msgstr "Senza conferme"
 
-msgid "The assistant acts without asking you"
-msgstr "L'assistente agisce senza chiederti nulla"
 
-msgid "In this session it runs ad-hoc commands, changes and deletes without a question. Turn off Without questions to be asked again; Stop everything cancels its runs."
-msgstr "In questa sessione esegue comandi ad-hoc, modifiche ed eliminazioni senza chiedere. Disattiva «Senza conferme» per tornare alle domande; «Ferma tutto» annulla le sue run."
+
+msgid "Without questions: the assistant runs commands, changes and deletes without asking you."
+msgstr "Senza conferme: l'assistente esegue comandi, modifiche ed eliminazioni senza chiederti nulla."

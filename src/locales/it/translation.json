@@ -1725,6 +1725,5 @@
   "For the conversations of this session, until you turn it off or change the profile.": "Per le conversazioni di questa sessione, finché non lo disattivi o cambi profilo.",
   "Act without asking": "Agisci senza chiedere",
   "Without questions": "Senza conferme",
-  "The assistant acts without asking you": "L'assistente agisce senza chiederti nulla",
-  "In this session it runs ad-hoc commands, changes and deletes without a question. Turn off Without questions to be asked again; Stop everything cancels its runs.": "In questa sessione esegue comandi ad-hoc, modifiche ed eliminazioni senza chiedere. Disattiva «Senza conferme» per tornare alle domande; «Ferma tutto» annulla le sue run."
+  "Without questions: the assistant runs commands, changes and deletes without asking you.": "Senza conferme: l'assistente esegue comandi, modifiche ed eliminazioni senza chiederti nulla."
 }

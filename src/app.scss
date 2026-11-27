@@ -160,6 +160,20 @@
 .fleet-chat-thought { color: var(--pf-t--global--text--color--subtle); font-style: italic; }
 .fleet-chat-tool { margin-block-end: var(--pf-t--global--spacer--md); }
 .fleet-chat-runs { margin-block-end: var(--pf-t--global--spacer--sm); }
+/* The message box while the assistant acts without asking. */
+.pf-v6-c-form-control.fleet-chat-unattended {
+    --pf-v6-c-form-control--before--BorderColor: var(--pf-t--global--border--color--status--warning--default);
+    --pf-v6-c-form-control--after--BorderColor: var(--pf-t--global--border--color--status--warning--default);
+    --pf-v6-c-form-control--hover--after--BorderColor: var(--pf-t--global--border--color--status--warning--hover);
+}
+.fleet-chat-unattended-note {
+    margin-block-start: var(--pf-t--global--spacer--xs);
+    font-size: var(--pf-t--global--font--size--sm);
+    color: var(--pf-t--global--text--color--status--warning--default);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .fleet-chat-value { white-space: pre-wrap; word-break: break-word; }
 .fleet-chat-instructions { white-space: pre-wrap; word-break: break-word; font-size: var(--pf-t--global--font--size--sm); margin: 0; }
 /* Open, the instructions must leave room for the conversation below them. */
