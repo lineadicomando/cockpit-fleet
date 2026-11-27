@@ -51,17 +51,52 @@ Each is described in the file named; what remains is the close.
   the assistant, asks it to propose a skill for a task that recurs,
   approves it in the page, and a new session uses it.
 
-## To look at
+## Decided, to do
 
-Found by the scenarios (26 November), not yet decided:
+Found by the scenarios (26 November), decided on 27 November.
 
-- Text the backend writes stays English in the Italian interface: titles
-  of check cycles ("laboratorio: 4 hosts", `checks.py`), a workflow's error
-  ("accensione: failed").
-- The list of checks polls only while a cycle holds a check: a cycle of
-  the timer shows only once the page is loaded again.
-- Under the group of an inventory, the list of templates shows a
-  template's last run on any inventory.
+- **The list of checks following the cycles of the timer** (to choose).
+  `ChecksPage` polls `check.list` every 5 s only while a cycle holds a
+  check (`checking`, or an active `last_cycle`): a cycle the tick of the
+  scheduler queues (each minute, `cockpit-fleet-scheduler.timer`) shows
+  only once the page is loaded again. Ways found:
+  - a slow poll while nothing runs (30 s) beside the 5 s one, paused
+    while the tab is hidden (`visibilitychange`, as `StorePage` does):
+    a few lines in the page, at most 30 s late, two calls of `fleetctl` a
+    minute with the page open and seen; `HostsPage` polls every 15 s,
+    `ApprovalsPage` every 5 s, always;
+  - a reload at the next due time: `check.list` gives each check the
+    earliest `next_at` of its states, the page reloads just after the
+    tick that follows it; no call while nothing is due, but blind to a
+    cycle someone else starts ("Run now", an agent, `fleet`) and to the
+    end of a maintenance;
+  - systemd's signals on D-Bus (`cockpit.dbus`, `Subscribe`; the end of
+    `cockpit-fleet-scheduler.service`, a new `cockpit-fleet-run@` unit):
+    at once and free while idle, and would serve Runs, Templates and the
+    Overview too; but a second channel from the page beside `fleetctl` (a
+    change of design, `architecture/overview.md`), tied to the names of
+    the units, to be tried under SELinux.
+
+  Proposed: the first now, a fix within the freeze, the pause of a hidden
+  tab in `usePolling` so that every page that polls has it; the third,
+  if wanted, under Future.
+- **The last run of a template under an inventory** (to fix). Grouped by
+  inventory, a template is listed under each inventory it allows, and its
+  "Last run" is its last on any (`_last_runs`, `resources.py`): under
+  `aula-2` a run on `aula-1`. A row speaks of what it is listed under, as
+  its Launch does already:
+  - `template.list` and `template.get` give `last_runs` by inventory
+    beside `last_run` (`runs.inventory_id` is the inventory chosen at
+    launch: no migration), and `last_run` its `inventory_id`;
+  - under an inventory, "Last run" is the last there; with none, "Never
+    here" and, muted, the last elsewhere with its inventory, so that the
+    history is not hidden; the sort by last run and the filter by outcome
+    take the same (a template failed on `aula-1` and good on `aula-2`
+    shows, filtering failures, under the first alone);
+  - grouped by project, by outcome or not at all, the last on any, with
+    its inventory beside it when it is not the one of the column;
+  - tests in `test/templates.test.ts`, the page's and `template.list`'s;
+    `architecture/inventories.md` updated.
 
 ## Integration
 
