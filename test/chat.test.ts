@@ -401,10 +401,10 @@ test("without questions, nothing is asked in any conversation of the session, un
     await agent.chat.send("again");
     const second = agent.chat.getState().fleetSession;
     assert.notEqual(second, first);
-    assert.deepEqual(agent.unattendedCalls.at(-1), [second, true]);
+    assert.deepEqual(agent.unattendedCalls[agent.unattendedCalls.length - 1], [second, true]);
     // Off: asked again at once, and the backend told.
     await agent.chat.unattend(false);
-    assert.deepEqual(agent.unattendedCalls.at(-1), [second, false]);
+    assert.deepEqual(agent.unattendedCalls[agent.unattendedCalls.length - 1], [second, false]);
     agent.ask(98, "run_adhoc");
     await tick();
     assert.equal(agent.chat.getState().ask!.tool?.name, "run_adhoc");

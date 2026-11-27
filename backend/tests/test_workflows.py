@@ -14,6 +14,11 @@ from cockpit_fleet.errors import BadRequest
 class WorkflowBase(ApprovalBase):
     def setUp(self):
         super().setUp()
+        # CI has no systemd-analyze: a schedule's times are made up.
+        patch = mock.patch.object(schedules, "analyze",
+                                  lambda calendar, timezone="", count=1: (calendar, [2e9] * count))
+        patch.start()
+        self.addCleanup(patch.stop)
         self.config = type(self.config)(**{**self.config.as_dict(), "max_concurrent_runs": 10})
         self.first = self.template()
         project_id, inventory_id = self.first["project_id"], self.first["inventory_id"]
@@ -457,14 +462,9 @@ class WorkflowTest(WorkflowBase):
 class ScheduledWorkflowTest(WorkflowBase):
     def setUp(self):
         super().setUp()
-        patches = [
-            mock.patch.object(schedules, "analyze",
-                              lambda calendar, timezone="", count=1: (calendar, [2e9] * count)),
-            mock.patch.object(paths, "SCHEDULER_LOCK", self.root / "scheduler.lock"),
-        ]
-        for patch in patches:
-            patch.start()
-            self.addCleanup(patch.stop)
+        patch = mock.patch.object(paths, "SCHEDULER_LOCK", self.root / "scheduler.lock")
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def schedule(self, workflow, **extra):
         return self.ok("schedule.create", {"name": "nightly", "workflow_id": workflow["id"],
