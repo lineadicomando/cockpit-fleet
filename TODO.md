@@ -71,10 +71,12 @@ What each is: the file named. What remains:
   the page, and a new session uses it.
 - **Assistant without questions** (27 November, `decisions.md`,
   `architecture/chat.md`): one consent per ad-hoc command, and "Without
-  questions" in `administrator`. Built with unit tests; left: `ct-test`
-  (migrations 40 and 41), and the user, with Claude on a controller with
-  `[chat] unattended = true`, sees an ad-hoc command start after one
-  "Allow once", then the switch: risks, no question, the run marked.
+  questions" in `administrator`. `ct-test` passed on the three (`mcp`,
+  `chat`, `adhoc`, `negative`); seen with Claude by the user (27
+  November): with the switch on, ad-hoc commands on a Windows node
+  started unasked, marked `unattended`; off, one "Allow once" started the
+  next, its approval recorded as "confirmed in the chat page". To move to
+  `acceptance.md` with the next close.
 
 ## Integration
 
