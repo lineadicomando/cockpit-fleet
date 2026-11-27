@@ -214,3 +214,22 @@ What each closed phase had to show, and how it was shown.
   host lasts 3–4 s: one the timer starts is seldom caught "Checking". The
   check found, and fixed, the list that missed the cycles of the timer
   (it polled only while a cycle held a check).
+- **20, documents** and **23, skills of projects** (27 November), on
+  `deb13` with `win11` as the PC of `aula-1`, the user with Claude in the
+  profile administrator: `win-edulab` synchronised to the commit that
+  pins `win_workman` v0.9.2 and its collections installed again from the
+  page, the skills of the project (`win-edulab-operations`,
+  `-inventory`, `-reports`) and of the collection (`win-workman`) found.
+  Asked in Italian for "a maintenance of the disks" of `aula-1`, naming
+  no playbook, the assistant read the skills, chose `maint_chkdsk.yaml`
+  and `maint_optimize.yaml`, saw that no template ran them, proposed two
+  templates (default `aula-1`, `aula-2` allowed, a question for
+  defragmentation) and a workflow (wake, check, optimise), made them once
+  allowed, launched it on `aula-1` to its end and told the outcome per
+  step. Asked, it wrote the report of the intervention, the index of the
+  lab's interventions and its state in `labs/aula-1/` as the skill lays
+  them out, each a change of the history by `mcp:claude-code`. The user
+  edited the state by hand, restored the agent's version from the
+  history and printed it to PDF from the page. The check found, and
+  fixed, the tool of a template that did not say what a field of a
+  survey is (the assistant guessed AWX's keys twice).
