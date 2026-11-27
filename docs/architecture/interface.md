@@ -78,6 +78,26 @@ value that is not understood (an older version, an edit by hand) falls
 back to the default. PatternFly's toolbar filters are not used: their
 labels ("Show Filters", "Close …") are English that cannot be translated.
 
+**Pages that follow changes.** Nothing tells a page that something
+changed: it asks again with `usePolling` (`src/lib/hooks.ts`), which waits
+for one answer before the next. Hosts every 15 s and Approvals every 5 s,
+always; Runs, Templates, Checks and Workflows only while something they
+show is not over (every 1.5–5 s); System every 30 s. So the list of checks
+misses a cycle the scheduler's tick queues (each minute) while none runs.
+Studied on 27 November, to choose (`TODO.md`):
+- a slow poll while nothing runs (30 s), paused while the tab is hidden
+  (`visibilitychange`, as `StorePage`): at most 30 s late, two calls of
+  `fleetctl` a minute with the page seen;
+- a reload just after the tick that follows the earliest `next_at` of a
+  check's states (a new field of `check.list`): no call while nothing is
+  due, but blind to a cycle someone else starts and to the end of a
+  maintenance;
+- systemd's signals on D-Bus (`cockpit.dbus`, `Subscribe`: the end of
+  `cockpit-fleet-scheduler.service`, a new `cockpit-fleet-run@` unit): at
+  once and free while idle, for every page; but a second channel beside
+  `fleetctl` (a change of `overview.md`'s design), tied to the names of
+  units, to be tried under SELinux.
+
 **Choosing one of many.** Where a form chooses a job template (a
 workflow's step, a schedule, a rule of notifications), a workflow, or the
 target of a rule, the choice is a `SearchSelect`

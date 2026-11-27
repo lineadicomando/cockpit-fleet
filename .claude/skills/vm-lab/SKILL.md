@@ -101,9 +101,8 @@ of the admin account (the password on stdin), and passes on the caller's
 better in the background. For `windows.sh`, authorise a key pair made for
 the test on `win11` (in `C:\ProgramData\ssh\administrators_authorized_keys`)
 and store its private half as the secret that `IT_WIN_KEY` names; remove
-the key afterwards, or `reset win11`. As done on 26 November, the key
-made in a private directory, the group names by SID (the ISO may be
-Italian):
+the key afterwards, or `reset win11`. The key made in a private
+directory, the groups by SID (the ISO may be Italian):
 
 ```bash
 d=$(mktemp -d) && ssh-keygen -q -t ed25519 -N '' -C it-win -f $d/key
@@ -157,14 +156,10 @@ file, and navigate to `http://127.0.0.1:9091/fleet`. What makes it work:
 - `sourcePath` is the Chrome tools' (`mcp__chrome-devtools__*`); in a frame
   without scripts (a rendered document) their click fails: dispatch the
   click from the page, or focus the element from the page and press a key;
-- to look at a page as a given role, create a throwaway account in the
-  matching group, log in with it, and delete it afterwards.
-
-To see a page as a role, use a throwaway account in the role's group, as
-`CLAUDE.md` says: give it a random password made on the host in a shell
-variable, set it with `printf 'NAME:%s\n' "$pw" | lab.sh root TARGET
-chpasswd`, log in as above with it, and `unset` it. `reset` removes the
-account with everything else.
+- a page as a role: a throwaway account in the role's group, a random
+  password made in a shell variable and set with `printf 'NAME:%s\n' "$pw"
+  | lab.sh root TARGET chpasswd`, logged in as above, then `unset`;
+  `reset` removes the account.
 
 ## Notes
 
