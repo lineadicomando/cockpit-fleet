@@ -299,6 +299,12 @@ class CommandsTest(Base):
         self.assertIn("Do not refuse one yourself", told)
         self.assertIn("an answer in the chat confirms nothing", told)
 
+    def test_the_page_tells_the_agent_of_runs_ended(self):
+        page = instructions.layers("assisted", "page", self.rules)[0]["text"]
+        terminal = instructions.layers("assisted", "terminal", self.rules)[0]["text"]
+        self.assertIn("begins with [Fleet]", page)
+        self.assertNotIn("[Fleet]", terminal)
+
     def test_unknown_agent(self):
         self.assertEqual(self.code("chat.start", {"agent": "nope"}), "not_found")
         self.assertEqual(self.code("chat.start", {}), "bad_request")

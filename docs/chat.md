@@ -216,6 +216,12 @@ started stays as it is: once logged in, send the message again.
   assistant shows the runs of the conversation that wait, with what they
   would run, and lets the user decide there: an answer written in the chat
   confirms nothing.
+- When runs the assistant launched end after it has answered (a command
+  confirmed later, a long playbook), the page tells it in a message marked
+  "Fleet", which it answers with how they went: there is no need to write
+  to it that a run has ended. The page does this while it is open, in any
+  tab of Fleet; runs stopped with "Stop everything" are not told. Each such
+  message is a turn of the model, sent to its provider as any other.
 - Files the assistant writes in a project or inventory written in Fleet
   (profile `administrator`) go to a draft of its session, which no run
   uses. The page of the assistant and the files of the project say when a

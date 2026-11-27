@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AcpError, Connection, applyUpdate, fleetTool, namedByAgent, permissionOutcome, type Item } from "../src/lib/acp.ts";
+import { AcpError, Connection, NOTICE_MARK, applyUpdate, fleetTool, namedByAgent, permissionOutcome, type Item } from "../src/lib/acp.ts";
 import { Chat, question, type ToolInfo, type Transport } from "../src/lib/chat.ts";
+import type { ChatSessionRun, ChatSessionRuns } from "../src/lib/types.ts";
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
@@ -122,6 +123,9 @@ class Agent {
     limits: { session: string; runs: number; before: number }[] = [];
     // Why setting them fails, when it does.
     limitFails = "";
+    // What chat.session answers, and the sessions it was asked for.
+    sessionRuns: ChatSessionRuns = { launched: 0, allowed: 2, granted: 0, not_ended: [], ended: [] };
+    watched: string[] = [];
     private onData: (text: string) => void = () => undefined;
     private onExit: (error: string) => void = () => undefined;
     // How the agent answers each method; a function gets the message.
@@ -132,7 +136,7 @@ class Agent {
         "session/load": {},
     };
 
-    constructor() {
+    constructor(watch = false) {
         this.chat = new Chat((agent, profile, onData, onExit): Transport => {
             this.spawned.push([agent, profile]);
             this.onData = onData;
@@ -154,8 +158,24 @@ class Agent {
         async (session, runs) => {
             if (this.limitFails) throw new Error(this.limitFails);
             this.limits.push({ session, runs, before: this.received.length });
-        });
+        }, watch ? {
+            load: async session => { this.watched.push(session); return structuredClone(this.sessionRuns); },
+            tell: (ended: ChatSessionRun[]) => `ended: ${ended.map(run => `${run.id} ${run.status}`).join(", ")}`,
+        } : null);
     }
+
+    // The runs of the conversation as chat.session says, and the page asking for them.
+    async runs(notEnded: [string, string][], ended: [string, string][]): Promise<void> {
+        this.sessionRuns = {
+            ...this.sessionRuns,
+            not_ended: notEnded.map(([id, status]) => ({ id, title: id, status })),
+            ended: ended.map(([id, status]) => ({ id, title: id, status })),
+        };
+        await this.chat.refreshRuns();
+        await tick();
+    }
+
+    prompts(): string[] { return this.received.filter(message => message.method === "session/prompt").map(message => message.params.prompt[0].text); }
 
     say(message: object): void { this.onData(JSON.stringify(message) + "\n"); }
     exit(error: string): void { this.onExit(error); }
@@ -580,4 +600,87 @@ test("a change of profile waits for the sessions to free, and says why it could 
     assert.equal(state.changing, "");
     assert.equal(state.phase, "ended");
     assert.equal(state.error, "not accepted");
+});
+
+test("a run the agent left running is told to it when it ends, once, in a message of the page", async () => {
+    const agent = new Agent(true);
+    await agent.ready();
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("delete the iso files");
+    const session = agent.chat.getState().fleetSession;
+    assert.ok(agent.watched.length > 0 && agent.watched.every(one => one === session));
+    await agent.runs([["r1", "pending_approval"]], []);
+    assert.deepEqual(agent.chat.getState().sessionRuns?.not_ended.map(run => run.id), ["r1"]);
+    assert.deepEqual(agent.prompts(), ["delete the iso files"]);
+
+    await agent.runs([], [["r1", "successful"]]);
+    assert.deepEqual(agent.prompts(), ["delete the iso files", `${NOTICE_MARK}ended: r1 successful`]);
+    const items = agent.chat.getState().items;
+    assert.deepEqual(items[items.length - 1], { kind: "notice", text: `${NOTICE_MARK}ended: r1 successful` });
+    await agent.runs([], [["r1", "successful"]]);
+    assert.equal(agent.prompts().length, 2);
+});
+
+test("a run that ends while the agent answers is told once it is idle", async () => {
+    const agent = new Agent(true);
+    await agent.ready();
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("reboot PC215");
+    await agent.runs([["r1", "running"]], []);
+    delete agent.answers["session/prompt"];
+    const answering = agent.chat.send("and the others?");
+    await tick();
+    await agent.runs([], [["r1", "failed"]]);
+    assert.deepEqual(agent.prompts(), ["reboot PC215", "and the others?"]);
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    agent.say({ jsonrpc: "2.0", id: agent.last("session/prompt").id, result: { stopReason: "end_turn" } });
+    await answering;
+    await tick();
+    assert.deepEqual(agent.prompts().slice(-1), [`${NOTICE_MARK}ended: r1 failed`]);
+});
+
+test("runs that end within the answer that launched them, or that the person stopped, are not told", async () => {
+    const agent = new Agent(true);
+    await agent.ready();
+    delete agent.answers["session/prompt"];
+    const answering = agent.chat.send("ping them");
+    await tick();
+    // Seen running while the agent answers, and ended before it is done: it followed them.
+    await agent.runs([["r1", "running"]], []);
+    await agent.runs([], [["r1", "successful"]]);
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    agent.say({ jsonrpc: "2.0", id: agent.last("session/prompt").id, result: { stopReason: "end_turn" } });
+    await answering;
+    await tick();
+    assert.deepEqual(agent.prompts(), ["ping them"]);
+
+    await agent.runs([["r2", "running"]], [["r1", "successful"]]);
+    agent.chat.silenceRuns();
+    await agent.runs([], [["r1", "successful"], ["r2", "canceled"]]);
+    assert.deepEqual(agent.prompts(), ["ping them"]);
+});
+
+test("a new conversation forgets the runs of the last one", async () => {
+    const agent = new Agent(true);
+    await agent.ready();
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("one");
+    await agent.runs([["r1", "running"]], []);
+    agent.chat.fresh();
+    assert.equal(agent.chat.getState().sessionRuns, null);
+    agent.sessionRuns = { ...agent.sessionRuns, not_ended: [] };
+    await agent.chat.send("two");
+    await agent.runs([], [["r1", "successful"]]);
+    assert.deepEqual(agent.prompts(), ["one", "two"]);
+});
+
+test("a message of the page is told apart when the conversation is replayed", () => {
+    let items: Item[] = [];
+    const say = (text: string) => { items = applyUpdate(items, { sessionUpdate: "user_message_chunk", content: { type: "text", text } }); };
+    say(`${NOTICE_MARK}A run has ended:`);
+    say("\n- r1: successful");
+    items = applyUpdate(items, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "It went well." } });
+    say("thanks");
+    assert.deepEqual(items.map(item => item.kind), ["notice", "agent", "user"]);
+    assert.equal((items[0] as { text: string }).text, `${NOTICE_MARK}A run has ended:\n- r1: successful`);
 });

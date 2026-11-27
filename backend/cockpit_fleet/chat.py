@@ -242,19 +242,34 @@ def _not_ended(ctx: Context, session: str) -> list:
     ).fetchall()
 
 
+# The page tells the agent of a run that has ended: it looks among the last ones.
+_ENDED = 20
+
+
+def _ended(ctx: Context, session: str) -> list:
+    marks = ", ".join("?" * len(_NOT_ENDED))
+    rows = ctx.conn.execute(
+        f"SELECT id, title, status FROM runs WHERE session = ? AND created_by = ?"  # noqa: S608
+        f" AND status NOT IN ({marks}) ORDER BY rowid DESC LIMIT ?",
+        (session, ctx.caller.user, *_NOT_ENDED, _ENDED)).fetchall()
+    return rows[::-1]
+
+
 @command("chat.session", role="viewer", tool=False, params={"session": _SESSION})
 def chat_session(ctx: Context, params: Values) -> dict:
     """What an agent of the caller launched in a session of fleet-mcp: how
     many launches went through, how many it may make in the profile
     autonomous (as the caller chose for it, or [chat] autonomous_runs, and
-    those the caller allowed since), and its runs not ended yet."""
+    those the caller allowed since), its runs not ended yet, and the last
+    ones that have, with how they ended."""
     session = _session(params)
     jobs.reconcile(ctx)
     user = ctx.caller.user
     return {"launched": autonomy.launched(ctx.conn, session, user),
             "allowed": autonomy.allowed(ctx.conn, ctx.config, session, user),
             "granted": autonomy.granted(ctx.conn, session, user),
-            "not_ended": [dict(row) for row in _not_ended(ctx, session)]}
+            "not_ended": [dict(row) for row in _not_ended(ctx, session)],
+            "ended": [dict(row) for row in _ended(ctx, session)]}
 
 
 @command("chat.limit_runs", role="operator", mutating=True, tool=False,

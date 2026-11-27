@@ -67,18 +67,14 @@ test("who may not decide is told so, without buttons", async () => {
 });
 
 test("a run of the conversation not ended opens on the page of the runs", async () => {
-    setSpawnHandler((call: SpawnCall) => {
-        if (last(call.args) === "chat.session") {
-            return JSON.stringify({ ok: true, data: { launched: 1, allowed: 5, granted: 0, not_ended: [{ id: "r7", title: "maint-optimize", status: "running" }] } });
-        }
-        return JSON.stringify({ ok: true, data: { approvals: [] } });
-    });
+    setSpawnHandler(() => JSON.stringify({ ok: true, data: { approvals: [] } }));
     const gone: unknown[][] = [];
     const go = cockpit.location.go;
     cockpit.location.path = ["chat"];
     cockpit.location.go = (...args: unknown[]) => { gone.push(args); };
     try {
-        const state = { fleetSession: "s1", profile: "assisted", items: [], busy: false } as unknown as ChatState;
+        const sessionRuns = { launched: 1, allowed: 5, granted: 0, not_ended: [{ id: "r7", title: "maint-optimize", status: "running" }], ended: [] };
+        const state = { fleetSession: "s1", profile: "assisted", items: [], busy: false, sessionRuns, runsError: "" } as unknown as ChatState;
         await act(async () => {
             render(<SessionContext.Provider value={session(["chat.cancel_runs"])}><SessionRuns state={state} info={{} as ChatInfo} /></SessionContext.Provider>);
         });

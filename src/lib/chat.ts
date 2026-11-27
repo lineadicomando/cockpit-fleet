@@ -2,7 +2,8 @@
 // and the conversation with it. It lives outside the components, so that it
 // goes on while another tab of the plugin is shown; it ends with the page.
 
-import { AUTH_REQUIRED, AcpError, Connection, MCP_SERVER, applyUpdate, fleetTool, namedByAgent, permissionOutcome, type Item } from "./acp.ts";
+import type { ChatSessionRun, ChatSessionRuns } from "./types.ts";
+import { AUTH_REQUIRED, AcpError, Connection, MCP_SERVER, NOTICE_MARK, applyUpdate, fleetTool, namedByAgent, permissionOutcome, type Item } from "./acp.ts";
 
 // A tool of fleet-mcp, as mcp.tools describes it.
 export interface ToolInfo {
@@ -84,6 +85,10 @@ export interface ChatState {
     // The runs an agent in the profile autonomous may launch in each
     // conversation, as chosen when the session started; 0 for config.toml's.
     runs: number;
+    // What the agent launched in the conversation (chat.session), and why it
+    // could not be asked.
+    sessionRuns: ChatSessionRuns | null;
+    runsError: string;
 }
 
 export interface Transport {
@@ -100,8 +105,19 @@ export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 // Sets the runs an agent acting without asking may launch in a session of fleet-mcp.
 export type LimitRuns = (session: string, runs: number) => Promise<void>;
 
+// Follows what the agent launched in a session of fleet-mcp, and words the
+// message that tells the agent which of its runs have ended.
+export interface Watch {
+    load: (session: string) => Promise<ChatSessionRuns>;
+    tell: (ended: ChatSessionRun[]) => string;
+}
+
+// How often the runs of the conversation are asked for while the agent
+// answers or they have not ended.
+export const WATCH_MS = 5000;
+
 const IDLE: ChatState = {
-    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "", runs: 0,
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "", runs: 0, sessionRuns: null, runsError: "",
 };
 
 // What fleet-mcp takes as the identifier of a session: 16 hexadecimal digits.
@@ -146,11 +162,22 @@ export class Chat {
     // whether the agent that ends next is one the change is waiting for, and
     // how many times its start found the sessions full.
     private change: { profile: string; sessionId: string; expected: boolean; full: number } | null = null;
+    private readonly watch: Watch | null;
+    // The runs of the conversation seen not ended once the agent was idle: the
+    // agent is told when they end, unless the person stopped them; those
+    // ended and not told yet, while the agent is answering.
+    private watched = new Set<string>();
+    private silenced = new Set<string>();
+    private toTell: ChatSessionRun[] = [];
+    private watchTimer: ReturnType<typeof setTimeout> | undefined;
+    private watching = false;
+    private watchAgain = false;
 
-    constructor(spawn: Spawn, loadTools: LoadTools, limitRuns: LimitRuns = async () => undefined) {
+    constructor(spawn: Spawn, loadTools: LoadTools, limitRuns: LimitRuns = async () => undefined, watch: Watch | null = null) {
         this.spawn = spawn;
         this.loadTools = loadTools;
         this.limitRuns = limitRuns;
+        this.watch = watch;
     }
 
     subscribe = (listener: () => void): (() => void) => {
@@ -170,6 +197,7 @@ export class Chat {
         // A draft waits for the session it was prepared for.
         this.state = { ...IDLE, draft: this.state.draft, runs };
         this.change = null;
+        this.unwatch();
         this.launch(agent, profile);
     }
 
@@ -364,14 +392,16 @@ export class Chat {
     fresh(): void {
         if (this.state.busy || this.state.loading) return;
         this.always.clear();
-        this.set({ sessionId: "", items: [], fleetSession: "" });
+        this.unwatch();
+        this.set({ sessionId: "", items: [], fleetSession: "", sessionRuns: null, runsError: "" });
     }
 
     // Goes on with an earlier conversation, which the agent replays.
     async open(sessionId: string): Promise<void> {
         if (!this.connection || this.state.busy || this.state.loading) return;
         this.always.clear();
-        this.set({ sessionId, items: [], loading: true, fleetSession: drawSession() });
+        this.unwatch();
+        this.set({ sessionId, items: [], loading: true, fleetSession: drawSession(), sessionRuns: null, runsError: "" });
         try {
             await this.limit();
             await this.connection.request("session/load", { ...this.sessionParams(), sessionId });
@@ -379,12 +409,18 @@ export class Chat {
             this.fail(ex);
         }
         this.set({ loading: false });
+        void this.refreshRuns();
     }
 
     async send(text: string): Promise<void> {
+        if (!text.trim()) return;
+        await this.prompt(text, "user");
+    }
+
+    private async prompt(text: string, kind: "user" | "notice"): Promise<void> {
         const connection = this.connection;
-        if (!connection || this.state.phase !== "ready" || this.state.busy || this.state.loading || !text.trim()) return;
-        this.set({ busy: true, needsLogin: false, items: [...this.state.items, { kind: "user", text }] });
+        if (!connection || this.state.phase !== "ready" || this.state.busy || this.state.loading) return;
+        this.set({ busy: true, needsLogin: false, items: [...this.state.items, { kind, text }] });
         try {
             if (!this.state.sessionId) {
                 this.set({ fleetSession: drawSession() });
@@ -392,12 +428,76 @@ export class Chat {
                 const session = await connection.request<{ sessionId: string }>("session/new", this.sessionParams());
                 this.set({ sessionId: session.sessionId });
             }
+            void this.refreshRuns();
             await connection.request("session/prompt", { sessionId: this.state.sessionId, prompt: [{ type: "text", text }] });
         } catch (ex) {
             this.fail(ex);
         }
         this.set({ busy: false });
         this.list();
+        void this.refreshRuns();
+    }
+
+    // Asks what the agent launched in the conversation; runs it was idle
+    // through that have ended are told to it, in a message of the page, once
+    // it is idle again. Asked again every WATCH_MS while it answers or runs
+    // have not ended, whichever tab of the plugin is open.
+    async refreshRuns(): Promise<void> {
+        const session = this.state.fleetSession;
+        if (!this.watch || !session) return;
+        if (this.watching) {
+            this.watchAgain = true;
+            return;
+        }
+        this.watching = true;
+        clearTimeout(this.watchTimer);
+        const idle = !this.state.busy;
+        try {
+            const runs = await this.watch.load(session);
+            if (session === this.state.fleetSession) {
+                for (const run of runs.ended) {
+                    if (this.watched.delete(run.id) && !this.silenced.has(run.id)) this.toTell.push(run);
+                }
+                if (idle) for (const run of runs.not_ended) this.watched.add(run.id);
+                this.set({ sessionRuns: runs, runsError: "" });
+            }
+        } catch (ex) {
+            if (session === this.state.fleetSession) this.set({ runsError: ex instanceof Error ? ex.message : String(ex) });
+        }
+        this.watching = false;
+        if (this.watchAgain) {
+            this.watchAgain = false;
+            return this.refreshRuns();
+        }
+        if (session === this.state.fleetSession && (this.state.busy || (this.state.sessionRuns?.not_ended.length ?? 0) > 0)) {
+            this.watchTimer = setTimeout(() => void this.refreshRuns(), WATCH_MS);
+        }
+        await this.tell();
+    }
+
+    // The person stops the runs of the conversation: the agent, stopped too,
+    // is not told of them.
+    silenceRuns(): void {
+        for (const run of this.state.sessionRuns?.not_ended ?? []) this.silenced.add(run.id);
+        for (const id of this.watched) this.silenced.add(id);
+        this.toTell = [];
+    }
+
+    private async tell(): Promise<void> {
+        const watch = this.watch;
+        const state = this.state;
+        if (!watch || !this.toTell.length || state.phase !== "ready" || state.busy || state.loading || state.ask
+            || this.change || !state.sessionId) return;
+        const ended = this.toTell;
+        this.toTell = [];
+        await this.prompt(NOTICE_MARK + watch.tell(ended), "notice");
+    }
+
+    private unwatch(): void {
+        clearTimeout(this.watchTimer);
+        this.watched = new Set();
+        this.silenced = new Set();
+        this.toTell = [];
     }
 
     // Stops the answer being given; the calls waiting for a yes get none.

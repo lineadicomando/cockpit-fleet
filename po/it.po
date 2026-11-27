@@ -4203,6 +4203,14 @@ msgid_plural "chat_runs_not_ended_plural"
 msgstr[0] "{{count}} run lanciata non è ancora finita"
 msgstr[1] "{{count}} run lanciate non sono ancora finite"
 
+msgid "chat_runs_ended"
+msgid_plural "chat_runs_ended_plural"
+msgstr[0] "Una run che hai lanciato in questa conversazione è terminata:"
+msgstr[1] "{{count}} run che hai lanciato in questa conversazione sono terminate:"
+
+msgid "Read how they went with run_result and tell me."
+msgstr "Leggi com'è andata con run_result e raccontamelo."
+
 msgid "chat_runs_waiting"
 msgid_plural "chat_runs_waiting_plural"
 msgstr[0] "Una run lanciata dall'assistente aspetta la tua decisione"

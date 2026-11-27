@@ -151,6 +151,12 @@
     border-radius: var(--pf-t--global--border--radius--small);
     background: var(--pf-t--global--background--color--secondary--default);
 }
+/* What the page told the agent in the person's place. */
+.fleet-chat-notice {
+    padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+    border-inline-start: 3px solid var(--pf-t--global--border--color--status--info--default);
+    color: var(--pf-t--global--text--color--subtle);
+}
 .fleet-chat-thought { color: var(--pf-t--global--text--color--subtle); font-style: italic; }
 .fleet-chat-tool { margin-block-end: var(--pf-t--global--spacer--md); }
 .fleet-chat-runs { margin-block-end: var(--pf-t--global--spacer--sm); }

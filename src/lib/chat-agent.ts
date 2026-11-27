@@ -1,8 +1,10 @@
 // The one chat session of the page, with the agent on a Cockpit channel.
 
 import cockpit from "cockpit";
+import i18n from "../i18n.ts";
 import { call, frames } from "./fleet.ts";
 import { Chat, type ToolInfo, type Transport } from "./chat.ts";
+import type { ChatSessionRun, ChatSessionRuns } from "./types.ts";
 
 const FLEET_CHAT = "/usr/libexec/cockpit-fleet/fleet-chat";
 
@@ -32,8 +34,20 @@ function spawnAgent(agent: string, profile: string, onData: (text: string) => vo
     };
 }
 
+// What the page tells the agent, in the person's place, of its runs that have ended.
+export function tellEnded(ended: ChatSessionRun[]): string {
+    const t = i18n.t.bind(i18n);
+    const statuses: Record<string, string> = {
+        successful: t("Successful"), failed: t("Failed"), canceled: t("Canceled"),
+        error: t("Error"), rejected: t("Rejected"), expired: t("Expired"),
+    };
+    const lines = ended.map(run => `- ${run.title || run.id} (${run.id}): ${statuses[run.status] ?? run.status}`);
+    return [t("chat_runs_ended", { count: ended.length }), ...lines, t("Read how they went with run_result and tell me.")].join("\n");
+}
+
 export const chat = new Chat(
     spawnAgent,
     async profile => (await call<{ tools: ToolInfo[] }>("mcp.tools", profile ? { profile } : {})).tools,
     async (session, runs) => { await call("chat.limit_runs", { session, runs }); },
+    { load: session => call<ChatSessionRuns>("chat.session", { session }), tell: tellEnded },
 );

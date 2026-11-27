@@ -117,7 +117,10 @@ in [security.md](security.md); the decisions behind these limits in
   cycle a launch of `check.run` makes due is not the session's, and "Stop
   everything" leaves it to end; Claude's question on trusting its directory
   the first time (it says the agent may edit and run files: it may not);
-  the page lists Claude's own `/login` among past conversations; for a viewer
+  the page lists Claude's own `/login` among past conversations; the end of
+  a run is told to the agent only while the page is open, not at a
+  terminal, not for runs that ended within the answer that launched them,
+  and not for those of a conversation before a change of profile; for a viewer
   or an operator the tab appears only once the page is reloaded after the
   agent is named (an administrator's guide looks again every 5 s).
 - AlmaLinux: no `ansible`/`ansible-lint` (no lint; collections from the

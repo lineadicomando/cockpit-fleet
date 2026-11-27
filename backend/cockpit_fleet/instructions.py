@@ -45,7 +45,10 @@ _BASE = (
     " it again; you cannot approve it yourself."
 )
 _SURFACES = {
-    "page": (" in the chat page", " Your answers are shown as plain text: do not use Markdown."),
+    "page": (" in the chat page", " Your answers are shown as plain text: do not use Markdown."
+             " When runs you launched in this conversation end, the page tells you in a"
+             " message that begins with [Fleet]: it is the page's, not the person's. Read how"
+             " they went and tell the person; never ask them to tell you when a run ends."),
     "terminal": (" at a terminal", ""),
 }
 

@@ -470,7 +470,8 @@ class AutonomyTest(Base):
         self.refused(self.via("run.start", launch), "allow more from the chat page")
         self.assertEqual(self.ok("chat.session", session),
                          {"launched": 2, "allowed": 2, "granted": 0,
-                          "not_ended": self.ok("chat.session", session)["not_ended"]})
+                          "not_ended": self.ok("chat.session", session)["not_ended"],
+                          "ended": []})
         # Never by the agent, nor by a viewer, nor for a session made up.
         self.refused(self.via("chat.grant_runs", {**session, "runs": 5}), "not for agents")
         self.assertEqual(self.code("chat.grant_runs", {**session, "runs": 1}, "viewer"),
@@ -551,7 +552,12 @@ class AutonomyTest(Base):
         self.assertEqual(self.ok("run.get", {"id": flow["id"]})["status"], "canceled")
         for run in (other, mine):
             self.assertNotEqual(self.ok("run.get", {"id": run["id"]})["status"], "canceled")
-        self.assertEqual(self.ok("chat.session", session)["not_ended"], [])
+        known = self.ok("chat.session", session)
+        self.assertEqual(known["not_ended"], [])
+        # What ended, for the page to tell the agent: the session's, the caller's.
+        self.assertEqual([(run["id"], run["status"]) for run in known["ended"]],
+                         [(run["id"], "canceled") for run in (first, second, flow)])
+        self.assertEqual(self.as_user("chat.session", session, "bob")["data"]["ended"], [])
         self.assertEqual(self.ok("chat.cancel_runs", session), {"canceled": []})
 
     def test_no_launch_without_a_session_and_no_session_made_up(self):

@@ -218,6 +218,24 @@ the sending there, with the error in the conversation, rather than let the
 agent go on with another limit than the one chosen. The backend side, and
 why the limit stays: agents.md, "The person beside an autonomous agent".
 
+**Telling the agent that runs ended.** An agent works only within a turn:
+once it has answered, nothing wakes it, and a run that waited for a
+confirmation, or a long playbook, ended unseen until the person wrote (it
+had asked to be told). The page is the observer, with no process of its
+own: `Chat` (outside the React tree, so it goes on in the other tabs, the
+page of approvals among them) asks `chat.session`, which lists beside the
+runs not ended the last 20 that have, with their status. A run seen not
+ended while the agent was idle, then among those ended, is told to the
+agent once it is idle again, in a prompt of the page (`watch.tell`, in the
+language of the interface, those ended together in one), shown as
+"Fleet" and marked by a prefix (`NOTICE_MARK`) so that a replay shows it
+the same. Runs that end within the answer that launched them are not
+told: the agent followed them, or can. "Stop everything" silences the runs
+it cancels. The base instructions on the page say what the message is and
+not to ask the person to report an end. One `chat.session` every
+`WATCH_MS` while the agent answers or runs have not ended, the same that
+`SessionRuns` shows: the component no longer asks by itself.
+
 **Permissions.** The agent asks before each call to a tool
 (`session/request_permission`). The page answers as `question` of the tool
 in `mcp.tools` says (see "Questions by profile" in [Agents](agents.md)): by itself

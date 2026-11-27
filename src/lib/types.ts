@@ -52,11 +52,19 @@ export interface ChatInfo {
 
 // What an agent launched in a conversation (chat.session): launches that
 // went through, those allowed in the profile autonomous, and its runs not ended.
+export interface ChatSessionRun {
+    id: string;
+    title: string;
+    status: string;
+}
+
 export interface ChatSessionRuns {
     launched: number;
     allowed: number;
     granted: number;
-    not_ended: { id: string; title: string; status: string }[];
+    not_ended: ChatSessionRun[];
+    // The last that have ended, oldest first.
+    ended: ChatSessionRun[];
 }
 
 // A draft an agent left in a managed project or inventory (draft.list).

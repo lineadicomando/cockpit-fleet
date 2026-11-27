@@ -23,7 +23,7 @@ import {
     TextInput,
 } from "@patternfly/react-core";
 import cockpit from "cockpit";
-import type { Item, ToolItem, ToolStatus } from "../lib/acp.ts";
+import { NOTICE_MARK, type Item, type ToolItem, type ToolStatus } from "../lib/acp.ts";
 import { chat } from "../lib/chat-agent.ts";
 import type { Ask, ChatState } from "../lib/chat.ts";
 import { documentLocation, writtenDocument } from "../lib/documents.ts";
@@ -31,7 +31,7 @@ import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useSession } from "../lib/session.tsx";
-import type { ChatAgentInfo, ChatGuide, ChatInfo, ChatSessionRuns } from "../lib/types.ts";
+import type { ChatAgentInfo, ChatGuide, ChatInfo } from "../lib/types.ts";
 import { FormModal, SectionHeader, TerminalCommand as Command, openRun } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { PendingDrafts } from "./Drafts.tsx";
@@ -169,7 +169,7 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
     // The box scrolls, not the page: the message box below must stay in sight.
     useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [items, busy]);
     const profiles = useProfiles();
-    const who: Record<string, string> = { user: t("You"), agent: t("Assistant"), thought: t("Assistant, thinking") };
+    const who: Record<string, string> = { user: t("You"), notice: "Fleet", agent: t("Assistant"), thought: t("Assistant, thinking") };
     return (
         <div ref={log} className="fleet-chat-log" role="log" aria-label={t("Conversation")}>
             {items.length === 0 && children}
@@ -182,7 +182,7 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
                 return (
                     <div key={index} className={`fleet-chat-message fleet-chat-${item.kind}`}>
                         <div className="fleet-chat-who">{who[item.kind]}</div>
-                        {item.text}
+                        {item.kind === "notice" && item.text.startsWith(NOTICE_MARK) ? item.text.slice(NOTICE_MARK.length) : item.text}
                     </div>
                 );
             })}
@@ -517,22 +517,13 @@ function Composer({ state }: { state: ChatState }) {
 export function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
     const { t } = useTranslation();
     const session = useSession();
-    const [runs, setRuns] = useState<ChatSessionRuns | null>(null);
-    const [error, setError] = useState("");
+    const [failed, setFailed] = useState("");
     const [stopping, setStopping] = useState(false);
     const [granting, setGranting] = useState(false);
     const fleetSession = state.fleetSession;
-    const load = React.useCallback(async () => {
-        if (!fleetSession) return;
-        try {
-            setRuns(await call<ChatSessionRuns>("chat.session", { session: fleetSession }));
-        } catch (ex) {
-            setError(ex instanceof Error ? ex.message : String(ex));
-        }
-    }, [fleetSession]);
-    useEffect(() => { setRuns(null); setError(""); }, [fleetSession]);
-    useEffect(() => { load(); }, [load, state.items.length, state.busy]);
-    usePolling(load, 5000, !!fleetSession && (state.busy || (runs?.not_ended.length ?? 0) > 0));
+    const runs = state.sessionRuns;
+    const error = failed || state.runsError;
+    useEffect(() => { setFailed(""); }, [fleetSession]);
 
     if (!fleetSession || !runs) return null;
     const autonomous = state.profile === "autonomous";
@@ -544,18 +535,19 @@ export function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo 
         setGranting(true);
         try {
             await call("chat.grant_runs", { session: fleetSession, runs: info.autonomous_runs });
-            await load();
+            await chat.refreshRuns();
         } catch (ex) {
-            setError(ex instanceof Error ? ex.message : String(ex));
+            setFailed(ex instanceof Error ? ex.message : String(ex));
         }
         setGranting(false);
     }
 
     async function stopAll() {
+        chat.silenceRuns();
         chat.cancel();
         await call("chat.cancel_runs", { session: fleetSession });
         setStopping(false);
-        await load();
+        await chat.refreshRuns();
     }
 
     return (

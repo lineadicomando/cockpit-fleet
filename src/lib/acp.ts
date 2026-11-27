@@ -124,10 +124,14 @@ export interface ToolItem {
     output: string;
 }
 
+// A notice is a message the page sent the agent in the person's place (that
+// runs have ended), marked so that it is told apart when replayed.
 export interface TextItem {
-    kind: "user" | "agent" | "thought" | "error";
+    kind: "user" | "notice" | "agent" | "thought" | "error";
     text: string;
 }
+
+export const NOTICE_MARK = "[Fleet] ";
 
 // Said by the page, not by the agent: the session went on in another profile.
 export interface ProfileItem {
@@ -192,8 +196,11 @@ function append(items: Item[], kind: TextItem["kind"], text: string): Item[] {
 export function applyUpdate(items: Item[], update: unknown): Item[] {
     if (!isObject(update)) return items;
     switch (update.sessionUpdate) {
-    case "user_message_chunk":
-        return append(items, "user", textOf(update.content));
+    case "user_message_chunk": {
+        const text = textOf(update.content);
+        const notice = text.startsWith(NOTICE_MARK) || items[items.length - 1]?.kind === "notice";
+        return append(items, notice ? "notice" : "user", text);
+    }
     case "agent_message_chunk":
         return append(items, "agent", textOf(update.content));
     case "agent_thought_chunk":
