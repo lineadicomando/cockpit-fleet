@@ -124,6 +124,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Interface: the row of a table under the pointer, or with one of its
+  controls in focus, is highlighted as in Cockpit, so that the actions at
+  the end of a wide row are found on the row of its name.
 - Documents: a document follows the theme of Cockpit, dark included; a
   page saved from it follows the theme of the system it is opened on.
   Printed, it stays light.

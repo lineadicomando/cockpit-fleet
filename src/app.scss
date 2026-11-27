@@ -170,6 +170,18 @@
 .fleet-document-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--pf-t--global--spacer--md); block-size: 65vh; min-block-size: 20rem; margin-block-end: var(--pf-t--global--spacer--sm); }
 .fleet-document-edit > .fleet-editor, .fleet-document-edit > .fleet-document-frame { block-size: 100%; min-block-size: 0; }
 @media (max-width: 60rem) { .fleet-document-edit { grid-template-columns: 1fr; block-size: auto; } .fleet-document-edit > * { block-size: 50vh; } }
+
+// A row of a table is highlighted under the pointer, and while one of its
+// controls has the focus, as PatternFly and Cockpit do for clickable rows: the
+// actions at the end of a wide row stay tied to its name. Not the rows of tables
+// of details (no borders), the selected or clickable rows (styled by
+// PatternFly), the head of a group of rows nor the row that holds the details
+// of the row above it: the rows of a group are expandable rows too, so that a
+// closed group hides them, and are highlighted.
+.pf-v6-c-table:not(.pf-m-no-border-rows) > tbody > tr:where(.pf-v6-c-table__tr):not(.pf-m-selected, .pf-m-clickable, .fleet-group-row, :has(> td > .pf-v6-c-table__expandable-row-content)):is(:hover, :focus-within) {
+    background-color: var(--pf-t--global--background--color--primary--hover);
+}
+
 .fleet-store-list { min-block-size: 10rem; border-radius: var(--pf-t--global--border--radius--small); }
 .fleet-store-list.is-target { outline: 2px dashed var(--pf-t--global--border--color--clicked); outline-offset: 2px; }
 .fleet-store-list tr.is-cut { opacity: 0.5; }

@@ -88,7 +88,7 @@ export function GroupRow({ title, count, open, onToggle, width, children }: {
     children?: React.ReactNode;
 }) {
     return (
-        <Tr>
+        <Tr className="fleet-group-row">
             <ExpandCell isExpanded={open} onToggle={onToggle} label={title} />
             <Td colSpan={width - 1}>
                 <Flex gap={{ default: "gapMd" }} alignItems={{ default: "alignItemsCenter" }}>

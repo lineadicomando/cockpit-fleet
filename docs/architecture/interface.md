@@ -122,6 +122,16 @@ inventory chosen in the header stays a parameter of `host.list`,
 `state.list` and `cmdb.list`, so that the grid of a large fleet loads only
 the states of one.
 
+A row of a table is highlighted under the pointer and while one of its
+controls has the focus (`app.scss`), with the token of PatternFly's
+clickable rows, as Cockpit's lists: on a wide screen the actions at the end
+of a row ("Launch", the menu) stay tied to its name. Left out: tables of
+details (`borders={false}`), the row holding the expanded details of the
+one above it, selected and clickable rows (PatternFly styles them) and the
+head of a group (`fleet-group-row` of `GroupRow`). The rows of a group are
+expandable rows of PatternFly too, so that a closed group hides them: they
+are highlighted.
+
 Job templates are grouped by inventory (the default), project, outcome of
 the last run or not at all, every group open at first; filtered by text
 (name, playbook, project, inventory, tags), project, inventory, a feature
