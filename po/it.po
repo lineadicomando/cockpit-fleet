@@ -2826,7 +2826,7 @@ msgid "Worst state"
 msgstr "Stato peggiore"
 
 msgid "Nothing"
-msgstr "Nulla"
+msgstr "Nessuno"
 
 msgid "Remove the filter {{filter}}"
 msgstr "Rimuovi il filtro {{filter}}"
