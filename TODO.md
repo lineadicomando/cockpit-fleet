@@ -40,11 +40,11 @@ Each is described in the file named; what remains is the close.
   `chat.md`, "Skills"): the skills are pushed in `ansible-win_edulab`
   (`win-edulab-operations`, `-inventory`, `-reports`) and in
   `ansible-collection-win_workman` (`win-workman`, its catalog written by
-  `tools/fleet_skills.py`), but the collection's came after its tag v0.9.1:
-  it needs a new tag and `requirements.yaml` of win_edulab pointing to it.
-  Then, on a controller, the project synchronised and its collections
-  installed again, and the work of a lab's maintenance done from the chat
-  with those skills, without going back to the repository.
+  `tools/fleet_skills.py`, in its tag v0.9.2, which `requirements.yaml`
+  of win_edulab pins). What remains: on a controller, the project
+  synchronised and its collections installed again, and the work of a
+  lab's maintenance done from the chat with those skills, without going
+  back to the repository.
 - **24, skills in the documents** (`architecture/documents.md`, "Skills
   of the documents"; `chat.md`, "Skills"): shown in containers and in a
   browser on `deb13` (26 November). What remains: the user, with Claude as
