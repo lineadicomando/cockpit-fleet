@@ -93,9 +93,11 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
   feature (an approval, questions, scheduled or not, from `schedule.list`)
   and the outcome of the last run (failed or error; under way, waiting for
   approval included; canceled, rejected or expired; successful; never
-  launched). `template.list` gives each template its `last_run`, any run
-  with its `template_id` (a step of a workflow too), in one query over the
-  index `runs_template` (schema 19); it does not reconcile runs as
+  launched); under an inventory, of the last run there
+  ([Inventories](inventories.md)). `template.list` gives each template its
+  `last_run`, any run with its `template_id` (a step of a workflow too),
+  and its last on each inventory, in one query over the index
+  `runs_template` (schema 19); it does not reconcile runs as
   `run.list` does, so a run whose unit died unseen shows as running until
   a page of runs is opened.
 - Checks: [Checks](checks.md), "The interface".
@@ -110,25 +112,17 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
 
 **Pages that follow changes.** Nothing tells a page that something
 changed: it asks again with `usePolling` (`src/lib/hooks.ts`), which waits
-for one answer before the next. Hosts every 15 s, the Overview and System
-every 30 s, pending approvals (in Runs and the Assistant) every 5 s,
-always; Runs, Templates, Checks, Workflows, Schedules, Notifications,
-Network, and Projects and Inventories after a change, only while something
-they show is not over (every 1.5–5 s). So the list of checks misses a
-cycle the scheduler's tick queues (each minute) while none runs. The ways
-to follow it, to choose (`TODO.md`):
-- a slow poll while nothing runs (30 s), paused while the tab is hidden
-  (`visibilitychange`, as `StorePage`): at most 30 s late, two calls of
-  `fleetctl` a minute with the page seen;
-- a reload just after the tick that follows the earliest `next_at` of a
-  check's states (a new field of `check.list`): no call while nothing is
-  due, but blind to a cycle someone else starts and to the end of a
-  maintenance;
-- systemd's signals on D-Bus (`cockpit.dbus`, `Subscribe`: the end of
-  `cockpit-fleet-scheduler.service`, a new `cockpit-fleet-run@` unit): at
-  once and free while idle, for every page; but a second channel beside
-  `fleetctl` (a change of `overview.md`'s design), tied to the names of
-  units, to be tried under SELinux.
+for one answer before the next and asks nothing while the browser's tab is
+hidden (`visibilitychange`), and once as soon as it is shown again.
+Hosts every 15 s, the Overview, System and Checks every 30 s, pending
+approvals (in Runs and the Assistant) every 5 s, always; Checks every 5 s
+while a cycle holds a check, so that a cycle the scheduler's tick queues
+(each minute) shows at most 30 s late; Runs, Templates, Workflows,
+Schedules, Notifications, Network, and Projects and Inventories after a
+change, only while something they show is not over (every 1.5–5 s). The
+Store asks every few seconds whether it changed, with a short answer when
+it did not. systemd's signals on D-Bus (at once and free while idle) were
+weighed and left: a second channel beside `fleetctl` (`decisions.md`).
 
 **Choosing one of many.** Where a form chooses a job template (a
 workflow's step, a schedule, a rule of notifications), a workflow, or the

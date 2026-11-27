@@ -1725,5 +1725,8 @@
   "For the conversations of this session, until you turn it off or change the profile.": "Per le conversazioni di questa sessione, finché non lo disattivi o cambi profilo.",
   "Act without asking": "Agisci senza chiedere",
   "Without questions": "Senza conferme",
-  "Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting.": "Senza conferme: l'assistente esegue comandi e modifiche senza chiederti nulla; chiede solo prima di eliminare."
+  "Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting.": "Senza conferme: l'assistente esegue comandi e modifiche senza chiederti nulla; chiede solo prima di eliminare.",
+  "Never here": "Mai qui",
+  "Last on {{inventory}}:": "Ultima su {{inventory}}:",
+  "an inventory deleted": "un inventario eliminato"
 }

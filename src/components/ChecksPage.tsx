@@ -93,6 +93,9 @@ function Help({ children }: { children: React.ReactNode }) {
     return <FormHelperText><HelperText><HelperTextItem>{children}</HelperTextItem></HelperText></FormHelperText>;
 }
 
+// How often the list is asked again: while a cycle runs, and otherwise.
+const CYCLE_POLL = 5000;
+const IDLE_POLL = 30000;
 const MINUTE = 60;
 
 // A check of the user has no entry in the catalog: no parameter, and no default
@@ -604,8 +607,10 @@ export function ChecksPage() {
     const kindNames = useKindNames();
     const [stored, setView] = useStoredView("checks-view", readView);
     const list = useLoad(() => call<{ checks: CheckDef[] }>("check.list"));
-    // While a cycle holds a check, the page follows it to its end.
-    usePolling(list.reload, 5000, list.data?.checks.some(check => check.checking || (!!check.last_cycle && isActiveRun(check.last_cycle.status))) ?? false);
+    // While a cycle holds a check, the page follows it to its end; otherwise
+    // it asks now and then, to see the cycles the scheduler starts.
+    const cycling = list.data?.checks.some(check => check.checking || (!!check.last_cycle && isActiveRun(check.last_cycle.status))) ?? false;
+    usePolling(list.reload, cycling ? CYCLE_POLL : IDLE_POLL, true);
     const windows = useLoad(() => call<{ maintenances: Maintenance[]; now: number }>("maintenance.list"));
     const refs = useLoad(async () => {
         const [catalog, inventories, hosts, credentials, projects] = await Promise.all([

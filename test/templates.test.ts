@@ -2,17 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { byGroupOrder, groupItems, isOpen, readOpen, withOpen } from "../src/lib/listview.ts";
 import {
-    allowedInventories, DEFAULT_TEMPLATES_VIEW, filterTemplates, groupTemplates, isTemplateGroupOpen, outcomeOf, overrideFields, overridesOf, readTemplatesView, sortTemplates,
+    allowedInventories, DEFAULT_TEMPLATES_VIEW, filterTemplates, groupTemplates, isTemplateGroupOpen, listTemplates, outcomeOf, overrideFields, overridesOf, readTemplatesView, sortTemplates,
     withoutTemplateFilters, withTemplateGroupsOpen, type TemplatesView,
 } from "../src/lib/templates.ts";
 import type { RunStatus, Template } from "../src/lib/types.ts";
+
+function runs(name: string, inventory: string | null, last?: [RunStatus, number]): Pick<Template, "last_run" | "last_runs"> {
+    const run = last ? { id: `r-${name}`, status: last[0], created_at: last[1], finished_at: null, inventory_id: inventory } : null;
+    return { last_run: run, last_runs: run && inventory ? { [inventory]: run } : {} };
+}
 
 function template(name: string, project: string, inventory: string | null, more: Partial<Template> = {}, last?: [RunStatus, number]): Template {
     return {
         id: name, name, project_id: project, playbook: `${name}.yml`, inventory_id: inventory, inventory_ids: [], any_inventory: false, machine_credential_id: null,
         vault_credential_ids: [], limit_hosts: "", tags: [], skip_tags: [], extra_vars: {}, variable_set_ids: [], survey: [], forks: null, verbosity: 0,
-        become: false, approval: "none", needs_approval: false, ...more,
-        last_run: last ? { id: `r-${name}`, status: last[0], created_at: last[1], finished_at: null } : null,
+        become: false, approval: "none", needs_approval: false, ...runs(name, inventory, last), ...more,
     };
 }
 
@@ -33,7 +37,7 @@ const names = (items: Template[]) => items.map(item => item.name);
 const view = (more: Partial<TemplatesView> = {}) => ({ ...DEFAULT_TEMPLATES_VIEW, ...more });
 
 test("the last run says how a template went", () => {
-    assert.deepEqual(TEMPLATES.map(outcomeOf), ["failed", "successful", "active", "never", "canceled"]);
+    assert.deepEqual(TEMPLATES.map(item => outcomeOf(item)), ["failed", "successful", "active", "never", "canceled"]);
 });
 
 test("a stored view of templates that is not understood falls back to the default", () => {
@@ -93,6 +97,29 @@ test("a template that allows other inventories is under each of them", () => {
         [["lab", ["wol", "anywhere"]], ["prod", ["wol", "anywhere", "here"]], ["test", ["anywhere"]]]);
     assert.deepEqual(names(filterTemplates(spread, view({ inventory: "i3" }), names3)), ["anywhere"]);
     assert.deepEqual(names(filterTemplates(spread, view({ search: "lab" }), names3)), ["wol", "anywhere"]);
+});
+
+test("under an inventory a template speaks of its last run there", () => {
+    const at = (id: string, status: RunStatus, time: number, inventory: string) =>
+        ({ id, status, created_at: time, finished_at: null, inventory_id: inventory });
+    const lab = at("r1", "failed", 100, "i2");
+    const prod = at("r2", "successful", 300, "i1");
+    const both = [
+        template("wol", "p1", "i1", { inventory_ids: ["i2"], last_run: prod, last_runs: { i1: prod, i2: lab } }),
+        template("scan", "p1", "i1", { inventory_ids: ["i2"], last_run: at("r3", "successful", 200, "i1"), last_runs: { i1: at("r3", "successful", 200, "i1") } }),
+    ];
+    assert.deepEqual([outcomeOf(both[0]), outcomeOf(both[0], "i2"), outcomeOf(both[1], "i2")], ["successful", "failed", "never"]);
+
+    const listed = (more: Partial<TemplatesView>) => listTemplates(both, view(more), NAMES);
+    const shown = (more: Partial<TemplatesView>) => listed(more).groups.map(group => [group.name, names(group.items)]);
+    // By last run there: under lab, wol (100) before scan (never there); under prod, scan (200) before wol (300).
+    assert.deepEqual(shown({ sort: "last_run" }), [["lab", ["scan", "wol"]], ["prod", ["scan", "wol"]]]);
+    assert.deepEqual(shown({ outcome: "failed" }), [["lab", ["wol"]]]);
+    assert.deepEqual(shown({ outcome: "never" }), [["lab", ["scan"]]]);
+    assert.equal(listed({ outcome: "successful" }).shown, 2);
+    // Grouped otherwise, the last on any inventory.
+    assert.equal(listed({ groupBy: "none", outcome: "failed" }).shown, 0);
+    assert.deepEqual(listed({ groupBy: "outcome" }).groups.map(group => [group.key, names(group.items)]), [["successful", ["scan", "wol"]]]);
 });
 
 test("a template with no default inventory is only under those it allows", () => {

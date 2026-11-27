@@ -12,34 +12,11 @@ features"): then fixes, minor changes and field use, toward 1.0.0. Last
 release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (875
-backend, 239 frontend tests). Each backend module's docstring says what it
+To resume: `git status`, `git log origin/main..`; `make check` (876
+backend, 244 frontend tests). Each backend module's docstring says what it
 is; `cli.py` the registry of commands, `db.py` the schema (41
-migrations). Under way: the two fixes below.
-
-## Fixes decided (27 November)
-
-Found by the scenarios.
-
-- **The list of checks misses the cycles of the timer**: it polls only
-  while a cycle holds a check. Three ways in `architecture/interface.md`,
-  "Pages that follow changes". Proposed, waiting for the user's choice:
-  the slow poll now, with the pause of a hidden tab in `usePolling` for
-  every page; D-Bus, if wanted, under Future.
-- **The last run of a template under an inventory** (to fix). Grouped by
-  inventory, a template is listed under each inventory it allows, and its
-  "Last run" is its last on any (`_last_runs`, `resources.py`). A row
-  speaks of what it is listed under, as its Launch does:
-  - `template.list`/`get` give `last_runs` by inventory beside `last_run`,
-    which gets its `inventory_id` (`runs.inventory_id` is the one chosen
-    at launch: no migration);
-  - under an inventory, the last run there; with none, "Never here" and,
-    muted, the last elsewhere with its inventory; the sort by last run and
-    the filter by outcome take the same;
-  - grouped otherwise or not at all, the last on any, with its inventory
-    when not the one of the column;
-  - tests: `test/templates.test.ts`, the page's, `template.list`'s;
-    `architecture/inventories.md`.
+migrations). Under way: the closes of 20–24 on the lab's VMs, then
+the integration there (`sandbox` run D, SELinux).
 
 ## To study
 

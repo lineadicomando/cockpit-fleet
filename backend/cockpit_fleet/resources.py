@@ -1054,20 +1054,31 @@ def template_vaults(ctx: Context, template_id: str) -> list:
         " WHERE v.template_id = ? ORDER BY v.position", (template_id,)).fetchall()
 
 
-_LAST_RUN = ("SELECT r.template_id, r.id, r.status, r.created_at, r.finished_at FROM runs r"
+# The last run of each template on each inventory (null for one deleted since).
+_LAST_RUN = ("SELECT r.rowid AS n, r.template_id, r.inventory_id, r.id, r.status, r.created_at,"
+             " r.finished_at FROM runs r"
              " JOIN (SELECT MAX(rowid) AS last FROM runs WHERE template_id IS NOT NULL{only}"
-             " GROUP BY template_id) m ON r.rowid = m.last")
+             " GROUP BY template_id, inventory_id) m ON r.rowid = m.last")
 
 
 def _last_runs(ctx: Context, template_id: str | None = None) -> dict:
-    """The last run of each template, or of one, by template id."""
+    """The last runs of each template, or of one, by template id: on any inventory
+    ("last") and on each ("by")."""
     if template_id is None:
         rows = ctx.conn.execute(_LAST_RUN.format(only="")).fetchall()
     else:
         rows = ctx.conn.execute(_LAST_RUN.format(only=" AND template_id = ?"),
                                 (template_id,)).fetchall()
-    return {row["template_id"]: {key: row[key] for key in ("id", "status", "created_at",
-                                                           "finished_at")} for row in rows}
+    found: dict = {}
+    for row in rows:
+        run = {key: row[key] for key in ("id", "status", "created_at", "finished_at",
+                                         "inventory_id")}
+        entry = found.setdefault(row["template_id"], {"n": -1, "last": None, "by": {}})
+        if row["inventory_id"] is not None:
+            entry["by"][row["inventory_id"]] = run
+        if row["n"] > entry["n"]:
+            entry["n"], entry["last"] = row["n"], run
+    return found
 
 
 def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
@@ -1088,7 +1099,9 @@ def _template(ctx: Context, row, last_runs: dict | None = None) -> dict:
     data["extra_vars"] = store.loads(row["extra_vars"], {})
     data["variable_set_ids"] = [one["id"] for one in variables.template_sets(ctx.conn, row["id"])]
     data["survey"] = store.loads(row["survey"], [])
-    data["last_run"] = last_runs.get(row["id"])
+    last = last_runs.get(row["id"])
+    data["last_run"] = last["last"] if last else None
+    data["last_runs"] = last["by"] if last else {}
     return data
 
 
@@ -1273,7 +1286,8 @@ def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[st
 @command("template.list", role="viewer")
 def template_list(ctx: Context, params: Values) -> dict:
     """The job templates: playbook, inventory, credentials, the questions each asks,
-    and its last run (id, status, created_at, finished_at), or null."""
+    its last run on any inventory (id, status, created_at, finished_at, inventory_id),
+    or null, and in last_runs its last on each inventory, by inventory id."""
     rows = ctx.conn.execute("SELECT * FROM templates ORDER BY name COLLATE NOCASE").fetchall()
     last_runs = _last_runs(ctx)
     return {"templates": [_template(ctx, row, last_runs) for row in rows]}

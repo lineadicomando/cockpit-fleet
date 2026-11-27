@@ -334,8 +334,20 @@ export interface Template {
     approval: ApprovalMode;
     // approval other than none: what it was before approval had modes.
     needs_approval: boolean;
-    // Its latest run, a step of a workflow included; null when never launched.
-    last_run: { id: string; status: RunStatus; created_at: number; finished_at: number | null } | null;
+    // Its latest run on any inventory, a step of a workflow included; null when never launched.
+    last_run: TemplateRun | null;
+    // Its latest run on each inventory, by inventory id.
+    last_runs: Record<string, TemplateRun>;
+}
+
+// A run of a template as its list gives it: inventory_id is the one chosen at
+// launch, null if that inventory was deleted since.
+export interface TemplateRun {
+    id: string;
+    status: RunStatus;
+    created_at: number;
+    finished_at: number | null;
+    inventory_id: string | null;
 }
 
 // What a launch or a schedule sets in place of its template's values: only

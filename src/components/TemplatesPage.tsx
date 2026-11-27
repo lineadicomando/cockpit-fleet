@@ -10,10 +10,10 @@ import { answerProblem, collectAnswers, draftProblem, fromDraft, initialAnswers,
 import { playbookChoices } from "../lib/files.ts";
 import { formatTime } from "../lib/format.ts";
 import {
-    allowedInventories, filterTemplates, groupTemplates, isTemplateGroupOpen, OUTCOMES, overrideFields, overridesOf, readTemplatesView, sortTemplates, withoutTemplateFilters,
+    allowedInventories, isTemplateGroupOpen, lastRunOf, listTemplates, OUTCOMES, overrideFields, overridesOf, readTemplatesView, withoutTemplateFilters,
     withTemplateGroupsOpen, type Outcome, type TemplateGroup, type TemplateNames, type TemplateSort, type TemplatesView, type Trait,
 } from "../lib/templates.ts";
-import type { ApprovalMode, Credential, Inventory, Overrides, Project, ProjectPaths, Run, Schedule, Template, VariableSet } from "../lib/types.ts";
+import type { ApprovalMode, Credential, Inventory, Overrides, Project, ProjectPaths, Run, Schedule, Template, TemplateRun, VariableSet } from "../lib/types.ts";
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { parseVariables } from "../lib/variables.ts";
 import { VariableSetsField } from "./VariablesPage.tsx";
@@ -408,8 +408,9 @@ export function TemplatesPage() {
     function reload() {
         list.reload();
     }
-    // A last run not over yet is followed, so that its outcome shows.
-    usePolling(list.reload, 3000, list.data?.templates.some(item => !!item.last_run && isActiveRun(item.last_run.status)) ?? false);
+    // A last run not over yet, on any inventory, is followed, so that its outcome shows.
+    usePolling(list.reload, 3000, list.data?.templates.some(item => Object.values(item.last_runs ?? {}).concat(item.last_run ?? [])
+        .some(run => isActiveRun(run.status))) ?? false);
 
     return (
         <>
@@ -444,8 +445,7 @@ export function TemplatesPage() {
                         project: projects.length > 1 && projects.some(item => item.id === stored.project) ? stored.project : "",
                         inventory: inventories.length > 1 && inventories.some(item => item.id === stored.inventory) ? stored.inventory : "",
                     };
-                    const shown = filterTemplates(data.templates, view, names);
-                    const groups = groupTemplates(sortTemplates(shown, view.sort, view.descending, names), view.groupBy, names);
+                    const { groups, shown } = listTemplates(data.templates, view, names);
                     const grouped = view.groupBy !== "none";
                     const width = grouped ? 9 : 8;
                     const columns: TemplateSort[] = ["name", "project", "inventory", "last_run"];
@@ -455,6 +455,38 @@ export function TemplatesPage() {
                         onSort: (_e: unknown, _index: number, direction: "asc" | "desc") => setView({ ...view, sort: column, descending: direction === "desc" }),
                     });
                     const title = (group: TemplateGroup) => view.groupBy === "outcome" ? outcomeNames[group.key as Outcome] : group.name;
+
+                    const runLink = (run: TemplateRun) => (
+                        <Button variant="link" isInline onClick={() => openRun(run.id)}>
+                            <RunStatusLabel status={run.status} /> {formatTime(run.created_at, i18n.language)}
+                        </Button>
+                    );
+                    // Under an inventory, the last run there, or the last elsewhere, muted;
+                    // otherwise the last on any, with its inventory if not the one of the column.
+                    const lastRunCell = (template: Template, where?: string) => {
+                        const run = lastRunOf(template, where);
+                        const any = template.last_run;
+                        if (where !== undefined && !run && any) {
+                            const deleted = t("an inventory deleted");
+                            return (
+                                <>
+                                    {t("Never here")}
+                                    <div className="pf-v6-u-font-size-sm pf-v6-u-text-color-subtle">
+                                        {t("Last on {{inventory}}:", { inventory: names.inventory(any.inventory_id ?? "") || deleted })} {runLink(any)}
+                                    </div>
+                                </>
+                            );
+                        }
+                        if (!run) return t("Never");
+                        const elsewhere = where === undefined && run.inventory_id !== null && run.inventory_id !== template.inventory_id
+                            && names.inventory(run.inventory_id);
+                        return (
+                            <>
+                                {runLink(run)}
+                                {elsewhere && <span className="pf-v6-u-text-color-subtle"> · {elsewhere}</span>}
+                            </>
+                        );
+                    };
 
                     // where: the inventory of the group it is listed under, if grouped by inventory.
                     const row = (template: Template, open: boolean, where?: string) => {
@@ -481,15 +513,7 @@ export function TemplatesPage() {
                                         : <span className="pf-v6-u-text-color-subtle">{t("inventories_choice_count", { count: allowed })}</span>}
                                     {others > 0 && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("inventories_others_count", { count: others })}</Label>}
                                 </Td>
-                                <Td dataLabel={t("Last run")}>
-                                    {template.last_run
-                                        ? (
-                                            <Button variant="link" isInline onClick={() => openRun(template.last_run!.id)}>
-                                                <RunStatusLabel status={template.last_run.status} /> {formatTime(template.last_run.created_at, i18n.language)}
-                                            </Button>
-                                        )
-                                        : t("Never")}
-                                </Td>
+                                <Td dataLabel={t("Last run")}>{lastRunCell(template, where)}</Td>
                                 <Td dataLabel={t("Schedules")}>
                                     {count > 0 && <Button variant="link" isInline onClick={() => cockpit.location.go(["schedules"])}>{count}</Button>}
                                 </Td>
@@ -511,8 +535,8 @@ export function TemplatesPage() {
                     return (
                         <>
                             <TemplatesToolbar view={view} onChange={setView} projects={projects} inventories={inventories} groups={groups}
-                                shown={shown.length} total={data.templates.length} />
-                            {shown.length === 0 ? (
+                                shown={shown} total={data.templates.length} />
+                            {shown === 0 ? (
                                 <NothingMatches title={t("No job template matches the filters")} onClearAll={() => setView(withoutTemplateFilters(view))} />
                             ) : (
                                 <Table variant="compact" aria-label={t("Job templates")}>

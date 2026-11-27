@@ -195,6 +195,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   pages go on after a few seconds, the end of a run is recorded by a later
   reading. A change of the documents waits at most 30 seconds for another
   ("try again in a while").
+- Job templates grouped by inventory: "Last run" is the last on that
+  inventory ("Never here" and the last elsewhere when there is none), and
+  so are the order by last run and the filter by outcome; it was the last
+  on any inventory under each of them.
+- Checks: the list shows the cycles the timer starts (at most 30 seconds
+  late); before, only those started from the page. Pages no longer ask the
+  controller anything while their browser tab is hidden.
 - Store: a folder of more than about a thousand files is downloaded whole;
   the browser saved an empty archive. A file deleted while the archive is
   being made is left out of it.

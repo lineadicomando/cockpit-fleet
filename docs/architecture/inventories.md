@@ -60,7 +60,14 @@ that differ need no template each; an ad-hoc command or a check with none
 takes it too. An inventory that a template allows cannot be deleted (the
 answer names the templates), nor kept as a starter. The list of templates
 shows a template under each inventory it allows, "also on N others"
-beside it, and launches it there; the launch form offers the choice when
+beside it, and launches it there. A row speaks of what it is listed
+under: its "Last run" is the last there ("Never here", and muted the last
+elsewhere with its inventory, when it has none there), and so are the
+order by last run and the filter by outcome; grouped otherwise, the last
+on any inventory, with that inventory's name when it is not the one of
+the column. `template.list` gives `last_runs`, the last run on each
+inventory by id, beside `last_run`, which carries its `inventory_id` (the
+one chosen at launch: `runs.inventory_id`). The launch form offers the choice when
 there is one, and `fleet launch --inventory` takes a name. A schedule
 keeps the inventory it launches on (null: the default), and an agent's
 tool of the template takes `inventory_id`, an enum of the inventories

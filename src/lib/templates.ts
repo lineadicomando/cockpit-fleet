@@ -2,7 +2,7 @@
 // template.list and schedule.list return.
 
 import { byGroupName, byGroupOrder, groupItems, isOpen, oneOf, readObject, readOpen, readText, withOpen, type Group } from "./listview.ts";
-import type { Overrides, RunStatus, Template } from "./types.ts";
+import type { Overrides, RunStatus, Template, TemplateRun } from "./types.ts";
 
 // How the last run of a template went, in the order its groups are shown.
 export type Outcome = "failed" | "active" | "canceled" | "successful" | "never";
@@ -15,8 +15,14 @@ const OUTCOME_OF: Record<RunStatus, Outcome> = {
     successful: "successful",
 };
 
-export function outcomeOf(template: Template): Outcome {
-    return template.last_run ? OUTCOME_OF[template.last_run.status] ?? "failed" : "never";
+// The last run of a template on the inventory `where`, or on any when none is given.
+export function lastRunOf(template: Template, where?: string): TemplateRun | null {
+    return where === undefined ? template.last_run : template.last_runs?.[where] ?? null;
+}
+
+export function outcomeOf(template: Template, where?: string): Outcome {
+    const run = lastRunOf(template, where);
+    return run ? OUTCOME_OF[run.status] ?? "failed" : "never";
 }
 
 export type Trait = "" | "approval" | "survey" | "scheduled" | "unscheduled";
@@ -101,14 +107,14 @@ const compareText = (a: string, b: string) => a.localeCompare(b, undefined, { se
 const defaultName = (template: Template, names: TemplateNames) =>
     template.inventory_id === null ? "" : names.inventory(template.inventory_id);
 
-// By last run: the oldest first, those never launched before any.
-export function sortTemplates(templates: Template[], column: TemplateSort, descending: boolean, names: TemplateNames): Template[] {
+// By last run (on the inventory `where`, if given): the oldest first, those never launched before any.
+export function sortTemplates(templates: Template[], column: TemplateSort, descending: boolean, names: TemplateNames, where?: string): Template[] {
     const byName = (a: Template, b: Template) => compareText(a.name, b.name);
     const compare: Record<TemplateSort, (a: Template, b: Template) => number> = {
         name: byName,
         project: (a, b) => compareText(names.project(a.project_id), names.project(b.project_id)) || byName(a, b),
         inventory: (a, b) => compareText(defaultName(a, names), defaultName(b, names)) || byName(a, b),
-        last_run: (a, b) => (a.last_run?.created_at ?? 0) - (b.last_run?.created_at ?? 0) || byName(a, b),
+        last_run: (a, b) => (lastRunOf(a, where)?.created_at ?? 0) - (lastRunOf(b, where)?.created_at ?? 0) || byName(a, b),
     };
     const sorted = [...templates].sort(compare[column]);
     return descending ? sorted.reverse() : sorted;
@@ -132,6 +138,25 @@ export function groupTemplates(templates: Template[], by: TemplateGroupBy, names
         return byGroupName([...groups.values()]);
     }
     return byGroupOrder(groupItems(templates, outcomeOf), OUTCOMES);
+}
+
+// The groups the page shows and how many templates are in them. Under an
+// inventory a row speaks of that inventory: its last run there decides the
+// filter by outcome and the order by last run.
+export function listTemplates(templates: Template[], view: TemplatesView, names: TemplateNames): { groups: TemplateGroup[]; shown: number } {
+    if (view.groupBy !== "inventory") {
+        const shown = filterTemplates(templates, view, names);
+        return { groups: groupTemplates(sortTemplates(shown, view.sort, view.descending, names), view.groupBy, names), shown: shown.length };
+    }
+    const kept = filterTemplates(templates, { ...view, outcome: "" }, names);
+    const groups = groupTemplates(kept, "inventory", names)
+        .map(group => ({
+            ...group,
+            items: sortTemplates(group.items.filter(item => !view.outcome || outcomeOf(item, group.key) === view.outcome),
+                view.sort, view.descending, names, group.key),
+        }))
+        .filter(group => group.items.length > 0);
+    return { groups, shown: new Set(groups.flatMap(group => group.items)).size };
 }
 
 // Templates are there to be launched: every group starts open.

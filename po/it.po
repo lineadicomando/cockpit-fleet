@@ -4997,3 +4997,12 @@ msgstr "Senza conferme"
 
 msgid "Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting."
 msgstr "Senza conferme: l'assistente esegue comandi e modifiche senza chiederti nulla; chiede solo prima di eliminare."
+
+msgid "Never here"
+msgstr "Mai qui"
+
+msgid "Last on {{inventory}}:"
+msgstr "Ultima su {{inventory}}:"
+
+msgid "an inventory deleted"
+msgstr "un inventario eliminato"

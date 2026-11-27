@@ -69,19 +69,13 @@ export function StorePage({ directory }: { directory: string }) {
 
     // While the page is shown, it asks whether the store changed (a run, a
     // file put there by hand): the answer is short when nothing did.
-    const [visible, setVisible] = useState(document.visibilityState === "visible");
-    useEffect(() => {
-        const look = () => setVisible(document.visibilityState === "visible");
-        document.addEventListener("visibilitychange", look);
-        return () => document.removeEventListener("visibilitychange", look);
-    }, []);
     usePolling(async () => {
         const base = fresh ?? list.data;
         if (!base?.token) return;
         const answer = await call<StoreList | StoreUnchanged>("store.list", { since: base.token });
         if (!("unchanged" in answer)) setFresh(answer);
         else if (answer.free !== base.free) setFresh({ ...base, free: answer.free });
-    }, REFRESH, visible && !!list.data && !dialog && !listDialog);
+    }, REFRESH, !!list.data && !dialog && !listDialog);
 
     // While something downloads: its progress, and the list once it lands.
     const busy = (downloads.data?.downloads ?? []).some(item => ACTIVE.includes(item.status));

@@ -52,13 +52,28 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): Loaded
     return { data, error, loading, reload };
 }
 
-// Calls tick every `ms` while `active` is true. The next call waits for the
-// previous one to finish, so a slow backend is never asked twice at once.
+// Whether the browser's tab is shown, followed as it changes.
+export function usePageVisible(): boolean {
+    const [visible, setVisible] = useState(document.visibilityState !== "hidden");
+    useEffect(() => {
+        const look = () => setVisible(document.visibilityState !== "hidden");
+        document.addEventListener("visibilitychange", look);
+        return () => document.removeEventListener("visibilitychange", look);
+    }, []);
+    return visible;
+}
+
+// Calls tick every `ms` while `active` is true and the tab is shown. The next
+// call waits for the previous one to finish, so a slow backend is never asked
+// twice at once. A hidden tab asks nothing; shown again, it asks at once.
 export function usePolling(tick: () => Promise<unknown> | void, ms: number, active: boolean): void {
     const tickRef = useRef(tick);
     tickRef.current = tick;
+    const visible = usePageVisible();
+    const wasHidden = useRef(false);
     useEffect(() => {
-        if (!active) return;
+        if (!visible) wasHidden.current = true;
+        if (!active || !visible) return;
         let stopped = false;
         let timer: ReturnType<typeof setTimeout>;
         const loop = async () => {
@@ -69,12 +84,13 @@ export function usePolling(tick: () => Promise<unknown> | void, ms: number, acti
             }
             if (!stopped) timer = setTimeout(loop, ms);
         };
-        timer = setTimeout(loop, ms);
+        timer = setTimeout(loop, wasHidden.current ? 0 : ms);
+        wasHidden.current = false;
         return () => {
             stopped = true;
             clearTimeout(timer);
         };
-    }, [ms, active]);
+    }, [ms, active, visible]);
 }
 
 // State kept in the browser's localStorage under `key`, so that it outlives

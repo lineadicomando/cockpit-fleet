@@ -495,6 +495,31 @@ class RunTest(Base):
         self.assertEqual(self.ok("template.update", {**{key: template[key] for key in (
             "id", "name", "project_id", "playbook", "inventory_id")}})["last_run"]["id"], again["id"])
 
+    def test_templates_tell_their_last_run_on_each_inventory(self):
+        other = self.ok("inventory.create", {"name": "lab2", "kind": "managed",
+                                             "content": "all:\n  hosts:\n    b:\n"})
+        template = self.template(inventory_ids=[other["id"]])
+        self.assertEqual(template["last_runs"], {})
+        there = self.ok("run.start", {"template_id": template["id"], "inventory_id": other["id"]})
+        self.finish(there["id"], rc=2)
+        self.ok("run.get", {"id": there["id"]})
+        here = self.ok("run.start", {"template_id": template["id"]})
+        listed = self.ok("template.list", role="viewer")["templates"][0]
+        self.assertEqual((listed["last_run"]["id"], listed["last_run"]["inventory_id"]),
+                         (here["id"], template["inventory_id"]))
+        self.assertEqual({key: (run["id"], run["status"], run["inventory_id"])
+                          for key, run in listed["last_runs"].items()},
+                         {template["inventory_id"]: (here["id"], "running", template["inventory_id"]),
+                          other["id"]: (there["id"], "failed", other["id"])})
+        self.assertEqual(self.ok("template.update", {**{key: template[key] for key in (
+            "id", "name", "project_id", "playbook", "inventory_id", "inventory_ids")}})["last_runs"],
+            listed["last_runs"])
+        # A run on an inventory deleted since is still the last on any, under none.
+        self.ctx().conn.execute("UPDATE runs SET inventory_id = NULL WHERE id = ?", (here["id"],))
+        listed = self.ok("template.list")["templates"][0]
+        self.assertEqual((listed["last_run"]["id"], list(listed["last_runs"])),
+                         (here["id"], [other["id"]]))
+
     def test_queue_respects_the_concurrency_limit(self):
         template = self.template()
         ids = [self.ok("run.start", {"template_id": template["id"]})["id"] for _ in range(4)]
