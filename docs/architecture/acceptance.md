@@ -185,3 +185,20 @@ What each closed phase had to show, and how it was shown.
   probed, the PC that is off "Nothing answers", `win11` "Gives another
   name". The check found, and fixed, a test of `netscan.sh` that canceled
   a scan after a fixed 3 s, before the unit of a VM's first run had begun.
+- **21, inventory chosen at launch** (27 November): tested in
+  `test_phase2.py`, `test_workflows.py`, `test_agents.py` and the
+  frontend's `templates.test.ts` and `launch-modal.test.tsx`; `ct-test` on
+  the three. On `deb13` with `win11` as the PC of `aula-1`: the scenario
+  `labs-launch` (26 November); the workflow `manutenzione` (wake, then
+  Windows Update) launched from the page with no inventory chosen, its
+  steps on their templates' default, to its end; the assistant, asked in
+  Italian for "the updates" of one room then the other, launched that
+  workflow on `aula-2` (the PC that is not there failed to wake, the
+  update did not start) and on `aula-1` (both steps successful), audited
+  as `mcp:claude-code`. A template with no default inventory, by the
+  user in a browser: its form, saved only with others allowed; under each
+  of them in the list; its launch, a schedule and a workflow of it
+  choosing one, the launch and the save held until then; the backend
+  refusing the template and the schedule from `fleet` (`bad_request`,
+  audited). The check found, and fixed, the last run under each
+  inventory, which was the last on any.
