@@ -30,7 +30,8 @@ hand.
 | [export.md](architecture/export.md) | Export and import of the configuration |
 | [agents.md](architecture/agents.md) | `fleet-mcp`, classes of commands, profiles, questions by profile, autonomy, drafts |
 | [terminal.md](architecture/terminal.md) | The command `fleet`, projects at a terminal |
-| [chat.md](architecture/chat.md) | `fleet-chat`, ACP, sessions, the page of the assistant, instructions |
+| [chat.md](architecture/chat.md) | `fleet-chat`, ACP, sessions, the page of the assistant, instructions, questions, one consent per ad-hoc command, "Without questions" |
+| [chat-trials.md](architecture/chat-trials.md) | Archive: what was tried and measured of the chat, with the stand-in agent and with Claude |
 | [events.md](architecture/events.md) | The callback and `events.jsonl` |
 | [windows.md](architecture/windows.md) | Windows nodes over SSH |
 | [packaging.md](architecture/packaging.md) | `.deb`, `.rpm`, versions, other distributions |

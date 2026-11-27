@@ -12,9 +12,9 @@ features"): then fixes, minor changes and field use, toward 1.0.0. Last
 release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (870
-backend, 231 frontend tests). Each backend module's docstring says what it
-is; `cli.py` the registry of commands, `db.py` the schema (39
+To resume: `git status`, `git log origin/main..`; `make check` (875
+backend, 239 frontend tests). Each backend module's docstring says what it
+is; `cli.py` the registry of commands, `db.py` the schema (41
 migrations). Under way: the two fixes below.
 
 ## Fixes decided (27 November)
@@ -69,14 +69,13 @@ What each is: the file named. What remains:
   of the documents"): shown in containers and on `deb13`. Left: the user,
   with Claude, has it propose a skill for a recurring task, approves it in
   the page, and a new session uses it.
-- **Assistant without questions** (27 November, `decisions.md`,
-  `architecture/chat.md`): one consent per ad-hoc command, and "Without
-  questions" in `administrator`. `ct-test` passed on the three (`mcp`,
-  `chat`, `adhoc`, `negative`); seen with Claude by the user (27
-  November): with the switch on, ad-hoc commands on a Windows node
-  started unasked, marked `unattended`; off, one "Allow once" started the
-  next, its approval recorded as "confirmed in the chat page". To move to
-  `acceptance.md` with the next close.
+- **Assistant without questions** (27 November, admitted under the
+  freeze, `decisions.md`; `architecture/chat.md`): one consent per ad-hoc
+  command, and "Without questions" in `administrator` (`[chat]
+  unattended`). Shown: `ct-test` (`mcp chat adhoc negative`) on the three;
+  the user with Claude on a Windows node, the switch on (runs marked
+  `unattended`) and off (one "Allow once", approval "confirmed in the chat
+  page"). Nothing left: to `acceptance.md` at the next close.
 
 ## Integration
 
