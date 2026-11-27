@@ -18,6 +18,14 @@ is; `cli.py` the registry of commands, `db.py` the schema (41
 migrations). Under way: the closes of 20–24 on the lab's VMs, then
 the integration there (`sandbox` run D, SELinux).
 
+## Minor changes decided
+
+- **"Close all groups" / "Open all groups" as an icon** (27 November): the
+  link beside "Group by" (`ListView.tsx`, every grouped list) becomes an
+  icon button (folded/unfolded, as Cockpit's lists show it: `AngleDown`/
+  `AngleRight` or `CompressIcon`/`ExpandIcon` of PatternFly, to choose),
+  its text kept as tooltip and `aria-label`.
+
 ## To study
 
 - **The names of `overview.md` and `dashboard.md`** (`docs/architecture/`).
