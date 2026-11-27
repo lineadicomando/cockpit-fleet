@@ -4,9 +4,9 @@
 its standard input and output, one message per line, tools only. A user
 starts it, on the controller or as the command of an ssh connection, and it
 runs as that user with no privilege of its own. Every tool is one call to
-`fleetctl` through sudo, exactly what the interface does, so there is still
-one way into the backend, and roles and the audit trail are the same. It
-uses the standard library only and listens on nothing.
+`fleetctl` through sudo, as the interface makes it: one way into the
+backend, the same roles and audit trail. Standard library only; it listens
+on nothing.
 
 ```
 agent ── JSON-RPC on stdio ──▶ fleet-mcp          (the user, e.g. over ssh)
@@ -16,261 +16,231 @@ agent ── JSON-RPC on stdio ──▶ fleet-mcp          (the user, e.g. over
                                fleetctl            role = min(user's, ceiling)
 ```
 
-**The ceiling.** `[mcp]` in `config.toml` has `enabled`, off by default, and
-`max_role`, `admin` by default (`operator` until 18 November). `fleet-mcp` adds `via` to the JSON of every
-call. When `fleetctl` finds it, it refuses everything while agents are not
-enabled, and lowers the caller's role to the ceiling for that call, never
-raises it; the audit record and the journal (`FLEET_VIA`) say where the call
-came from. The reason for a ceiling below what the person may do, which an
-administrator may set: the output
-of a run is written by the nodes, and an agent that reads it and may also
-write files and launch anything can be steered by what a node prints.
+**The ceiling.** `[mcp]` has `enabled` (false) and `max_role` (`admin`).
+`fleet-mcp` adds `via` to every call; `fleetctl`, finding it, refuses
+everything while agents are not enabled and lowers the caller's role to
+the ceiling, never raises it; the audit record and the journal
+(`FLEET_VIA`) say where the call came from. Why an administrator may set
+it below the person's role: the output of a run is written by the nodes,
+and an agent that reads it and may also write files and launch anything
+can be steered by what a node prints.
 
-Only a `via` that is `mcp` or starts with `mcp:` is an agent's; any other
-value, such as the `cli` of the command `fleet` (see [The terminal](terminal.md)), is
-recorded and changes nothing else. Saying `via` can only restrict, and that
-is all it is: a declaration. A user
-with a shell can call `fleetctl` without it, with their whole role, which is
-no more than they could do by hand. It binds an agent only when the agent
-cannot reach anything but `fleet-mcp`: a key of its own in `authorized_keys`
-with a forced command,
+Only a `via` that is `mcp` or starts with `mcp:` is an agent's; any other,
+such as the `cli` of `fleet` ([The terminal](terminal.md)), is only
+recorded. `via` is a declaration that can only restrict: a user with a
+shell calls `fleetctl` without it, with no more than they could do by hand.
+It binds an agent only when the agent reaches nothing but `fleet-mcp`: a
+key of its own with a forced command (`mcp.sh` tries it),
 
 ```
 restrict,command="/usr/libexec/cockpit-fleet/fleet-mcp" ssh-ed25519 AAAA… agent
 ```
 
-which gets `fleet-mcp` whatever it asks for (`mcp.sh` tries), or, stricter
-and with no setting at all, a Unix account for the agent in the role group it
+or, stricter and with no setting, a Unix account in the role group it
 should have.
 
-**Tools.** `mcp.tools` gives `fleet-mcp` what to offer: one tool per command
-the caller's role allows under the ceiling (`run.start` becomes `run_start`),
-with the first lines of its documentation as description and its declared
-parameters as `inputSchema`. Tools above the ceiling are not listed, and
-`fleetctl` refuses them anyway. A few commands are not tools: the upload of an
-archive, the list of all modules and the raw events, which are too large to be
-useful to an agent, and those only the backend calls. There is no tool for
-secrets, because `fleet-secret` is not a command of `fleetctl`: an agent may
-create a credential, a person enters its value.
+**Tools.** `mcp.tools` gives `fleet-mcp` one tool per command the caller's
+role allows under the ceiling (`run.start` becomes `run_start`): the first
+lines of its docstring as description, its declared parameters as
+`inputSchema`. Not tools (`tool=False`): what moves files or archives
+(`project.upload`, `file.bundle`/`import`/`push`/`download`, `store.*` but
+listing, `doc.put`/`get`), what is too large (`module.list`,
+`run.events`), what only the backend or the page calls (`mcp.tools`,
+`chat.*`, `run.reconcile`, `scheduler.tick`, `notification.deliver`,
+`doc.render`), and a person's decisions (`approval.approve`/`reject`,
+`draft.merge`/`discard`, `skill.approve`). `_through` refuses a call of
+any of them from an agent. No tool for secrets: `fleet-secret` is not a
+command of `fleetctl`; an agent may create a credential, a person enters
+its value.
 
-**Classes of tools.** Every command declares what it lets an agent do, one
-of six classes from the least to the most, and one apart: `read`; `run` (start, stop and
-follow work already defined: launches, cancels, checks, schedules turned on
-or off, acknowledgements, maintenance windows, a syntax check); `scan` (the
-scan of a subnet, see [The network](network.md)); `adhoc` (any
-module on the nodes); `config` (create and change templates, inventories,
+**Classes of tools.** Every command declares what it lets an agent do
+(`agent=` in `@command`, `cli.AGENT_CLASSES`), from the least to the most:
+`read`; `run` (start, stop and follow what is defined: launches, cancels,
+checks, schedules on or off, acknowledgements, maintenance windows, a
+syntax check); `scan` (`netscan.start`, [The network](network.md));
+`adhoc` (`run.adhoc`); `config` (create and change templates, inventories,
 schedules, rules, channels, checks, sets of variables, workflows); `code`
-(the files of projects, projects themselves, credentials, host keys,
-`config.import`, and every delete); and apart, `doc`: the changes to the
-documents (`documents.md`), in every profile, since a text is not run and
-has its history (reading them is `read`). The default comes from the declaration:
-a command that changes nothing reads, one that changes something is `run`
-for an operator and `config` for an administrator; the others say theirs
-(`agent=` in `@command`). `mcp.tools` gives each tool its class, a
-template's being `run`. The profiles of the assistant are made of these
-classes; a test holds the table of them, so moving a command to another
-class is a decision.
+(files of projects, projects, credentials, host keys, `config.import`, and
+every delete but `maintenance.delete`, of `run`, and `doc.delete`); and
+apart, `doc`: changes to the documents ([Documents](documents.md)),
+allowed in every profile, since a text is not run and has its history.
+Undeclared, a command that changes nothing is `read`, one that changes
+something `run` for an operator and `config` for an administrator. A
+template's tool is `run`. `CLASS_TABLE` in `test_agents.py` holds the
+table, so moving a command is a decision.
 
-**Profiles of the assistant.** A profile is a set of classes
-(`profiles.py`): `observer` reads, `assisted` and `autonomous` also run,
-`diagnostic` also `scan` and `adhoc-diagnostic`, which is not the class of a command
-but of a call (`run.adhoc` with a module of `[mcp] adhoc_modules`, without
-become, and no `{{`, `{%` or `{#` in its arguments: Ansible would read them
-as templates, and a lookup in one runs a command on the controller, in the
-run), `administrator` has them all. `fleet-chat --profile` asks
-`chat.start` whether the profile is enabled (`[chat] profiles`) and starts
-`fleet-mcp --profile`, which adds it to every call beside `via`. In
-`_through`, after the ceiling lowers the role, a call whose class the
-profile does not allow is refused and audited; a call with no profile gets
-`default_profile`, one with a profile not enabled is refused.
-`administrator` is only for an agent acting with the role admin, the
-caller's under the ceiling (`profiles.ADMIN_ONLY`, 18 November): for
-anyone else it is refused there, left out of `chat.agents` and refused by
-`chat.accept` and `chat.start`, and a call with no profile gets
-`default_profile` if the role may have it, else `assisted`. So the
-profile, like `via`, can only restrict: naming another gains nothing that
-the default does not give, and leaving `via` out is what a person does by
-hand with the same role. `mcp.tools` lists only the tools of the profile,
-`run_adhoc` in `diagnostic` with the enum of its modules and without
-`become`. The audit has a `profile` column (schema 22), and the journal
-`FLEET_PROFILE`.
+**Profiles of the assistant** (`profiles.py`): sets of classes.
 
-**Questions by profile.** How a person is asked about a call is the
-backend's too: `profiles.question` gives, for a profile and a class, `none`
-(made unasked: reading; `run` and `doc` in `autonomous`, which autonomy holds;
-`adhoc-diagnostic` in `diagnostic`), `every` (asked every time, never
-trusted for a conversation: `scan`, `adhoc`, `config`, `code`, in any profile,
-and `doc.delete` but in `autonomous`: `profiles.ALWAYS_ASKED_COMMANDS`) or
-`ask` (asked, and "always" trusts the class for the conversation).
-`mcp.tools` gives it with each tool, for the page, and `chat.start` gives
-the names of the tools that are `none`, for the agent's program at a
-terminal. One table, so that the page and the terminal cannot drift apart;
-and a floor, not a control, since `_through` decides each call again.
-`mcp.tools` with `session` gives `none` for every tool when the caller
-let the agent act without asking in that session (`chat.unattended`,
-"Without questions" in [The chat](chat.md)).
+| Profile | Classes |
+|---|---|
+| `observer` | read, doc |
+| `assisted`, `autonomous` | read, run, doc |
+| `diagnostic` | read, run, scan, adhoc-diagnostic, doc |
+| `administrator` | all |
+
+`adhoc-diagnostic` is the class of a call, not of a command: `run.adhoc`
+with a module of `[mcp] adhoc_modules`, without become, and no `{{`, `{%`
+or `{#` in its arguments (Ansible would read them as templates, and a
+lookup runs a command on the controller, in the run). `fleet-chat
+--profile` asks `chat.start` whether the profile is enabled (`[chat]
+profiles`) and starts `fleet-mcp --profile`, which adds it to every call
+beside `via`. In `_through`, after the ceiling, a call outside the
+profile is refused and audited; a profile not enabled is refused; no
+profile gets `default_profile`. `administrator` is only for an agent
+acting as admin (the caller's role under the ceiling,
+`profiles.ADMIN_ONLY`): for anyone else it is refused there, left out of
+`chat.agents`, refused by `chat.accept` and `chat.start`, and the default
+falls to `assisted` (or the first profile the role may have). So a
+profile, like `via`, only restricts. `mcp.tools` lists the tools of the
+profile only, `run_adhoc` in `diagnostic` with an enum of its modules and
+no `become`. Audit column `profile` (schema 22), journal `FLEET_PROFILE`.
+
+**Questions by profile.** `profiles.question` gives, for a profile and a
+class, how a person is asked: `none` (reading; `run` and `doc` in
+`autonomous`, which autonomy holds; `adhoc-diagnostic` in `diagnostic`),
+`every` (never trusted for a conversation: `scan`, `adhoc`, `config`,
+`code` in any profile, and `doc.delete` but in `autonomous`,
+`ALWAYS_ASKED_COMMANDS`) or `ask` ("always" trusts the class for the
+conversation). `mcp.tools` gives it with each tool, for the page;
+`chat.start` gives the `none` tools for the agent's program at a terminal.
+One table, so page and terminal cannot drift; a floor, not a control:
+`_through` decides each call again. `mcp.tools` with `session` gives
+`none` for every tool when the caller let the agent act without asking in
+that session ("Without questions", [The chat](chat.md)).
 
 **Autonomy.** In a profile nobody confirms (`profiles.AUTONOMOUS`),
 `dispatch` hands the call, once the role allows it, to `autonomy.hold`:
 nothing that silences a problem (`state.ack`, `state.unack`,
-`maintenance.*`); no schedule turned on (`schedule.enable`), whose runs
-would go on after the session and outside its count; launches (templates, ad-hoc, workflows and their resume,
-schedules, checks) only with a session, at most `[chat] autonomous_runs` of
-them, none on an inventory with a maintenance window open, and with
-`autonomous_dry_run` a template's run in check mode and no workflow or
-schedule, which have no dry run; changes to the documents only with a
-session, at most `[chat] autonomous_writes` of them (20), counted from the
-audit as launches are (`autonomy.DOCUMENT_CHANGES`), with no grant: a person
-writes beside the agent instead. The session is drawn by `fleet-mcp` when
-it starts and added to every call; the audit records it (column `session`,
-schema 23) and the launches are counted from there, so there is no counter
-to keep in step and an agent cannot reset it. A fleet-mcp started again is
-a new session: what a person with a shell could do by hand anyway.
+`maintenance.*`); no `schedule.enable`, whose runs would outlive the
+session and its count; launches (`autonomy.LAUNCHES`: templates, ad-hoc,
+workflows and their resume, schedules, checks) only with a session, at
+most `[chat] autonomous_runs`, none on an inventory with a maintenance
+window open, and with `autonomous_dry_run` templates in check mode and no
+workflow or schedule (they have no dry run); changes to the documents
+(`autonomy.DOCUMENT_CHANGES`) only with a session, at most `[chat]
+autonomous_writes`, with no grant (a person writes beside the agent
+instead). The session (16 hex digits) is drawn by `fleet-mcp` and added to
+every call; the audit records it (column `session`, schema 23) and both
+counts come from there: no counter to keep in step, none an agent can
+reset. Another `fleet-mcp` is another session, which whoever can start one
+could do by hand anyway. A run that needs approval still waits for a
+person: an agent has no rights.
 
 **The person beside an autonomous agent** (schema 35). The chat page draws
-the session for each conversation (16 hex digits, as `fleet-mcp` would) and
-gives it to `fleet-mcp` with `--session`, so that it can follow what the
-agent launched. `fleet-mcp` started without draws its own. Naming the session
-gives nothing a person could not take by hand: `fleetctl` already takes
-any `session` a call of an agent names. Counts and grants are by session and
-user, so naming another user's session gains nothing. `chat.session` (viewer) gives the launches counted, those
-allowed and the runs not ended; `chat.grant_runs` (operator) records in
-`session_grants` that the user allows so many more, which `autonomy.allowed`
-adds to the base of the session; `chat.limit_runs` (operator, schema 36)
-sets that base in `session_limits`, one row per session and user that a
-new value replaces, in place of `[chat] autonomous_runs`: what the user
-chose for the conversations of a chat session, lower or higher, which the
-page sets for each conversation before the agent is told anything of it.
-No ceiling of the administrator's bounds it, since grants already do not:
-a ceiling would hold only if grants were bounded too. `chat.cancel_runs` (operator) cancels the
-user's runs of the session not ended, by `runs.session`, set when an
-agent's call queues a run of a template, an ad-hoc command, a workflow run or a
-scan (`runs.launch`, `run.adhoc`, `workflows._start`, `netscan.start`).
-The steps of a workflow run are not tagged: `jobs.cancel` of the
-workflow run cancels them, and a step queued by `reconcile` during another
-session's call must not be taken for that session's. Check cycles
-are not tagged either: `check.run` plans every check that is due, not
-only its own. The three are `tool=False`, so `_through` refuses them to
-an agent: allowing more runs is a person's decision. When its runs are
-spent, the refusal tells the agent to say so and wait, and the profile's
-instructions say the same; the page shows "Allow N more" then, with N
-being `[chat] autonomous_runs`. The alternative of no limit and a stop
-button was set aside: the profile is meant for when nobody watches, and
-a stop button holds only while somebody does. Rights
-are taken away from agents, so a run that needs approval waits for a
-person.
+the session for each conversation and gives it to `fleet-mcp`
+(`--session`), to follow what the agent launched. Naming a session gains
+nothing: `fleetctl` takes any session an agent's call names, and counts
+and grants are by session and user. `chat.session` (viewer) gives the
+launches counted, those allowed and the runs not ended.
+`chat.limit_runs` (operator, schema 36) sets the base of a session and
+user in `session_limits`, in place of `[chat] autonomous_runs`: what the
+user chose for the conversations, lower or higher, set before the agent is
+told anything; no ceiling of the administrator's, since grants have none.
+`chat.grant_runs` (operator) adds to it in `session_grants`
+(`autonomy.allowed`). `chat.cancel_runs` (operator) cancels the user's
+runs of the session not ended, by `runs.session`, set when an agent's call
+queues a template's run, an ad-hoc command, a workflow run or a scan
+(`runs.launch`, `run.adhoc`, `workflows._start`, `netscan.start`). Not
+tagged: the steps of a workflow run (`jobs.cancel` of the workflow run
+cancels them, and a step queued by `reconcile` during another session's
+call must not count as that session's), and check cycles (`check.run`
+plans every check due). The three are no tools: allowing more is a
+person's decision. When its runs are spent the refusal, and the profile's
+instructions, tell the agent to say so and wait; the page offers "Allow N
+more", N being `[chat] autonomous_runs`. Why a limit and not a stop
+button alone: `decisions.md`, "Assistant profiles".
 
 **Drafts.** An agent never writes to `main` of a managed project or
-inventory: `file.write`, `file.change`, `file.delete`, `file.move` and
-`file.restore` called by an agent, and the files `inventory.create` and
-`inventory.update` write in a managed inventory (its main file, the files
-given, a starter's), go to the branch `drafts/SESSION` of the
-same repository, made at its first write from where `main` is then
-(`files.place`). The branch is checked out in a work tree of its own,
-`drafts/SESSION/tree` beside the project's `tree`, with its own index
-(`GIT_INDEX_FILE`), and committed with `write-tree`, `commit-tree` and
-`update-ref`, so `main`, its index and `HEAD` are never touched; a write
-that fails before the first commit leaves no draft. No run reads a draft:
-templates, schedules, checks and the readings of inventories copy the
-project's own tree, which is `main`. What follows a write in a draft is a
-syntax check of the draft, a run whose `options` name it; collections and
-inventories wait for `main`. While its draft exists an agent reads it
-(`file.list`, `file.read`, `file.history`, `file.check`), so the digest it
-quotes is the draft's; another session's draft it may read by naming it
-(`draft`), never write. Without a session there is nothing to write to,
-and an agent's write is refused. The row of an inventory (name, path,
-sets of variables) is no file and changes at once; so an agent may not
-change the format of a managed inventory, which names its main file and
-would no longer match what `main` has until a person merges. An inventory
-an agent creates has nothing in `main` until then, and its answer names
-the draft.
+inventory: its `file.write`, `file.change`, `file.delete`, `file.move`,
+`file.restore`, and the files `inventory.create` and `inventory.update`
+write in a managed inventory (main file, files given, a starter's), go to
+the branch `drafts/SESSION`, made at the first write from where `main` is
+then (`files.place`). It is checked out in `drafts/SESSION/tree` beside
+the project's `tree`, with its own index (`GIT_INDEX_FILE`), and committed
+with `write-tree`, `commit-tree` and `update-ref`: `main`, its index and
+`HEAD` are never touched; a write that fails before the first commit
+leaves no draft. No run reads a draft (templates, schedules, checks and
+inventory readings copy `main`), but a syntax check of it, a run whose
+`options` name it; collections and inventories wait for `main`. While its
+draft exists an agent reads it (`file.list`, `file.read`, `file.history`,
+`file.check`), so the digest it quotes is the draft's; another session's
+draft it may read by naming it (`draft`), never write. Without a session
+an agent's write is refused. The row of an inventory (name, path, sets of
+variables) is no file and changes at once, so an agent may not change the
+format of a managed inventory (it names the main file, which would not
+match `main` until a merge). An inventory an agent creates has nothing in
+`main` until then; its answer names the draft.
 
-`drafts.py` is the person's side: `draft.list` (every draft, or those of a
-project, with how many files each changes and how many main changed too),
-`draft.diff` (the changes path by path, the unified diff from where the
-draft started, the last syntax check of each file), `draft.merge` and
-`draft.discard`. The last two are `code` and not tools, so `_through`
-refuses them to an agent: a program does not approve its own code. A
-merge quotes the revision of the draft that was reviewed, and takes all
-or some of its paths into `main` through `change()`, as one commit of the
-person, with what any change of `main` brings (checks, collections,
-inventories read again); the draft goes once `main` has all of it. It is
-taken file by file, not line by line: a file goes in as the draft has it
-if `main` still has it as the draft found it (the merge base of the
-branch and `main`), and is skipped if `main` has it as the draft does; a
-file changed on both sides is a conflict, refused, which a person settles
-by editing the draft (`draft` on the file commands) or `main`. Directories
-a merge empties go, unless the draft keeps them. A line-by-line merge was
-left: a person reviews whole files anyway, and git's merge would write
-conflict markers into a playbook.
+`drafts.py` is the person's side (admin): `draft.list` (with how many
+files each changes and how many `main` changed too), `draft.diff` (path by
+path, the unified diff from where the draft started, the last syntax check
+of each file), `draft.merge` and `draft.discard` (`code`, no tools: a
+program does not approve its own code). A merge quotes the revision
+reviewed and takes all or some paths into `main` through `change()`, one
+commit of the person, with what any change of `main` brings (checks,
+collections, inventories read again); the draft goes once `main` has all
+of it. File by file: a file goes in if `main` still has it as the draft
+found it (the merge base), is skipped if `main` has it as the draft does,
+and is a conflict, refused, if both changed it; a person settles it by
+editing the draft or `main`. Directories a merge empties go, unless the
+draft keeps them. Not line by line: a person reviews whole files, and
+git's merge would write conflict markers into a playbook.
 
-In the interface (`src/components/Drafts.tsx`) an administrator is told of
-the drafts waiting on the page of the assistant, looked at again after
-each answer, and on the files of their project or inventory. The review
-shows `draft.diff`, every change chosen but those in conflict, and merges
-what is chosen (all, or the paths) with the revision it showed. "Edit the
-draft" opens the page of the files at `projects/ID/drafts/SESSION`, where
-every file command carries `draft`: what a person saves goes to the draft,
-under their name, and its syntax checks check the draft. Importing an
-archive and downloading are left out there, since they read and write
-`main`. At a terminal `fleet draft diff` writes the same review as text,
-ending with the `fleet draft merge` line that quotes the revision shown;
-the draft commands take the name of a managed project or inventory.
+In the interface (`Drafts.tsx`) an administrator is told of waiting
+drafts on the page of the assistant (looked at again after each answer)
+and on the files of the project or inventory. The review shows
+`draft.diff`, every change chosen but conflicts, and merges what is chosen
+with the revision shown. "Edit the draft" opens the files at
+`projects/ID/drafts/SESSION`, where every file command carries `draft`:
+the person's saves and syntax checks go to the draft; importing an archive
+and downloading, which touch `main`, are left out. `fleet draft diff`
+writes the same review as text, ending with the `fleet draft merge` line
+quoting the revision; draft commands take the name of a managed project
+or inventory.
 
-**Skills** (phase 23, `skills.py`). What a project, the collections
-installed for it and the controller teach the assistant, as data the
-backend reads, never code it runs: `.fleet/skills/NAME/SKILL.md` in a
-project's tree, in each collection under the project's
-`collections/<digest>/ansible_collections/NS/NAME/`, and
-`/etc/cockpit-fleet/skills/NAME/SKILL.md`. The format is Claude's skills',
-so one file can serve a developer's Claude Code and the assistant alike; a
-dot directory survives `ansible-galaxy collection build`, which leaves out
-only `.git` and built artifacts. The frontmatter is read for `name` and
-`description` only (plain, quoted, or a `>`/`|` block), not as YAML; the
-name must be the directory's. `chat.start` puts the index in a layer of its
-own after the controller's (`instructions.layers(..., skills=)`), at most
-16 kB, the rest left to `skill.list`; `skill.read` (viewer, class `read`)
-gives `SKILL.md` or a `.md`/`.txt` file beside it, 64 kB at most, each step
-of the path opened with `O_NOFOLLOW`: a project's tree may hold links, and
-fleetctl can read the database. A source is `controller`, `project:ID` or
-`collection:ID:NS.NAME`, or `documents` for `skills/NAME/` of the documents
-(phase 24), which an agent may write and whose last change, when an agent
-made it, waits for a person's approval (`skill.approve`, never an agent's;
-`architecture/documents.md`). They are no tool of their own per skill: two tools
-whatever the number of skills, so the list of tools does not grow with
-them. The MCP servers of projects stay discarded (they would run Ansible
-outside the sandbox): skills are what stands in for what they knew.
+**Skills** (`skills.py`). What a project, its collections and the
+controller teach the assistant, as data the backend reads, never code it
+runs: `.fleet/skills/NAME/SKILL.md` in a project's tree, in each
+collection under `collections/<digest>/ansible_collections/NS/NAME/`, and
+`/etc/cockpit-fleet/skills/NAME/SKILL.md`; and `skills/NAME/` of the
+documents, which an agent may write and whose last change by an agent
+waits for a person's `skill.approve` ([Documents](documents.md)). Claude's
+format, so one file serves Claude Code and the assistant; a dot directory
+survives `ansible-galaxy collection build`. The frontmatter is read for
+`name` and `description` only (plain, quoted, or a `>`/`|` block), not as
+YAML; the name must be the directory's. `chat.start` adds the index as a
+layer after the controller's (`instructions.layers(..., skills=)`), 16 kB
+at most, the rest left to `skill.list`; `skill.read` (viewer, `read`)
+gives `SKILL.md` or a `.md`/`.txt` beside it, 64 kB at most, each step
+opened with `O_NOFOLLOW` (a project's tree may hold links, and fleetctl
+can read the database). Sources: `controller`, `project:ID`,
+`collection:ID:NS.NAME`, `documents`. Two tools whatever the number of
+skills, so the list of tools does not grow.
 
-**Templates as tools.** Each job template is also a tool of its own,
-`launch_<name>_<id>`, for whoever may launch it: its description says what it
-runs and where, and its parameters are the questions of its survey, typed and
-bounded as the survey is, plus the limit and the dry run, and `inventory_id`
-when the template allows more than one inventory (an enum of their ids, the
-description naming each). The tool fixes the
-template: what it fixes and `via` are set by `fleet-mcp` after the agent's
+**Templates as tools.** Each job template is also a tool,
+`launch_<name>_<id>`, for whoever may launch it: its description says what
+it runs and where; its parameters are the survey's questions, typed and
+bounded as the survey is, the limit, the dry run, and `inventory_id` when
+it allows more than one inventory (an enum, the description naming each).
+What the tool fixes and `via` are set by `fleet-mcp` after the agent's
 arguments, so a call cannot replace them. A template that cannot start
 without a secret is not offered; an optional secret question is left out.
-This is what stands in for the MCP servers a project may carry, which are
-never started: they would run Ansible outside the sandbox.
+Skills and templates stand in for the MCP servers a project may carry,
+which are never started: they would run Ansible outside the sandbox.
 
-**Reading a run.** `run.result` answers with the status of a run, the outcome
-per host and, task by task, how many hosts went each way and what was said
-where one failed, cut to 500 characters; with `wait` it answers when the run
-ends or after at most 50 seconds, so an agent follows a run with one call at
-a time and no polling loop of its own. It is built from the events, not from
-the output. The output stays a separate tool, `run_log`, whose description says to read
-`run_result` first, then search, and to read it all only when asked. Called
-by an agent it answers in chunks of 16 KiB, cut at the end of a line, without
-the codes of colours, with `size`, the whole length: the page's chunk of
-256 KiB, with its colours, came to some 61,000 characters for a log of
-54 KB, past what Claude Code takes from a tool (about 25,000 tokens), which
-then put it in a file the agent had no tool to read (18 November). Giving
-it one was ruled out: its `Read` reads any file of the user's. With `match`
-(any caller) it answers the lines that hold a text, whatever its case,
-numbered from `offset`, with `context` lines around each (2 by default, at
-most 10), groups apart split by `--`, at most 100 that match, each cut to
-500 characters; `more` and `offset` say where to go on.
+**Reading a run.** `run.result` gives the status, the outcome per host
+and, task by task, how many hosts went each way and what was said where
+one failed (500 characters); with `wait` it answers when the run ends or
+after 50 s at most, so an agent follows a run one call at a time. Built
+from the events, not the output. The output is `run_log`, whose
+description says to read `run_result` first, then search, and read it all
+only when asked. For an agent it answers 16 KiB at a time, cut at a line,
+without colour codes, with `size`: the page's 256 KiB chunk overflowed
+what Claude Code takes from a tool, which then put it in a file the agent
+had no tool to read (giving it `Read` was ruled out: it reads any file of
+the user's). With `match` (any caller): the lines that hold a text, any
+case, from `offset`, `context` lines around each (2, at most 10), groups
+split by `--`, at most 100 matches of 500 characters; `more` and `offset`
+say where to go on.
 
-Checked on Debian 13 (`mcp.sh`), with a client written for the test, and
-from Claude Code 2.1 over ssh with a forced-command key: five turns to launch
-a template, wait for it and report host and tasks.
+Trials: [docs/history/agents.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/agents.md).

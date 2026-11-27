@@ -276,7 +276,8 @@ def skill_list(ctx: Context, params: Values) -> dict:
 @command("skill.read", role="viewer",
          params={
              "source": Str("Where the skill is, as skill.list gives it: controller,"
-                           " project:ID or collection:ID:NAMESPACE.NAME", required=True,
+                           " documents, project:ID or collection:ID:NAMESPACE.NAME",
+                           required=True,
                            max_length=200),
              "name": Str("The name of the skill", required=True, max_length=64),
              "file": Str("A file of the skill other than SKILL.md, as skill.list lists them",

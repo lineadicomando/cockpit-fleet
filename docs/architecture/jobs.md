@@ -7,15 +7,16 @@ learn hosts and groups; when it fails, Ansible quotes the lines it could not
 read, which may hold passwords, so why is shown to administrators only,
 and so is its output), `sync` (fetch a git project), `syntax` (check a
 playbook without running it, or an inventory written in the interface,
-whose output is for administrators as a reading's is), `unpack` (extract an uploaded archive),
-`galaxy` (install the collections a project asks for), `check` (a cycle
-of checks, see [Checks](checks.md)), `download` and `copy` (files of the
-store, see [The store](store.md)) and `netscan` (the scan of a subnet, see
-[The network](network.md)). A run of a workflow is not a job: it has no
-unit, and its steps are runs of playbooks (see [Workflows](workflows.md)). All of them need the sandbox, because all of them work on what a project
-brings: inventory plugins and scripts, git itself, the rules a project gives
-to ansible-lint, an archive made by anyone, or a list of sources to download
-from.
+whose output is for administrators as a reading's is), `unpack` (extract an
+uploaded archive), `galaxy` (install the collections a project asks for),
+`check` (a cycle of checks, see [Checks](checks.md)), `download` and `copy`
+(files of the store, see [The store](store.md)) and `netscan` (the scan of a
+subnet, see [The network](network.md)). A run of a workflow is not a job: it
+has no unit, and its steps are runs of playbooks (see
+[Workflows](workflows.md)). All of them need the sandbox, because all of
+them work on what a project brings: inventory plugins and scripts, git
+itself, the rules a project gives to ansible-lint, an archive made by
+anyone, or a list of sources to download from.
 
 When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 
@@ -27,16 +28,16 @@ When a job is queued, `fleetctl` prepares `/var/lib/cockpit-fleet/runs/<id>/`:
 | `known_hosts` | the host keys an administrator has trusted |
 | `inventory/` | a copy of the tree of the inventory, when it is written in the interface rather than a project file |
 | `collections/` | a copy of the collections installed for the project, when it asks for some |
+| `store/` | made at dispatch, not here: the store as hard links (see [The store](store.md)) |
 
 The copy of a local project opens each directory and file from the one
 that holds it, following no link, so a tree its owner changes while it is
-copied cannot lead outside it (an earlier `os.walk` could be raced into
-copying the database). What the service account cannot read there (logs or
-reports that a tool of the owner writes with mode 0600, in a directory git
-ignores) is left out of the copy instead of failing the job, and the paths
-left out head the run's output, written to `stdout.log` before the unit
-starts: a variables file left out says so there, not silently. Failing
-instead made every run of such a project fail on files it never used.
+copied cannot lead outside it (into the database, say). What the service
+account cannot read there (logs or reports that a tool of the owner writes
+with mode 0600, in a directory git ignores) is left out of the copy instead
+of failing the job, which would fail every run of such a project on files
+it never used; the paths left out head the run's output, written to
+`stdout.log` before the unit starts.
 
 The run can write in its own directory, so what it leaves there is read by
 `fleetctl`, outside the sandbox, through `jobs.open_run_file`: without
@@ -46,9 +47,8 @@ by the account), without waiting on a FIFO, and with a size limit for the
 small files.
 
 The outcome, `result.json`, is in that directory too, so the job could
-write it: from a process it leaves running, or by changing `fleet-run` in
-memory (`/proc/1/mem`, same account), a playbook made a failed run
-successful (review of 16 November). `fleet-run` is PID 1 of the run's PID
+forge it: from a process it leaves running, or by changing `fleet-run` in
+memory (`/proc/1/mem`, same account). `fleet-run` is PID 1 of the run's PID
 namespace: it makes itself not dumpable as it starts (`/proc/1` is then
 root's; ptrace is outside `@system-service`), and once the job is over it
 kills every other process of the namespace and waits for all of them, so
@@ -57,49 +57,51 @@ names of the outcome and writes its own. `sandbox.sh`, run D, tries both
 ways. What the job writes for itself (events, artifacts, the data of a
 check) stays its word, which is what it is.
 
-The run then sees a self-contained directory and nothing else. `project/`,
-`creds/`, `collections/` and an uploaded `archive` are removed when the job
-ends; `stdout.log`, `events.jsonl` and `result.json` stay until
-`[runs] keep_days` (90; 0 for ever) after it ended, when the tick deletes the
-directory (see [Maintenance](maintenance.md)).
+The run then sees a self-contained directory and nothing else. When the job
+ends, everything it needed only while it ran is removed (`jobs._tidy`: the
+copies, the credentials, the farm, the archive), but what a download that
+ended short brought, kept a week to be taken up; `stdout.log`,
+`events.jsonl` and `result.json` stay until `[runs] keep_days` (90; 0 for
+ever) after it ended, when the tick deletes the directory (see
+[Maintenance](maintenance.md)).
 
 There is no daemon tracking jobs. The `runs` table holds the state, and
 `reconcile` brings it up to date from what a unit left behind: it runs when a
 unit ends (`OnSuccess=`/`OnFailure=` start `cockpit-fleet-finish@ID.service`,
 which is the backend itself, unsandboxed, as the service account) and whenever
-runs are read. It also starts queued runs while fewer than
-`runs.max_concurrent` are running: those of a higher priority first (a
-schedule gives its own to its runs; a launch by hand has 0), then the oldest. Only one `reconcile` works at a time (a
-lock on the directory of the runs): the unit that ends and a page that polls
-get there together, and what a job left can be moved only once; found with
-the galaxy job, whose result takes longer to take in. The lock is waited
-for a while, not for ever: a `fleetctl` stopped with Ctrl-Z while it holds
-it would otherwise stop every page and every start. A page waits 5 s, then
-goes on without collecting (the holder collects; queued runs still start);
-`run.reconcile` of the unit that ends waits 2 minutes, then fails, and a
-later reading collects the run (`store.flock_within`). A unit that is gone without a
+runs are read. It also starts queued runs (`dispatch`), lane by lane
+(`jobs.lanes()`): `runs`, every kind but the others, up to `[runs]
+max_concurrent`; `downloads`, downloads and copies of the store, up to
+`[store] max_downloads`; `checks` and `slow` (cycles of the slow kinds), up
+to `[checks] max_concurrent` each. In a lane, a higher priority first (a
+schedule gives its own to its runs; a launch by hand has 0), then the
+oldest. Only one `reconcile` works at a time (a lock on the directory of
+the runs): the unit that ends and a page that polls get there together, and
+what a job left can be moved only once. The lock is waited for a while, not
+for ever, since a `fleetctl` stopped with Ctrl-Z while it holds it would
+stop every page and every start: a page waits 5 s, then goes on without
+collecting (the holder collects; queued runs still start); `run.reconcile`
+of the unit that ends waits 2 minutes, then fails, and a later reading
+collects the run (`store.flock_within`). A unit that is gone without a
 `result.json` is recorded as an error, or as canceled if that was asked.
 
-**Runs in series.** Two templates on one inventory launched one after the
-other run at once, and may step on each other's hosts. A run of a template
-or an ad-hoc command launched with `serial` (`options.serial`, no column of
-its own; the box of the launch forms is ticked by default, the API and
-`fleet launch` leave it off unless asked) is passed over by `dispatch` while another run is running on its
-inventory, or one launched before it (a lower `rowid`) is queued there; it
-takes no place in its lane meanwhile, so runs on other inventories start
-past it. Running ones count whatever their age, since a run approved after
-a later launch is queued only then; one chosen in the same pass counts too,
-as a later run of a higher priority may come first. Runs waiting for
-approval do not hold it back (they may wait a day), nor do check cycles,
-which have lanes of their own, nor workflow runs, whose steps count.
-Outcomes do not matter: it asks for an order, not for a success, which is
-what a workflow is for. The check is on the inventory, not on the hosts its
-limit leaves: two inventories that list the same hosts are not ordered, and
-two limits that share no host are. The waiting run keeps what it was given
-at launch (a copy of the project, the inventory, `known_hosts`), as one
-waiting for approval does. `run.get` and `run.list` say what it waits for
-(`waiting_for`: the last launched of the runs that hold it back). Nothing
-starts it but `dispatch`, which runs when a unit ends, so no process waits.
+**Runs in series.** Two runs on one inventory would otherwise run at once
+and may step on each other's hosts. A run of a template or an ad-hoc command launched with
+`serial` (`options.serial`; ticked by default in the launch forms, off in
+the API and `fleet launch`) is passed over by `dispatch` while another run
+is running on its inventory, or one launched before it (a lower `rowid`) is
+queued there (`jobs._AHEAD`), and takes no place in its lane meanwhile.
+Running ones count whatever their age (one approved after a later launch is
+queued only then), and so does one chosen in the same pass. Runs waiting
+for approval, check cycles and workflow runs (whose steps count) do not.
+Outcomes do not matter: an order, not a success, which is what a workflow
+is for. It is per inventory, not per host: two inventories that list the
+same hosts are not ordered, two limits that share no host are. The waiting
+run keeps what it was given at launch, as one waiting for approval does;
+`run.get` and `run.list` say what it waits for (`waiting_for`). Nothing
+starts it but `dispatch`, so no process waits. See
+[decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md),
+"Runs in series".
 
 Projects and inventories, where the files of a run come from, are in
 [projects.md](projects.md) and [inventories.md](inventories.md).
@@ -132,108 +134,91 @@ keys are public, so a viewer may read them.
 a file, so `fleet-run` starts an `ssh-agent` inside the unit and loads the key
 with `ssh-add`, which gets the passphrase from `fleet-askpass`. The agent lives
 in the run's PID namespace and ends with it. The same helper answers git when
-a token is used.
-
-`fleet-askpass` is a packaged file because a run's scratch directory is
-mounted `noexec`: a helper script written there, as a first version did, cannot
-be executed. It prints the file named in its environment, so the secret itself
-is still in no command line and no environment.
+a token is used. `fleet-askpass` is a packaged file because a run's scratch
+directory is mounted `noexec`; it prints the file named in its environment,
+so the secret itself is in no command line and no environment.
 
 **Several vaults.** A template lists any number of vault credentials; each has
 an identifier, and each reaches Ansible as `--vault-id IDENTIFIER@FILE`, in the
 template's order. Credentials used together must have different identifiers.
 One without an identifier is given as `default@FILE`, Ansible's own name for
 it, never as the file alone: the path of a unit's credentials has the `@` of
-the unit's name in it, and Ansible would split it there (found running
-`ansible-win_edulab`, whose vault has no identifier).
+the unit's name in it, and Ansible would split it there.
 
 **Sets of variables.** A set (`variable_sets`, schema 21, commands
-`varset.*`) is a named object of extra variables that job templates take,
-several in order (`template_variable_sets`, like `template_vaults`), so that
-a value common to many templates, such as a domain or the name of an ISO for
-`ansible-win_edulab`, is written once. At launch `runs.launch` merges them
-into the template's extra variables: the sets in the template's order, a
-later one winning by top-level name, then the template's own; the survey's
-answers and what earlier steps of a workflow pass on still come after, in
-their own files. The merge happens at each launch, so a change of a set is
-in the next run of every template that takes it, schedules and workflow
-steps included; the run records which sets it took, by id and by name as
-they were (`options.variable_sets`). Like the template's own they are
-written by an administrator, seen by every role, and stay templates for
-Ansible: not a place for secrets. Names are those Ansible takes for a
-variable (the template's own extra variables are checked the same way
-since), 64 KB at most per object. A set in use cannot be deleted (a foreign
-key, as for credentials); deleting a template frees its sets. They differ
-from the `group_vars` of an inventory, which depend on the hosts and lose
-to extra variables: a set is chosen by the template and wins over the
-defaults of roles and over the inventory. The form of a template shows what
-a run will get, variable by variable, with where each comes from
-(`src/lib/variables.ts`).
+`varset.*`) is a named object of extra variables written once and taken by
+job templates, several in order (`template_variable_sets`), and by
+inventories (`inventory_variable_sets`, schema 28), so that what an
+inventory's files refer to reaches every job on it. At each launch
+`runs.launch` merges them: the inventory's sets, then the template's, then
+the template's own extra variables, a later one winning by top-level name,
+plain or secret; the survey's answers and what earlier steps of a workflow
+pass on come after, in their own files. An ad-hoc command and a check cycle
+take the inventory's sets alone. A change of a set is thus in the next run
+of everything that takes it; the run records which sets it took, by id and
+name (`options.variable_sets`). Plain values are written by an
+administrator, seen by every role, and stay templates for Ansible. Names
+are those Ansible takes for a variable (`ansible_*` allowed, unlike a
+survey's: a secret `ansible_become_password` works; a template's own extra
+variables are checked the same way), 64 KB at most per object. A set in
+use cannot be deleted (a foreign key); deleting a template frees its sets.
+A set wins over the
+defaults of roles and over the inventory's `group_vars`, which depend on
+the hosts. The form of a template shows what a run will get, variable by
+variable, with where each comes from (`src/lib/variables.ts`).
 
-**Secret variables and the sets of an inventory** (phase 15, schema 28).
-A set also has secret variables: their names are in the set (`secrets`, a
-name for a random slot), their values are stored by `fleet-secret` as
-`s-SLOT`, as a credential's are, and set apart from `varset.update` by the
-interface or by `fleet secret --varset`, so that none passes through
-`fleetctl`. A name left out of an update keeps its slot, and a set the
-caller sends without `secrets` keeps them all: a client that knows nothing
-of them must not drop their values. An inventory takes sets too
-(`inventory_variable_sets`), so that what its files refer to is given to
-every job on it: a run takes the inventory's sets, then the template's,
-then the template's own variables, a later one winning whether plain or
-secret; an ad-hoc command and a check cycle take the inventory's alone.
-At launch the ciphertext of each secret that won is copied into the run's
-credentials (`secret_var_N`); one with no value stops the launch (a check
-cycle is then not prepared, and its states say why). `fleet-run` writes
-them, tagged `!unsafe`, into `secret_vars.yaml` in the runtime directory,
-after the plain extra variables, and they are masked in the output as
-every secret of a run. Checked with ansible-core 2.16: an extra variable
-given that way reaches the playbook and the inventory's own files (a
-`group_vars` holding `serial: "{{ secret }}"`), and the listing of the
-inventory keeps the reference, not the value. Names are an
-administrator's, so `ansible_*` is allowed, unlike a survey's: a secret
-`ansible_become_password` works. A run takes at most 30, and its
-credentials at most 128 files (`credstage.MAX_FILES`). Rejected: editing
-Ansible Vault files in the interface (`decisions.md`), which would have
-had to decrypt them in a job; a secret is a set's, not an inventory's own,
-so that one value serves several inventories, as Semaphore's variable
-groups do for templates.
+A set's secret variables (`secrets`: a name for a random slot) have their
+values stored by `fleet-secret` as `s-SLOT`, like a credential's, set apart
+from `varset.update` by the interface or `fleet secret --varset`, so that
+none passes through `fleetctl`. A name left out of an update keeps its
+slot, and a set sent without `secrets` keeps them all, so that a client that
+knows nothing of them does not drop their values. At launch the ciphertext
+of each secret that won is copied into the run's credentials
+(`secret_var_N`); one with no value stops the launch (a check cycle is then
+not prepared, and its states say why). `fleet-run` writes them, tagged
+`!unsafe`, into `secret_vars.yaml` in the runtime directory, after the plain
+extra variables, and they are masked in the output. Being extra variables,
+they also reach the inventory's own files (a `group_vars` holding
+`"{{ secret }}"`), while the listing of the inventory keeps the reference,
+not the value. A run takes at most 30 (`variables.MAX_SECRETS`), and its
+credentials at most 128 files (`credstage.MAX_FILES`). A secret is a set's,
+not an inventory's, so that one value serves several inventories; Vault
+files are not edited in the interface (decisions.md, "Vault files").
 
 **Limits a launcher can change.** Launching a template, an operator may add a
 host limit and ask for a dry run. The limit narrows the template's own and
 cannot widen it. They are not joined into one pattern: Ansible reads the
 plain terms of a pattern as a union before its `&` ones, so
-`template:&all:other` would reach `other` (found by the security review of
-24 October). With both, the spec holds `limits`, and `fleet-run`, in the
-sandbox, lists the hosts of each with `ansible-inventory --list --limit`,
-keeps those in all of them, and runs the playbook with `--limit @FILE` of
-their names. A name that a limit file would read as a pattern (a group's,
-`all`, one with `*` or `[`) stops the run rather than widen it; so does an
-empty intersection. It costs one reading of the inventory per limit.
+`template:&all:other` would reach `other`. With both, the spec holds
+`limits`, and `fleet-run`, in the sandbox, lists the hosts of each with
+`ansible-inventory --list --limit`, keeps those in all of them, and runs the
+playbook with `--limit @FILE` of their names. A name that a limit file would
+read as a pattern (a group's, `all`, one with `*` or `[`) stops the run
+rather than widen it; so does an empty intersection. It costs one reading of
+the inventory per limit.
 
 An operator may also replace, for one launch, the template's tags, tags to
 skip, forks and verbosity (`runs.OVERRIDES`; `--tags`, `--skip-tags`,
 `--forks`, `--verbosity` of `fleet launch`). Only what is given replaces the
 template's, and tags given empty run every task; forks stay within `[runs]
-max_forks`. Tags decide which tasks run, so an operator can run tasks the
-template leaves out by them: tags are not a control of what a role may do
-(16 November). What was replaced is kept in `options.overrides`, shown with
-the run and carried by its audit record; a template that needs approval
-still waits for it. A schedule stores the same values (`overrides`, schema
-30) and its runs take them; the steps of a workflow take the template's.
+max_forks`. Tags are not a control of what a role may do: an operator can
+run tasks the template leaves out by them. What was replaced is kept in
+`options.overrides`, shown with the run and carried by its audit record; a
+template that needs approval still waits for it. A schedule stores the same
+values (`overrides`, schema 30) and its runs take them; the steps of a
+workflow take the template's.
 
-**Ad-hoc commands.** `run.adhoc` runs one module on hosts of an inventory,
-with no template: an inventory, a host pattern, a module, its arguments, and
-optionally a machine credential, vault credentials, `become` and a dry run.
-It is for administrators only, and the module must be in `[adhoc] modules` of
-`config.toml`, by its full name (`ansible.builtin.command`): a short name
-could be answered by another collection. The file belongs to root, so the
-list is set by whoever administers the machine, not from the interface; the
-default has what one looks at a fleet with (ping, facts, `command`, `shell`
-and their Windows counterparts), and an empty list turns ad-hoc commands off.
-An administrator can write any playbook anyway: the list is not what keeps
-them from a module, it is what bounds a single call, which matters once the
-caller is an agent (phase 3b).
+**Ad-hoc commands.** `run.adhoc` (admin) runs one module on hosts of an
+inventory, with no template: an inventory, a host pattern, a module, its
+arguments, and optionally a machine credential, vault credentials, `become`
+and a dry run. The module must be in `[adhoc] modules` of `config.toml`, by
+its full name (`ansible.builtin.command`), since a short name could be
+answered by another collection; root's file, so the list is set by whoever
+administers the machine. The default has what one looks at a fleet with
+(ping, facts, `command`, `shell` and their Windows counterparts); an empty
+list turns ad-hoc commands off. An
+administrator can write any playbook anyway: the list bounds a single call,
+which matters once the caller is an agent (decisions.md, "Ad-hoc").
 
 The job does not call `ansible`: `fleet-run` writes a playbook of one play and
 one task in the run's runtime directory and runs `ansible-playbook` on it,
@@ -262,8 +247,6 @@ beside a playbook are not. The output is the one of `ansible`, what each host
 answered (`ANSIBLE_STDOUT_CALLBACK=ansible.builtin.minimal`), since a play of
 one task has no use for banners and a recap.
 
-Checked on Debian 13 with ansible-core 2.19.11 (`adhoc.sh`).
-
 **Surveys.** A template may ask questions at launch: typed fields (text,
 number, choice, yes or no) with a default and bounds, defined by an
 administrator. Each answer becomes a variable of the run, and this is the only
@@ -271,14 +254,13 @@ way an operator gives variables. `run.start` checks the answers against the
 definition and refuses a variable that was not asked for.
 
 Answers reach Ansible in a second variables file, after the template's own, so
-an answer wins over a fixed value of the same name. The two files differ in
-one thing. Ansible renders any variable holding `{{ ... }}` as a template
-wherever it is used, lookups included: `{{ lookup('pipe', ...) }}` in a
-variable is a command executed on the controller, inside the sandbox but next
-to the run's decrypted secrets. The template's variables are written by an
-administrator and stay templates. The answers are written as YAML with every
-string tagged `!unsafe`, which Ansible uses as it is written; checked on
-ansible-core 2.19 (Debian 13) and 2.20.
+an answer wins over a fixed value of the same name. Ansible renders any
+variable holding `{{ ... }}` as a template wherever it is used, lookups
+included: `{{ lookup('pipe', ...) }}` in a variable is a command executed on
+the controller, inside the sandbox but next to the run's decrypted secrets.
+The template's variables are written by an administrator and stay templates.
+The answers are written as YAML with every string tagged `!unsafe`, which
+Ansible uses as it is written.
 
 A survey cannot set a variable whose name starts with `ansible_`: those change
 how a run connects (`ansible_ssh_common_args`, `ansible_python_interpreter`),
@@ -313,19 +295,15 @@ variables file. The run records which variables were given as secrets, never
 their values. A secret field has no default and no bounds: a default would be
 stored in clear, and nothing that could check a length ever sees the value.
 
-**Masking.** A playbook that prints a secret would put it in the run's
-output. What a run prints is therefore filtered against the secrets of that
-run, the decrypted files of its credentials directory: passwords, vault
-passwords, tokens, secret answers, and a private key line by line. Each is
-replaced by `********` in two places: `fleet-run` filters every line before it
-goes to `stdout.log` and to the journal, and the events callback filters the
-values of an event before writing it (it is told the directory with
-`FLEET_EVENTS_SECRETS_DIR`; the values, not the line of JSON, where a secret
-that reads like a field name would break the event).
-
-This is a net, not a guarantee, and `no_log` is still the way to keep a value
-out. A value is looked for as it is and as JSON escapes it: base64, a hash, a
-value cut over two lines are not recognised. Secrets shorter than four bytes
-are left alone, since masking them would mostly hide ordinary output. And only
-the secrets cockpit-fleet handed to the run are known: a password an inventory
-takes from a vaulted variable is one the run decrypts itself.
+**Masking.** What a run prints is filtered against the secrets of that run,
+the decrypted files of its credentials directory: passwords, vault
+passwords, tokens, secret answers, secret variables, and a private key line
+by line. Each is replaced by `********` in two places: `fleet-run` filters
+every line before it goes to `stdout.log` and to the journal, and the events
+callback filters the values of an event before writing it (it is told the
+directory with `FLEET_EVENTS_SECRETS_DIR`; the values, not the line of
+JSON, where a secret that reads like a field name would break the event). A
+value is looked for as it is and as JSON escapes it; secrets shorter than
+four bytes are left alone, since masking them would mostly hide ordinary
+output. It is a net, `no_log` is still the way to keep a value out; what
+it misses is in [security.md](../security.md), "Secrets".

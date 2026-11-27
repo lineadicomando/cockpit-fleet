@@ -93,8 +93,8 @@ instead.
 
 `/etc/cockpit-fleet/config.toml` holds the limits an administrator of the
 machine sets; the file installed shows every key with its default,
-commented out. An unknown key is an error, which the System tab and
-`fleet selfcheck` show. The parts most often changed:
+commented out, and says what each does; an unknown key is an error, which
+the System tab and `fleet selfcheck` show. The parts most often changed:
 
 - `[runs] max_concurrent`: runs at the same time; the rest wait in a queue.
 - `[projects] local_roots`: directories of the machine that may be a project
@@ -222,7 +222,8 @@ description = "nginx behind the company's proxy."
 A name is letters, digits, `-` and `_`. One with the same name as the
 package's does not replace it: both are offered. The files must be readable
 by the group `cockpit-fleet`, and are refused if they hold a symbolic link
-or a special file, a file larger than 1 MB, or more than 500 files; the
+or a special file, a file larger than 1 MB, more than 500 files or 16 MB in
+all; the
 page shows why next to its name. An inventory's format is that of its main
 file, `hosts.yaml` or `hosts.yml` (YAML) or `hosts` (INI). A playbook may
 end in `.yml` too; what is made from it ends in `.yaml`. Do not put

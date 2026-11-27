@@ -47,9 +47,9 @@ metrics; the summary says in a line what it found.
 | `updates` | updates available (apt, dnf, zypper, Windows Update searched without installing) | `refresh` (needs become) | `security_updates` 1 / –, `updates` – / – |
 
 `cmdb`, `updates` and compliance checks are *slow*: they run in cycles of
-their own (`cmdb` and `updates` every 6 hours unless told otherwise), with `[checks] slow_timeout` (900 s)
-as their limit, so that a long search for updates does not hold back a disk
-check.
+their own (`cmdb` and `updates` every 6 hours unless told otherwise), with
+`[checks] slow_timeout` (900 s) as their limit, so that a long search for
+updates does not hold back a disk check.
 
 ## Thresholds
 
@@ -145,8 +145,8 @@ modules support check mode; the playbook needs no `fleet_result`.
   `[checks] reminder_hours` (24).
 - An operator acknowledges a problem in **Hosts**: it is not told again
   until it is ok again.
-- A check that changes state in half of its last 20 results flaps, and is
-  not told about until it settles.
+- A check that changes state in half of its last 20 results (10 at least)
+  flaps, and is not told about until it changes in fewer than a quarter.
 - A maintenance window (a host, or a group, up to 90 days) keeps its hosts
   from being told about; what is still a problem when it ends is told then.
 

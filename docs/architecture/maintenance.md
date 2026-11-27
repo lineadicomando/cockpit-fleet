@@ -1,7 +1,8 @@
 # Maintenance
 
 Every retention is applied in one place, `maintenance.tidy`, at each tick
-after the checks; only the outbox of notifications is pruned by the service
+after the checks (with the digests of the store and the checks of its
+sources); only the outbox of notifications is pruned by the service
 that delivers it (90 days). One step that fails is written to the journal
 and does not keep the others from running.
 
@@ -11,6 +12,9 @@ and does not keep the others from running.
 | What check cycles took | 30 days | deleted |
 | Output of other runs | `[runs] keep_days` (90) | directory deleted, 500 a tick at most; the row stays with its outcome and `pruned_at` |
 | Directories of `runs/` with no run | a day | deleted, the directory looked through once an hour (a stamp file) |
+| Store uploads not resumed | 7 days | deleted (`storage.digest_pending`) |
+| Farms of the store of runs that ended | a day | deleted (`storage.digest_pending`) |
+| What a download that ended short brought | 7 days | deleted (`storage.refresh_due`) |
 | CMDB changes | 365 days | deleted |
 | Metrics | `[metrics]` (14, 90, 730 days) | deleted, see [Time series](time-series.md) |
 | Runs, state changes, audit | always | |
@@ -26,6 +30,8 @@ created with `auto_vacuum = INCREMENTAL`; the tick then gives back up to
 32 MB of free pages at a time, and only when they are a quarter of the file
 or more, so that it does not shrink a file that will grow again at once. A
 database made before is rewritten once by `VACUUM` to work that way, if it
-is below 64 MB (every one made before phase 8); a larger one is left as it
-is. The scheduler's unit has a private `/tmp`, where `VACUUM` writes its
+is below 64 MB; a larger one is left as it is. The scheduler's unit has a private `/tmp`, where `VACUUM` writes its
 copy.
+
+Not to be confused with maintenance windows (`maintenance.*`, table
+`maintenances`), which belong to [Checks](checks.md).

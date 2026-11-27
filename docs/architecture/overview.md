@@ -21,12 +21,15 @@ ansible-playbook
    │ stdout → stdout.log and the journal
 ```
 
-There is no daemon and no listening socket. Everything that runs is either a
-short command started by the web console or a systemd unit started on demand.
+`fleet` at a terminal and the assistant (`fleet-mcp`, `fleet-chat`) reach
+`fleetctl` the same way, through the same sudoers line, as the user who
+runs them. There is no daemon and no listening socket. Everything that
+runs is either a short command started by the web console or a systemd
+unit started on demand.
 
 ## Privilege boundaries
 
-Two programs run as root. Both validate their single argument against
+Two programs run as root. Both validate the name or id they take against
 `[a-z0-9][a-z0-9_-]{0,63}` and accept nothing else.
 
 | Helper | Called by | Does |
@@ -89,11 +92,9 @@ disables sudo.
 Secrets are encrypted without an embedded name, because the same secret is
 loaded under a different credential name depending on its purpose.
 
-The service account decides which ciphertext goes into which run, so
-compromising that account still exposes every secret through a crafted run.
-What the design guarantees is narrower: secrets are safe at rest and in
-backups, the web console cannot read them, and a playbook cannot reach the
-secrets of another run or project.
+What this guarantees, and what it does not (the service account decides
+which ciphertext goes into which run): [security.md](../security.md),
+"Secrets".
 
 ## The run sandbox
 
@@ -110,7 +111,7 @@ tries exactly that path.
 |---|---|
 | read and write its own run directory | see the database, the projects the backend keeps, other runs |
 | read its own decrypted secrets | read the secret store or another run's credentials |
-| open network connections | reach D-Bus or systemd (`/run` is an empty tmpfs) |
+| open network connections | reach D-Bus or systemd (`/run` is a read-only tmpfs with only the resolver's directory) |
 | write to a private `/tmp` and a throwaway home | use sudo or setuid binaries, write `/etc` or `/usr`, read `/home` |
 | leave processes running while it runs | outlive its run, or change its outcome (`jobs.md`) |
 

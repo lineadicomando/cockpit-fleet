@@ -1,8 +1,8 @@
 # Documents
 
 Markdown written by people and by the assistant (reports of interventions,
-studies, analyses), in folders, with their attachments (`documents.py`).
-Decided on 25 November (`decisions.md`, "Documents").
+studies, analyses), in folders, with their attachments (`documents.py`;
+`decisions.md`, "Documents").
 
 ```
 /var/lib/cockpit-fleet/documents/           the tree: texts (.md) and attachments
@@ -34,12 +34,12 @@ put in the tree by hand, or changed there, is committed by the service
 before the next change, so that the commit of a person holds only what
 they did. There are no drafts: an agent's write is a commit like a
 person's, with the person it acts for as its author, and a trailer
-`Fleet-Agent: VIA (PROFILE)` saying it came through an agent (phase 24;
-`doc.history` gives it as `agent`, the page as "through the assistant"),
+`Fleet-Agent: VIA (PROFILE)` saying it came through an agent
+(`doc.history` gives it as `agent`, the page as "through the assistant"),
 as the audit trail does.
 
-**Skills of the documents** (phase 24; `decisions.md`, "Skills in the
-documents"). `skills/NAME/SKILL.md` and the `.md` beside it are a source of
+**Skills of the documents** (`decisions.md`, "Skills in the documents").
+`skills/NAME/SKILL.md` and the `.md` beside it are a source of
 `skills.py`, `documents`, so that the assistant may write a skill for a
 task that recurs and people correct, compare and restore it here. Only the
 texts count (the `.txt` of other sources is an attachment here, out of the
@@ -111,35 +111,35 @@ backticks are paired in one pass, emphasis looks back over 200 pieces at
 most, quotes and lists nest 16 deep.
 
 **The page** (Resources, Documents; `DocumentsPage.tsx`). A folder is the
-store's file manager (`FileManager.tsx`) on `doc.list`, with the changes
-made by `doc.*` and attachments uploaded through `doc.put`; a text
+store's file manager (`FileManager.tsx`) on `doc.list`, changed through
+`doc.*`, attachments uploaded through `doc.put`. A text
 (`#/documents/PATH.md`) is shown as `doc.render` gives it, in an iframe of
-its own: `srcdoc`, `sandbox="allow-same-origin allow-modals"` (no
-scripts; same origin so that the page can reach into it, modals for
-printing) and a policy of its own in it (`default-src 'none'; img-src
-data:`). The frame inherits Cockpit's policy too, which refuses inline
-styles: the renderer aligns cells by class, and the page adopts the
-document's stylesheet into the frame as a constructed sheet
-(`adoptedStyleSheets`), as CodeMirror's are; the frame is as tall as the
-document. A click on a link is taken by a listener the page puts on the
-frame's document (it runs in the page's realm: tried with a trusted click
-and keyboard on Chrome, 25 November): `fleet:doc/` opens another document,
+its own: `srcdoc`, `sandbox="allow-same-origin allow-modals"` (no scripts;
+same origin so that the page can reach into it, modals for printing) and
+a policy of its own (`default-src 'none'; img-src data:`). The frame
+inherits Cockpit's policy too, which refuses inline styles: the renderer
+aligns cells by class, and the page adopts the document's stylesheet into
+the frame as a constructed sheet (`adoptedStyleSheets`), as CodeMirror's
+are; the frame is as tall as the document.
+
+Links: a listener the page puts on the frame's document (it runs in the
+page's realm) takes a click: `fleet:doc/` opens another document,
 `fleet:run/` and `fleet:host/` their pages, `#id` scrolls, http(s) and
 mailto open in a tab of their own with `noopener`; the frame never
-navigates. Editing (`?mode=edit`) is CodeMirror with Markdown beside a
-preview, rendered by the backend 400 ms after the last keystroke; a save
-quotes the digest read, with an optional line for the history. History,
-diff and restore are a dialog as for projects. Exports: "Print or save as
-PDF" prints the frame (the stylesheet has print rules: page margins, no
-breaks inside code and rows), "Download the text" is `doc.get`, "Download
-as a web page" is the rendered page saved from the browser with the
-stylesheet and its policy inside it, the images in it (a `blob:` link
+navigates.
+
+Editing (`?mode=edit`) is CodeMirror with Markdown beside a preview,
+rendered by the backend 400 ms after the last keystroke; a save quotes the
+digest read, with an optional line for the history. History, diff and
+restore are a dialog as for projects. Exports: "Print or save as PDF"
+prints the frame (print rules: page margins, no breaks inside code and
+rows); "Download the text" is `doc.get`; "Download as a web page" saves
+the rendered page with its stylesheet, policy and images (a `blob:` link
 clicked in the shell's document, `saveBlob`: Firefox refuses it from the
-page's frame). The document follows the theme: the page sets a class on
-the frame's root as Cockpit's theme changes, a saved page follows the
-system's `prefers-color-scheme`, and on paper it is always light. In the chat, a write
-of the agent that went through (`doc_write`, `doc_restore`, a copy or a
-move to a text) has "Open the document".
+page's frame). The theme: a class on the frame's root follows Cockpit's;
+a saved page follows `prefers-color-scheme`; paper is always light. In
+the chat, an agent's write that went through (`doc_write`, `doc_restore`,
+a copy or a move to a text) has "Open the document".
 
 **Files of any size** come in and go out as the store's do (`store.md`):
 `doc.put` takes the parameters on one line and the bytes after them (no
@@ -152,3 +152,5 @@ UTF-8.
 included; like the store, a file that would leave less than 1 GB free on
 the disk is refused. Links in the tree are neither listed nor followed:
 every directory is opened from the one above with `O_NOFOLLOW`.
+
+Trials: [docs/history/documents.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/documents.md).

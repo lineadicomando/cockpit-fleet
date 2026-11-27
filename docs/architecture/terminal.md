@@ -22,12 +22,13 @@ as they are declared (`--limit 3`, a flag for a boolean and `--no-` before it,
 a repeated option for a list, JSON for an object, `@path` or `@-` for a text
 read from a file or stdin). Its help is its docstring and its parameters,
 the same that describe it to an agent: a command added to the backend is in
-`fleet` with no work, phase 4 included. The registry is read from the
+`fleet` with no work. The registry is read from the
 installed package, so `fleet help AREA VERB` needs no call; `fleet help`
 asks `whoami` which commands the role has. Where a command takes the id of
 something that has a name (a template, project, inventory, credential,
-check, host, schedule, channel, rule), the name may be given: `fleet` asks
-the list for it and passes the id, and says so when two have that name.
+check, host, schedule, channel, rule, set of variables, workflow), the
+name may be given: `fleet` asks the list for it and passes the id, and
+says so when two have that name.
 The completion for bash offers commands, options and their choices from the
 registry, and asks the backend, as the user, for the names of what an id
 names, the last runs and the secrets of a credential: nothing to whoever has
@@ -40,17 +41,21 @@ command that does the same (`fleet launch` with the answers typed so far,
 never the secret ones, which `fleet` asks for; `fleet log -f` or `fleet
 result`; `fleet project upload --archive`), quoted for a POSIX shell, with a
 button to copy it and one that opens Cockpit's terminal in a new tab:
-Cockpit's terminal cannot be handed a command, so it is pasted. Four
+Cockpit's terminal cannot be handed a command, so it is pasted. Five
 commands meant for other programs (`run.reconcile`, `mcp.tools`,
-`chat.start`, `scheduler.tick`) are not listed, and still answer.
+`chat.start`, `scheduler.tick`, `notification.deliver`) are not listed,
+and still answer.
 
 **Shortcuts** for what is done most often: `launch` takes a template by name
 or id and answers to its survey as `-a NAME=VALUE`, follows the output and
 ends with the outcome per host and per task (`run.result`); `log` prints the
-output, `-f` follows it; `result` reads the outcome; `secret` sets a secret
-of a credential. The exit status lets a script tell a run that failed (1)
-from a command line that is wrong (2) and a refusal or an unreachable
-backend (3).
+output, `-f` follows it; `result` reads the outcome; `secret` sets the
+secret of a credential, a channel or a set of variables; `assistant`
+starts the chat's agent here ([The chat](chat.md)). The streams of `fleet
+store`, `fleet doc` and `fleet draft diff`: [The store](store.md),
+[Documents](documents.md), [Agents](agents.md). The exit status tells a
+run that failed (1) from a wrong command line (2) and a refusal or an
+unreachable backend (3).
 
 **Secrets stay off the command line.** A secret question of a survey is
 never taken from `-a`: it is asked for at the terminal, with no echo, and
@@ -72,8 +77,8 @@ backend gives it, for a program. English only, like the backend's messages.
 a run, and a run outside the unit would have neither the sandbox nor the
 audit trail.
 
-**Projects at a terminal** (decided with the user on 16 October). Two ways,
-for administrators only, since files are theirs in the interface too:
+**Projects at a terminal.** Two ways, for administrators only, since
+files are theirs in the interface too:
 
 - A directory of local projects under `[projects] local_roots`, by a
   convention that `selfcheck` (`project_roots`) checks on the directory
@@ -85,9 +90,8 @@ for administrators only, since files are theirs in the interface too:
   readable by everyone a warning, writable by everyone a failure. Not under
   `/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`
   (`jobs.HIDDEN_FROM_UNITS`): the scheduler and `cockpit-fleet-finish@` have
-  `ProtectHome` and `PrivateTmp`, so such a project worked when launched
-  through sudo and failed whenever a timer started it, with "is not a
-  directory". It is refused when created and at every use, a link leading
+  `ProtectHome` and `PrivateTmp`, so such a project would fail whenever a
+  timer started it. It is refused when created and at every use, a link leading
   there too, and `selfcheck` fails on such a root. A project that has to
   stay in a home is bind-mounted under a root (fleet(1)). The ACL
   mask follows the group bits of a new file: who writes there keeps a umask
@@ -114,9 +118,4 @@ for administrators only, since files are theirs in the interface too:
   `fleet.project`, so a clone of one is never pushed as the other. A push
   reads the inventory again.
 
-Checked on Debian 13 (`cli.sh`): a project, an inventory and a template set
-up by an administrator, a file written from a file and from stdin, an
-operator's launch followed to its end, exit statuses, refusals by role, a
-user in no group told why, a secret from stdin; and by hand, at a terminal,
-a secret question asked with no echo, which reached the run masked and is in
-no record.
+Trials: [docs/history/terminal.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/terminal.md).

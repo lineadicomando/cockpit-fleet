@@ -2,13 +2,14 @@
 
 A rule names the ends of a run to tell about (`failed`, which covers `error`
 too, `changed`, `succeeded`, `canceled`, which covers a run rejected or
-expired before it started), a run that waits for approval (`approval`), which runs (every one, or those of
-one project, template, schedule or inventory) and a channel; what a rule
-says about checks, and about check cycles falling behind (`late`,
-`caught_up`) or that cannot be prepared (`unprepared`, `prepared`), is in [Checks](checks.md). Channels are Telegram, a
-webhook, mail (SMTP) and Matrix, written with the standard library. Only
-playbook runs and ad-hoc commands are told about, not the jobs that serve a
-project.
+expired before it started), a run that waits for approval (`approval`),
+which runs (every one, or those of one project, template, schedule or
+inventory) and a channel; what a rule says about checks, and about check
+cycles falling behind (`late`, `caught_up`) or that cannot be prepared
+(`unprepared`, `prepared`), is in [Checks](checks.md). Channels are
+Telegram, a webhook, mail (SMTP) and Matrix, written with the standard
+library. Only playbook runs, ad-hoc commands and workflows are told about,
+not the jobs that serve a project, check cycles or scans.
 
 ```
 reconcile → _finish(run)  ── rules ──▶ notifications (the outbox, one row per channel)
@@ -24,7 +25,7 @@ Telegram, webhook, SMTP, Matrix
 **Waking without privilege.** The service account cannot start units but
 run units, through `fleet-unit`. A path unit needs nothing of it: writing
 `notify.wake` is enough, and systemd 257 starts the service again when the
-file was written while it ran (tried on the VM). Retries need no timer of
+file was written while it ran. Retries need no timer of
 their own: the tick of the scheduler writes the file when a notification's
 time to be tried again has come. No root code was added.
 
@@ -57,7 +58,7 @@ twice. A redirect is an error, not followed: it would carry a token to
 another host. Anything else that goes wrong while sending (a server that
 does not speak HTTP, a header a secret makes invalid) is a failed attempt
 like the others, said by the class of the error only, as its text may quote
-the secret; before, it stopped the whole delivery, every tick. An error
+the secret, and the delivery goes on to the next. An error
 keeps an API's own reason, never the raw body of an answer (viewers read
 errors, and the URL may be one of the network's own). A mail's subject is
 made one line: a host name from an inventory may hold a line break. A
@@ -90,8 +91,7 @@ tests and tries again; anyone with a role sees the channels (not their
 secrets), the rules and the notifications. Channels and rules are in the
 exported document, without secrets.
 
-Checked on Debian 13 (`notify.sh`): a failed run reaches a Telegram Bot API,
-a webhook, an SMTP server and a Matrix homeserver (stand-ins on the VM,
-`notify-sinks.py`), each with its secret where it belongs and in neither the
-database nor the journal; a channel whose server was down got the
-notification about 90 s later, from the tick, once it answered.
+Tests: `notify.sh`, against stand-ins of the four services
+(`notify-sinks.py`): each secret where it belongs and in neither the
+database nor the journal, a channel that was down served by the tick once
+it answers.

@@ -4,16 +4,17 @@ How cockpit-fleet is put together on the controller, why, and what was
 measured before building on it: one file per area in
 [architecture/](architecture/). The plan is in [TODO.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/TODO.md); the
 decisions in [decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md). Read only the file of the area at
-hand.
+hand. How an area came to be (trials, measurements, what was found on the
+way): [history/](https://github.com/lineadicomando/cockpit-fleet/tree/main/docs/history), one file per area, not needed to work on it.
 
 | File | What it covers |
 |---|---|
 | [overview.md](architecture/overview.md) | The parts and how a run flows; the security model: privilege boundaries (why no polkit rule), secrets, the run sandbox |
 | [backend.md](architecture/backend.md) | `fleetctl`: the registry of commands, roles and rights, the audit |
 | [jobs.md](architecture/jobs.md) | Runs and the other jobs, `fleet-run`, the queue and lanes, runs in series; what a launch is given: host keys, keys with a passphrase, vaults, sets of variables and secret variables, limits, ad-hoc commands, surveys, secret answers, masking |
-| [projects.md](architecture/projects.md) | Projects (git, managed, uploaded), Galaxy, `ansible.cfg`, starters, duplicates |
+| [projects.md](architecture/projects.md) | Projects (git, managed, uploaded, local), Galaxy, `ansible.cfg`, starters, duplicates |
 | [inventories.md](architecture/inventories.md) | Inventories (files, directories of sources, scripts; written in the interface), the inventory chosen at launch |
-| [files.md](architecture/files.md) | The page of the files, the editor, syntax checks, help on modules |
+| [files.md](architecture/files.md) | The page of the files, the editor, restore, download, import, diff, syntax checks, help on modules |
 | [store.md](architecture/store.md) | The store: hard links and intake, uploads, downloads to the browser and from URLs, copies, archives, sources, SFTP, the page |
 | [documents.md](architecture/documents.md) | Documents: texts in a history of their own, attachments, what agents read and write |
 | [schedules.md](architecture/schedules.md) | The timer and `scheduler.tick`, missed times, overlap |
@@ -28,10 +29,9 @@ hand.
 | [health.md](architecture/health.md) | `system.health` |
 | [dashboard.md](architecture/dashboard.md) | The Overview: `overview.get`, what it sums and how fast |
 | [export.md](architecture/export.md) | Export and import of the configuration |
-| [agents.md](architecture/agents.md) | `fleet-mcp`, classes of commands, profiles, questions by profile, autonomy, drafts |
+| [agents.md](architecture/agents.md) | `fleet-mcp`, classes of commands, profiles, questions by profile, autonomy, drafts, skills |
 | [terminal.md](architecture/terminal.md) | The command `fleet`, projects at a terminal |
 | [chat.md](architecture/chat.md) | `fleet-chat`, ACP, sessions, the page of the assistant, instructions, questions, one consent per ad-hoc command, "Without questions" |
-| [chat-trials.md](architecture/chat-trials.md) | Archive: what was tried and measured of the chat, with the stand-in agent and with Claude |
 | [events.md](architecture/events.md) | The callback and `events.jsonl` |
 | [windows.md](architecture/windows.md) | Windows nodes over SSH |
 | [packaging.md](architecture/packaging.md) | `.deb`, `.rpm`, versions, other distributions |

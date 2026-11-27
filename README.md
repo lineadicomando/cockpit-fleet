@@ -66,7 +66,7 @@ the security model in [docs/security.md](docs/security.md).
 
 - Controller: Debian 13, Fedora 44 or AlmaLinux 10, with Cockpit ≥ 337,
   `ansible-core` ≥ 2.16, systemd ≥ 257, Python ≥ 3.12
-- Development machine: Node.js ≥ 22, npm, Make, Python ≥ 3.12, podman (to build the packages)
+- Development machine: Node.js ≥ 22.6, npm, Make, Python ≥ 3.12, podman (to build the packages)
 
 ## Build and install
 
@@ -82,11 +82,8 @@ make rpm                                    # builds rpm/cockpit-fleet-<version>
 sudo dnf install ./rpm/cockpit-fleet-*.fc44.noarch.rpm  # on Fedora; .el10 on AlmaLinux
 ```
 
-The package creates the `cockpit-fleet` account and three role groups:
-`cockpit-fleet-admin`, `cockpit-fleet-operator`, `cockpit-fleet-viewer`; and
-`cockpit-fleet-approver`, whose members approve the runs of the templates that
-need it, whatever their role. What each may do, and what to set up first, is
-in [docs/install.md](docs/install.md).
+Access comes from the groups `cockpit-fleet-*` the package creates: what
+each may do, and what to set up first, is in [docs/install.md](docs/install.md).
 
 ## Development
 

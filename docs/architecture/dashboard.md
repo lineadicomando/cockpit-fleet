@@ -27,9 +27,8 @@ the browser is, from `tz_offset`):
   problem; it ends at the next hard ok. The hard state is the one each
   change kept (`hard_state`, schema 32): an unknown suppressed because the
   host could not be reached is no problem (rows of before take the state).
-  The mean time to recover is over
-  the problems that ended in the window, timed from when they began, before
-  the window if need be;
+  The mean time to recover is over the problems that ended in the window,
+  timed from when they began, before the window if need be;
 - updates the hosts lack (security ones apart) and how many hosts have
   been asked, compliance as `cmdb.list` judges it (the worst hard state of
   the compliance checks of a host), the next five enabled schedules and
@@ -39,19 +38,16 @@ the browser is, from `tz_offset`):
   waiting.
 
 **Why the hosts that fail most come from failed runs alone.** A run keeps
-its outcome per host as JSON in `runs.stats`. Reading it for every run of
-30 days, at 500 hosts and a run every 15 minutes, took 0.7 s in Python and
-1.2 s with SQLite's `json_each`; a run that succeeded has no host that
-failed, so only the runs that failed or erred are read. The figure is
-then how many runs a host failed in, not out of how many.
+its outcome per host as JSON in `runs.stats`; reading it for every run of
+30 days took 0.7 s at 500 hosts. A run that succeeded has no host that
+failed, so only the runs that failed or erred are read: the figure is how
+many runs a host failed in, not out of how many.
 
-**Measured** on the development host (16 November), 500 hosts with 10
-checks each, 200 000 changes of state over 60 days (every check changing
-about every day and a half, far more than a fleet does), 8 640 runs in 30
-days, a third of them with the outcome of 500 hosts, a tenth failed: the
-whole answer in about 135 ms for 14 days and 245 ms for 30. Runs take 33
-and 70 ms, the changes of state 100 and 170 ms (read as tuples, not
-`sqlite3.Row`: a third of the time). Everything else stays under 2 ms.
+**Cost.** At 500 hosts with 10 checks each, 200 000 changes of state over
+60 days and 8 640 runs in 30 days, the whole answer takes about 135 ms
+for 14 days and 245 ms for 30, mostly the changes of state (read as
+tuples, not `sqlite3.Row`: a third of the time). The breakdown:
+[history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/dashboard.md).
 
 **The page** (`OverviewPage.tsx`): a row of figures (hosts, open problems,
 successful runs, the queue, security updates), each leading to its
@@ -65,9 +61,10 @@ are those of the states and outcomes elsewhere (PatternFly's status
 tokens); the bars of each chart have a table for screen readers beside
 them. Their text (axes, legends, the total in the ring) is drawn in the
 colours of the page's text (`chartText.tsx`, also used by the charts of
-a host): the charts' own theme draws a grey the dark theme hides. The charts (`OverviewCharts.tsx`) are in the chunk of those of a host
+a host): the charts' own theme draws a grey the dark theme hides. The
+charts (`OverviewCharts.tsx`) are in the chunk of those of a host
 (`charts.tsx`, see [time series](time-series.md)): the figures and lists
-show before it loads. How the answer becomes figures is
-in `src/lib/overview.ts`, tested apart from the page.
+show before it loads. How the answer becomes figures is in
+`src/lib/overview.ts`, tested apart from the page.
 
 At a terminal, `fleet overview get` prints the same answer.

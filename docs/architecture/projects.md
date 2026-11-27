@@ -6,7 +6,7 @@ in [inventories.md](inventories.md); the page of the files, the editor and
 syntax checks in [files.md](files.md); how a run uses them in
 [Jobs](jobs.md).
 
-**Git projects.** A sync job makes a fresh shallow fetch of one reference into
+**Git projects.** `project.sync` (admin) queues a sync job, which makes a fresh shallow fetch of one reference into
 its own directory and drops `.git`; the result replaces the project's tree
 only if the fetch succeeded. Hooks are disabled, submodules are not followed,
 and `GIT_ALLOW_PROTOCOL` leaves only https and ssh. A token is handed to git by
@@ -14,6 +14,14 @@ an askpass helper that reads it from the credentials directory, so it is in
 neither argv nor the environment. The git commands are quiet, so the job
 ends by writing what it fetched (the reference, the revision, the date and
 the subject of the commit): the output of a sync that succeeded is not empty.
+
+**Local projects.** A directory of the controller, under one of `[projects]
+local_roots` (none by default) and not under a directory the units cannot
+see (`/home`, `/root`, `/tmp`, `/var/tmp`, `/run/user`:
+`jobs.HIDDEN_FROM_UNITS`), copied for each run (see [Jobs](jobs.md)). It is
+not ours to write, and nobody tells the backend when it changes.
+`project.files` (admin) lists the YAML and INI files and the directories of
+a project of any kind, to choose a playbook or an inventory from.
 
 **Projects written in the interface.** A third kind of project, `managed`,
 has no source elsewhere: its files are written in the "Files" page by
@@ -44,10 +52,9 @@ file: one that someone else changed meanwhile is refused instead of
 overwritten. A list of changes may also quote the revision it was made on,
 and is refused if the project moved on since. The content is not copied
 into the audit record, the paths are (`operations[].content` and
-`operations[].data` are redacted inside the list). Files are up to 1 MB:
-text is edited, a file that is not UTF-8 (an installer a playbook copies to
-nodes) is uploaded in base64 and shown as binary, never edited. The same
-page shows the files of the other kinds of project, read-only.
+`operations[].data` are redacted inside the list). What else the page of
+the files does (restore, download, import, the limits of a file) is in
+[files.md](files.md).
 
 The changes of a list are made one after the other in the tree; each is
 checked before it touches anything, and when one fails after others were
@@ -65,34 +72,11 @@ it, as it ignores every name that starts with a dot in an inventory
 directory and among variables. An archive imported keeps its empty
 directories the same way.
 
-`file.restore` puts a file or a directory back as it was at a revision, as
-a new commit, exactly (files added since are removed). Only a revision in
-the history of `main` is taken: a push that was refused leaves its objects
-in the repository, links among them, and they must not reach the tree.
-`file.download` gives a file in base64, or a directory as a gzipped tar
-built by `fleetctl`, opening each directory from the one that holds it and
-leaving links out, for any kind of project; like `file.bundle`, it is in
-the audit trail, as a copy of the files.
-
-`file.import` brings an archive into a managed project or inventory, into
-a directory of it or at its top, as one commit of the caller: it travels
-like an upload (base64 on stdin, within `[projects] max_upload_mb`) and is
-unpacked by the same `unpack` job, in the sandbox, with the same rules and
-the same single top directory left out. What the job leaves is then read
-by `fleetctl` from the run's directory one directory from another,
-following no link, and taken only if every entry is a regular file or a
-directory, of at most 1 MB, with a path the editor takes, 5000 files at
-most: a link, which an uploaded project may keep inside itself, fails the
-import here, since the editor never writes one. The files are added, and
-replace those of the same path; nothing else of the tree goes. What a
-write does follows: syntax checks, collections, inventories read again.
-
 An inventory that is a file of a project is read again when a change in
 the interface or a push touches what it reads: its own file or directory,
 the directory it is in (its `group_vars` and `host_vars`), or a directory
 it is in, moved or deleted. A fetch or an upload reads again every
-inventory of the project. Before, the hosts were those of the last reading
-until someone asked, or the hourly reading for checks.
+inventory of the project.
 
 **Uploaded projects.** A fourth kind of project, `archive`, gets its files
 from a tar (plain, gzip, bzip2 or xz) or a zip chosen in the browser. They are
@@ -108,8 +92,8 @@ reconcile        checkout/ replaces projects/<id>/tree; revision = SHA-256 of th
 ```
 
 The archive travels like every other parameter, so there is still one way
-into the backend. The browser sends the JSON in pieces of 256 kB on the same
-standard input, and `fleetctl` holds it in memory whole: that is what bounds
+into the backend. The browser sends the JSON in pieces of at most 64 KiB (`frames()`
+of `fleet.ts`) on the same standard input, and `fleetctl` holds it in memory whole: that is what bounds
 the size, 20 MB by default (`projects.max_upload_mb`, at most 50). `fleetctl`
 does nothing with the archive but count and digest its bytes; the format is
 read from the content, in the sandbox, never from the name.
@@ -132,11 +116,9 @@ it had, and shows the reason. A single directory that holds everything else,
 as `project-1.0/` in most archives, is not kept: its content is the project.
 The revision is the digest `fleetctl` took of what it received, not something
 the job reports; and what the job leaves is taken as the tree only if it is a
-directory, not a link (the same now holds for a git fetch).
-
-Measured on the test controller, from the browser through Cockpit: an archive
-of 19 MB is answered in 1.7 s and unpacked in under a second; 600 MB of zeros
-in a gzip of 600 kB are refused at the limit.
+directory, not a link, as for a git fetch. An archive of 19 MB is answered
+in 1.7 s and unpacked in under a second; 600 MB of zeros in a gzip of 600
+kB are refused at the limit.
 
 **Collections from Galaxy.** A project of any kind may list the collections
 it needs in a requirements file: the first one found among
@@ -182,8 +164,7 @@ lists are not used (the allowlist drops them): public sources only, for now.
 Downloads and clones go to the run's directory on disk, not to its runtime
 directory, which is memory.
 
-Checked on Debian 13 with ansible-core 2.19.11 (`galaxy.sh`): ansible-galaxy
-skips what the controller or the project already has, so with Debian's
+ansible-galaxy skips what the controller or the project already has, so with Debian's
 `ansible` package a requirement for `ansible.windows` installs nothing, and an
 installation that installs nothing is still one. A collection of 1000 files
 from a public git repository is installed in 7 to 17 s and takes 5.7 MB.

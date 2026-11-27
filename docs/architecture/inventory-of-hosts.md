@@ -3,7 +3,7 @@
 What each host is made of, the updates it lacks and whether it drifted from
 what a playbook describes: three kinds of check, so that they inherit
 planning, sharding, the sandbox, states, notifications, acknowledgement and
-maintenance windows, decided with the user on 16 October.
+maintenance windows (`decisions.md`, "CMDB, updates, drift").
 
 ```
 cmdb      checks.py / win_checks.ps1 ── hardware, packages, services ──▶ cmdb_hosts, cmdb_packages, cmdb_services
@@ -29,7 +29,7 @@ so), dnf by `check-update` and `updateinfo list --security`, zypper by its XML
 output and the security patches; the metadata the node has is used, and
 `refresh` (which needs `become`) updates it first. Windows Update is searched
 through its COM interface without downloading anything, from the SSH logon
-with a key, with no `become` (`windows.sh`, Windows 11, 16 October). The node
+with a key, with no `become` (`windows.sh`). The node
 reports the metrics `updates` and `security_updates`; the default threshold
 is a warning from one security update.
 
@@ -63,25 +63,21 @@ drift may hold the content of files: `drift.get` is for operators and
 administrators, as the output of runs.
 
 **The interface.** "Assets" has the hosts with their system, hardware,
-updates and compliance, filtered by any word, grouped by inventory and counted by system, exported
-as CSV (a cell that would start a formula is opened by an apostrophe) or
-JSON, and a search of a package across hosts. An export is made in the
-browser as a `blob:` link (`saveBlob` in `src/lib/cmdb.ts`, also behind the
-other files the interface saves), clicked in the document of Cockpit's
-shell rather than in the page's own: Firefox takes the click for a
-navigation of the page's iframe and checks it against the `frame-src` of
-the shell's policy, `'self'`, which the manifest of a package does not
-reach (seen with Firefox 160 on Cockpit 369 and 370). The page of a host has what it
-is made of: hardware, packages, services, updates, changes and, for an
-operator, drift. From its updates an operator launches a template of the
-same inventory, narrowed to that host, through the usual launch (survey and
-dry run included): which template applies updates is the user's, the
-plugin installs nothing by itself.
+updates and compliance, filtered by any word, grouped by inventory and
+counted by system, exported as CSV (a cell that would start a formula is
+opened by an apostrophe) or JSON, and a search of a package across hosts.
+An export is made in the browser as a `blob:` link (`saveBlob` in
+`src/lib/cmdb.ts`, also behind the other files the interface saves),
+clicked in the document of Cockpit's shell: Firefox checks a click in the
+page's own iframe against the shell's `frame-src 'self'`, which a
+package's manifest does not reach (Firefox 160, Cockpit 369 and 370). The
+page of a host has what it is made of: hardware, packages, services,
+updates, changes and, for an operator, drift. From its updates an
+operator launches a template of the same inventory, narrowed to that host,
+through the usual launch (survey and dry run included): which template
+applies updates is the user's, the plugin installs nothing by itself.
 
-Checked in containers of Debian 13, Fedora 44 and AlmaLinux 10 (`cmdb.sh`,
-on 16 October): a Debian node's packages
-from dpkg, a package removed by hand recorded as a change, a managed file
-changed by hand as drift at the next cycle, its diff for an operator and not
-for a viewer. The module was also run by hand in containers of Fedora 44
-(dnf5), AlmaLinux 10 (dnf4, security updates told apart) and openSUSE Leap
-15.6 (zypper, which had no update to find).
+Tests: `cmdb.sh` (packages, a package removed by hand, drift from a
+managed file changed by hand, `drift.get` refused to a viewer),
+`windows.sh` (the CMDB and Windows Update). What was tried by hand:
+[history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/inventory-of-hosts.md).

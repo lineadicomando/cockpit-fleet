@@ -56,19 +56,22 @@ target.close()
 '
 ```
 
-Then copy that file, the projects, the inventories and the configuration
-where backups go:
+Then copy that file, the projects, the inventories, the documents and the
+configuration where backups go:
 
 ```sh
 tar -C / -czf /root/cockpit-fleet-$(date +%F).tar.gz \
     var/backups/cockpit-fleet/fleet.db var/lib/cockpit-fleet/projects \
-    var/lib/cockpit-fleet/inventories etc/cockpit-fleet/config.toml \
+    var/lib/cockpit-fleet/inventories var/lib/cockpit-fleet/documents \
+    var/lib/cockpit-fleet/documents.git etc/cockpit-fleet/config.toml \
     $(test -d /etc/cockpit-fleet/starters && echo etc/cockpit-fleet/starters) \
     $(test -f /etc/cockpit-fleet/assistant.md && echo etc/cockpit-fleet/assistant.md) \
     $(test -d /etc/cockpit-fleet/skills && echo etc/cockpit-fleet/skills)
 ```
 
-Add `etc/cockpit-fleet/secrets` for a restore on this same machine, and
+Add `etc/cockpit-fleet/secrets` for a restore on this same machine,
+`var/lib/cockpit-fleet/store` for files that cannot be downloaded again
+(the database says what each is, so copy the two together), and
 `var/lib/cockpit-fleet/runs` to keep the output of past runs.
 
 ## Restoring
@@ -90,8 +93,7 @@ Add `etc/cockpit-fleet/secrets` for a restore on this same machine, and
    rm -f /var/lib/cockpit-fleet/fleet.db-wal /var/lib/cockpit-fleet/fleet.db-shm
    install -o cockpit-fleet -g cockpit-fleet -m 0600 \
        /var/backups/cockpit-fleet/fleet.db /var/lib/cockpit-fleet/fleet.db
-   chown -R cockpit-fleet:cockpit-fleet /var/lib/cockpit-fleet/projects \
-       /var/lib/cockpit-fleet/inventories
+   chown -R cockpit-fleet:cockpit-fleet /var/lib/cockpit-fleet
    ```
 
    The secrets, if restored on the same machine, stay root's:

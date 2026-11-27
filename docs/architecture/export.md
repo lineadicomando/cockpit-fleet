@@ -8,13 +8,15 @@ each other by name, since identifiers differ between two installations. It
 holds no secret: a credential is its name, its kind, its user name and its
 vault identifier, and its secrets are entered again where it is imported;
 a set of variables carries the names of its secret variables, whose values
-are entered again too (`fleet secret --varset`).
+are entered again too (`fleet secret --varset`), and a channel its settings
+without its secret (`fleet secret --channel`).
 Neither does it hold the files of a project that has no source elsewhere
 (written in the interface, uploaded): such a project arrives empty. The
 files of an inventory written in the interface (`files`: path, and content,
 or data in base64 for one that is not text, with `content` its main file for
 an import made before inventories were trees) and the variables of a
-template are in it as they are.
+template are in it as they are. Not in it: maintenance windows, the store,
+documents, runs, the audit trail, the profiles of the assistant.
 
 `config.import` creates what the document lists and is not there yet, by
 name; what exists is left as it is, so importing twice changes nothing. Each

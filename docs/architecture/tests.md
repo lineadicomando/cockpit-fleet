@@ -21,39 +21,40 @@ each test: `node:test` does not call it.
 
 Integration scripts run as root on a controller with the package installed
 (a container of `make ct-test`, a VM of the lab, or another machine: see
-below). Those that wipe delete the database, runs and projects, and need
+below). The header of each says in detail what it shows and what it
+takes. Those that wipe delete the database, runs and projects, and need
 `IT_WIPE=yes`; `IT_SSH_USER` and `IT_SSH_PASSWORD` name an account of the
 controller that accepts password logins over SSH.
 
 | Script | What it shows (variables it takes, time) | Wipes |
 |---|---|---|
-| `test/integration/privileges.sh` | what the service account can reach |  |
-| `test/integration/sandbox.sh` | run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD) |  |
-| `test/integration/roles.sh` | roles, audit, sudoers (creates and removes test accounts) |  |
-| `test/integration/negative.sh` | hostile input to every command as each role, the caller's environment, secrets typed in clear | yes |
-| `test/integration/runs.sh` | a whole run through fleetctl | yes |
-| `test/integration/files.sh` | a project written in the interface, syntax checks, starters | yes |
-| `test/integration/upload.sh` | a project uploaded as an archive, hostile archives | yes |
-| `test/integration/store.sh` | the store: put and read through fleetctl, roles, a run's farm taken in, the tick's digests, many moved and deleted at once, copies (one a job), an archive, downloads from a container node, sources checked again, refused addresses, `sftp` over SSH through `fleet store sftp` | yes |
-| `test/integration/documents.sh` | the documents: the tree and its repository made by the service with git as installed, roles, a text written, replaced with its digest, moved, deleted and restored as commits of the caller, an attachment put and read back out of the history, the rendered page, a text put there by hand, `fleet doc put` and `get`, a run that does not see them | yes |
-| `test/integration/galaxy.sh` | collections from a requirements file (IT_GALAXY_NET=yes for git) | yes |
-| `test/integration/adhoc.sh` | ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD) | yes |
-| `test/integration/netscan.sh` | the scan of a subnet: on a dummy interface by default, nothing leaving the machine (IT_NETSCAN_SUBNET: a subnet of the lab's instead, without the inventories), ICMP from the sandbox, refusals, a scan canceled; an inventory made from it and MAC addresses written into another, read by Ansible; an inventory probed; `net_probe` as an ad-hoc command on the controller | yes |
-| `test/integration/inventories.sh` | inventory plugins, directories of sources, scripts off and on | yes |
-| `test/integration/mcp.sh` | fleet-mcp: tools by role, ceiling, profiles, autonomy, an agent's ad-hoc confirmed, via in the audit, forced-command key | yes |
-| `test/integration/chat.sh` | fleet-chat with fake-agent.py: start, limit on sessions, tools by role | yes |
-| `test/integration/cli.sh` | fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin | yes |
-| `test/integration/workflows.sh` | workflows: an approval at a step, a confirmation by who launched it, set_stats passed on, resume, cancel | yes |
-| `test/integration/schedules.sh` | the timer, ten schedules on one minute, missed times, overlap (about 5 min) | yes |
-| `test/integration/notify.sh` | notifications to stand-ins of the four channels, a retry by the tick (about 3 min) | yes |
-| `test/integration/checks.sh` | checks on container nodes (podman), a playbook of the user, a full disk told about, a cycle falling behind (about 10 min) | yes |
-| `test/integration/cmdb.sh` | the CMDB, updates and drift of container nodes (podman), changes by hand (about 4 min) | yes |
-| `test/integration/measure-events.sh` | callback cost on N simulated hosts |  |
-| `test/integration/load.sh` | real check cycles (podman) on IT_LOAD_HOSTS aliases and IT_LOAD_SSH nodes for IT_LOAD_MINUTES, the interface timed | yes |
-| `test/integration/multihost.sh` | five container nodes (podman): vaults, passphrase key, key changes | yes |
-| `test/integration/windows.sh` | Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY) | yes |
-| `test/integration/nodes.sh` | the container nodes themselves (podman): `up N KEYS`, `recreate I KEYS`, `down` |  |
-| `test/integration/lifecycle.sh` | upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed), through `make ct-lifecycle` |  |
+| `privileges.sh` | what the service account can reach |  |
+| `sandbox.sh` | run sandbox, secrets, SSH (IT_SSH_USER, IT_SSH_PASSWORD) |  |
+| `roles.sh` | roles, audit, sudoers (creates and removes test accounts) |  |
+| `negative.sh` | hostile input to every command as each role (`negative-inputs.py`), the caller's environment, secrets typed in clear | yes |
+| `runs.sh` | a whole run through fleetctl (IT_SSH_USER, IT_SSH_PASSWORD; IT_GIT_URL, IT_GIT_REF for a git project) | yes |
+| `files.sh` | a project written in the interface, syntax checks, starters | yes |
+| `upload.sh` | a project uploaded as an archive, hostile archives | yes |
+| `store.sh` | the store: put, read, a run's files taken in, downloads, copies, archives, `sftp` through `fleet store sftp` | yes |
+| `documents.sh` | the documents: repository, roles, writes as commits, attachments, rendering, `fleet doc`, hidden from runs | yes |
+| `galaxy.sh` | collections from a requirements file (IT_GALAXY_NET=yes for git) | yes |
+| `adhoc.sh` | ad-hoc commands, the allowlist of modules (IT_SSH_USER, IT_SSH_PASSWORD) | yes |
+| `netscan.sh` | the scan of a subnet on a dummy interface (IT_NETSCAN_SUBNET: a lab's subnet instead, without the inventories), inventories from it, a probe, `net_probe` | yes |
+| `inventories.sh` | inventory plugins, directories of sources, scripts off and on | yes |
+| `mcp.sh` | fleet-mcp: tools by role, ceiling, profiles, autonomy, an agent's ad-hoc confirmed, via in the audit, forced-command key | yes |
+| `chat.sh` | fleet-chat with `fake-agent.py`: start, limit on sessions, tools by role; `fleet assistant` with `fake-terminal.py` | yes |
+| `cli.sh` | fleet at a terminal: setup, launch, exit statuses, roles, secrets on stdin | yes |
+| `workflows.sh` | workflows: an approval at a step, a confirmation by who launched it, set_stats passed on, resume, cancel | yes |
+| `schedules.sh` | the timer, ten schedules on one minute, missed times, overlap (about 5 min) | yes |
+| `notify.sh` | notifications to stand-ins of the four channels (`notify-sinks.py`), a retry by the tick (about 3 min) | yes |
+| `checks.sh` | checks on container nodes (podman), a playbook of the user, a full disk told about, a cycle falling behind (IT_KEEP; about 10 min) | yes |
+| `cmdb.sh` | the CMDB, updates and drift of container nodes (podman), changes by hand (IT_KEEP; about 6 min) | yes |
+| `measure-events.sh` | callback cost on HOSTS simulated hosts (arguments `[HOSTS] [FORKS]`) |  |
+| `load.sh` | real check cycles (podman) on many aliases and a few SSH nodes, the interface timed (`IT_LOAD_*`, IT_KEEP; `load-sample.py`) | yes |
+| `multihost.sh` | IT_NODES container nodes (podman; 5): vaults, passphrase key, key changes | yes |
+| `windows.sh` | Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY, IT_KEEP) | yes |
+| `nodes.sh` | the container nodes themselves (podman): `up N KEYS`, `recreate I KEYS`, `down` |  |
+| `lifecycle.sh` | upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed), through `make ct-lifecycle` |  |
 
 ## Running them
 
@@ -88,17 +89,15 @@ secret `it-win-key` that `windows.sh` expects.
 
 The scripts that go through `fleetctl` share helpers in `lib.sh` (`admin`,
 `get`, `expect_run`, `wipe`, `prepare`); a failed `expect_run` prints the
-end of the run's output. With `IT_KEEP=yes`, `windows.sh` leaves its data
-in place so the same run can be launched from the interface; so does
-`checks.sh`, whose stand-in for the webhook then stays up (`pkill -f
-notify-sinks.py` as root).
+end of the run's output. With `IT_KEEP=yes`, `windows.sh`, `checks.sh`,
+`cmdb.sh` and `load.sh` leave their data in place, so that the same run
+can be looked at in the interface; the webhook's stand-in of `checks.sh`
+then stays up (`pkill -f notify-sinks.py` as root).
 
-Installing on a test controller: `apt-get install ./cockpit-fleet_*.deb`,
-`dnf install ./cockpit-fleet-*.noarch.rpm` (`dnf reinstall` for the same
-version, which `install` skips). dpkg stops to ask when
-`/etc/cockpit-fleet/config.toml` was changed there and in the package too:
-put the packaged file back first, or install with `--force-confold`. After
-a deploy a Cockpit tab runs the old bundle until reloaded, and a copy in
+Installing by hand: [install.md](../install.md); `dnf reinstall` for the
+same version. When `config.toml` was changed on both sides dpkg stops to
+ask: put the packaged file back first, or use `--force-confold`. After a
+deploy a Cockpit tab runs the old bundle until reloaded, and a copy in
 `~/.local/share/cockpit` (left by `make devel-install`) shadows the
 package's.
 
@@ -122,44 +121,25 @@ What a container leaves to machines: SELinux, which belongs to the host's
 kernel (a container reports it disabled); the kernel itself, which is the
 host's; the interface in a browser; Windows nodes. Its nodes, containers in
 the container, read the host's `/proc/meminfo` and `/proc/stat`, which is
-why `checks.sh` gives the memory and processor checks
-no thresholds: the state it expects says that the module answered, whatever
-the load of the host.
+why `checks.sh` gives the memory and processor checks no thresholds: the
+state it expects says that the module answered, whatever the load of the
+host.
 
-Known failure: since 1 November `cmdb.sh` fails on Fedora in a container
-(podman's netavark: "invalid namespace path" when it starts its nodes); it
-passes on the other two and on machines. Run the `ct-test` of two
-distributions one after the other, not together.
+Known failures, as of 27 November: `cmdb.sh` fails on Fedora in a
+container (netavark: "invalid namespace path"); on AlmaLinux in a
+container on a Fedora 44 host, podman often cannot build the image of the
+nodes ("mounting an overlay over build context directory ... invalid
+argument"), and every script with nodes fails (`cmdb`, `multihost`,
+`checks`, `store`): show those on the VM `alma10`. Both pass on machines
+and on the other distributions. Run the `ct-test` of two distributions
+one after the other, not together.
 
-Intermittent failure: once on 26 November `checks.sh` failed on AlmaLinux
-in a container on a Fedora 44 host: podman in the container could not build
-the image of its nodes ("mounting an overlay over build context directory
-... invalid argument"), so no node existed and every check was unknown. It
-passed there later the same day, and on the VM `alma10`: run it again. On
-27 November it failed so in two runs in a row, for every script with nodes
-(`cmdb`, `multihost`, `checks`, `store`), while Debian passed them: on
-AlmaLinux, scripts with nodes are shown on the VM.
-
-The containers run in UTC, which the test machines did not, and that found a
-bug: `systemd-analyze calendar` prints a time "(in UTC)" only when the local
-zone has an offset, and the schedules read only that line, so on a
-controller in UTC no schedule was ever due.
-
-The machines are VMs dedicated to the project and built from scratch by
-`test/vm/` (`lab.sh`, skill `vm-lab`): a controller of each distribution and
-a Windows 11 node, on a libvirt network of their own, each address reserved
-for the VM's MAC. A controller starts from the distribution's cloud image,
-verified against its checksum file, with cloud-init only for the name, the
-time zone and the admin account; the packages come from a script run over
-SSH, where its errors show. The controllers run in Europe/Rome, not UTC, so
-that between containers and machines both cases are covered. The Windows
-node is installed by Windows Setup with an answer file, on a SATA disk and
-an e1000e NIC, which need no driver from outside the ISO; its first logon
-installs OpenSSH Server. Each VM has one snapshot, `baseline`, internal to
-its disk and without the package, so that a test starts from a known
-system with the package of the commit under test (`lab.sh deploy`). What
-identifies the VMs is tracked (`test/vm/lab.conf`); what belongs to one
-workstation, the password and the path of the Windows ISO, is in `.env`.
+The machines are the lab's VMs, built from scratch by `test/vm/`
+(`lab.sh`, skill `vm-lab`, which says how): a controller of each
+distribution, in Europe/Rome so that containers (UTC) and machines cover
+both cases, and a Windows 11 node. A test starts from their snapshot
+`baseline`, without the package, and installs that of the commit under
+test (`lab.sh deploy`).
 
 ## Negative tests
 
@@ -185,12 +165,8 @@ run. Secrets are planted where they live (the store, the channels', the
 waiting answers, a run's `creds/`), every command is called by each role
 allowed to, and none answers with one, nor does the journal or any file of
 the database hold it. `fleet-unit` and `fleet-secret` are loaded from
-`backend/libexec` and given every form of their arguments. They found that
-nesting deep enough to stop the JSON parser, and objects of the wrong type
-in the links of a workflow or in the host keys of an import, gave an
-internal error; that a secret typed in clear was refused but recorded with
-the call; that `hostkey.add` took a pattern that trusted its key for every
-host; and that `SUDO_UID` was read by `int()`. `negative.sh` gives every
+`backend/libexec` and given every form of their arguments (what they
+found: [history/tests.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/tests.md)). `negative.sh` gives every
 command, through sudo as each role, an empty object, one hostile value per
 parameter and input that is not an object, and checks what the caller's
 environment and working directory cannot bring into fleetctl.

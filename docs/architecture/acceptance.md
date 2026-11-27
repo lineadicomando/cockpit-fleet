@@ -25,15 +25,15 @@ What each closed phase had to show, and how it was shown.
   tick (`notify.sh`); then real Telegram, mail over TLS and Matrix, the page
   in the browser in Italian for the three roles, no token in the database
   or the journal.
-- **6, checks** (16 October): see [Checks](checks.md): the same disk metrics from
+- **6, checks** (16 October; [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/checks.md)): the same disk metrics from
   Debian and Windows, a full disk told about within two intervals.
-- **7, inventory of hosts** (16 October): see [The inventory of hosts](inventory-of-hosts.md):
+- **7, inventory of hosts** (16 October; [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/inventory-of-hosts.md)):
   `cmdb.sh` on the machines of the three distributions, drift from a file
   changed by hand at the next cycle, the CMDB of Windows by `windows.sh`.
 - **8, time series and scale** (23 October): 500 hosts with ten checks
   each every 10 minutes ran 24 hours on a Debian machine of 2 vCPUs and
   4 GB with no backlog and every call of the interface under 0.4 s at
-  p95 (`load.sh`; see [Checks](checks.md), "At scale"), after runs were given a
+  p95 (`load.sh`; [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/checks.md)), after runs were given a
   slice of their own; then every script on the machines of the three
   distributions, and the health section and the charts in a browser on
   Debian with the 500 hosts.

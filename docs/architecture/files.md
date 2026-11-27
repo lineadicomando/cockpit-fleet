@@ -27,8 +27,37 @@ The check keeps nothing of what it listed, so the inventory's hosts and
 its `parse_error` are those of the last reading. A file of the tree that is
 no source of the inventory (its path names another file) is not checked.
 
-Checked on Debian 13 with ansible-core 2.19.11 and ansible-lint 25.2.1, which
-works inside the unit as it is.
+ansible-lint works inside the unit as it is.
+
+**Files of a managed project or inventory.** Up to 1 MB each: text is
+edited, a file that is not UTF-8 (an installer a playbook copies to nodes)
+is uploaded in base64 and shown as binary, never edited. The same page
+shows the files of the other kinds of project, read-only. How a change
+becomes a commit is in [projects.md](projects.md).
+
+`file.diff` gives what one commit did, as a unified diff. `file.restore`
+puts a file or a directory back as it was at a revision, as a new commit,
+exactly (files added since are removed). Only a revision in the history of
+`main` is taken: a push that was refused leaves its objects in the
+repository, links among them, and they must not reach the tree.
+`file.download` gives a file in base64, or a directory as a gzipped tar
+built by `fleetctl`, opening each directory from the one that holds it and
+leaving links out, for any kind of project; like `file.bundle`, it is in
+the audit trail, as a copy of the files.
+
+`file.import` brings an archive into a managed project or inventory, into
+a directory of it or at its top, as one commit of the caller: it travels
+like an upload (base64 on stdin, within `[projects] max_upload_mb`) and is
+unpacked by the same `unpack` job, in the sandbox, with the same rules and
+the same single top directory left out. What the job leaves is then read
+by `fleetctl` from the run's directory one directory from another,
+following no link, and taken only if every entry is a regular file or a
+directory, of at most 1 MB, with a path the editor takes, 5000 files at
+most: a link, which an uploaded project may keep inside itself, fails the
+import here, since the editor never writes one. The files are added, and
+replace those of the same path; nothing else of the tree goes. What a
+write does follows: syntax checks, collections, inventories read again.
+All of these are for administrators.
 
 **The page of the files** shows a tree, a project's or an inventory's, and
 the files open in tabs beside it. The tree is not PatternFly's `TreeView`,

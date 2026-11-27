@@ -14,9 +14,9 @@ BROWSER_LAB=deb13 test/browser/browser.sh setup|test NAME   # on a VM of the lab
 
 | Scenario | Setup | Where | Shows |
 |---|---|---|---|
-| `checks-cycles` | `checks` | container | phase 22: overview, checks, "Check now", a cycle's page, recent cycles, cycles among runs |
-| `network-scan` | `network` | `deb13`, `win11` up | phase 19: a part of the lab's subnet scanned, MAC written into an inventory, its hosts probed |
-| `labs-launch` | `labs` | `deb13`, `win11` up | phase 21: one template on two labs, Windows Update to its end, Wake-on-LAN, a schedule, the workflow |
+| `checks-cycles` | `checks` | container | overview, checks, "Check now", a cycle's page, recent cycles, cycles among runs |
+| `network-scan` | `network` | `deb13`, `win11` up | a part of the lab's subnet scanned, MAC written into an inventory, its hosts probed |
+| `labs-launch` | `labs` | `deb13`, `win11` up | one template on two labs, Windows Update to its end, Wake-on-LAN, a schedule, the workflow |
 
 `labs-launch` runs Windows Update on `win11` for real (about 1 h 15 min):
 take a snapshot of it first and go back to it before running it again. Its
@@ -37,7 +37,7 @@ VM (`BROWSER_LAB`, the package deployed): the setup is copied there and
 run through `lab.sh root`; `tester` is made by the first setup with a
 random password kept in `$XDG_RUNTIME_DIR/cockpit-fleet-browser/`, never
 on a command line; the browser goes through `lab.sh tunnel`, opened for
-the time it takes.
+the time it takes, on `127.0.0.1:9091` (`BROWSER_PORT`).
 
 `browser.sh with COMMAND...` runs another tool against the same
 controller: `BROWSER_URL`, `BROWSER_USER` and `BROWSER_PASSWORD` in its

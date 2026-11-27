@@ -1,10 +1,11 @@
 # The chat
 
-A page of Fleet, "Assistant" in its tabs, where a user talks to an assistant that works on the
-controller through Fleet itself: it reads what that user may read, launches
-what that user may launch, within the profile the user chose for the
-session, and asks before the actions that profile does not let through.
-How it is built is in [architecture/chat.md](architecture/chat.md); this page is for the administrator who turns it on.
+A page of Fleet, "Assistant" in its tabs, where a user talks to an
+assistant that works on the controller through Fleet itself: it reads
+what that user may read, launches what that user may launch, within the
+profile the user chose for the session, and asks before the actions that
+profile does not let through. This page is for the administrator who
+turns it on; how it is built: [architecture/chat.md](architecture/chat.md).
 
 ## What leaves the controller
 
@@ -67,7 +68,7 @@ nothing: this does, when an administrator runs it.
   `nodejs.org`, checked against the checksum published with the release.
 - **The adapter**, `@agentclientprotocol/claude-agent-acp` 0.89.1, from
   `registry.npmjs.org` with `npm ci`: a lockfile in the package names each of
-  its 115 packages with its hash, so nothing else can be installed, and no
+  its 114 packages with its hash, so nothing else can be installed, and no
   install script of a package is run. It brings its own `claude` binary.
 - **Two commands** in `/opt/cockpit-fleet-agent/bin`: `claude-agent-acp`, the
   agent, and `claude`, for the login.
@@ -97,11 +98,19 @@ everything it wrote, add `-e chat_agent_state=absent`. Behind a proxy, add
 A named agent that is not installed shows in the page with this command,
 ready to be copied, and a button that opens the terminal.
 
-Other things `[chat]` takes:
+The keys of `[chat]`, with their defaults (the rest of this page says
+what each does):
 
 ```toml
 [chat]
-#max_sessions = 2       # for all users: a session takes about 360 MB
+#max_sessions = 2            # open at once, all users: one takes about 360 MB
+#profiles = ["observer", "assisted", "diagnostic", "autonomous", "administrator"]
+#default_profile = "assisted"
+#autonomous_runs = 30        # launches per conversation in autonomous
+#autonomous_dry_run = false  # autonomous: templates in check mode only
+#autonomous_writes = 20      # changes to the documents per conversation
+#unattended = false          # allow "Without questions" in administrator
+#[chat.agents.NAME]          # command, label, login, terminal
 ```
 
 An agent is any program that speaks the Agent Client Protocol on its standard
@@ -131,68 +140,44 @@ terminal on the controller, as that user:
 The first time, it asks for a style of text and a way of logging in (an
 account with a subscription, or one billed by use), then gives an address to
 open in a browser and takes the code shown there. The login is made when it
-says "Login successful"; press Enter there, or the first `fleet assistant`
-asks its questions of first use again, and what it shows afterwards is for
-its own use at a terminal: Ctrl+C leaves it. The login is kept in the user's home
-(`~/.claude`). Until it is made the page says so, with this command and a
+says "Login successful"; press Enter there, or the first `fleet
+assistant` asks its questions of first use again; what it shows
+afterwards is for its own use at a terminal: Ctrl+C leaves it. The login
+is kept in the user's home (`~/.claude`). Until it is made the page says so, with this command and a
 button that opens the terminal in a new tab, so that the assistant already
 started stays as it is: once logged in, send the message again.
 
 ## What a user gets
 
-- The role they have in Fleet, lowered to `[mcp] max_role`, `admin` by
-  default: set it to `operator` for an administrator's assistant to be an
-  operator's. The reason to lower it is in `config.toml`: the output of a
-  run is written by the nodes.
-- Within that, what the profile of the assistant allows (`[chat] profiles`,
-  `default_profile`): `observer` reads; `assisted`, the default, also
-  launches and cancels what is defined (templates, workflows, checks,
-  schedules turned on or off); `diagnostic` also runs ad-hoc commands of the
-  modules in `[mcp] adhoc_modules`, which change nothing, without become
-  and with no template (`{{ }}`) in their arguments, and for an
-  administrator of Fleet scans a subnet among those allowed
-  (`[network]`, see [security.md](security.md));
-  `autonomous` is as `assisted`, held by the backend since nobody confirms
-  its calls: at most `[chat] autonomous_runs` launches in a conversation
-  (30 as installed), or as many as the user chooses when starting the
-  session or changing to this profile, and more when the user allows them
-  from the page once they are spent; none on
-  an inventory with a maintenance window open, no acknowledging a problem,
-  no maintenance window opened or closed and no schedule turned on, and with
-  `autonomous_dry_run` dry runs only; `administrator` gets whatever the
-  role allows: ad-hoc commands, changes to templates, inventories and the
-  rest, files, projects, credentials, deletes; it is offered, and allowed,
-  only to administrators of Fleet with `max_role = "admin"`, since for
-  anyone else it would be the powers of their role under a name that
-  promises more. In every profile the assistant also reads, searches and
-  writes the documents (Resources, Documents); in `autonomous` it changes
-  them at most `[chat] autonomous_writes` times in a conversation (20 as
-  installed). All five are enabled
-  as installed, `assisted` the default; list fewer in `profiles` to keep
-  the others from users, who otherwise accept the risks of `diagnostic`,
-  `autonomous` and `administrator` once each before using them. The backend refuses what is outside
-  the profile, and `fleet-mcp` started by hand gets the default one.
-- The user picks the profile when starting a session, among those enabled,
-  and may change it within the conversation ("Change the profile"): the
-  agent starts again in the new one with the same conversation, and what
-  was allowed "always" is asked again.
-  Before the first session in `diagnostic`, `autonomous` or `administrator`
-  the page tells what it may do and its risks (the nodes can steer an
-  assistant through what they write, and in these profiles it does more
-  with it), and the user accepts them, once: the acceptance is in the audit
-  log (`chat.accept`), and until then the backend refuses to start a
-  session in that profile. Enabling a profile in `config.toml` is the
-  administrator's decision; accepting its risks is each user's.
-- What the page asks about follows the profile: in `observer` only a
-  change to the documents; in `assisted` every launch or cancel, with "always"
-  to trust launches for the rest of the conversation; in `diagnostic` the
-  same, and its ad-hoc commands go unasked, while each scan of a subnet is
-  asked; in `autonomous` nothing, the backend holds it instead; in
-  `administrator` every change, and scans, ad-hoc commands, changes to
-  what is defined and files every time, never "always". A change to the
-  documents is asked about, with "always", in every profile but
-  `autonomous`; deleting one is asked every time. These questions are a convenience: the backend decides again,
-  whatever the answer.
+- The role they have in Fleet, lowered to `[mcp] max_role` (`admin`):
+  set it to `operator` for an administrator's assistant to be an
+  operator's, since the output of a run is written by the nodes.
+- Within that, the profile of the session, among `[chat] profiles`
+  (all five as installed; list fewer to keep the others from users).
+  The backend refuses what is outside it; `fleet-mcp` started by hand
+  gets `default_profile`.
+
+  | Profile | May | Asked |
+  |---|---|---|
+  | `observer` | read | changes to the documents |
+  | `assisted` (default) | also launch and cancel what is defined: templates, workflows, checks, schedules on or off | launches and cancels, with "always" for the conversation |
+  | `diagnostic` | also ad-hoc commands of `[mcp] adhoc_modules` (change nothing), without become or `{{ }}` in their arguments; scans of a subnet allowed by `[network]` ([security.md](security.md)), for administrators of Fleet | as `assisted`; those ad-hoc commands unasked, each scan every time |
+  | `autonomous` | as `assisted`, held by the backend: at most `autonomous_runs` launches per conversation (or what the user chose at the start, and more allowed from the page), none on an inventory in a maintenance window, no acknowledging, no maintenance window, no schedule turned on, dry runs only with `autonomous_dry_run`; at most `autonomous_writes` changes to the documents | nothing |
+  | `administrator` | whatever the role allows: ad-hoc commands, changes to templates, inventories and the rest, files, projects, credentials, deletes; only for administrators of Fleet with `max_role = "admin"` (for anyone else, a name that promises more than the role) | launches as `assisted`; scans, ad-hoc commands, changes, files, deletes every time, never "always" |
+
+  Every profile reads, searches and writes the documents (Resources,
+  Documents); a change to them is asked, with "always", but in
+  `autonomous`; deleting one every time, but in `autonomous`. Questions
+  are a convenience: the backend decides again, whatever the answer.
+- The user picks the profile when starting a session and may change it
+  within the conversation ("Change the profile"): the agent starts again
+  with the same conversation, and "always" answers are asked again.
+  Before the first session in `diagnostic`, `autonomous` or
+  `administrator` the page tells what it may do and its risks (the nodes
+  can steer an assistant through what they write), and the user accepts
+  them once, in the audit log (`chat.accept`); until then the backend
+  refuses such a session. Enabling a profile is the administrator's
+  decision; accepting its risks, each user's.
 - "Without questions", in `administrator` only and only where `[chat]
   unattended = true` (off as installed): the switch in the header of the
   session turns every question off, as the mode of Claude Code that
@@ -204,16 +189,15 @@ started stays as it is: once logged in, send the message again.
   a person, and "Stop everything" cancels its runs. Each user accepts its
   risks once (`chat.accept`), and each turning on or off is in the audit
   log (`chat.unattended`). Not at a terminal.
-- Above the message box the page shows what the assistant launched in the
-  conversation. In `autonomous`, how many runs of those it may ("Runs
-  launched in this conversation: 30 of 30"); when they are spent, "Allow
-  30 more" (`[chat] autonomous_runs` more each time) lets it go on, for
-  users with the role operator: the agent is told to stop and say so, and
-  goes on when told. In any profile, while runs it launched have not ended,
-  "Stop everything" stops the answer under way and cancels them, queued,
-  running or waiting for an approval; the steps of a workflow go with it.
-  These, and the runs chosen at the start, are the user's own decisions,
-  recorded in the audit log (`chat.limit_runs`, `chat.grant_runs`,
+- Above the message box the page shows the runs the assistant launched
+  in the conversation and not ended, each a link to its page. In
+  `autonomous`, how many of those it may ("Runs launched in this
+  conversation: 30 of 30"); once spent, the agent stops and says so, and
+  "Allow 30 more" (`autonomous_runs` more each time; role operator) lets
+  it go on. In any profile, "Stop everything" stops the answer and cancels
+  those runs, queued, running or waiting for an approval, workflow steps
+  included. These, and the runs chosen at the start, are the user's
+  decisions, in the audit log (`chat.limit_runs`, `chat.grant_runs`,
   `chat.cancel_runs`); an agent cannot call them.
 - A run that has ended, and a check whose result is not ok (in the checks
   of a host and in Problems), have a button "Assistance": it writes in the
@@ -221,13 +205,11 @@ started stays as it is: once logged in, send the message again.
   is sent by itself. `diagnostic` is suggested for a new session, when it
   is enabled.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
-  adhoc_modules`, does not start until the user confirms it: with "Allow
-  once" when the page asks about it, or afterwards in the list of
-  runs waiting for approval or with `fleet approval approve`; the assistant
-  cannot confirm it, and it expires as approvals do. The page of the
-  assistant shows the runs of the conversation that wait, with what they
-  would run, and lets the user decide there: an answer written in the chat
-  confirms nothing.
+  adhoc_modules` without become, does not start until the user confirms
+  it (unless "Without questions" is on): "Allow once" when the page asks,
+  or later above the message box, in the runs waiting for approval, or
+  `fleet approval approve`. The assistant cannot confirm it, an answer
+  written in the chat confirms nothing, and it expires as approvals do.
 - When runs the assistant launched end after it has answered (a command
   confirmed later, a long playbook), the page tells it in a message marked
   "Fleet", which it answers with how they went: there is no need to write
@@ -339,25 +321,27 @@ terminal = ["/opt/cockpit-fleet-agent/bin/claude", "--mcp-config", "{mcp_config}
 ```
 
 `{mcp_config}` becomes a file, private to the session and deleted at its
-end, that names `fleet-mcp` as the only server; `{allowed_tools}` the
-tools the profile of the session lets through with no question, as the
-page would (reading, for example), comma-separated; `{instructions}` the
-instructions of the session (see "What the assistant is told"). The options keep the agent to the tools of
-`fleet-mcp`, with none of its own and none of the user's settings, as in the
-page. What the user gets is the same: the role under `[mcp] max_role`, the
-profile, `--profile` or the default one, with its risks to accept at the
-first session (`fleet assistant` tells them and waits for `yes`), the
-start in the audit log (`chat.start`, with `terminal`), a session counted in
-`[chat] max_sessions`. The agent asks about the other calls in its own way:
-its "don't ask again" trusts one tool for the session, whatever its class,
-which the page never does for ad-hoc commands, changes and files. A line
-without `{allowed_tools}` makes it ask about every call. It starts in a directory of its own,
-`~/.local/state/cockpit-fleet/assistant`, the same each time: Claude asks
-there, the first time, whether to trust it (answer yes: its own tools are
-off, whatever the question says), and the conversations held at a terminal
-are there, to be resumed with `/resume`. With more than one agent, `fleet assistant NAME`
-chooses, and `fleet assistant --profile diagnostic` the profile; an agent without `terminal` is for the page only. When it is
-installed by hand, add the line to its section; a controller set up before
-this line existed, or before `{allowed_tools}`, gets it by running the playbook again with
-`chat_agent_configure=true`, which replaces the section it wrote (a section
-written by hand is to be removed first).
+end, naming `fleet-mcp` as the only server; `{allowed_tools}` the tools
+the profile lets through with no question, as the page would,
+comma-separated; `{instructions}` those of the session. The options keep
+the agent to the tools of `fleet-mcp`, with none of its own and none of
+the user's settings. The rest is as on the page: the role under `[mcp]
+max_role`; the profile (`--profile`, or the default), whose risks
+`fleet assistant` tells at the first session and waits for `yes`; the
+start in the audit log (`chat.start`, with `terminal`); a session counted
+in `max_sessions`. Other calls are asked in the agent's own way: its
+"don't ask again" trusts one tool for the session, whatever its class,
+which the page never does for ad-hoc commands, changes and files; a line
+without `{allowed_tools}` makes it ask about every call. No "Without
+questions", "Allow more" or "Stop everything" there.
+
+It starts in `~/.local/state/cockpit-fleet/assistant`, the same each
+time: Claude asks there, the first time, whether to trust it (answer yes:
+its own tools are off, whatever the question says); conversations held at
+a terminal are there, resumed with `/resume`. `fleet assistant NAME`
+chooses among agents, `--profile diagnostic` the profile; an agent
+without `terminal` is for the page only. Installed by hand, add the line
+to its section. A controller set up before this line, or before
+`{allowed_tools}`, gets it by running the playbook again with
+`chat_agent_configure=true`, which replaces the section it wrote (remove
+one written by hand first).

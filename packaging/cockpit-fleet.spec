@@ -39,10 +39,10 @@ account; no daemon is left running and no network port is opened.
 # no network access and only packs the result.
 %build
 test -f dist/index.js || { echo "dist/ is missing: run 'make build' first"; exit 1; }
-# The screenshots are for the README on the web, and the decisions for those
-# who work on the project, not for %{_docdir}: the documents installed link
-# to them, and to TODO.md, in the repository.
-rm -rf docs/screenshots docs/decisions.md
+# The screenshots are for the README on the web, the decisions and the
+# history for those who work on the project, not for %{_docdir}: the
+# documents installed link to them, and to TODO.md, in the repository.
+rm -rf docs/screenshots docs/decisions.md docs/history
 
 %install
 %{__make} install-files DESTDIR=%{buildroot}

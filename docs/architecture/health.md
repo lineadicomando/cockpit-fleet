@@ -7,13 +7,15 @@ memory a cycle may take. The System tab shows it above the installation
 checks, read again every 30 s.
 
 - For each group of cycles that the enabled checks make (by inventory: the
-  checks that go together, each slow kind, each check of the user): its
-  shortest interval; from `cycles`, over the last day, how many cycles
-  ended and how many not successfully, their usual (median) and longest
-  duration, the highest peak of memory against the budget of one cycle,
-  the due times they skipped (with those of cycles still under way); the
-  delay of `cycle_lag`; and the forks and hosts per cycle the planner would
-  choose now, from `checks.size()`, measured or as configured.
+  checks that go together, each slow kind, each check of the user):
+  - its shortest interval;
+  - from `cycles`, over the last day: cycles ended and not successful,
+    median and longest duration, the highest peak of memory against the
+    budget of one cycle, due times skipped (with those of cycles still
+    under way);
+  - the delay of `cycle_lag`;
+  - the forks and hosts per cycle the planner would choose now
+    (`checks.size()`, measured or as configured).
 - The queue of each lane of the dispatch (`jobs.lanes()`, the ones
   `dispatch()` uses): running against its limit, waiting, the longest wait.
 - The database: pages, free pages and the page size as SQLite counts them

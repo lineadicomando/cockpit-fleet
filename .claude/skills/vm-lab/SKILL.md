@@ -33,7 +33,11 @@ test/vm/lab.sh root deb13 'journalctl -u cockpit-fleet-run@* -n 50' </dev/null
 test/vm/lab.sh ssh win11 'Get-ComputerInfo -Property OsName'
 test/vm/lab.sh tunnel deb13              # Cockpit on http://127.0.0.1:9091
 test/vm/lab.sh stop all
+test/vm/lab.sh snapshot win11 NAME       # of a shut-off VM; revert win11 NAME
+test/vm/lab.sh destroy deb13             # the VM, its disks and snapshots
 ```
+
+`lab.sh help` lists every subcommand (`net`, `resources` too).
 
 ## Rules
 
@@ -116,9 +120,10 @@ lab.sh root deb13 '/usr/libexec/cockpit-fleet/fleet-secret set it-win-key' < $d/
 `BROWSER_LAB=deb13 test/browser/browser.sh setup|test NAME` drives a VM
 with the package deployed (`docs/architecture/browser-tests.md`): the
 account `tester` and the tunnel are made for it. A scenario that changes `win11`
-for good (`labs-launch` installs Windows Update) wants a snapshot first,
-taken shut off (`virsh snapshot-create-as cockpit-fleet-win11 NAME`),
-reverted before running it again and deleted at the end.
+for good (`labs-launch` installs Windows Update) wants a snapshot first
+(`lab.sh snapshot win11 NAME`, shut off), reverted before running it
+again (`lab.sh revert win11 NAME`) and deleted at the end (`virsh
+snapshot-delete cockpit-fleet-win11 NAME`).
 
 ## The interface in the browser tools
 
@@ -153,7 +158,7 @@ file, and navigate to `http://127.0.0.1:9091/fleet`. What makes it work:
   need the native value setter followed by an `input` event; after a
   redeploy, reload ignoring the cache (a change of the URL fragment does
   not reload the bundle);
-- `sourcePath` is the Chrome tools' (`mcp__chrome-devtools__*`); in a frame
+- `sourcePath` is the Chrome DevTools tools' (`evaluate_script`); in a frame
   without scripts (a rendered document) their click fails: dispatch the
   click from the page, or focus the element from the page and press a key;
 - a page as a role: a throwaway account in the role's group, a random

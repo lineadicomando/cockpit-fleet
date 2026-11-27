@@ -2,8 +2,8 @@
 
 Reached over SSH with `ansible_shell_type: powershell`. The `ansible.windows`
 collection is not part of `ansible-core`: it comes from the `ansible` package,
-from a copy inside the project, or from the project's requirements file (see
-"Collections from Galaxy").
+from a copy inside the project, or from the project's requirements file
+([Projects](projects.md), "Collections from Galaxy").
 
 The test nodes accept public keys only, so the run uses a private key stored
 as a secret and passed with `--private-key`. Measured from the sandboxed unit
@@ -28,5 +28,5 @@ per check.
 `ansible_become_user: SYSTEM` in the inventory. It fails before any module
 runs when `ansible_remote_tmp` is set to a directory such as
 `C:\Windows\Temp\ansible`, and works with the default (`%TEMP%`): tried with
-`win_whoami` and with the checks of the catalog on Windows 11, 16 October.
+`win_whoami` and with the checks of the catalog on Windows 11.
 Windows Update needs no `become` over SSH with a key.

@@ -46,23 +46,15 @@ goes below; bytes get ticks at round binary sizes. What turns the answer
 into lines is in `src/lib/metrics.ts`, tested apart from the page.
 
 They use `@patternfly/react-charts` 8 (Victory 37), the major that goes with
-PatternFly 6. It costs about 380 kB of minified bundle, a quarter of the rest;
-the bundle is therefore split (`splitting` in `build.js`) and the charts are a
-chunk of their own (`charts.tsx`, with those of the [Overview](dashboard.md):
-one chunk, or each would carry the same styles, which rpmlint refuses),
-loaded the first time a check is opened. A page that shows
-no chart loads as before. `build.js` empties `dist/` before a build, since
-chunks are named by their hash and the package copies the whole directory. A
-page loaded before an upgrade asks for a chunk that is no longer there: it
-then says to reload the page instead of failing.
+PatternFly 6: about 380 kB of minified bundle, so the bundle is split
+(`splitting` in `build.js`) and the charts are a chunk of their own
+(`charts.tsx`, with those of the [Overview](dashboard.md): one chunk, or each
+would carry the same styles, which rpmlint refuses), loaded the first time a
+check is opened. `build.js` empties `dist/` before a build, since chunks are
+named by their hash and the package copies the whole directory. A page
+loaded before an upgrade that asks for a chunk no longer there says to
+reload the page instead of failing.
 
-Measured on the development host (20 October), 500 hosts with 10 metrics
-each: a cycle's 5000 values are written in 0.12 s outside a transaction
-(0.06 s in one), the tick's deletion takes 12 ms when nothing is due and
-0.1 s for a day of 125 000 values. At the target of phase 8 (500 hosts, 10
-checks every 10 minutes, about 20 values per host) 14 days of values are
-some 20 million rows, about 500 MB. The load test found the database
-growing faster than that: ~47 MB a day at 200 hosts over 1.5 hours,
-which would be ~120 MB a day at 500 and well above 500 MB in 14 days; the
-24 hours at 500 hosts measured ~60 MB a day, while retention had yet
-to delete anything.
+A cycle's 5000 values (500 hosts, 10 metrics) are written in 0.12 s; the
+tick's deletion takes 12 ms when nothing is due. What the database grows
+by at scale is in [Checks](checks.md), "At scale".
