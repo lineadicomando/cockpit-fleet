@@ -6,7 +6,7 @@ What is left. How each closed phase was shown:
 
 ## Status (27 November 2026)
 
-Phases 0–23 closed; 24 built, waiting only for its close below.
+Phases 0–24 closed, and the assistant without questions.
 21–24 were the last to add features (`decisions.md`, "Freeze of
 features"): then fixes, minor changes and field use, toward 1.0.0. Last
 release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
@@ -15,8 +15,8 @@ release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 To resume: `git status`, `git log origin/main..`; `make check` (878
 backend, 246 frontend tests). Each backend module's docstring says what it
 is; `cli.py` the registry of commands, `db.py` the schema (41
-migrations). Under way: the close of 24 on the lab's VMs, then
-the integration there (`sandbox` run D, SELinux).
+migrations). Under way: the integration on the lab's VMs
+(`sandbox` run D, SELinux on `fed44` and `alma10`).
 
 ## Minor changes decided
 
@@ -46,22 +46,6 @@ the integration there (`sandbox` run D, SELinux).
   - what breaks outside: links from the installed documents and from
     released packages and the README on GitHub to the old paths;
   - whether a line at the top of each ("not the page: see …") is enough.
-
-## Built, waiting for their close
-
-What each is: the file named. What remains:
-
-- **24, skills in the documents** (`architecture/documents.md`, "Skills
-  of the documents"): shown in containers and on `deb13`. Left: the user,
-  with Claude, has it propose a skill for a recurring task, approves it in
-  the page, and a new session uses it.
-- **Assistant without questions** (27 November, admitted under the
-  freeze, `decisions.md`; `architecture/chat.md`): one consent per ad-hoc
-  command, and "Without questions" in `administrator` (`[chat]
-  unattended`). Shown: `ct-test` (`mcp chat adhoc negative`) on the three;
-  the user with Claude on a Windows node, the switch on (runs marked
-  `unattended`) and off (one "Allow once", approval "confirmed in the chat
-  page"). Nothing left: to `acceptance.md` at the next close.
 
 ## Integration
 

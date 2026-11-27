@@ -233,3 +233,21 @@ What each closed phase had to show, and how it was shown.
   history and printed it to PDF from the page. The check found, and
   fixed, the tool of a template that did not say what a field of a
   survey is (the assistant guessed AWX's keys twice).
+- **24, skills in the documents** (27 November): shown in containers and
+  on `deb13`; then the user with Claude in the profile administrator: asked
+  to write a skill for the monthly maintenance of the disks of every room
+  (the work of phases 20 and 23 that day), the assistant wrote
+  `skills/manutenzione-dischi/SKILL.md` (the workflow, what to ask, what
+  to look for in the output, the report), said it could not approve it,
+  and it waited, out of the index, with "Approve" and the changes since
+  the last approved version on its page; approved there (an empty commit
+  with `Fleet-Approves`, audited), it was in the index. A new session,
+  asked only for "the monthly maintenance of the disks of aula-1", read
+  it, then the state of the room as the skill says, and launched nothing:
+  that month's was done.
+- **Assistant without questions** (27 November, admitted under the
+  freeze): one consent per ad-hoc command in every profile, "Without
+  questions" in `administrator` (`[chat] unattended`). `ct-test` (`mcp
+  chat adhoc negative`) on the three; the user with Claude on a Windows
+  node, the switch on (runs marked `unattended`) and off (one "Allow
+  once", the approval "confirmed in the chat page").
