@@ -112,6 +112,13 @@ ALWAYS_ASKED = ("scan", "adhoc", "config", "code")
 ALWAYS_ASKED_COMMANDS = ("doc.delete",)
 
 
+def deletes(name: str) -> bool:
+    """Whether the command NAME deletes something: asked about even of an
+    agent its person lets act without questions, since nothing puts back
+    what is gone."""
+    return name.rpartition(".")[2] in ("delete", "remove")
+
+
 def question(profile: str, kind: str, read_only: bool, name: str = "") -> str:
     """How the page and the agent at a terminal ask the person about a call of
     the class KIND (of the command NAME) in PROFILE: "none" (made with no

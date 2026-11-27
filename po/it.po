@@ -4972,8 +4972,8 @@ msgstr "Scelto al lancio"
 msgid "Runs on the inventory chosen at launch: the job template has no default."
 msgstr "Gira sull'inventario scelto al lancio: il template non ne ha uno predefinito."
 
-msgid "Nothing it does is asked about: it runs ad-hoc commands on the nodes, become included, changes templates, inventories, schedules and the rest, and deletes them, as soon as it decides to."
-msgstr "Non ti chiede nulla: esegue comandi ad-hoc sui nodi, become compreso, modifica template, inventari, pianificazioni e il resto, e li elimina, appena lo decide."
+msgid "Nothing it does is asked about, but deleting: it runs ad-hoc commands on the nodes, become included, and changes templates, inventories, schedules and the rest, as soon as it decides to."
+msgstr "Non ti chiede nulla, tranne prima di eliminare: esegue comandi ad-hoc sui nodi, become compreso, e modifica template, inventari, pianificazioni e il resto, appena lo decide."
 
 msgid "A change it makes is made in your name, and nobody reads it before: what the nodes write in the output of runs can steer it into changes you would have refused."
 msgstr "Ogni modifica che fa è fatta a tuo nome e nessuno la legge prima: quello che i nodi scrivono nell'output delle run può indurlo a modifiche che avresti rifiutato."
@@ -4995,5 +4995,5 @@ msgstr "Senza conferme"
 
 
 
-msgid "Without questions: the assistant runs commands, changes and deletes without asking you."
-msgstr "Senza conferme: l'assistente esegue comandi, modifiche ed eliminazioni senza chiederti nulla."
+msgid "Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting."
+msgstr "Senza conferme: l'assistente esegue comandi e modifiche senza chiederti nulla; chiede solo prima di eliminare."

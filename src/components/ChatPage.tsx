@@ -85,7 +85,7 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
 function useUnattendedRisks(): string[] {
     const { t } = useTranslation();
     return [
-        t("Nothing it does is asked about: it runs ad-hoc commands on the nodes, become included, changes templates, inventories, schedules and the rest, and deletes them, as soon as it decides to."),
+        t("Nothing it does is asked about, but deleting: it runs ad-hoc commands on the nodes, become included, and changes templates, inventories, schedules and the rest, as soon as it decides to."),
         t("A change it makes is made in your name, and nobody reads it before: what the nodes write in the output of runs can steer it into changes you would have refused."),
         t("What still holds it: your role, its profile, the drafts for the files it writes, the approvals of templates, and Stop everything, which cancels its runs."),
     ];
@@ -602,7 +602,7 @@ function Composer({ state }: { state: ChatState }) {
         </Flex>
         {unattended && (
             <div className="fleet-chat-unattended-note">
-                {t("Without questions: the assistant runs commands, changes and deletes without asking you.")}
+                {t("Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting.")}
             </div>
         )}
         </div>

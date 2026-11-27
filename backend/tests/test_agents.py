@@ -269,6 +269,18 @@ class ProfileTest(Base):
                                  "administrator")["ok"])
 
     def test_an_agent_s_ad_hoc_command_waits_for_its_person_to_confirm_it(self):
+        # A template in the arguments of a module that changes nothing runs on
+        # the controller, lookups and all: it waits as any other.
+        lookup = "{{ lookup('ansible.builtin.pipe', 'id') }}"
+        for templated in (self.adhoc(args={"data": lookup}),
+                          self.adhoc("ansible.builtin.setup", args={"filter": [lookup]}),
+                          self.adhoc(free_form="data=" + lookup)):
+            run = self.via("run.adhoc", templated, "administrator")["data"]
+            self.assertEqual(run["status"], "pending_approval", templated)
+        self.assertEqual(self.started, [])
+        self.assertEqual(self.via("run.adhoc", self.adhoc(), "administrator")["data"]["status"],
+                         "running")
+        self.started.clear()
         shell = self.adhoc("ansible.builtin.shell", free_form="systemctl restart nginx")
         run = self.via("run.adhoc", shell, "administrator")["data"]
         self.assertEqual(run["status"], "pending_approval")
@@ -332,7 +344,7 @@ class ProfileTest(Base):
                                                     "input": {**shell, "forks": "x"}}),
                          "bad_request")
 
-    def test_an_agent_the_person_let_act_without_asking_is_asked_nothing(self):
+    def test_an_agent_the_person_let_act_without_asking_is_asked_only_to_delete(self):
         session = "0123456789abcdef"
         self.config = replace(self.config, chat_unattended=True, max_concurrent_runs=10)
         shell = self.adhoc("ansible.builtin.shell", free_form="df -h", become=True)
@@ -340,15 +352,24 @@ class ProfileTest(Base):
         def agent(profile="administrator", session=session):
             return self.via("run.adhoc", {**shell, "session": session}, profile)["data"]
 
-        def questions(**params):
-            return {tool["question"] for tool in self.ok("mcp.tools", {
+        def asked(**params):
+            return {tool["command"]: tool["question"] for tool in self.ok("mcp.tools", {
                 "profile": "administrator", **params})["tools"]}
+
+        def questions(**params):
+            return set(asked(**params).values())
 
         self.assertEqual(agent()["status"], "pending_approval")
         self.assertIn("every", questions(session=session))
         self.ok("chat.accept", {"profile": "unattended"})
         self.ok("chat.unattended", {"session": session, "on": True})
-        self.assertEqual(questions(session=session), {"none"})
+        every = {name for name, question in asked(session=session).items() if question != "none"}
+        self.assertEqual(every, {
+            "channel.delete", "check.delete", "credential.delete", "doc.delete", "file.delete",
+            "hostkey.remove", "inventory.delete", "maintenance.delete", "project.delete",
+            "rule.delete", "schedule.delete", "template.delete", "varset.delete",
+            "workflow.delete"})
+        self.assertEqual({asked(session=session)[name] for name in every}, {"every"})
         self.assertIn("every", questions())
         self.assertIn("every", questions(session="fedcba9876543210"))
         run = agent()

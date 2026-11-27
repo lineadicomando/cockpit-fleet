@@ -180,10 +180,10 @@
 #autonomous_writes = 20
 # Whether a user may turn the questions off for one conversation of an
 # assistant in the profile administrator, as the mode of Claude Code that
-# bypasses permissions: it then runs ad-hoc commands (become included),
-# changes templates, inventories and the rest, and deletes, without asking
-# anyone; files still go to a draft a person merges, and a template that
-# needs approval still waits for a person. Each user accepts its risks once,
+# bypasses permissions: it then runs ad-hoc commands (become included) and
+# changes templates, inventories and the rest without asking anyone; only
+# deleting is still asked about, every time. Files still go to a draft a
+# person merges, and a template that needs approval still waits for a person. Each user accepts its risks once,
 # recorded in the audit log, and turns it on for each conversation.
 #unattended = false
 #[chat.agents.claude]

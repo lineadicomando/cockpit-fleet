@@ -180,11 +180,13 @@ started stays as it is: once logged in, send the message again.
   decision; accepting its risks, each user's.
 - "Without questions", in `administrator` only and only where `[chat]
   unattended = true` (off as installed): the switch in the header of the
-  session turns every question off, as the mode of Claude Code that
-  bypasses permissions, for the conversations of that session until it is
+  session turns every question off but those about deleting, as the mode
+  of Claude Code that bypasses permissions, for the conversations of that session until it is
   turned off, the profile changes or the page is reloaded. Its ad-hoc
   commands then start without a confirmation, marked "unattended" in the
-  run's options; changes and deletes are made at once. Files still go to
+  run's options; changes are made at once; a delete (of a template, an
+  inventory, a credential, a file, a document and the rest) is still
+  asked about, every time. Files still go to
   a draft a person merges, a template that needs approval still waits for
   a person, and "Stop everything" cancels its runs. Each user accepts its
   risks once (`chat.accept`), and each turning on or off is in the audit
@@ -205,7 +207,8 @@ started stays as it is: once logged in, send the message again.
   is sent by itself. `diagnostic` is suggested for a new session, when it
   is enabled.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
-  adhoc_modules` without become, does not start until the user confirms
+  adhoc_modules` without become and with no template (`{{ }}`) in its
+  arguments, does not start until the user confirms
   it (unless "Without questions" is on): "Allow once" when the page asks,
   or later above the message box, in the runs waiting for approval, or
   `fleet approval approve`. The assistant cannot confirm it, an answer

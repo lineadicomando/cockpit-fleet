@@ -152,7 +152,7 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
 
 def tools(ctx: Context, role: str | None, profile: str, unattended: bool = False) -> list[dict]:
     """The tools of an agent with ROLE in PROFILE (all, with none); with
-    UNATTENDED, none of them asked about."""
+    UNATTENDED, none of them asked about but those that delete."""
     modules = ctx.config.mcp_adhoc_modules
 
     def offered(kind: str) -> bool:
@@ -189,8 +189,11 @@ def tools(ctx: Context, role: str | None, profile: str, unattended: bool = False
             if tool is not None:
                 found.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
     for tool in found:
-        tool["question"] = "none" if unattended else profiles.question(
-            profile, tool["class"], tool["readOnly"], tool["command"])
+        if unattended:
+            tool["question"] = "every" if profiles.deletes(tool["command"]) else "none"
+        else:
+            tool["question"] = profiles.question(
+                profile, tool["class"], tool["readOnly"], tool["command"])
     return found
 
 

@@ -12,8 +12,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 - Assistant: "Without questions" in the profile administrator, as the mode
   of Claude Code that bypasses permissions: a switch in the header of the
-  session turns every question off for its conversations, and the
-  assistant's ad-hoc commands start without a confirmation. Off unless
+  session turns every question off for its conversations, but those
+  about deleting, and the assistant's ad-hoc commands start without a
+  confirmation. Off unless
   `[chat] unattended = true` in `config.toml`; each user accepts its risks
   once; files still go to a draft and templates that need approval still
   wait (command `chat.unattended`, which agents cannot call).
@@ -237,6 +238,13 @@ entries go under `[Unreleased]`, under the heading of their kind.
   directory, from a process left running or through the memory of the
   process that writes it. Nothing of the job outlives it now, and that
   process is out of its reach.
+- Assistant: an ad-hoc command with a template (`{{ }}`) in the arguments
+  of a module of `[mcp] adhoc_modules` now waits for its person's
+  confirmation, as any other that is not diagnostic. In the profile
+  administrator it started at once, and a lookup in such a template runs
+  a command on the controller, in the run's sandbox, with the credential
+  of the command; the page of the chat asked about it, an agent at a
+  terminal did not have to. Since 0.3.0.
 
 ## [0.4.0] - 2026-11-18
 

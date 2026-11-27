@@ -42,8 +42,10 @@ a schedule of a template that needs an approval (an operator could
 approve what it launches); an operator still turns one off.
 
 **Agents.** An ad-hoc command an agent asks for waits in `confirm` for the
-person it acts for (`run.adhoc`), unless diagnostic (a module of `[mcp]
-adhoc_modules`, without become); it expires as the others. Nobody reads
+person it acts for (`run.adhoc`), unless diagnostic (`profiles.is_diagnostic`,
+as in `_through`: a module of `[mcp] adhoc_modules`, without become and
+with no template in its arguments, whose lookups would run on the
+controller); it expires as the others. Nobody reads
 what an agent runs before it runs, and the agent may be steered by what a
 node wrote. Unless the person allowed that very call in the chat page
 just before (`consent.py`, table `chat_consents`, schema 40): on "once"

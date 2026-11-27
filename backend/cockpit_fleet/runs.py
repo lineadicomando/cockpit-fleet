@@ -315,7 +315,8 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
            "revision": project["revision"] if project else "", "options": json.dumps(options),
            "session": ctx.session}
     if is_agent(ctx.via) and not profiles.is_diagnostic(
-            {"module": module, "become": become}, ctx.config.mcp_adhoc_modules):
+            {"module": module, "become": become, "free_form": free_form, "args": args},
+            ctx.config.mcp_adhoc_modules):
         # Nobody reads what an agent runs before it runs: the person it acts
         # for does now, or did in the chat page just before. A program
         # steered by what a node wrote cannot.

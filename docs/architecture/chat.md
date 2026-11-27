@@ -196,7 +196,9 @@ conversation's session of `fleet-mcp` (or, before the first message, when
 the session is drawn: `limit()`, as for the runs of `autonomous`), and
 asks `mcp.tools` again with `session`: for a session `unattended_sessions`
 (schema 41) holds for the caller, every tool is `none` and the page
-answers alone. An agent's `run.adhoc` there starts at once, `"unattended":
+answers alone, but those that delete (`profiles.deletes`: the verbs
+`delete` and `remove`), which stay `every`: nothing puts back what is
+gone. An agent's `run.adhoc` there starts at once, `"unattended":
 true` in its options and no row of approval. While on, the message box
 says so (`fleet-chat-unattended`, a note under it), and `chat.session`
 gives `unattended`. It holds for every conversation of the chat session

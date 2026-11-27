@@ -168,13 +168,14 @@ are off as installed. How they are turned on, and what each profile allows:
   `chat.limit_runs`, `chat.grant_runs`, which no agent may call), nothing
   on an inventory in maintenance, and cannot silence a problem; a run that
   needs approval still waits for a person.
-- An ad-hoc command of a module that may change something waits until
+- An ad-hoc command of a module that may change something, or with a
+  template in its arguments (a lookup runs on the controller), waits until
   the person confirms it (`chat.consent`, which no agent may call),
   whatever the profile; except where `[chat] unattended = true` allows
   that person to turn the questions off for the conversations of a
   session in the profile `administrator` (`chat.unattended`, audited):
-  then ad-hoc commands, changes and deletions run with nobody reading
-  them first.
+  then ad-hoc commands and changes run with nobody reading them first;
+  the page still asks before a deletion.
 - Accepting the risks of a profile beyond `assisted` (`chat.accept`,
   audited, required by `chat.start`) is consent, not a control; so are
   the questions of the page or of the agent's program at a terminal: the
