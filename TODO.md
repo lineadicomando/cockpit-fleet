@@ -15,8 +15,8 @@ release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 To resume: `git status`, `git log origin/main..`; `make check` (878
 backend, 246 frontend tests). Each backend module's docstring says what it
 is; `cli.py` the registry of commands, `db.py` the schema (41
-migrations). Under way: the integration on the lab's VMs
-(`sandbox` run D, SELinux on `fed44` and `alma10`).
+migrations). Under way: fixes and minor changes; `sandbox` with
+run D on `deb13` (see Integration).
 
 ## Minor changes decided
 
@@ -49,13 +49,16 @@ migrations). Under way: the integration on the lab's VMs
 
 ## Integration
 
-Last runs, 26 November. Containers, the three distributions: `runs`,
-`schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`, `cli`,
-`documents`, `store`, `sandbox` (its run D in containers only); Debian
-only: `netscan`, `make ct-lifecycle` (from 0.3.0). VMs: `netscan` on the
-three (`win11` up), `windows` on `deb13`; `runs`, `workflows`,
-`schedules` on `fed44` (SELinux, no denial); `sandbox` on `deb13` and
-`alma10` before run D. Earlier: `files` in containers.
+Last runs, 26 and 27 November. Containers, the three distributions:
+`runs`, `schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`,
+`cli`, `documents`, `store`, `sandbox` (with run D); `runs` and
+`workflows` again on 27 November; Debian only: `netscan`, `make
+ct-lifecycle` (from 0.3.0). VMs: `netscan` on the three (`win11` up),
+`windows` on `deb13`; on 27 November (`0.4.0+82`), `sandbox` with run D,
+`runs`, `workflows`, `schedules` on `alma10` and the last three on
+`fed44`, SELinux enforcing, no denial. Left: `sandbox` with run D on
+`deb13` (its data of the closes kept until then). Earlier: `files` in
+containers.
 
 ## Future
 
