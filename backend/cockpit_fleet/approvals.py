@@ -62,6 +62,18 @@ def request(ctx: Context, run_id: str, mode: str) -> None:
     notify.run_waits(ctx, run_id)
 
 
+def confirmed_before(ctx: Context, run_id: str, comment: str) -> None:
+    """Record that a run just queued would have waited in confirm, and that
+    the person who launched it confirmed it before it was asked for
+    (consent.py): its decision is already taken, by them."""
+    now = store.now()
+    run = store.fetch(ctx.conn, "runs", run_id, "run")
+    ctx.conn.execute(
+        "INSERT INTO approvals (run_id, requested_by, requested_at, expires_at, mode, decision,"
+        " decided_by, decided_at, comment) VALUES (?, ?, ?, ?, 'confirm', 'approved', ?, ?, ?)",
+        (run_id, run["created_by"], now, now, run["created_by"], now, comment))
+
+
 def _row(row) -> dict:
     return {key: row[key] for key in ("run_id", "requested_by", "requested_at", "expires_at",
                                       "decision", "decided_by", "decided_at", "comment",

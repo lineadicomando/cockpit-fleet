@@ -12,9 +12,9 @@ more runs, or cancel those not ended.
 import os
 from pathlib import Path
 
-from . import agents, autonomy, instructions, jobs, profiles, skills, store
+from . import agents, autonomy, consent, instructions, jobs, profiles, skills, store
 from .auth import ROLES
-from .cli import Bool, Choice, Context, Int, Str, Values, command
+from .cli import Bool, Choice, Context, Int, Obj, Str, Values, command
 from .errors import (
     BadRequest,
     Conflict,
@@ -321,3 +321,19 @@ def chat_cancel_runs(ctx: Context, params: Values) -> dict:
             continue  # ended meanwhile
         canceled.append(row["id"])
     return {"canceled": canceled}
+
+
+@command("chat.consent", role="admin", mutating=True, tool=False,
+         params={"session": _SESSION,
+                 "command": Choice(consent.CONSENTED, "The command the agent asked to call"),
+                 "input": Obj("Its arguments, as the page showed them")})
+def chat_consent(ctx: Context, params: Values) -> dict:
+    """Record that the caller allowed, in the chat page, a call an agent of
+    theirs asked to make in a session of fleet-mcp: made within minutes with
+    the same arguments, the call does not wait to be confirmed again. A
+    person's decision, never an agent's, which is refused this command."""
+    session = _session(params)
+    command = params["command"]
+    consent.give(ctx.conn, session, ctx.caller.user, command,
+                 consent.of_input(command, params["input"]))
+    return {}

@@ -44,7 +44,7 @@ audit.list admin -            channel.create admin M        channel.delete admin
 channel.list viewer -         channel.test admin M          channel.update admin M
 chat.accept viewer M          chat.agents viewer -          chat.start viewer M
 chat.cancel_runs operator M   chat.grant_runs operator M    chat.limit_runs operator M
-chat.session viewer -
+chat.session viewer -         chat.consent admin M
 check.catalog viewer -
 check.create admin M          check.delete admin M          check.list viewer -        check.cycle viewer -
 check.run operator M          check.update admin M          cmdb.get viewer -
@@ -425,6 +425,8 @@ class Fixture(CheckBase):
         "chat.grant_runs": lambda fx: {"session": "0123456789abcdef", "runs": 1},
         "chat.cancel_runs": lambda fx: {"session": "0123456789abcdef"},
         "chat.limit_runs": lambda fx: {"session": "0123456789abcdef", "runs": 5},
+        "chat.consent": lambda fx: {"session": "0123456789abcdef", "command": "run.adhoc",
+                                    "input": {"inventory_id": "i1", "module": "ansible.builtin.ping"}},
         "notification.retry": lambda fx: {"id": 1},
         "config.import": lambda fx: {"document": fx["export"]},
         "channel.update": lambda fx: {"settings": WEBHOOK["settings"]},

@@ -98,7 +98,7 @@ const TOOLS: Omit<ToolInfo, "question">[] = [
     { name: "run_list", description: "The runs.", readOnly: true, class: "read", inputSchema: {} },
     { name: "run_start", description: "Launch a job template.", readOnly: false, class: "run", inputSchema: {} },
     { name: "run_cancel", description: "Cancel a run.", readOnly: false, class: "run", inputSchema: {} },
-    { name: "run_adhoc", description: "Run an ad-hoc command.", readOnly: false, class: "adhoc", inputSchema: {} },
+    { name: "run_adhoc", command: "run.adhoc", description: "Run an ad-hoc command.", readOnly: false, class: "adhoc", inputSchema: {} },
 ];
 
 // What mcp.tools says of them in a profile (profiles.question in the backend).
@@ -126,6 +126,9 @@ class Agent {
     // What chat.session answers, and the sessions it was asked for.
     sessionRuns: ChatSessionRuns = { launched: 0, allowed: 2, granted: 0, not_ended: [], ended: [] };
     watched: string[] = [];
+    // The calls the person allowed, recorded in the backend; why that fails, when it does.
+    consents: { session: string; command: string; input: unknown; before: number }[] = [];
+    consentFails = "";
     private onData: (text: string) => void = () => undefined;
     private onExit: (error: string) => void = () => undefined;
     // How the agent answers each method; a function gets the message.
@@ -161,7 +164,10 @@ class Agent {
         }, watch ? {
             load: async session => { this.watched.push(session); return structuredClone(this.sessionRuns); },
             tell: (ended: ChatSessionRun[]) => `ended: ${ended.map(run => `${run.id} ${run.status}`).join(", ")}`,
-        } : null);
+        } : null, async (session, command, input) => {
+            if (this.consentFails) throw new Error(this.consentFails);
+            this.consents.push({ session, command, input, before: this.received.length });
+        });
     }
 
     // The runs of the conversation as chat.session says, and the page asking for them.
@@ -333,6 +339,35 @@ test("an ad-hoc command of an administrator is asked about every time, with no a
     agent.ask(91, "run_adhoc");
     await tick();
     assert.equal(agent.chat.getState().ask!.tool?.name, "run_adhoc");
+});
+
+test("an ad-hoc command allowed once is recorded before the agent is answered, so it does not wait again", async () => {
+    const agent = new Agent();
+    await agent.ready("administrator");
+    agent.chat.send("check the disks");
+    await tick();
+    agent.ask(92, "run_adhoc");
+    await tick();
+    agent.chat.answer("once");
+    await tick();
+    const session = agent.chat.getState().fleetSession;
+    assert.deepEqual(agent.consents.map(({ before, ...one }) => one), [{ session, command: "run.adhoc", input: { limit: "web" } }]);
+    assert.ok(agent.consents[0].before <= agent.received.indexOf(agent.answerTo(92)!));
+    // Refused, or a command that does not wait, records nothing; a failure still answers.
+    agent.ask(93, "run_adhoc");
+    await tick();
+    agent.chat.answer("refuse");
+    agent.ask(94, "run_start");
+    await tick();
+    agent.chat.answer("once");
+    await tick();
+    assert.equal(agent.consents.length, 1);
+    agent.consentFails = "forbidden";
+    agent.ask(96, "run_adhoc");
+    await tick();
+    agent.chat.answer("once");
+    await tick();
+    assert.deepEqual(agent.answerTo(96)!.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
 });
 
 test("an autonomous agent launches with no question; the backend holds it", async () => {

@@ -10,7 +10,7 @@ from unittest import mock
 
 from test_phase2 import Base
 
-from cockpit_fleet import agents, autonomy, cli, mcp, paths, profiles, schedules
+from cockpit_fleet import agents, autonomy, cli, consent, mcp, paths, profiles, schedules
 
 # What each tool lets an agent do, beyond reading. A new tool, or one moved to
 # another class, fails here until this table says so: the profiles of the
@@ -290,6 +290,47 @@ class ProfileTest(Base):
         self.config = replace(self.config, mcp_adhoc_modules=())
         self.assertEqual(self.via("run.adhoc", self.adhoc(), "administrator")["data"]["status"],
                          "pending_approval")
+
+    def test_a_call_the_person_allowed_in_the_page_does_not_wait_again(self):
+        session = "0123456789abcdef"
+        shell = self.adhoc("ansible.builtin.shell", free_form="df -h")
+
+        def agent(params, session=session):
+            return self.via("run.adhoc", {**params, "session": session},
+                            "administrator")["data"]
+
+        # As the page shows it: without the defaults, with what fleet-mcp adds.
+        self.ok("chat.consent", {"session": session, "command": "run.adhoc",
+                                 "input": {**shell, "via": "x", "profile": "observer"}})
+        # Other arguments, or another session, are not what was allowed.
+        self.assertEqual(agent({**shell, "free_form": "rm -rf /"})["status"], "pending_approval")
+        self.assertEqual(agent(shell, "fedcba9876543210")["status"], "pending_approval")
+        self.config = replace(self.config, max_concurrent_runs=10)
+        run = agent(shell)
+        self.assertEqual(run["status"], "running")
+        approval = self.ok("run.get", {"id": run["id"]})["approval"]
+        self.assertEqual((approval["mode"], approval["decision"], approval["decided_by"]),
+                         ("confirm", "approved", "anna"))
+        # Once only.
+        self.assertEqual(agent(shell)["status"], "pending_approval")
+        # Nor later than it may wait.
+        self.ok("chat.consent", {"session": session, "command": "run.adhoc", "input": shell})
+        with mock.patch.object(consent.store, "now",
+                               return_value=time.time() + consent.CONSENT_SECONDS + 1):
+            self.assertEqual(agent(shell)["status"], "pending_approval")
+        # Another user's consent is not this one's.
+        self.ok("chat.consent", {"session": session, "command": "run.adhoc", "input": shell})
+        answer = cli.dispatch("run.adhoc", json.dumps({
+            **shell, "session": session, "via": "mcp:test", "profile": "administrator"}).encode(),
+            self.ctx("admin", user="carlo"))
+        self.assertEqual(answer["data"]["status"], "pending_approval")
+        # An agent cannot consent for its person; nor to arguments that are wrong.
+        self.assertEqual(self.via("chat.consent", {"session": session, "command": "run.adhoc",
+                                                   "input": shell}, "administrator")
+                         ["error"]["code"], "forbidden")
+        self.assertEqual(self.code("chat.consent", {"session": session, "command": "run.adhoc",
+                                                    "input": {**shell, "forks": "x"}}),
+                         "bad_request")
 
     def test_the_role_still_bounds_a_profile(self):
         self.config = replace(self.config, mcp_max_role="operator")

@@ -1013,6 +1013,23 @@ MIGRATIONS: list[list[str]] = [
         "DROP TABLE templates",
         "ALTER TABLE templates_new RENAME TO templates",
     ],
+    [
+        # A call of an agent a person allowed in the chat page before the
+        # agent made it, by the digest of its parameters: the ad-hoc command
+        # it is starts at once instead of waiting to be confirmed again
+        # (chat.consent, consent.py). Used once.
+        """
+        CREATE TABLE chat_consents (
+            session   TEXT NOT NULL,
+            user      TEXT NOT NULL,
+            command   TEXT NOT NULL,
+            digest    TEXT NOT NULL,
+            given_at  REAL NOT NULL,
+            used_at   REAL
+        )
+        """,
+        "CREATE INDEX chat_consents_session ON chat_consents (session, user)",
+    ],
 ]
 
 

@@ -8,6 +8,8 @@ import { AUTH_REQUIRED, AcpError, Connection, MCP_SERVER, NOTICE_MARK, applyUpda
 // A tool of fleet-mcp, as mcp.tools describes it.
 export interface ToolInfo {
     name: string;
+    // The command of fleetctl it calls.
+    command?: string;
     description: string;
     readOnly: boolean;
     // What it lets an agent do: read, run, scan, adhoc, adhoc-diagnostic, config or code.
@@ -105,6 +107,14 @@ export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
 // Sets the runs an agent acting without asking may launch in a session of fleet-mcp.
 export type LimitRuns = (session: string, runs: number) => Promise<void>;
 
+// Records in the backend that the person allowed a call when asked, so that
+// the command does not wait to be confirmed again (chat.consent).
+export type Consent = (session: string, command: string, input: unknown) => Promise<void>;
+
+// The commands whose call by an agent waits for its person in the backend,
+// unless the person allowed it here first.
+export const CONSENTED = ["run.adhoc"];
+
 // Follows what the agent launched in a session of fleet-mcp, and words the
 // message that tells the agent which of its runs have ended.
 export interface Watch {
@@ -163,6 +173,7 @@ export class Chat {
     // how many times its start found the sessions full.
     private change: { profile: string; sessionId: string; expected: boolean; full: number } | null = null;
     private readonly watch: Watch | null;
+    private readonly consent: Consent | null;
     // The runs of the conversation seen not ended once the agent was idle: the
     // agent is told when they end, unless the person stopped them; those
     // ended and not told yet, while the agent is answering.
@@ -173,11 +184,13 @@ export class Chat {
     private watching = false;
     private watchAgain = false;
 
-    constructor(spawn: Spawn, loadTools: LoadTools, limitRuns: LimitRuns = async () => undefined, watch: Watch | null = null) {
+    constructor(spawn: Spawn, loadTools: LoadTools, limitRuns: LimitRuns = async () => undefined, watch: Watch | null = null,
+                consent: Consent | null = null) {
         this.spawn = spawn;
         this.loadTools = loadTools;
         this.limitRuns = limitRuns;
         this.watch = watch;
+        this.consent = consent;
     }
 
     subscribe = (listener: () => void): (() => void) => {
@@ -525,7 +538,20 @@ export class Chat {
             this.set({ ask: this.waiting[0].ask });
         });
         if (answer === null) return { outcome: { outcome: "cancelled" } };
+        if (answer !== "refuse") await this.consented(tool, call.rawInput);
         return permissionOutcome(params.options, answer !== "refuse");
+    }
+
+    // A call the backend would hold for the person to confirm again: the
+    // answer just given is that confirmation. Without it, the call waits.
+    private async consented(tool: ToolInfo | null, input: unknown): Promise<void> {
+        const session = this.state.fleetSession;
+        if (!this.consent || !session || !tool?.command || !CONSENTED.includes(tool.command) || !isObject(input)) return;
+        try {
+            await this.consent(session, tool.command, input);
+        } catch {
+            // The run waits to be confirmed, as without the page.
+        }
     }
 
     // The person's answer to the call being asked about.

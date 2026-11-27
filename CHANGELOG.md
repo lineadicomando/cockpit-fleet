@@ -138,6 +138,11 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Assistant: an ad-hoc command allowed once when the chat page asks about
+  it starts at once, recorded as confirmed by the person, instead of
+  waiting to be confirmed a second time; one asked for in other words, in
+  another conversation, more than ten minutes later or at a terminal still
+  waits (command `chat.consent`, which agents cannot call).
 - Interface: the row of a table under the pointer, or with one of its
   controls in focus, is highlighted as in Cockpit, so that the actions at
   the end of a wide row are found on the row of its name.

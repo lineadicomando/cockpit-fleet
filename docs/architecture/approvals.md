@@ -48,7 +48,18 @@ one off. An ad-hoc command an agent asks for waits in `confirm` for the
 person it acts for (`run.adhoc`), unless it is diagnostic (a module of
 `[mcp] adhoc_modules`, without become), and expires as the others; nobody
 reads what an agent runs before it runs, and the agent may be steered by
-what a node wrote. `run.result` gives a run that waits as not done, with
+what a node wrote. Unless the person allowed that very call in the chat
+page just before (27 November, `consent.py`): when they answer "once" to
+the question of `run_adhoc`, the page calls `chat.consent` (admin, no tool)
+with the session of `fleet-mcp` and the arguments it showed, before it
+answers the agent; `run.adhoc` of an agent in that session, for that user,
+whose checked parameters have the same digest, within ten minutes, uses
+the consent (once) and starts, with an approval already `approved` by the
+person in `confirm` and the comment "confirmed in the chat page", so that
+the history of approvals has it. The question of the page was no control
+because an agent at a terminal asks nobody; the consent is one, recorded
+by a person, and a call in other words is not the one allowed. It spares
+the second confirmation of the same command. `run.result` gives a run that waits as not done, with
 its mode, at once. An agent never approves nor confirms, not even a run it
 launched for its user: a call made for one has no right, and the commands refuse it
 whatever its role; `approval.list` is a tool, deciding is not. Through

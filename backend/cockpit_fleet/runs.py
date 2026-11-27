@@ -5,7 +5,7 @@ import os
 import re
 import shutil
 
-from . import approvals, jobs, profiles, store, survey
+from . import approvals, consent, jobs, profiles, store, survey
 from . import variables as varsets
 from .cli import Bool, Context, Id, Int, Obj, Str, Strs, Values, command, is_agent
 from .errors import BadRequest, Conflict, Forbidden
@@ -234,8 +234,10 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
     the audit record, in clear: they are not for secrets. One an agent asks
     for waits until the person it acts for confirms it, unless it is of a
     module that changes nothing ([mcp] adhoc_modules, mcp_adhoc_modules in
-    config.show, without become); it expires as approvals do.
+    config.show, without become), or the person allowed it in the chat page
+    just before; it expires as approvals do.
     """
+    called = consent.digest(params)
     inventory_id = params["inventory_id"]
     project_id = params["project_id"]
     module = check_module(params["module"])
@@ -315,9 +317,14 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
     if is_agent(ctx.via) and not profiles.is_diagnostic(
             {"module": module, "become": become}, ctx.config.mcp_adhoc_modules):
         # Nobody reads what an agent runs before it runs: the person it acts
-        # for does now. A program steered by what a node wrote cannot.
-        jobs.queue(ctx, run, spec, directory, jobs.WAITING)
-        approvals.request(ctx, run_id, "confirm")
+        # for does now, or did in the chat page just before. A program
+        # steered by what a node wrote cannot.
+        if consent.take(ctx.conn, ctx.session, ctx.caller.user, "run.adhoc", called):
+            jobs.enqueue(ctx, run, spec, directory)
+            approvals.confirmed_before(ctx, run_id, "confirmed in the chat page")
+        else:
+            jobs.queue(ctx, run, spec, directory, jobs.WAITING)
+            approvals.request(ctx, run_id, "confirm")
     else:
         jobs.enqueue(ctx, run, spec, directory)
     return run_row(store.fetch(ctx.conn, "runs", run_id, "run"))

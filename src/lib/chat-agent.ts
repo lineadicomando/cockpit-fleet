@@ -50,4 +50,5 @@ export const chat = new Chat(
     async profile => (await call<{ tools: ToolInfo[] }>("mcp.tools", profile ? { profile } : {})).tools,
     async (session, runs) => { await call("chat.limit_runs", { session, runs }); },
     { load: session => call<ChatSessionRuns>("chat.session", { session }), tell: tellEnded },
+    async (session, command, input) => { await call("chat.consent", { session, command, input }); },
 );

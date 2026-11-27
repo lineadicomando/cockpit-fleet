@@ -210,7 +210,8 @@ started stays as it is: once logged in, send the message again.
   is sent by itself. `diagnostic` is suggested for a new session, when it
   is enabled.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
-  adhoc_modules`, does not start until the user confirms it, in the list of
+  adhoc_modules`, does not start until the user confirms it: with "Allow
+  once" when the page asks about it, or afterwards in the list of
   runs waiting for approval or with `fleet approval approve`; the assistant
   cannot confirm it, and it expires as approvals do. The page of the
   assistant shows the runs of the conversation that wait, with what they

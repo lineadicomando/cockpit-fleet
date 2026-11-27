@@ -242,7 +242,9 @@ in `mcp.tools` says (see "Questions by profile" in [Agents](agents.md)): by itse
 for `none`; for `ask` and `every` it shows the description of the tool, its
 arguments, the profile and the class, and waits: once, always in this
 conversation (for `ask` only, and for the whole class: "always" on a launch
-trusts the other launches and cancels), refuse. "Always" is kept by the
+trusts the other launches and cancels), refuse. "Once" on `run_adhoc` is also
+recorded in the backend first (`chat.consent`), so the command does not
+wait to be confirmed again (approvals.md). "Always" is kept by the
 page and answered as "once": the agent's own option of that kind writes a
 rule in the user's settings. A call that names something `mcp.tools` does
 not list, after asking it again, is asked about every time. Stopping an
