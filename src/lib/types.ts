@@ -43,6 +43,8 @@ export interface ChatInfo {
     profiles: string[];
     default_profile: string;
     to_accept: string[];
+    // The profiles in which the user may let the agent act without asking.
+    unattended: string[];
     // What holds an agent in the profile autonomous.
     autonomous_runs: number;
     autonomous_dry_run: boolean;

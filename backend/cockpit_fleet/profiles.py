@@ -27,6 +27,11 @@ AUTONOMOUS = ("autonomous",)
 # Profiles beyond assisted, whose risks a user accepts once before a session
 # in them (chat.accept).
 RISKY = ("diagnostic", "autonomous", "administrator")
+# A mode a person turns on for one conversation, in these profiles: the
+# agent is asked about nothing and its ad-hoc commands do not wait for the
+# person (consent.py). Its risks are accepted once, as those of a profile.
+UNATTENDED = "unattended"
+UNATTENDED_PROFILES = ("administrator",)
 # Profiles only for an agent that acts with the role admin, the caller's
 # under [mcp] max_role: for anyone else administrator would be the role's
 # powers under a name that promises more.

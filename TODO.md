@@ -69,6 +69,12 @@ What each is: the file named. What remains:
   of the documents"): shown in containers and on `deb13`. Left: the user,
   with Claude, has it propose a skill for a recurring task, approves it in
   the page, and a new session uses it.
+- **Assistant without questions** (27 November, `decisions.md`,
+  `architecture/chat.md`): one consent per ad-hoc command, and "Without
+  questions" in `administrator`. Built with unit tests; left: `ct-test`
+  (migrations 40 and 41), and the user, with Claude on a controller with
+  `[chat] unattended = true`, sees an ad-hoc command start after one
+  "Allow once", then the switch: risks, no question, the run marked.
 
 ## Integration
 

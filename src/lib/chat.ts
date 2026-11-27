@@ -87,6 +87,10 @@ export interface ChatState {
     // The runs an agent in the profile autonomous may launch in each
     // conversation, as chosen when the session started; 0 for config.toml's.
     runs: number;
+    // The person let the agent act without asking (chat.unattended): set for
+    // the session of fleet-mcp of each conversation, until turned off or the
+    // profile changes.
+    unattended: boolean;
     // What the agent launched in the conversation (chat.session), and why it
     // could not be asked.
     sessionRuns: ChatSessionRuns | null;
@@ -101,8 +105,12 @@ export interface Transport {
 // Starts the agent in a profile; onExit says why it ended, or "" when it was closed.
 export type Spawn = (agent: string, profile: string, onData: (text: string) => void, onExit: (error: string) => void) => Transport;
 
-// The tools of an agent in a profile.
-export type LoadTools = (profile: string) => Promise<ToolInfo[]>;
+// The tools of an agent in a profile, and in a session of fleet-mcp the
+// person let it act without asking in, when one is named.
+export type LoadTools = (profile: string, session: string) => Promise<ToolInfo[]>;
+
+// Lets the agent act without asking in a session of fleet-mcp, or asks again.
+export type SetUnattended = (session: string, on: boolean) => Promise<void>;
 
 // Sets the runs an agent acting without asking may launch in a session of fleet-mcp.
 export type LimitRuns = (session: string, runs: number) => Promise<void>;
@@ -127,7 +135,7 @@ export interface Watch {
 export const WATCH_MS = 5000;
 
 const IDLE: ChatState = {
-    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "", runs: 0, sessionRuns: null, runsError: "",
+    phase: "idle", agent: "", profile: "", layers: [], error: "", needsLogin: false, sessionId: "", items: [], busy: false, loading: false, ask: null, sessions: [], draft: "", suggested: "", changing: "", fleetSession: "", runs: 0, unattended: false, sessionRuns: null, runsError: "",
 };
 
 // What fleet-mcp takes as the identifier of a session: 16 hexadecimal digits.
@@ -174,6 +182,7 @@ export class Chat {
     private change: { profile: string; sessionId: string; expected: boolean; full: number } | null = null;
     private readonly watch: Watch | null;
     private readonly consent: Consent | null;
+    private readonly setUnattended: SetUnattended | null;
     // The runs of the conversation seen not ended once the agent was idle: the
     // agent is told when they end, unless the person stopped them; those
     // ended and not told yet, while the agent is answering.
@@ -185,12 +194,13 @@ export class Chat {
     private watchAgain = false;
 
     constructor(spawn: Spawn, loadTools: LoadTools, limitRuns: LimitRuns = async () => undefined, watch: Watch | null = null,
-                consent: Consent | null = null) {
+                consent: Consent | null = null, setUnattended: SetUnattended | null = null) {
         this.spawn = spawn;
         this.loadTools = loadTools;
         this.limitRuns = limitRuns;
         this.watch = watch;
         this.consent = consent;
+        this.setUnattended = setUnattended;
     }
 
     subscribe = (listener: () => void): (() => void) => {
@@ -230,7 +240,8 @@ export class Chat {
 
     private async reloadTools(): Promise<void> {
         try {
-            this.tools = new Map((await this.loadTools(this.state.profile)).map(tool => [tool.name, tool]));
+            const session = this.state.unattended ? this.state.fleetSession : "";
+            this.tools = new Map((await this.loadTools(this.state.profile, session)).map(tool => [tool.name, tool]));
         } catch {
             // A tool not known is asked about every time.
         }
@@ -258,7 +269,8 @@ export class Chat {
         if (!transport || this.state.phase !== "ready" || this.state.busy || this.state.loading || this.state.ask
             || this.change || !profile || profile === this.state.profile) return;
         this.change = { profile, sessionId: this.state.sessionId, expected: true, full: 0 };
-        this.set({ changing: profile, runs });
+        // Asked again in the next profile, as "always" is.
+        this.set({ changing: profile, runs, unattended: false });
         // The next starts once this one has gone, not to be counted with it.
         transport.close();
     }
@@ -399,6 +411,27 @@ export class Chat {
         if (this.state.profile === "autonomous" && this.state.runs > 0) {
             await this.limitRuns(this.state.fleetSession, this.state.runs);
         }
+        if (this.state.unattended && this.setUnattended) {
+            await this.setUnattended(this.state.fleetSession, true);
+            await this.reloadTools();
+        }
+    }
+
+    // Lets the agent act without asking, or asks again, from now on in this
+    // conversation and in the next ones of the session. Off at once in the
+    // page, whatever the backend answers; on only once the backend has it.
+    async unattend(on: boolean): Promise<void> {
+        if (!this.setUnattended || on === this.state.unattended) return;
+        const session = this.state.fleetSession;
+        if (!on) {
+            this.set({ unattended: false });
+            await this.reloadTools();
+            if (session) await this.setUnattended(session, false);
+            return;
+        }
+        if (session) await this.setUnattended(session, true);
+        this.set({ unattended: true });
+        await this.reloadTools();
     }
 
     // A new conversation: the agent is told when the first message is sent.

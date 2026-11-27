@@ -11,7 +11,7 @@ import json
 import re
 import time
 
-from . import approvals, jobs, profiles, store
+from . import approvals, consent, jobs, profiles, store
 from .auth import role_at_least
 from .cli import COMMANDS, Context, Id, Int, Str, Values, command
 from .errors import BadRequest
@@ -128,7 +128,10 @@ def _diagnostic_tool(tool: dict, modules: tuple[str, ...]) -> dict:
 
 @command("mcp.tools", role="viewer", tool=False,
          params={"profile": Str("For the page: the tools of an agent in this profile.",
-                                max_length=32)})
+                                max_length=32),
+                 "session": Str("For the page: of an agent in this session of fleet-mcp,"
+                                " which the caller may have let act without asking",
+                                max_length=16)})
 def mcp_tools(ctx: Context, params: Values) -> dict:
     """The tools the caller may use: for fleet-mcp, which offers them to an agent.
 
@@ -142,12 +145,14 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
     profile = ctx.profile or params["profile"] or ""
     if profile and profile not in ctx.config.chat_profiles:
         raise BadRequest(f"{profile} is not a profile enabled on this controller")
-    return {"tools": tools(ctx, role, profile), "role": role, "user": ctx.caller.user,
-            "profile": profile}
+    unattended = consent.unattended_session(ctx, ctx.session or params["session"], profile)
+    return {"tools": tools(ctx, role, profile, unattended), "role": role,
+            "user": ctx.caller.user, "profile": profile, "unattended": unattended}
 
 
-def tools(ctx: Context, role: str | None, profile: str) -> list[dict]:
-    """The tools of an agent with ROLE in PROFILE (all, with none)."""
+def tools(ctx: Context, role: str | None, profile: str, unattended: bool = False) -> list[dict]:
+    """The tools of an agent with ROLE in PROFILE (all, with none); with
+    UNATTENDED, none of them asked about."""
     modules = ctx.config.mcp_adhoc_modules
 
     def offered(kind: str) -> bool:
@@ -184,8 +189,8 @@ def tools(ctx: Context, role: str | None, profile: str) -> list[dict]:
             if tool is not None:
                 found.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
     for tool in found:
-        tool["question"] = profiles.question(profile, tool["class"], tool["readOnly"],
-                                             tool["command"])
+        tool["question"] = "none" if unattended else profiles.question(
+            profile, tool["class"], tool["readOnly"], tool["command"])
     return found
 
 

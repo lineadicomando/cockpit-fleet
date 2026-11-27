@@ -247,7 +247,32 @@ recorded in the backend first (`chat.consent`), so the command does not
 wait to be confirmed again (approvals.md). "Always" is kept by the
 page and answered as "once": the agent's own option of that kind writes a
 rule in the user's settings. A call that names something `mcp.tools` does
-not list, after asking it again, is asked about every time. Stopping an
+not list, after asking it again, is asked about every time.
+
+**Without questions** (27 November, `consent.py`). In a profile of
+`profiles.UNATTENDED_PROFILES` (`administrator`), where `[chat] unattended`
+allows it, the header has a switch that turns the questions off, as Claude
+Code's mode that bypasses permissions. The first time it tells the risks
+and records their acceptance (`chat.accept` with `unattended`, a mode and
+not a profile, in `profile_acceptances`); then `Chat.unattend` calls
+`chat.unattended` (admin, no tool, audited) for the session of `fleet-mcp`
+of the conversation, or, before the first message, when the session is
+drawn (`limit()`, before `session/new` or `session/load`, as the runs of
+`autonomous`), and asks `mcp.tools` again with `session`: for a session
+that `unattended_sessions` (schema 41) holds for the caller, every tool is
+`none`, and the page answers alone. `run.adhoc` of an agent in that
+session and profile starts without waiting, `"unattended": true` in its
+options. It holds for every conversation of the chat session (each draws
+its session and sets it), until switched off (the page asks again at once,
+then tells the backend), the profile changes (the page drops it, and the
+backend holds it only in `administrator`) or the page is reloaded; and
+`config.toml` takes it back at the next call. Not offered at a terminal.
+What stays: role, ceiling and profile in `_through`, drafts for files,
+approvals of templates (an agent has no right), "Stop everything". The
+alternative of a profile of its own was set aside: it would start the
+agent again to turn it on or off, and its powers are those of
+`administrator`. A cap on its calls, as `autonomous` has, was not wanted:
+the point is the speed of a person watching. Stopping an
 answer cancels what was waiting. None of this is a control: the backend
 decides again, with the role of the user under the ceiling of `[mcp]` and
 the profile.

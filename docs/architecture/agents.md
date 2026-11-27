@@ -106,6 +106,9 @@ and `doc.delete` but in `autonomous`: `profiles.ALWAYS_ASKED_COMMANDS`) or
 the names of the tools that are `none`, for the agent's program at a
 terminal. One table, so that the page and the terminal cannot drift apart;
 and a floor, not a control, since `_through` decides each call again.
+`mcp.tools` with `session` gives `none` for every tool when the caller
+let the agent act without asking in that session (`chat.unattended`,
+"Without questions" in [The chat](chat.md)).
 
 **Autonomy.** In a profile nobody confirms (`profiles.AUTONOMOUS`),
 `dispatch` hands the call, once the role allows it, to `autonomy.hold`:

@@ -193,6 +193,17 @@ started stays as it is: once logged in, send the message again.
   documents is asked about, with "always", in every profile but
   `autonomous`; deleting one is asked every time. These questions are a convenience: the backend decides again,
   whatever the answer.
+- "Without questions", in `administrator` only and only where `[chat]
+  unattended = true` (off as installed): the switch in the header of the
+  session turns every question off, as the mode of Claude Code that
+  bypasses permissions, for the conversations of that session until it is
+  turned off, the profile changes or the page is reloaded. Its ad-hoc
+  commands then start without a confirmation, marked "unattended" in the
+  run's options; changes and deletes are made at once. Files still go to
+  a draft a person merges, a template that needs approval still waits for
+  a person, and "Stop everything" cancels its runs. Each user accepts its
+  risks once (`chat.accept`), and each turning on or off is in the audit
+  log (`chat.unattended`). Not at a terminal.
 - Above the message box the page shows what the assistant launched in the
   conversation. In `autonomous`, how many runs of those it may ("Runs
   launched in this conversation: 30 of 30"); when they are spent, "Allow

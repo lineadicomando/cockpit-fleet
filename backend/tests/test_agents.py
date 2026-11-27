@@ -332,6 +332,45 @@ class ProfileTest(Base):
                                                     "input": {**shell, "forks": "x"}}),
                          "bad_request")
 
+    def test_an_agent_the_person_let_act_without_asking_is_asked_nothing(self):
+        session = "0123456789abcdef"
+        self.config = replace(self.config, chat_unattended=True, max_concurrent_runs=10)
+        shell = self.adhoc("ansible.builtin.shell", free_form="df -h", become=True)
+
+        def agent(profile="administrator", session=session):
+            return self.via("run.adhoc", {**shell, "session": session}, profile)["data"]
+
+        def questions(**params):
+            return {tool["question"] for tool in self.ok("mcp.tools", {
+                "profile": "administrator", **params})["tools"]}
+
+        self.assertEqual(agent()["status"], "pending_approval")
+        self.assertIn("every", questions(session=session))
+        self.ok("chat.accept", {"profile": "unattended"})
+        self.ok("chat.unattended", {"session": session, "on": True})
+        self.assertEqual(questions(session=session), {"none"})
+        self.assertIn("every", questions())
+        self.assertIn("every", questions(session="fedcba9876543210"))
+        run = agent()
+        self.assertEqual(run["status"], "running")
+        got = self.ok("run.get", {"id": run["id"]})
+        self.assertTrue(got["options"]["unattended"])
+        self.assertIsNone(got.get("approval"))
+        # Not in another session, nor another profile, nor once config.toml takes it back.
+        self.assertEqual(agent(session="fedcba9876543210")["status"], "pending_approval")
+        self.assertEqual(self.via("mcp.tools", {"session": session}, "assisted")["data"]
+                         ["unattended"], False)
+        self.config = replace(self.config, chat_unattended=False)
+        self.assertEqual(agent()["status"], "pending_approval")
+        self.assertIn("every", questions(session=session))
+        # An agent cannot let itself act so, nor stop being asked.
+        self.config = replace(self.config, chat_unattended=True)
+        self.assertEqual(self.via("chat.unattended", {"session": session, "on": True},
+                                  "administrator")["error"]["code"], "forbidden")
+        # The profile still bounds it.
+        self.assertEqual(self.via("credential.delete", {"id": "c1", "session": session},
+                                  "observer")["error"]["code"], "forbidden")
+
     def test_the_role_still_bounds_a_profile(self):
         self.config = replace(self.config, mcp_max_role="operator")
         answer = self.via("credential.create", {"name": "x", "kind": "vault"}, "administrator")
@@ -510,7 +549,7 @@ class AutonomyTest(Base):
             self.assertTrue(self.via("run.start", launch)["ok"])
         self.refused(self.via("run.start", launch), "allow more from the chat page")
         self.assertEqual(self.ok("chat.session", session),
-                         {"launched": 2, "allowed": 2, "granted": 0,
+                         {"unattended": False, "launched": 2, "allowed": 2, "granted": 0,
                           "not_ended": self.ok("chat.session", session)["not_ended"],
                           "ended": []})
         # Never by the agent, nor by a viewer, nor for a session made up.

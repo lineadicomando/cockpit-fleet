@@ -1030,6 +1030,18 @@ MIGRATIONS: list[list[str]] = [
         """,
         "CREATE INDEX chat_consents_session ON chat_consents (session, user)",
     ],
+    [
+        # The sessions of fleet-mcp in which a person let an agent of theirs
+        # in the profile administrator act without asking (chat.unattended).
+        """
+        CREATE TABLE unattended_sessions (
+            session  TEXT NOT NULL,
+            user     TEXT NOT NULL,
+            set_at   REAL NOT NULL,
+            PRIMARY KEY (session, user)
+        )
+        """,
+    ],
 ]
 
 

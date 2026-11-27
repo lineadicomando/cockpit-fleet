@@ -235,7 +235,7 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
     for waits until the person it acts for confirms it, unless it is of a
     module that changes nothing ([mcp] adhoc_modules, mcp_adhoc_modules in
     config.show, without become), or the person allowed it in the chat page
-    just before; it expires as approvals do.
+    just before, or let you act without asking; it expires as approvals do.
     """
     called = consent.digest(params)
     inventory_id = params["inventory_id"]
@@ -319,7 +319,12 @@ def run_adhoc(ctx: Context, params: Values) -> dict:
         # Nobody reads what an agent runs before it runs: the person it acts
         # for does now, or did in the chat page just before. A program
         # steered by what a node wrote cannot.
-        if consent.take(ctx.conn, ctx.session, ctx.caller.user, "run.adhoc", called):
+        if consent.unattended(ctx):
+            # The person let it act without asking, for this conversation.
+            options["unattended"] = True
+            run["options"] = json.dumps(options)
+            jobs.enqueue(ctx, run, spec, directory)
+        elif consent.take(ctx.conn, ctx.session, ctx.caller.user, "run.adhoc", called):
             jobs.enqueue(ctx, run, spec, directory)
             approvals.confirmed_before(ctx, run_id, "confirmed in the chat page")
         else:

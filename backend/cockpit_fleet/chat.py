@@ -100,6 +100,15 @@ def _offered(ctx: Context) -> tuple[str, ...]:
     return profiles.offered(ctx.config.chat_profiles, _agent_role(ctx))
 
 
+def _check_unattended(ctx: Context) -> None:
+    if not ctx.config.chat_unattended:
+        raise Conflict("acting without asking is not enabled on this controller"
+                       " ([chat] unattended in config.toml)")
+    if not _unattended_offered(ctx):
+        raise Forbidden("acting without asking is for an agent in the profile administrator,"
+                        " which is for administrators of Fleet")
+
+
 def _check_offered(ctx: Context, profile: str) -> None:
     if profile not in ctx.config.chat_profiles:
         raise Conflict(f"the profile {profile} is not enabled on this controller"
@@ -109,8 +118,15 @@ def _check_offered(ctx: Context, profile: str) -> None:
                         " Fleet, and agents act as one only with [mcp] max_role = \"admin\"")
 
 
+def _unattended_offered(ctx: Context) -> bool:
+    """Whether the caller may let an agent act without asking: config.toml
+    allows it and one of its profiles is offered to them."""
+    return ctx.config.chat_unattended and any(
+        profile in _offered(ctx) for profile in profiles.UNATTENDED_PROFILES)
+
+
 def _accepted(ctx: Context) -> set[str]:
-    """The profiles whose risks the caller accepted."""
+    """The profiles whose risks the caller accepted, and "unattended"."""
     return {row["profile"] for row in ctx.conn.execute(
         "SELECT profile FROM profile_acceptances WHERE user = ?", (ctx.caller.user,))}
 
@@ -142,7 +158,11 @@ def chat_agents(ctx: Context, params: Values) -> dict:
                                             _agent_role(ctx)),
         # Those of them the caller must accept the risks of before a session.
         "to_accept": [profile for profile in _offered(ctx)
-                      if profile in profiles.RISKY and profile not in accepted],
+                      if profile in profiles.RISKY and profile not in accepted]
+        + ([profiles.UNATTENDED] if _unattended_offered(ctx)
+           and profiles.UNATTENDED not in accepted else []),
+        # Whether the caller may let an agent in one of these act without asking.
+        "unattended": list(profiles.UNATTENDED_PROFILES) if _unattended_offered(ctx) else [],
         # What holds an agent in the profile autonomous, to tell the user.
         "autonomous_runs": config.chat_autonomous_runs,
         "autonomous_dry_run": config.chat_autonomous_dry_run,
@@ -203,14 +223,20 @@ def chat_start(ctx: Context, params: Values) -> dict:
 
 
 @command("chat.accept", role="viewer", mutating=True, tool=False,
-         params={"profile": Choice(profiles.RISKY, "A profile of the assistant beyond assisted.")})
+         params={"profile": Choice((*profiles.RISKY, profiles.UNATTENDED),
+                                   "A profile of the assistant beyond assisted, or unattended:"
+                                   " acting without asking.")})
 def chat_accept(ctx: Context, params: Values) -> dict:
     """Record that the caller was told what an agent in a profile beyond
     assisted may do, how the managed nodes can steer it and what goes to the
     provider of its model, and accepted it: once, for every later session in
-    that profile. The audit trail keeps who and when."""
+    that profile. The audit trail keeps who and when. "unattended" is the
+    mode in which the agent asks nothing (chat.unattended)."""
     profile = params["profile"]
-    _check_offered(ctx, profile)
+    if profile == profiles.UNATTENDED:
+        _check_unattended(ctx)
+    else:
+        _check_offered(ctx, profile)
     when = store.now()
     ctx.conn.execute("INSERT OR IGNORE INTO profile_acceptances (user, profile, accepted_at)"
                      " VALUES (?, ?, ?)", (ctx.caller.user, profile, when))
@@ -265,7 +291,8 @@ def chat_session(ctx: Context, params: Values) -> dict:
     session = _session(params)
     jobs.reconcile(ctx)
     user = ctx.caller.user
-    return {"launched": autonomy.launched(ctx.conn, session, user),
+    return {"unattended": consent.unattended_session(ctx, session, profiles.UNATTENDED_PROFILES[0]),
+            "launched": autonomy.launched(ctx.conn, session, user),
             "allowed": autonomy.allowed(ctx.conn, ctx.config, session, user),
             "granted": autonomy.granted(ctx.conn, session, user),
             "not_ended": [dict(row) for row in _not_ended(ctx, session)],
@@ -337,3 +364,22 @@ def chat_consent(ctx: Context, params: Values) -> dict:
     consent.give(ctx.conn, session, ctx.caller.user, command,
                  consent.of_input(command, params["input"]))
     return {}
+
+
+@command("chat.unattended", role="admin", mutating=True, tool=False,
+         params={"session": _SESSION,
+                 "on": Bool("Let it act without asking; false asks again")})
+def chat_unattended(ctx: Context, params: Values) -> dict:
+    """Let an agent of the caller in the profile administrator act without
+    asking in a session of fleet-mcp, or ask again: nothing it calls is
+    asked about, and its ad-hoc commands start without waiting for a
+    confirmation. Only where config.toml allows it ([chat] unattended), once
+    the caller accepted its risks (chat.accept). A person's decision, never
+    an agent's, which is refused this command."""
+    session = _session(params)
+    if params["on"]:
+        _check_unattended(ctx)
+        if profiles.UNATTENDED not in _accepted(ctx):
+            raise NotAccepted("the risks of acting without asking have not been accepted yet")
+    consent.set_unattended(ctx.conn, session, ctx.caller.user, params["on"])
+    return {"unattended": params["on"]}

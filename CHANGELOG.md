@@ -10,6 +10,14 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Assistant: "Without questions" in the profile administrator, as the mode
+  of Claude Code that bypasses permissions: a switch in the header of the
+  session turns every question off for its conversations, and the
+  assistant's ad-hoc commands start without a confirmation. Off unless
+  `[chat] unattended = true` in `config.toml`; each user accepts its risks
+  once; files still go to a draft and templates that need approval still
+  wait (command `chat.unattended`, which agents cannot call).
+
 - Assistant: each run it launched that has not ended is a link to its page
   under the chat, beside "Stop everything".
 - Assistant: when runs it launched end after its answer (one confirmed

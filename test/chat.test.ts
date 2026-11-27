@@ -101,9 +101,11 @@ const TOOLS: Omit<ToolInfo, "question">[] = [
     { name: "run_adhoc", command: "run.adhoc", description: "Run an ad-hoc command.", readOnly: false, class: "adhoc", inputSchema: {} },
 ];
 
-// What mcp.tools says of them in a profile (profiles.question in the backend).
-function toolsOf(profile: string): ToolInfo[] {
+// What mcp.tools says of them in a profile (profiles.question in the backend),
+// and in a session the person let the agent act without asking in.
+function toolsOf(profile: string, unattended = false): ToolInfo[] {
     return TOOLS.map(tool => {
+        if (unattended) return { ...tool, question: "none" as const };
         let asked: ToolInfo["question"] = tool.class === "read" ? "none" : tool.class === "adhoc" ? "every" : "ask";
         if (profile === "autonomous" && tool.class === "run") asked = "none";
         return { ...tool, question: asked };
@@ -117,8 +119,11 @@ class Agent {
     readonly received: Message[] = [];
     closed = false;
     spawned: string[][] = [];
-    // The profiles the tools were asked for.
+    // The profiles the tools were asked for, with the session when one was named.
     listed: string[] = [];
+    // What chat.unattended was asked, and the sessions it holds for.
+    unattendedCalls: [string, boolean][] = [];
+    unattendedSessions = new Set<string>();
     // The runs set for sessions of fleet-mcp, with the methods the agent had been sent by then.
     limits: { session: string; runs: number; before: number }[] = [];
     // Why setting them fails, when it does.
@@ -157,7 +162,10 @@ class Agent {
                 },
                 close: () => { this.closed = true; },
             };
-        }, async profile => { this.listed.push(profile); return toolsOf(profile); },
+        }, async (profile, session) => {
+            this.listed.push(session ? `${profile}@${session}` : profile);
+            return toolsOf(profile, this.unattendedSessions.has(session));
+        },
         async (session, runs) => {
             if (this.limitFails) throw new Error(this.limitFails);
             this.limits.push({ session, runs, before: this.received.length });
@@ -167,6 +175,9 @@ class Agent {
         } : null, async (session, command, input) => {
             if (this.consentFails) throw new Error(this.consentFails);
             this.consents.push({ session, command, input, before: this.received.length });
+        }, async (session, on) => {
+            this.unattendedCalls.push([session, on]);
+            if (on) this.unattendedSessions.add(session); else this.unattendedSessions.delete(session);
         });
     }
 
@@ -368,6 +379,42 @@ test("an ad-hoc command allowed once is recorded before the agent is answered, s
     agent.chat.answer("once");
     await tick();
     assert.deepEqual(agent.answerTo(96)!.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
+});
+
+test("without questions, nothing is asked in any conversation of the session, until turned off or the profile changes", async () => {
+    const agent = new Agent();
+    await agent.ready("administrator");
+    // Before the first message: set once its session is drawn, before the agent is told.
+    await agent.chat.unattend(true);
+    assert.deepEqual(agent.unattendedCalls, []);
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("free some space");
+    const first = agent.chat.getState().fleetSession;
+    assert.deepEqual(agent.unattendedCalls, [[first, true]]);
+    agent.ask(97, "run_adhoc");
+    await tick();
+    assert.equal(agent.chat.getState().ask, null);
+    assert.deepEqual(agent.answerTo(97)!.result, { outcome: { outcome: "selected", optionId: "allow-once" } });
+    assert.deepEqual(agent.consents, []);
+    // A new conversation gets it too.
+    agent.chat.fresh();
+    await agent.chat.send("again");
+    const second = agent.chat.getState().fleetSession;
+    assert.notEqual(second, first);
+    assert.deepEqual(agent.unattendedCalls.at(-1), [second, true]);
+    // Off: asked again at once, and the backend told.
+    await agent.chat.unattend(false);
+    assert.deepEqual(agent.unattendedCalls.at(-1), [second, false]);
+    agent.ask(98, "run_adhoc");
+    await tick();
+    assert.equal(agent.chat.getState().ask!.tool?.name, "run_adhoc");
+    agent.chat.answer("refuse");
+    await tick();
+    // On again, then another profile: asked again there.
+    await agent.chat.unattend(true);
+    assert.equal(agent.chat.getState().unattended, true);
+    agent.chat.changeProfile("assisted");
+    assert.equal(agent.chat.getState().unattended, false);
 });
 
 test("an autonomous agent launches with no question; the backend holds it", async () => {

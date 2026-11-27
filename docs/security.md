@@ -165,7 +165,11 @@ on an inventory in maintenance, and cannot silence a problem; a run that
 needs approval still waits for a person. An ad-hoc command an agent asks
 for, of a module that may change something, waits until the person it acts
 for confirms it, whatever the profile: when the page asks about that very
-call (`chat.consent`, which no agent may call), or once it waits. A user accepts the risks of a profile
+call (`chat.consent`, which no agent may call), or once it waits; or,
+where `[chat] unattended = true` allows it, after they turned the questions
+off for the conversations of a session in the profile `administrator`
+(`chat.unattended`, audited, its risks accepted once), which runs them,
+and changes and deletes, with nobody reading them first. A user accepts the risks of a profile
 beyond `assisted` once before a session in it (`chat.accept`, audited), and
 `chat.start` refuses until then; that is consent, not a control. Neither
 are the questions of the page or of the agent's program at a terminal:

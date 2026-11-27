@@ -10,13 +10,23 @@ the agent then makes with the same parameters, in the same session of
 fleet-mcp, for the same user and within CONSENT_SECONDS, starts at once,
 recorded as confirmed by that person. One consent is one call. The command
 that records it is no tool: an agent cannot consent for its person.
+
+Or the person consents to everything, for one conversation: in the profile
+administrator, when [chat] unattended allows it, they turn the questions off
+for a session of fleet-mcp (chat.unattended, no tool either), as Claude
+Code's mode that bypasses permissions. The page then asks about nothing
+(profiles.question gives "none" in mcp.tools of that session) and the
+agent's ad-hoc commands start at once, marked "unattended" in their
+options. Everything else holds it as before: role, ceiling, profile, drafts
+for files, approvals of templates, which an agent never gives; and "Stop
+everything".
 """
 
 import hashlib
 import json
 
-from . import store
-from .cli import COMMANDS
+from . import profiles, store
+from .cli import COMMANDS, Context
 
 # Commands whose call of an agent waits for its person, and may be allowed
 # beforehand.
@@ -55,3 +65,26 @@ def take(conn, session: str | None, user: str, command: str, value: str) -> bool
         " SELECT rowid FROM chat_consents WHERE session = ? AND user = ? AND command = ?"
         " AND digest = ? AND used_at IS NULL AND given_at > ? ORDER BY given_at LIMIT 1)",
         (now, session, user, command, value, now - CONSENT_SECONDS)).rowcount == 1
+
+
+def unattended_session(ctx: Context, session: str | None, profile: str) -> bool:
+    """Whether the caller let an agent of theirs in PROFILE act without asking
+    in SESSION, and config.toml still allows it."""
+    if not (session and ctx.config.chat_unattended and profile in profiles.UNATTENDED_PROFILES):
+        return False
+    return ctx.conn.execute("SELECT 1 FROM unattended_sessions WHERE session = ? AND user = ?",
+                            (session, ctx.caller.user)).fetchone() is not None
+
+
+def unattended(ctx: Context) -> bool:
+    """Whether the call of an agent being made is one nobody is asked about."""
+    return unattended_session(ctx, ctx.session, ctx.profile or "")
+
+
+def set_unattended(conn, session: str, user: str, on: bool) -> None:
+    if on:
+        conn.execute("INSERT OR IGNORE INTO unattended_sessions (session, user, set_at)"
+                     " VALUES (?, ?, ?)", (session, user, store.now()))
+    else:
+        conn.execute("DELETE FROM unattended_sessions WHERE session = ? AND user = ?",
+                     (session, user))

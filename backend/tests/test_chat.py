@@ -246,6 +246,48 @@ class CommandsTest(Base):
             self.assertEqual(self.code("chat.accept", {"profile": profile}), "bad_request")
         self.assertEqual(self.code("chat.accept", {"profile": "administrator"}), "conflict")
 
+    def test_acting_without_asking_is_allowed_by_config_toml_accepted_and_set_by_a_person(self):
+        session = "0123456789abcdef"
+        self.config = replace(self.config, mcp_max_role="admin",
+                              chat_profiles=tuple(profiles.PROFILES))
+        # Off by default: neither offered nor accepted nor set.
+        data = self.ok("chat.agents")
+        self.assertEqual(data["unattended"], [])
+        self.assertNotIn("unattended", data["to_accept"])
+        self.assertEqual(self.code("chat.accept", {"profile": "unattended"}), "conflict")
+        self.assertEqual(self.code("chat.unattended", {"session": session, "on": True}),
+                         "conflict")
+        self.config = replace(self.config, chat_unattended=True)
+        data = self.ok("chat.agents")
+        self.assertEqual(data["unattended"], ["administrator"])
+        self.assertIn("unattended", data["to_accept"])
+        # Not for whoever cannot be in the profile administrator.
+        self.assertEqual(self.ok("chat.agents", role="operator")["unattended"], [])
+        self.assertEqual(self.code("chat.accept", {"profile": "unattended"}, role="operator"),
+                         "forbidden")
+        # Its risks first.
+        self.assertEqual(self.code("chat.unattended", {"session": session, "on": True}),
+                         "not_accepted")
+        self.ok("chat.accept", {"profile": "unattended"})
+        self.assertNotIn("unattended", self.ok("chat.agents")["to_accept"])
+        self.assertFalse(self.ok("chat.session", {"session": session})["unattended"])
+        self.assertEqual(self.ok("chat.unattended", {"session": session, "on": True}),
+                         {"unattended": True})
+        self.assertTrue(self.ok("chat.session", {"session": session})["unattended"])
+        # Another user's session of the same name is not this one.
+        answer = cli.dispatch("chat.session", json.dumps({"session": session}).encode(),
+                              self.ctx("admin", "bruno"))
+        self.assertFalse(answer["data"]["unattended"])
+        # Taken back by config.toml, or by the person.
+        self.config = replace(self.config, chat_unattended=False)
+        self.assertFalse(self.ok("chat.session", {"session": session})["unattended"])
+        self.config = replace(self.config, chat_unattended=True)
+        self.ok("chat.unattended", {"session": session, "on": False})
+        self.assertFalse(self.ok("chat.session", {"session": session})["unattended"])
+        rows = self.ctx().conn.execute(
+            "SELECT outcome FROM audit WHERE command = 'chat.unattended'").fetchall()
+        self.assertEqual([row["outcome"] for row in rows], ["error", "error", "ok", "ok"])
+
     def test_instructions_in_layers_the_controller_s_last(self):
         self.rules.write_text("Never touch the inventory school on Fridays.\n")
         data = self.ok("chat.start", {"agent": "claude", "terminal": True}, role="viewer")

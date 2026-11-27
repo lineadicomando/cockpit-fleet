@@ -19,6 +19,7 @@ import {
     ModalFooter,
     ModalHeader,
     ModalVariant,
+    Switch,
     TextArea,
     TextInput,
 } from "@patternfly/react-core";
@@ -78,6 +79,94 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
         what: (profile: string) => what[profile] ?? "",
         risks: (profile: string) => [...(risks[profile] ?? []), steering],
     };
+}
+
+// The risks of letting the assistant act without asking (chat.unattended).
+function useUnattendedRisks(): string[] {
+    const { t } = useTranslation();
+    return [
+        t("Nothing it does is asked about: it runs ad-hoc commands on the nodes, become included, changes templates, inventories, schedules and the rest, and deletes them, as soon as it decides to."),
+        t("A change it makes is made in your name, and nobody reads it before: what the nodes write in the output of runs can steer it into changes you would have refused."),
+        t("What still holds it: your role, its profile, the drafts for the files it writes, the approvals of templates, and Stop everything, which cancels its runs."),
+    ];
+}
+
+// Turning the questions off, said before the first time, and accepted once.
+function UnattendedModal({ toAccept, onClose, onAccepted }: { toAccept: boolean; onClose: () => void; onAccepted: () => void }) {
+    const { t } = useTranslation();
+    const risks = useUnattendedRisks();
+    const [accepted, setAccepted] = useState(false);
+    const [problem, setProblem] = useState<string | null>(null);
+    const [working, setWorking] = useState(false);
+
+    async function turnOn() {
+        setProblem(null);
+        setWorking(true);
+        try {
+            if (toAccept) {
+                await call("chat.accept", { profile: "unattended" });
+                onAccepted();
+            }
+            await chat.unattend(true);
+        } catch (ex) {
+            setProblem(ex instanceof Error ? ex.message : String(ex));
+            setWorking(false);
+            return;
+        }
+        onClose();
+    }
+
+    return (
+        <Modal variant={ModalVariant.medium} isOpen onClose={onClose}>
+            <ModalHeader title={t("Act without asking?")} titleIconVariant="warning"
+                description={t("For the conversations of this session, until you turn it off or change the profile.")} />
+            <ModalBody>
+                {problem && <Alert variant="danger" isInline title={problem} style={{ marginBlockEnd: "1rem" }} />}
+                <Content component="ul">
+                    {risks.map(risk => <Content component="li" key={risk}>{risk}</Content>)}
+                </Content>
+                {toAccept && (
+                    <Checkbox id="chat-unattended-accept" isChecked={accepted} onChange={(_event, checked) => setAccepted(checked)}
+                        label={t("I understand what it may do and these risks. This is asked once, and recorded in the audit trail.")} />
+                )}
+            </ModalBody>
+            <ModalFooter>
+                <Button variant="danger" isDisabled={(toAccept && !accepted) || working} isLoading={working} onClick={turnOn}>{t("Act without asking")}</Button>
+                <Button variant="link" onClick={onClose}>{t("Cancel")}</Button>
+            </ModalFooter>
+        </Modal>
+    );
+}
+
+// The questions turned off or on again, in the header of the session.
+function UnattendedSwitch({ state, info, onAccepted }: { state: ChatState; info: ChatInfo; onAccepted: () => void }) {
+    const { t } = useTranslation();
+    const session = useSession();
+    const [asking, setAsking] = useState(false);
+    const [problem, setProblem] = useState<string | null>(null);
+    if (!info.unattended.includes(state.profile) || !session.commands.includes("chat.unattended")) return null;
+
+    async function change(on: boolean) {
+        setProblem(null);
+        if (on) {
+            setAsking(true);
+            return;
+        }
+        try {
+            await chat.unattend(false);
+        } catch (ex) {
+            setProblem(ex instanceof Error ? ex.message : String(ex));
+        }
+    }
+
+    return (
+        <FlexItem>
+            <Switch id="chat-unattended" label={t("Without questions")} isChecked={state.unattended}
+                onChange={(_event, on) => change(on)} />
+            {problem && <Alert variant="danger" isInline isPlain title={problem} />}
+            {asking && <UnattendedModal toAccept={info.to_accept.includes("unattended")} onClose={() => setAsking(false)} onAccepted={onAccepted} />}
+        </FlexItem>
+    );
 }
 
 // The runs an agent in the profile autonomous may launch in each
@@ -697,6 +786,7 @@ export function ChatPage() {
                                 {t("Profile {{profile}}", { profile: profiles.name(state.profile) })}
                             </Label>
                         </FlexItem>
+                        <UnattendedSwitch state={state} info={info.data} onAccepted={reload} />
                         {info.data.profiles.length > 1 && (
                             <Button variant="secondary" isDisabled={!idle || !!state.ask} onClick={() => setChanging(true)}>{t("Change the profile")}</Button>
                         )}
@@ -729,6 +819,11 @@ export function ChatPage() {
                 </Conversation>
             )}
             {running && state.needsLogin && <Login agent={agent} />}
+            {running && state.unattended && (
+                <Alert variant="warning" isInline title={t("The assistant acts without asking you")} style={{ marginBlockEnd: "0.5rem" }}>
+                    {t("In this session it runs ad-hoc commands, changes and deletes without a question. Turn off Without questions to be asked again; Stop everything cancels its runs.")}
+                </Alert>
+            )}
             {running && <SessionRuns state={state} info={info.data} />}
             {shown && <Composer state={state} />}
             {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} onAccepted={reload} />}

@@ -97,6 +97,9 @@ class Config:
     # one session, and whether they must all be dry runs (autonomy.py).
     chat_autonomous_runs: int = 30
     chat_autonomous_dry_run: bool = False
+    # Whether a person may let an agent in the profile administrator act
+    # without being asked, for one conversation (consent.py).
+    chat_unattended: bool = False
     # And the changes to the documents it may make in one session.
     chat_autonomous_writes: int = 20
     # Where the web console is reached, for the links in notifications.
@@ -291,7 +294,7 @@ def parse(text: str) -> Config:
 
     chat = _section(data, "chat", {"agents", "max_sessions", "profiles", "default_profile",
                                    "autonomous_runs", "autonomous_dry_run",
-                                   "autonomous_writes"})
+                                   "autonomous_writes", "unattended"})
     agents = chat.get("agents", {})
     if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
         raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
@@ -307,6 +310,9 @@ def parse(text: str) -> Config:
     dry_run = chat.get("autonomous_dry_run", False)
     if not isinstance(dry_run, bool):
         raise ConfigError("chat.autonomous_dry_run must be true or false")
+    unattended = chat.get("unattended", False)
+    if not isinstance(unattended, bool):
+        raise ConfigError("chat.unattended must be true or false")
 
     notifications = _section(data, "notifications", {"url"})
     notify_url = notifications.get("url", "")
@@ -359,6 +365,7 @@ def parse(text: str) -> Config:
         chat_autonomous_runs=_int(chat, "chat", "autonomous_runs", Config.chat_autonomous_runs,
                                   1, 1000),
         chat_autonomous_dry_run=dry_run,
+        chat_unattended=unattended,
         chat_autonomous_writes=_int(chat, "chat", "autonomous_writes",
                                     Config.chat_autonomous_writes, 1, 1000),
         notify_url=notify_url.rstrip("/"),

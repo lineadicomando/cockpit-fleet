@@ -71,6 +71,12 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaises(ConfigError, msg=bad):
                 parse("[chat]\n" + bad)
 
+    def test_acting_without_asking_is_off_unless_allowed(self):
+        self.assertFalse(parse("").chat_unattended)
+        self.assertTrue(parse("[chat]\nunattended = true").chat_unattended)
+        with self.assertRaises(ConfigError):
+            parse('[chat]\nunattended = "yes"')
+
     def test_diagnostic_modules_are_among_those_of_ad_hoc_commands(self):
         self.assertIn("ansible.builtin.setup", parse("").mcp_adhoc_modules)
         self.assertNotIn("ansible.builtin.shell", parse("").mcp_adhoc_modules)

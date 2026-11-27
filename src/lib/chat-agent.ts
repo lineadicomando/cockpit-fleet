@@ -47,8 +47,11 @@ export function tellEnded(ended: ChatSessionRun[]): string {
 
 export const chat = new Chat(
     spawnAgent,
-    async profile => (await call<{ tools: ToolInfo[] }>("mcp.tools", profile ? { profile } : {})).tools,
+    async (profile, session) => (await call<{ tools: ToolInfo[] }>("mcp.tools", {
+        ...(profile ? { profile } : {}), ...(session ? { session } : {}),
+    })).tools,
     async (session, runs) => { await call("chat.limit_runs", { session, runs }); },
     { load: session => call<ChatSessionRuns>("chat.session", { session }), tell: tellEnded },
     async (session, command, input) => { await call("chat.consent", { session, command, input }); },
+    async (session, on) => { await call("chat.unattended", { session, on }); },
 );
