@@ -13,7 +13,7 @@ release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 `make release` only when asked.
 
 To resume: `git status`, `git log origin/main..`; `make check` (876
-backend, 244 frontend tests). Each backend module's docstring says what it
+backend, 246 frontend tests). Each backend module's docstring says what it
 is; `cli.py` the registry of commands, `db.py` the schema (41
 migrations). Under way: the closes of 20–24 on the lab's VMs, then
 the integration there (`sandbox` run D, SELinux).

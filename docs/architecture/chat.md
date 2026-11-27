@@ -48,10 +48,14 @@ login, each to copy; the page asks again every 5 s. It installs nothing
 itself: that would take a third entry point as root. For a named agent
 under `/opt/cockpit-fleet-agent` that is not installed, `chat.agents`
 gives the installing command. Beside each command, a button opens
-Cockpit's terminal (`cockpit-system`, as the user of the page) in a new
-tab, at an address built from the shell's own (`src/lib/shell.ts`):
-`cockpit.jump` would replace the page and end the agent the user is
-logging in for; outside the shell it falls back to `cockpit.jump`.
+Cockpit's terminal (`cockpit-system`, as the user of the page) in the
+same tab (`cockpit.jump`): the page is left, and an agent it started ends,
+but one that is not installed or not logged in does nothing yet, and the
+page, opened again from Cockpit's menu, starts it anew; a tab opened for
+it would be left behind. Elsewhere (`AtTerminal`: the `fleet` command of
+what a page does) the button opens a new tab, at an address built from
+the shell's own (`src/lib/shell.ts`), so that leaving does not end a
+conversation; outside the shell, `cockpit.jump`.
 
 **The page names the agent, it does not start it.** It spawns `fleet-chat
 NAME` (`chat_agent.py`), which runs as the user, asks `chat.start` for the

@@ -505,7 +505,7 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
                         ? (
                             <>
                                 <Content component="p">{t("An administrator of this machine installs it once, for all users, from a terminal:")}</Content>
-                                <Command text={agent.setup} />
+                                <Command text={agent.setup} here />
                             </>
                         )
                         : <Content component="p">{t("An administrator of this machine has to install it, or correct its command in /etc/cockpit-fleet/config.toml.")}</Content>}
@@ -699,7 +699,7 @@ function Login({ agent }: { agent: ChatAgentInfo | undefined }) {
     return (
         <Alert variant="warning" isInline title={t("The assistant is not logged in to its model")} style={{ marginBlockEnd: "1rem" }}>
             <Content component="p">{t("Log in once, as your user, from a terminal on this machine, then send the message again. The login is kept for the next times.")}</Content>
-            {agent?.login && <Command text={agent.login} />}
+            {agent?.login && <Command text={agent.login} here />}
         </Alert>
     );
 }
@@ -731,7 +731,7 @@ function Setup({ guide, onCheck }: { guide: ChatGuide; onCheck: () => void }) {
             <Content component="ol">
                 <Content component="li">
                     <Content component="p">{t("Install Claude's agent and turn the chat on: paste this line in a terminal, as a user who may use sudo on this machine. It downloads about 510 MB.")}</Content>
-                    <Command text={guide.command} />
+                    <Command text={guide.command} here />
                     <Flex gap={{ default: "gapSm" }} style={{ marginBlock: "0.5rem 1rem" }}>
                         <Step done={guide.installed}>{t("Agent installed")}</Step>
                         <Step done={guide.configured}>{t("Agent named in config.toml")}</Step>
@@ -740,7 +740,7 @@ function Setup({ guide, onCheck }: { guide: ChatGuide; onCheck: () => void }) {
                 </Content>
                 <Content component="li">
                     <Content component="p">{t("Log in to the model, once, as your own user and without sudo. Every user who opens the assistant does this once.")}</Content>
-                    <Command text={guide.login} />
+                    <Command text={guide.login} here />
                 </Content>
             </Content>
         </>

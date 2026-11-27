@@ -77,6 +77,8 @@ export class MockChannel {
 }
 
 export const channels: MockChannel[] = [];
+// Where cockpit.jump was asked to go.
+export const jumps: string[] = [];
 
 const cockpit = {
     channel(options: Record<string, unknown>): MockChannel {
@@ -102,7 +104,7 @@ const cockpit = {
         return p;
     },
     location: { path: [] as string[], options: {}, go() { /* no-op */ } },
-    jump() { /* no-op */ },
+    jump(path: string) { jumps.push(path); },
     addEventListener() { /* no-op */ },
     removeEventListener() { /* no-op */ },
 };

@@ -144,8 +144,8 @@ says "Login successful"; press Enter there, or the first `fleet
 assistant` asks its questions of first use again; what it shows
 afterwards is for its own use at a terminal: Ctrl+C leaves it. The login
 is kept in the user's home (`~/.claude`). Until it is made the page says so, with this command and a
-button that opens the terminal in a new tab, so that the assistant already
-started stays as it is: once logged in, send the message again.
+button that opens the terminal in the same tab: once logged in, open
+Fleet again from Cockpit's menu and send the message again.
 
 ## What a user gets
 

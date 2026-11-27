@@ -147,6 +147,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Assistant: while it is being set up or logged in, "Open the terminal"
+  opens Cockpit's terminal in the same tab, not in a new one.
 - Assistant: an ad-hoc command allowed once when the chat page asks about
   it starts at once, recorded as confirmed by the person, instead of
   waiting to be confirmed a second time; one asked for in other words, in

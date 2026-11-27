@@ -300,10 +300,11 @@ function terminalUrl(): string {
 // A command to run in a terminal: it can be copied, and Cockpit's own
 // terminal, which runs as the user of this page, is one click away. In a new
 // tab: leaving the page would lose what was being done there, such as the
-// agent the chat has started.
-export function TerminalCommand({ text }: { text: string }) {
+// agent the chat has started; in this one (`here`) where nothing would be
+// lost, as while the chat is being set up, so that no tab is left behind.
+export function TerminalCommand({ text, here = false }: { text: string; here?: boolean }) {
     const { t } = useTranslation();
-    const url = terminalUrl();
+    const url = here ? "" : terminalUrl();
     return (
         <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }} flexWrap={{ default: "nowrap" }}>
             <FlexItem grow={{ default: "grow" }}>

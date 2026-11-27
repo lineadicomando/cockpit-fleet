@@ -38,7 +38,10 @@ missing login, with no denial: the commands in `bin/` are `bin_t`, by the
 policy's own rules for `/opt`.
 
 **Why the terminal button opens a new tab** (14 October): `cockpit.jump`
-replaced the page and ended the agent the user was logging in for.
+replaced the page and ended the agent the user was logging in for. On
+27 November the buttons of the chat's setup and login went back to the
+same tab: the user found the tab left open in the way, and an agent not
+installed or not logged in loses nothing.
 
 **Why `--permission-mode manual`** at a terminal (20 October): without it
 the CLI started in its "auto" mode, calling tools unasked, with an account
