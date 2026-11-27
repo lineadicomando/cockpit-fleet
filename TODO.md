@@ -41,6 +41,27 @@ Found by the scenarios.
   - tests: `test/templates.test.ts`, the page's, `template.list`'s;
     `architecture/inventories.md`.
 
+## To study
+
+- **The names of `overview.md` and `dashboard.md`** (`docs/architecture/`).
+  The first is "Overview and security model" (the parts, a run's flow,
+  privilege boundaries, secrets, the sandbox: what `CLAUDE.md`'s rules
+  cite), the second "The Overview", the first tab of the page
+  (`overview.get`): a search for one finds the other. To weigh, before
+  renaming anything:
+  - the names: `security-model.md` for the first (then what of its
+    section on the parts and the flow: there, in `backend.md`, or a short
+    file of its own), `overview-page.md` or as it is for the second,
+    whose command and component are `overview`; `docs/security.md`, the
+    administrator's, must not be taken for it;
+  - what cites them: 7 references to `overview.md` in 5 files
+    (`CLAUDE.md`, the index, `checks.md`, `interface.md`,
+    `docs/security.md`), 5 to `dashboard.md` in 4, `docs/history/dashboard.md`
+    beside it, the sections cited by name ("Secrets");
+  - what breaks outside: links from the installed documents and from
+    released packages and the README on GitHub to the old paths;
+  - whether a line at the top of each ("not the page: see …") is enough.
+
 ## Built, waiting for their close
 
 What each is: the file named. What remains:
