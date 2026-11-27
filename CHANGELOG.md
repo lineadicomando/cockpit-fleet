@@ -201,6 +201,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   inventory ("Never here" and the last elsewhere when there is none), and
   so are the order by last run and the filter by outcome; it was the last
   on any inventory under each of them.
+- Assistant: the tool that creates or changes a job template says what a
+  question of its survey is made of, and a field written otherwise is
+  refused with the keys it takes; the assistant guessed them before.
 - Checks: the list shows the cycles the timer starts (at most 30 seconds
   late); before, only those started from the page. Pages no longer ask the
   controller anything while their browser tab is hidden.

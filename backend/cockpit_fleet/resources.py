@@ -1127,7 +1127,7 @@ _TEMPLATE_PARAMS = {
     "variable_set_ids": Strs("Sets of variables the template takes before its own extra"
                              " variables, in order: a later one wins.",
                              max_items=variables.MAX_PER_TEMPLATE),
-    "survey": Objs(max_items=survey.MAX_FIELDS),
+    "survey": Objs(survey.FIELDS_DOC, max_items=survey.MAX_FIELDS),
     "forks": Int(1, 200),
     "verbosity": Int(0, 4, default=0),
     "become": Bool(),

@@ -33,6 +33,11 @@ _KEYS = {
     "secret": set(),
 }
 _COMMON_KEYS = {"name", "label", "help", "type", "required", "default"}
+# What a field is, for whoever writes one (an agent reads it in its tool).
+FIELDS_DOC = ("The questions asked at launch, each an object: name (the variable it sets),"
+              " type (text, number, choice, boolean or secret), label (the question shown),"
+              " help, required (true or false), default (none for secret); text also"
+              " min_length and max_length, number min and max, choice choices (a list)")
 
 
 def check_variable(value: object) -> str:
@@ -72,13 +77,16 @@ def _length(field: dict, key: str, default: int) -> int:
 def _check_field(raw: object) -> dict:
     if not isinstance(raw, dict):
         raise BadRequest("a survey field must be an object")
+    if "name" not in raw:
+        raise BadRequest("a survey field needs name, the variable it sets")
     name = check_variable(raw.get("name"))
     kind = raw.get("type")
     if kind not in TYPES:
         raise BadRequest(f"{name}: type must be one of: {', '.join(TYPES)}")
     unknown = set(raw) - _COMMON_KEYS - _KEYS[kind]
     if unknown:
-        raise BadRequest(f"{name}: not valid for a {kind} field: {', '.join(sorted(unknown))}")
+        raise BadRequest(f"{name}: not valid for a {kind} field: {', '.join(sorted(unknown))}"
+                         f" (it takes {', '.join(sorted(_COMMON_KEYS | _KEYS[kind]))})")
     required = raw.get("required", False)
     if not isinstance(required, bool):
         raise BadRequest(f"{name}: required must be true or false")

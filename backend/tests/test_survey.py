@@ -58,6 +58,21 @@ class DefinitionTest(unittest.TestCase):
                 survey.check_survey(bad)
 
 
+    def test_a_refusal_says_how_to_write_a_field(self):
+        # As another tool would write it (AWX's "variable" and "question").
+        with self.assertRaisesRegex(BadRequest, "needs name, the variable it sets"):
+            survey.check_survey([{"variable": "defrag", "question": "Defrag?", "type": "boolean"}])
+        with self.assertRaisesRegex(BadRequest, r"question \(it takes default, help, label, name,"
+                                                r" required, type\)"):
+            survey.check_survey([{"name": "defrag", "question": "Defrag?", "type": "boolean"}])
+
+    def test_the_tool_of_a_template_says_what_a_field_is(self):
+        from cockpit_fleet import resources
+        doc = resources._TEMPLATE_PARAMS["survey"].schema()["description"]
+        for word in ("name", "type", "label", "choices"):
+            self.assertIn(word, doc)
+
+
 class AnswerTest(unittest.TestCase):
     def setUp(self):
         self.fields = survey.check_survey(FIELDS)
