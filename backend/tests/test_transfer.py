@@ -46,6 +46,9 @@ class TransferTest(Base):
             "extra_vars": {"x": 1}, "forks": 7, "become": True,
             "variable_set_ids": [school["id"]], "inventory_ids": [lab["id"]],
             "survey": [{"name": "version", "type": "text", "required": True}]})
+        # One with no default inventory.
+        self.ok("template.create", {"name": "wake", "project_id": project["id"],
+                                    "playbook": "site.yml", "inventory_ids": [lab["id"]]})
         template = self.ok("template.list")["templates"][0]
         with mock.patch.object(schedules, "analyze", lambda *args: ("", [2e9])):
             self.ok("schedule.create", {
@@ -103,22 +106,24 @@ class TransferTest(Base):
         self.populate()
         document = self.ok("config.export")
         self.assertEqual(document["schedules"][0]["template"], "deploy")
+        self.assertEqual([(one["name"], one["inventory"]) for one in document["templates"]],
+                         [("deploy", "inv"), ("wake", "")])
         ctx = self.elsewhere()
         self.enterContext(mock.patch.object(schedules, "analyze", lambda *args: ("", [2e9])))
         answer = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)
         self.assertTrue(answer["ok"], answer)
         data = answer["data"]
-        self.assertEqual((data["created"], data["exists"], data["failed"]), (14, 0, 0), data)
+        self.assertEqual((data["created"], data["exists"], data["failed"]), (15, 0, 0), data)
         again = dispatch("config.export", b"", ctx)["data"]
         for section in transfer.SECTIONS:
             self.assertEqual(again[section], document[section], section)
         second = dispatch("config.import", json.dumps({"document": document}).encode(), ctx)["data"]
-        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 14, 0))
+        self.assertEqual((second["created"], second["exists"], second["failed"]), (0, 15, 0))
         # Each thing left the record its own command leaves; the text of an
         # inventory is in none.
         rows = ctx.conn.execute("SELECT command, params FROM audit").fetchall()
         commands = [row["command"] for row in rows]
-        self.assertEqual(commands.count("template.create"), 1)
+        self.assertEqual(commands.count("template.create"), 2)
         self.assertEqual(commands.count("config.import"), 2)
         self.assertNotIn("[all]", " ".join(row["params"] for row in rows))
 

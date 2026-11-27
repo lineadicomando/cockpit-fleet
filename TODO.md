@@ -12,9 +12,9 @@ features"): then fixes, minor changes and field use, toward 1.0.0. Last
 release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (864
-backend, 224 frontend tests). Each backend module's docstring says what it
-is; `cli.py` the registry of commands, `db.py` the schema (38
+To resume: `git status`, `git log origin/main..`; `make check` (870
+backend, 231 frontend tests). Each backend module's docstring says what it
+is; `cli.py` the registry of commands, `db.py` the schema (39
 migrations). Under way: the two fixes below.
 
 ## Fixes decided (27 November)
@@ -52,6 +52,10 @@ What each is: the file named. What remains:
   scenario `labs-launch` on `deb13` showed the rest (26 November). Left:
   the workflow launched on `aula-1` to its end; the agent choosing the
   inventory (the user, with Claude).
+  A template with no default inventory (27 November, `decisions.md`):
+  built; `ct-test` passed but for the known failures of containers
+  (`architecture/tests.md`); left, seen in a browser (its form, the
+  launch, a schedule and a workflow that must choose).
 - **22, check cycles in view** (`checks.md`, "Following the cycles"):
   scenario `checks-cycles` in a container. Left: the user follows the
   cycles of the labs' checks on a controller.

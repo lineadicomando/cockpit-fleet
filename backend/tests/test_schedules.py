@@ -171,6 +171,25 @@ class TickTest(ScheduleBase):
         self.assertEqual(self.ok("schedule.run", {"id": default["id"]})["inventory_id"],
                          template["inventory_id"])
 
+    def test_a_template_with_no_default_inventory_is_scheduled_on_one(self):
+        other = self.ok("inventory.create", {"name": "lab2", "kind": "managed", "content": ""})
+        template = self.template(inventory_ids=[other["id"]])
+        relying = self.schedule(template, name="default")
+        params = {key: template[key] for key in ("name", "project_id", "playbook",
+                                                 "inventory_ids")}
+        # The default is not taken away from a schedule that relies on it.
+        answer = self.call("template.update", {"id": template["id"], **params})
+        self.assertEqual(answer["error"]["code"], "conflict")
+        self.assertIn("default", answer["error"]["message"])
+        self.ok("schedule.update", {"id": relying["id"], "name": "default",
+                                    "template_id": template["id"], "calendar": "hourly",
+                                    "inventory_id": other["id"]})
+        self.ok("template.update", {"id": template["id"], **params})
+        self.assertEqual(self.code("schedule.create", {
+            "name": "x", "template_id": template["id"], "calendar": "hourly"}), "bad_request")
+        self.assertEqual(self.ok("schedule.run", {"id": relying["id"]})["inventory_id"],
+                         other["id"])
+
     def test_a_due_schedule_is_launched_as_itself_and_planned_again(self):
         schedule = self.schedule(limit="a", priority=3)
         self.assertEqual(self.tick(START + HOUR - 1), [])

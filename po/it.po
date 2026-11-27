@@ -4832,6 +4832,11 @@ msgstr "Chi lo lancia può scegliere uno di questi al posto dell'inventario indi
 msgid "With a project, only its job templates can be steps; with an inventory, every step runs on it, and only job templates that allow it can be steps. Without an inventory, one may be chosen at launch."
 msgstr "Con un progetto, solo i suoi template possono essere passi; con un inventario, ogni passo viene eseguito su di esso e possono essere passi solo i template che lo ammettono. Senza inventario, se ne può scegliere uno al lancio."
 
+msgid "inventories_choice_count"
+msgid_plural "inventories_choice_count_plural"
+msgstr[0] "scelto al lancio ({{count}} ammesso)"
+msgstr[1] "scelto al lancio ({{count}} ammessi)"
+
 msgid "inventories_others_count"
 msgid_plural "inventories_others_count_plural"
 msgstr[0] "anche su {{count}} altro"
@@ -4943,3 +4948,18 @@ msgstr "Pagine"
 
 msgid "per page"
 msgstr "per pagina"
+
+msgid "None: chosen at each launch"
+msgstr "Nessuno: scelto a ogni lancio"
+
+msgid "Whoever launches it chooses one of the inventories allowed below: allow some, or any."
+msgstr "Chi lo lancia sceglie uno degli inventari ammessi qui sotto: ammettine alcuni, o tutti."
+
+msgid "Whoever launches it chooses one of these."
+msgstr "Chi lo lancia sceglie uno di questi."
+
+msgid "Chosen at launch"
+msgstr "Scelto al lancio"
+
+msgid "Runs on the inventory chosen at launch: the job template has no default."
+msgstr "Gira sull'inventario scelto al lancio: il template non ne ha uno predefinito."

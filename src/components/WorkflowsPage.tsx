@@ -88,7 +88,7 @@ function StepEditor({ step, steps, templates, scope, inventories, projects, onCh
     const outside = !!template && !inScope(template, scope);
     // The one chosen stays in the list when it no longer fits, to be seen and changed.
     const offered = templates.filter(item => inScope(item, scope) || item.id === step.template_id);
-    const groups = templateGroups(offered, scope, inventories, projects);
+    const groups = templateGroups(offered, scope, inventories, projects, t("Chosen at launch"));
     // Where it runs: the workflow's inventory, else its template's default.
     const runsOn = scope.inventory_id || template?.inventory_id || "";
     const inventory = runsOn ? inventories.get(runsOn) ?? runsOn : "";
@@ -112,7 +112,9 @@ function StepEditor({ step, steps, templates, scope, inventories, projects, onCh
                                 onChange={value => onChange({ ...step, template_id: value, answers: storedAnswers(templates.find(item => item.id === value), {}) })} />
                             {template && (
                                 <FormHelperText><HelperText><HelperTextItem>
-                                    {t("Runs on the inventory {{inventory}}.", { inventory })}
+                                    {inventory
+                                        ? t("Runs on the inventory {{inventory}}.", { inventory })
+                                        : t("Runs on the inventory chosen at launch: the job template has no default.")}
                                 </HelperTextItem></HelperText></FormHelperText>
                             )}
                         </FormGroup>
@@ -367,6 +369,7 @@ function LaunchWorkflowModal({ workflow, inventories, names, onClose, onLaunched
 }) {
     const { t } = useTranslation();
     const [inventoryId, setInventoryId] = useState("");
+    const needed = workflow.needs_inventory;
 
     async function submit() {
         const run = await call<Run>("workflow.launch", { id: workflow.id, ...(inventoryId ? { inventory_id: inventoryId } : {}) });
@@ -376,10 +379,13 @@ function LaunchWorkflowModal({ workflow, inventories, names, onClose, onLaunched
     }
 
     return (
-        <FormModal title={t("Launch {{name}}", { name: workflow.name })} submitLabel={t("Launch")} onSubmit={submit} onClose={onClose}>
-            <FormGroup label={t("Inventory")} fieldId="wfl-inventory">
+        <FormModal title={t("Launch {{name}}", { name: workflow.name })} submitLabel={t("Launch")} onSubmit={submit} onClose={onClose}
+            isDisabled={needed && !inventoryId}>
+            <FormGroup label={t("Inventory")} isRequired={needed} fieldId="wfl-inventory">
                 <FormSelect id="wfl-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
-                    <FormSelectOption value="" label={t("Each step's own")} />
+                    {needed
+                        ? !inventoryId && <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
+                        : <FormSelectOption value="" label={t("Each step's own")} />}
                     {inventories.map(id => <FormSelectOption key={id} value={id} label={names.get(id) ?? id} />)}
                 </FormSelect>
                 <FormHelperText><HelperText><HelperTextItem>{t("Every step runs on the inventory chosen; the list has those all of its job templates allow.")}</HelperTextItem></HelperText></FormHelperText>

@@ -971,6 +971,48 @@ MIGRATIONS: list[list[str]] = [
         "CREATE INDEX template_inventories_of ON template_inventories (inventory_id)",
         "ALTER TABLE schedules ADD COLUMN inventory_id TEXT REFERENCES inventories (id)",
     ],
+    [
+        # A template may have no default inventory: every launch then chooses
+        # one among those it allows. SQLite drops NOT NULL only by a rebuild.
+        """
+        CREATE TABLE templates_new (
+            id                     TEXT PRIMARY KEY,
+            name                   TEXT NOT NULL UNIQUE,
+            project_id             TEXT NOT NULL REFERENCES projects (id),
+            playbook               TEXT NOT NULL,
+            inventory_id           TEXT REFERENCES inventories (id),
+            machine_credential_id  TEXT REFERENCES credentials (id),
+            vault_credential_id    TEXT REFERENCES credentials (id),
+            limit_hosts            TEXT NOT NULL DEFAULT '',
+            tags                   TEXT NOT NULL DEFAULT '[]',
+            skip_tags              TEXT NOT NULL DEFAULT '[]',
+            extra_vars             TEXT NOT NULL DEFAULT '{}',
+            forks                  INTEGER,
+            verbosity              INTEGER NOT NULL DEFAULT 0,
+            become                 INTEGER NOT NULL DEFAULT 0,
+            created_at             REAL NOT NULL,
+            updated_at             REAL NOT NULL,
+            survey                 TEXT NOT NULL DEFAULT '[]',
+            needs_approval         INTEGER NOT NULL DEFAULT 0,
+            approval               TEXT NOT NULL DEFAULT 'none',
+            any_inventory          INTEGER NOT NULL DEFAULT 0
+        )
+        """,
+        """
+        INSERT INTO templates_new (rowid, id, name, project_id, playbook, inventory_id,
+                                   machine_credential_id, vault_credential_id, limit_hosts,
+                                   tags, skip_tags, extra_vars, forks, verbosity, become,
+                                   created_at, updated_at, survey, needs_approval, approval,
+                                   any_inventory)
+        SELECT rowid, id, name, project_id, playbook, inventory_id, machine_credential_id,
+               vault_credential_id, limit_hosts, tags, skip_tags, extra_vars, forks,
+               verbosity, become, created_at, updated_at, survey, needs_approval, approval,
+               any_inventory
+        FROM templates
+        """,
+        "DROP TABLE templates",
+        "ALTER TABLE templates_new RENAME TO templates",
+    ],
 ]
 
 

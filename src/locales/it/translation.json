@@ -1666,6 +1666,9 @@
   "The inventory's": "Quella dell'inventario",
   "Whoever launches it may choose one of these instead of the inventory above, which is the default.": "Chi lo lancia può scegliere uno di questi al posto dell'inventario indicato sopra, che resta il predefinito.",
   "With a project, only its job templates can be steps; with an inventory, every step runs on it, and only job templates that allow it can be steps. Without an inventory, one may be chosen at launch.": "Con un progetto, solo i suoi template possono essere passi; con un inventario, ogni passo viene eseguito su di esso e possono essere passi solo i template che lo ammettono. Senza inventario, se ne può scegliere uno al lancio.",
+  "inventories_choice_count_one": "scelto al lancio ({{count}} ammesso)",
+  "inventories_choice_count_many": "scelto al lancio ({{count}} ammessi)",
+  "inventories_choice_count_other": "scelto al lancio ({{count}} ammessi)",
   "inventories_others_count_one": "anche su {{count}} altro",
   "inventories_others_count_many": "anche su {{count}} altri",
   "inventories_others_count_other": "anche su {{count}} altri",
@@ -1705,5 +1708,10 @@
   "Items per page": "Elementi per pagina",
   "of": "di",
   "Pages": "Pagine",
-  "per page": "per pagina"
+  "per page": "per pagina",
+  "None: chosen at each launch": "Nessuno: scelto a ogni lancio",
+  "Whoever launches it chooses one of the inventories allowed below: allow some, or any.": "Chi lo lancia sceglie uno degli inventari ammessi qui sotto: ammettine alcuni, o tutti.",
+  "Whoever launches it chooses one of these.": "Chi lo lancia sceglie uno di questi.",
+  "Chosen at launch": "Scelto al lancio",
+  "Runs on the inventory chosen at launch: the job template has no default.": "Gira sull'inventario scelto al lancio: il template non ne ha uno predefinito."
 }

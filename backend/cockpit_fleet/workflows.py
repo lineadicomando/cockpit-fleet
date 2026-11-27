@@ -85,6 +85,10 @@ def run_inventory(ctx: Context, workflow, nodes: list[dict],
             raise Conflict(f"the workflow {workflow['name']} runs on its own inventory")
         return workflow["inventory_id"]
     if not inventory_id:
+        lacking = _lacking(ctx.conn, nodes)
+        if lacking is not None:
+            raise BadRequest(f"the step {lacking['name'] or lacking['id']} of the workflow"
+                             f" {workflow['name']} has no default inventory: choose one")
         return None
     inventory = store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
                              "inventory")
@@ -109,7 +113,7 @@ def choices(conn, nodes: list[dict]) -> list[str] | None:
             continue
         mine = {template["inventory_id"], *(row[0] for row in conn.execute(
             "SELECT inventory_id FROM template_inventories WHERE template_id = ?",
-            (template["id"],)))}
+            (template["id"],)))} - {None}
         allowed = mine if allowed is None else allowed & mine
     return None if allowed is None else sorted(allowed)
 
@@ -217,6 +221,8 @@ def _workflow(ctx: Context, row) -> dict:
     return {"id": row["id"], "name": row["name"], "description": row["description"],
             "project_id": row["project_id"], "inventory_id": row["inventory_id"],
             "inventory_ids": _offered(ctx.conn, row),
+            "needs_inventory": not row["inventory_id"] and _lacking(ctx.conn, store.loads(
+                row["nodes"], [])) is not None,
             "nodes": [node_out(node) for node in store.loads(row["nodes"], [])],
             "edges": store.loads(row["edges"], []), "created_at": row["created_at"],
             "updated_at": row["updated_at"], "last_run": dict(last) if last else None}
@@ -286,7 +292,10 @@ def workflow_create(ctx: Context, params: Values) -> dict:
 def workflow_update(ctx: Context, params: Values) -> dict:
     """Change a workflow; its runs under way go on with the steps they started with."""
     store.fetch(ctx.conn, "workflows", params["id"], "workflow")
-    store.update(ctx.conn, "workflows", params["id"], _values(ctx, params), "workflow")
+    values = _values(ctx, params)
+    if values["inventory_id"] is None:
+        _keep_schedules(ctx, params["id"], store.loads(values["nodes"], []))
+    store.update(ctx.conn, "workflows", params["id"], values, "workflow")
     _sync_uses(ctx, params["id"])
     return _workflow(ctx, store.fetch(ctx.conn, "workflows", params["id"], "workflow"))
 
@@ -299,6 +308,29 @@ def workflow_delete(ctx: Context, params: Values) -> dict:
     """Delete a workflow; its past runs stay."""
     store.delete(ctx.conn, "workflows", params["id"], "workflow")
     return {}
+
+
+def _lacking(conn, nodes: list[dict]) -> dict | None:
+    """The first step whose template has no default inventory, if any."""
+    return next((node for node in nodes if conn.execute(
+        "SELECT 1 FROM templates WHERE id = ? AND inventory_id IS NULL",
+        (node["template_id"],)).fetchone()), None)
+
+
+def _keep_schedules(ctx: Context, workflow_id: str, nodes: list[dict]) -> None:
+    """Refuse a step with no default inventory while a schedule launches the
+    workflow, naming no inventory, on each step's default."""
+    lacking = _lacking(ctx.conn, nodes)
+    if lacking is None:
+        return
+    names = [row[0] for row in ctx.conn.execute(
+        "SELECT name FROM schedules WHERE workflow_id = ? AND inventory_id IS NULL"
+        " ORDER BY name COLLATE NOCASE", (workflow_id,))]
+    if names:
+        raise Conflict(f"the step {lacking['name'] or lacking['id']} has no default"
+                       " inventory, and schedules launch this workflow on each step's: "
+                       + ", ".join(names[:5]) + (" and others" if len(names) > 5 else "")
+                       + "; give them an inventory first")
 
 
 def _sync_uses(ctx: Context, workflow_id: str) -> None:

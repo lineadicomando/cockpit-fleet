@@ -68,10 +68,11 @@ export interface TemplateNames {
     inventories: string[];
 }
 
-// The inventories a template may run on, its default first.
+// The inventories a template may run on, its default first, if it has one.
 export function allowedInventories(template: Template, inventories: string[]): string[] {
     const others = template.any_inventory ? inventories : template.inventory_ids;
-    return [template.inventory_id, ...others.filter(id => id !== template.inventory_id)];
+    const first = template.inventory_id;
+    return first === null ? [...others] : [first, ...others.filter(id => id !== first)];
 }
 
 export function filterTemplates(templates: Template[], view: TemplatesView, names: TemplateNames): Template[] {
@@ -96,13 +97,17 @@ export function filterTemplates(templates: Template[], view: TemplatesView, name
 
 const compareText = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base" });
 
+// Those with no default inventory sort before the others.
+const defaultName = (template: Template, names: TemplateNames) =>
+    template.inventory_id === null ? "" : names.inventory(template.inventory_id);
+
 // By last run: the oldest first, those never launched before any.
 export function sortTemplates(templates: Template[], column: TemplateSort, descending: boolean, names: TemplateNames): Template[] {
     const byName = (a: Template, b: Template) => compareText(a.name, b.name);
     const compare: Record<TemplateSort, (a: Template, b: Template) => number> = {
         name: byName,
         project: (a, b) => compareText(names.project(a.project_id), names.project(b.project_id)) || byName(a, b),
-        inventory: (a, b) => compareText(names.inventory(a.inventory_id), names.inventory(b.inventory_id)) || byName(a, b),
+        inventory: (a, b) => compareText(defaultName(a, names), defaultName(b, names)) || byName(a, b),
         last_run: (a, b) => (a.last_run?.created_at ?? 0) - (b.last_run?.created_at ?? 0) || byName(a, b),
     };
     const sorted = [...templates].sort(compare[column]);

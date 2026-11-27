@@ -120,6 +120,34 @@ class DatabaseTest(unittest.TestCase):
         conn.execute("DELETE FROM schedules")
         self.assertIsNone(conn.execute("SELECT schedule_id FROM runs").fetchone()[0])
 
+    def test_templates_keep_their_rows_and_references_when_rebuilt(self):
+        with mock.patch.object(db, "MIGRATIONS", db.MIGRATIONS[:38]):
+            conn = db.connect(self.path)
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("INSERT INTO templates (id, name, project_id, playbook, inventory_id,"
+                     " created_at, updated_at, survey, approval, any_inventory)"
+                     " VALUES ('t', 'patch', 'p', 'site.yml', 'i', 1, 2, '[1]', 'confirm', 1)")
+        conn.execute("INSERT INTO template_inventories (template_id, inventory_id)"
+                     " VALUES ('t', 'j')")
+        conn.execute("INSERT INTO runs (id, kind, status, title, created_by, created_at,"
+                     " template_id) VALUES ('r', 'playbook', 'successful', 'x', 'anna', 1, 't')")
+        conn.commit()
+        conn.close()
+        conn = self.opened(db.connect(self.path))
+        row = conn.execute("SELECT * FROM templates").fetchone()
+        self.assertEqual((row["inventory_id"], row["survey"], row["approval"],
+                          row["any_inventory"], row["updated_at"]),
+                         ("i", "[1]", "confirm", 1, 2))
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("INSERT INTO templates (id, name, project_id, playbook, created_at,"
+                     " updated_at) VALUES ('u', 'free', 'p', 'site.yml', 1, 1)")
+        conn.execute("PRAGMA foreign_keys = ON")
+        # What referred to the old table refers to the new one.
+        conn.execute("DELETE FROM templates WHERE id = 't'")
+        self.assertIsNone(conn.execute("SELECT template_id FROM runs").fetchone()[0])
+        self.assertEqual(conn.execute("SELECT count(*) FROM template_inventories")
+                         .fetchone()[0], 0)
+
     def test_failed_migration_leaves_the_previous_version(self):
         db.connect(self.path).close()
         broken = [*db.MIGRATIONS, ["CREATE TABLE ok_table (x INTEGER)", "THIS IS NOT SQL"]]

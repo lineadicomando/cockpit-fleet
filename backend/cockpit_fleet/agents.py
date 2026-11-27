@@ -54,7 +54,8 @@ def _field_schema(field: dict) -> dict:
 def template_tool(template, project: str, inventory: str,
                   choices: dict[str, str] | None = None) -> dict | None:
     """A job template as a tool: its questions are the parameters, and the
-    inventory when CHOICES (id: name) offers more than its default.
+    inventory when CHOICES (id: name) offers more than its default, or when
+    it has none.
 
     A template that cannot start without a secret is not offered: a secret
     answer goes from a person to fleet-secret, never through an agent. An
@@ -73,10 +74,17 @@ def template_tool(template, project: str, inventory: str,
     }
     limit = template["limit_hosts"]
     properties: dict = {}
+    required = ["answers"] if answers["required"] else []
     where = f"on inventory {inventory!r}"
-    if choices and len(choices) > 1:
+    if template["inventory_id"] is None:
+        if not choices:
+            return None
+        where = "on the inventory chosen with inventory_id"
+        required.append("inventory_id")
+    elif choices and len(choices) > 1:
         where = (f"on the inventory chosen with inventory_id, {inventory!r} if none is"
                  " chosen")
+    if choices and (template["inventory_id"] is None or len(choices) > 1):
         properties["inventory_id"] = {
             "type": "string", "enum": list(choices),
             "description": "The inventory to run on, by id: " + ", ".join(
@@ -100,7 +108,7 @@ def template_tool(template, project: str, inventory: str,
                 "check": {"type": "boolean", "description":
                           "Dry run: report what would change, change nothing."},
             },
-            "required": ["answers"] if answers["required"] else [],
+            "required": required,
             "additionalProperties": False,
         },
     }

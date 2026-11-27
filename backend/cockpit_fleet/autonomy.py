@@ -85,7 +85,8 @@ def _inventories(conn, name: str, params: dict) -> set[str]:
     else:
         rows = conn.execute("SELECT inventory_id FROM checks WHERE id = ?",
                             (_text(params.get("id")),))
-    return {row[0] for row in rows}
+    # A template with no default inventory reaches none until one is chosen.
+    return {row[0] for row in rows} - {None}
 
 
 def launched(conn, session: str, user: str, commands: tuple[str, ...] = LAUNCHES) -> int:

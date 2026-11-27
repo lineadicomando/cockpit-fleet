@@ -41,6 +41,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
   lab instead of one each. The list shows a template under each inventory
   it allows and launches it there; an agent's tool of it takes the
   inventory as a parameter. A schedule keeps the inventory it launches on.
+  A template may have no default inventory: then every launch, schedule
+  and agent's tool of it chooses one among those it allows.
 - Workflows: one that names an inventory runs every step there, each
   template allowing it; one that names none may be launched on an
   inventory every step allows (`inventory_id` of `workflow.launch`, and of

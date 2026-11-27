@@ -334,6 +334,29 @@ class RunTest(Base):
         self.assertEqual(self.ok("template.list", role="viewer")["templates"][0]["inventory_ids"],
                          [])
 
+    def test_a_template_with_no_default_inventory_runs_on_the_one_chosen(self):
+        other = self.ok("inventory.create", {"name": "lab2", "kind": "managed", "content": ""})
+        template = self.template()
+        params = {key: template[key] for key in ("name", "project_id", "playbook")}
+        # Nothing to run on: refused.
+        self.assertEqual(self.code("template.update", {"id": template["id"], **params}),
+                         "bad_request")
+        free = self.ok("template.update", {"id": template["id"], **params,
+                                           "inventory_ids": [other["id"]]})
+        self.assertEqual((free["inventory_id"], free["inventory_ids"]), (None, [other["id"]]))
+        answer = self.call("run.start", {"template_id": template["id"]}, role="operator")
+        self.assertEqual(answer["error"]["code"], "bad_request")
+        self.assertIn("no default inventory", answer["error"]["message"])
+        run = self.ok("run.start", {"template_id": template["id"], "inventory_id": other["id"]},
+                      role="operator")
+        self.assertEqual(run["inventory_id"], other["id"])
+        self.assertEqual(self.code("run.start", {"template_id": template["id"],
+                                                 "inventory_id": template["inventory_id"]},
+                                   role="operator"), "conflict")
+        anywhere = self.ok("template.create", {**params, "name": "anywhere",
+                                               "any_inventory": True})
+        self.assertIsNone(anywhere["inventory_id"])
+
     def test_an_inventory_a_template_allows_is_kept_and_its_credential_tells_it(self):
         machine = self.ok("credential.create", {"name": "ssh", "kind": "machine"})
         other = self.ok("inventory.create", {"name": "lab2", "kind": "managed", "content": "",

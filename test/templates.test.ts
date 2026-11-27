@@ -7,7 +7,7 @@ import {
 } from "../src/lib/templates.ts";
 import type { RunStatus, Template } from "../src/lib/types.ts";
 
-function template(name: string, project: string, inventory: string, more: Partial<Template> = {}, last?: [RunStatus, number]): Template {
+function template(name: string, project: string, inventory: string | null, more: Partial<Template> = {}, last?: [RunStatus, number]): Template {
     return {
         id: name, name, project_id: project, playbook: `${name}.yml`, inventory_id: inventory, inventory_ids: [], any_inventory: false, machine_credential_id: null,
         vault_credential_ids: [], limit_hosts: "", tags: [], skip_tags: [], extra_vars: {}, variable_set_ids: [], survey: [], forks: null, verbosity: 0,
@@ -93,6 +93,21 @@ test("a template that allows other inventories is under each of them", () => {
         [["lab", ["wol", "anywhere"]], ["prod", ["wol", "anywhere", "here"]], ["test", ["anywhere"]]]);
     assert.deepEqual(names(filterTemplates(spread, view({ inventory: "i3" }), names3)), ["anywhere"]);
     assert.deepEqual(names(filterTemplates(spread, view({ search: "lab" }), names3)), ["wol", "anywhere"]);
+});
+
+test("a template with no default inventory is only under those it allows", () => {
+    const names3 = { ...NAMES, inventory: (id: string) => ({ i1: "prod", i2: "lab", i3: "test" })[id] ?? "", inventories: ["i1", "i2", "i3"] };
+    const free = [
+        template("chosen", "p1", null, { inventory_ids: ["i3", "i2"] }),
+        template("any", "p1", null, { any_inventory: true }),
+        template("here", "p1", "i1"),
+    ];
+    assert.deepEqual(allowedInventories(free[0], names3.inventories), ["i3", "i2"]);
+    assert.deepEqual(allowedInventories(free[1], names3.inventories), ["i1", "i2", "i3"]);
+    assert.deepEqual(groupTemplates(free, "inventory", names3).map(group => [group.name, names(group.items)]),
+        [["lab", ["chosen", "any"]], ["prod", ["any", "here"]], ["test", ["chosen", "any"]]]);
+    // By inventory, those with none come first.
+    assert.deepEqual(names(sortTemplates(free, "inventory", false, names3)), ["any", "chosen", "here"]);
 });
 
 test("groups of any list keep the order asked for and what was opened by hand", () => {

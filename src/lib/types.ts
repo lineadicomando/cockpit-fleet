@@ -302,8 +302,9 @@ export interface Template {
     name: string;
     project_id: string;
     playbook: string;
-    // The inventory of a launch that chooses none; the others it allows; or any.
-    inventory_id: string;
+    // The inventory of a launch that chooses none (null: every launch chooses
+    // one); the others it allows; or any.
+    inventory_id: string | null;
     inventory_ids: string[];
     any_inventory: boolean;
     // null: the machine credential of the inventory a run is on.
@@ -366,6 +367,8 @@ export interface Workflow {
     inventory_id: string | null;
     // The inventories a launch may choose (all steps allow them); null: any.
     inventory_ids: string[] | null;
+    // A step has no default inventory: a launch chooses one.
+    needs_inventory: boolean;
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     created_at: number;

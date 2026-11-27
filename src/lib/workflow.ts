@@ -46,17 +46,18 @@ export function inScope(template: Pick<Template, "project_id" | "inventory_id" |
 
 // The job templates a step may take, by inventory unless the workflow names one, by name in each,
 // each with its project and playbook under it. A group with no label is the one of a workflow that
-// names its inventory.
-export function templateGroups(offered: Template[], scope: StepScope, inventories: Map<string, string>, projects: Map<string, string>): SearchGroup[] {
+// names its inventory; those with no default inventory are under noDefault.
+export function templateGroups(offered: Template[], scope: StepScope, inventories: Map<string, string>, projects: Map<string, string>,
+    noDefault = ""): SearchGroup[] {
     const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
-    const groups = new Map<string, Template[]>();
+    const groups = new Map<string | null, Template[]>();
     for (const item of offered) {
         const key = scope.inventory_id ? "" : item.inventory_id;
         groups.set(key, [...(groups.get(key) ?? []), item]);
     }
     return [...groups.entries()]
         .map(([id, items]) => ({
-            label: id ? inventories.get(id) ?? id : "",
+            label: id === null ? noDefault : id ? inventories.get(id) ?? id : "",
             options: [...items].sort((a, b) => byName(a.name, b.name)).map(item => ({
                 id: item.id,
                 label: item.name,

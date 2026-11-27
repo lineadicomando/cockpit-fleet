@@ -135,7 +135,10 @@ Intermittent failure: once on 26 November `checks.sh` failed on AlmaLinux
 in a container on a Fedora 44 host: podman in the container could not build
 the image of its nodes ("mounting an overlay over build context directory
 ... invalid argument"), so no node existed and every check was unknown. It
-passed there later the same day, and on the VM `alma10`: run it again.
+passed there later the same day, and on the VM `alma10`: run it again. On
+27 November it failed so in two runs in a row, for every script with nodes
+(`cmdb`, `multihost`, `checks`, `store`), while Debian passed them: on
+AlmaLinux, scripts with nodes are shown on the VM.
 
 The containers run in UTC, which the test machines did not, and that found a
 bug: `systemd-analyze calendar` prints a time "(in UTC)" only when the local

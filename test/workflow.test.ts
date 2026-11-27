@@ -33,7 +33,7 @@ test("a workflow of a project or an inventory takes only their templates", () =>
 test("the templates a step may take go by inventory, by name in each", () => {
     const inventories = new Map([["i1", "lab2"], ["i2", "lab10"]]);
     const projects = new Map([["p1", "school"], ["p2", "office"]]);
-    const template = (id: string, name: string, project_id: string, inventory_id: string) =>
+    const template = (id: string, name: string, project_id: string, inventory_id: string | null) =>
         ({ id, name, project_id, inventory_id, playbook: `${name}.yaml` }) as Template;
     const templates = [
         template("t1", "shutdown", "p1", "i2"),
@@ -47,6 +47,11 @@ test("the templates a step may take go by inventory, by name in each", () => {
         ] },
         { label: "lab10", options: [{ id: "t1", label: "shutdown", description: "school · shutdown.yaml" }] },
     ]);
+    // Those with no default inventory: under the label given for them.
+    const free = templateGroups([...templates, template("t4", "audit", "p2", null)], { project_id: "", inventory_id: "" },
+        inventories, projects, "Chosen at launch");
+    assert.deepEqual(free.map(group => [group.label, group.options.map(option => option.id)]),
+        [["Chosen at launch", ["t4"]], ["lab2", ["t3", "t2"]], ["lab10", ["t1"]]]);
     // A workflow of one inventory: one group with no label.
     const one = templateGroups(templates.slice(1), { project_id: "", inventory_id: "i1" }, inventories, projects);
     assert.deepEqual(one.map(group => group.label), [""]);

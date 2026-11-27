@@ -57,6 +57,23 @@ a name. A schedule keeps the inventory it launches on (null: the default),
 and an agent's tool of the template takes `inventory_id`, an enum of the
 inventories allowed (every one not kept as a starter, for "any").
 
+A template may have no default (`inventory_id` null, schema 39, which
+rebuilt the table to drop its `NOT NULL`): it must then allow others, or
+any (`bad_request` otherwise), and every launch names one. `run.start`
+without `inventory_id` answers `bad_request` ("no default inventory:
+choose one"); so does `schedule.create` or `.update` without one, and an
+agent's tool of it requires `inventory_id` even when it allows a single
+inventory (a template whose allowed inventories are all starters is no
+tool). The default is not taken away while a schedule relies on it
+(`conflict`, naming the schedules): one of the template naming no
+inventory, or one of a workflow that names none with the template as a
+step. In the interface the form offers "None: chosen at each launch",
+the launch form has no inventory chosen until one is, and the list shows
+such a template, when not grouped by inventory, as "chosen at launch (N
+allowed)". Wanted so that a template whose default would be arbitrary,
+one serving every lab alike, cannot run on the wrong one by a launch that
+forgot to choose.
+
 **Inventories written in the interface** are a tree of files, like a managed
 project, with a git repository beside it:
 

@@ -279,7 +279,7 @@ class _Importer:
             "inventory_ids": [self._id("inventories", name, "inventory", True)
                               for name in others],
             "project_id": self._id("projects", item.get("project"), "project", True),
-            "inventory_id": self._id("inventories", item.get("inventory"), "inventory", True),
+            "inventory_id": self._id("inventories", item.get("inventory"), "inventory"),
             "machine_credential_id": self._id("credentials", item.get("machine_credential"),
                                               "credential"),
             "vault_credential_ids": [self._id("credentials", name, "credential", True)

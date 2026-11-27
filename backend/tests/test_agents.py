@@ -705,6 +705,18 @@ class ToolsTest(Base):
         self.ok("template.update", {"id": template["id"], **params, "any_inventory": True})
         self.assertNotIn(kept["id"], tool()["inputSchema"]["properties"]["inventory_id"]["enum"])
 
+    def test_a_template_with_no_default_inventory_asks_for_one(self):
+        template = self.template()
+        params = {key: template[key] for key in ("name", "project_id", "playbook")}
+        self.ok("template.update", {"id": template["id"], **params,
+                                    "inventory_ids": [template["inventory_id"]]})
+        tool = next(tool for tool in self.ok("mcp.tools", role="operator")["tools"]
+                    if tool["name"].startswith("launch_"))
+        self.assertEqual(tool["inputSchema"]["properties"]["inventory_id"]["enum"],
+                         [template["inventory_id"]])
+        self.assertIn("inventory_id", tool["inputSchema"]["required"])
+        self.assertIn("chosen with inventory_id", tool["description"])
+
     def test_a_template_that_needs_a_secret_is_not_a_tool(self):
         self.template(survey=[{"name": "token", "type": "secret", "required": True}])
         self.assertEqual([tool for tool in self.ok("mcp.tools")["tools"]
@@ -894,7 +906,7 @@ class ServerTest(unittest.TestCase):
 class TemplateToolTest(unittest.TestCase):
     def test_names_stay_within_what_a_tool_name_may_be(self):
         row = {"id": "tabcdef123456", "name": "Déploy — the Big One!!! " * 4, "survey": "[]",
-               "playbook": "site.yml", "limit_hosts": ""}
+               "playbook": "site.yml", "limit_hosts": "", "inventory_id": "i"}
         tool = agents.template_tool(row, "p", "i")
         self.assertRegex(tool["name"], r"^[a-z0-9_]{1,64}$")
         self.assertEqual(tool["inputSchema"]["required"], [])

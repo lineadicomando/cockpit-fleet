@@ -221,13 +221,15 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
     })));
     // The inventories it may launch on besides the default ("" below): none
     // to choose for a template that allows one only, nor for a workflow on its own.
+    // With no default, one of them must be chosen.
     const usable = places.data?.usable ?? [];
+    const noDefault = template ? template.inventory_id === null : !!workflow?.needs_inventory;
     const inventoryChoices = template
-        ? allowedInventories(template, usable).slice(1)
+        ? allowedInventories(template, usable).slice(noDefault ? 0 : 1)
         : workflow && !workflow.inventory_id ? (workflow.inventory_ids ?? usable) : [];
     const inventoryName = (id: string) => places.data?.inventories.get(id) ?? id;
     const templateChoices = templateGroups(templates, { project_id: "", inventory_id: "" },
-        places.data?.inventories ?? new Map(), places.data?.projects ?? new Map());
+        places.data?.inventories ?? new Map(), places.data?.projects ?? new Map(), t("Chosen at launch"));
     const workflowGroups = [{
         label: "",
         options: [...workflows].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
@@ -260,7 +262,7 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
 
     return (
         <FormModal title={schedule ? t("Edit schedule") : t("New schedule")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
-            isDisabled={!name.trim() || !calendar.trim() || (launches === "workflow"
+            isDisabled={!name.trim() || !calendar.trim() || (noDefault && !inventoryId) || (launches === "workflow"
                 ? !workflow || waiting !== null
                 : !template || needsSecret || survey.some(field => answerProblem(field, answers[field.name])))}>
             <FormGroup label={t("Launches")} role="radiogroup" isInline fieldId="sch-launches">
@@ -298,11 +300,13 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
                 </GridItem>
             </Grid>
             {inventoryChoices.length > 0 && (
-                <FormGroup label={t("Inventory")} fieldId="sch-inventory">
+                <FormGroup label={t("Inventory")} isRequired={noDefault} fieldId="sch-inventory">
                     <FormSelect id="sch-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
-                        <FormSelectOption value="" label={template
-                            ? t("{{name}} (default)", { name: inventoryName(template.inventory_id) })
-                            : t("Each step's own")} />
+                        {noDefault
+                            ? !inventoryId && <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
+                            : <FormSelectOption value="" label={template?.inventory_id
+                                ? t("{{name}} (default)", { name: inventoryName(template.inventory_id) })
+                                : t("Each step's own")} />}
                         {inventoryChoices.filter(id => !template || id !== template.inventory_id)
                             .map(id => <FormSelectOption key={id} value={id} label={inventoryName(id)} />)}
                     </FormSelect>

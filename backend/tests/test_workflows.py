@@ -362,6 +362,40 @@ class WorkflowTest(WorkflowBase):
                                        ("name", "project_id", "playbook", "inventory_id")},
             "inventory_ids": [lab["id"]]}), "conflict")
 
+    def test_a_step_with_no_default_inventory_needs_one_chosen(self):
+        lab = self.ok("inventory.create", {"name": "lab", "kind": "managed", "content": ""})
+        nodes = {"nodes": [{"id": "a", "template_id": self.first["id"]}], "edges": []}
+        free = self.ok("workflow.create", {"name": "free", **nodes})
+        relying = self.ok("schedule.create", {"name": "nightly", "workflow_id": free["id"],
+                                              "calendar": "daily"})
+        params = {key: self.first[key] for key in ("name", "project_id", "playbook")}
+        self.assertEqual(self.code("template.update", {"id": self.first["id"], **params,
+                                                       "inventory_ids": [lab["id"]]}),
+                         "conflict")
+        self.ok("schedule.delete", {"id": relying["id"]})
+        self.ok("template.update", {"id": self.first["id"], **params,
+                                    "inventory_ids": [lab["id"]]})
+        listed = {one["id"]: one for one in self.ok("workflow.list")["workflows"]}
+        self.assertEqual(listed[free["id"]]["inventory_ids"], [lab["id"]])
+        self.assertTrue(listed[free["id"]]["needs_inventory"])
+        answer = self.call("workflow.launch", {"id": free["id"]})
+        self.assertEqual(answer["error"]["code"], "bad_request")
+        self.assertIn("no default inventory", answer["error"]["message"])
+        self.assertEqual(self.code("schedule.create", {
+            "name": "nightly", "workflow_id": free["id"], "calendar": "daily"}), "bad_request")
+        self.ok("schedule.create", {"name": "nightly", "workflow_id": free["id"],
+                                    "calendar": "daily", "inventory_id": lab["id"]})
+        run = self.ok("workflow.launch", {"id": free["id"], "inventory_id": lab["id"]})
+        self.assertEqual(self.ok("run.get", {"id": self.steps(run["id"])["a"][1]})
+                         ["inventory_id"], lab["id"])
+        # A step with none is not added while a schedule takes each step's default.
+        other = self.ok("workflow.create", {"name": "other", "nodes": [
+            {"id": "b", "template_id": self.third["id"]}], "edges": []})
+        self.ok("schedule.create", {"name": "weekly", "workflow_id": other["id"],
+                                    "calendar": "weekly"})
+        self.assertEqual(self.code("workflow.update", {"id": other["id"], "name": "other", **nodes}),
+                         "conflict")
+
     def test_a_template_stays_where_a_workflow_takes_its_steps_from(self):
         other = self.elsewhere()
         workflow = self.ok("workflow.create", {

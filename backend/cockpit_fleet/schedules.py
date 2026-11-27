@@ -301,7 +301,7 @@ def _target(ctx: Context, params: Values) -> dict:
                 "check_mode": 0, "diff": 0, "answers": "{}", "overrides": "{}",
                 "inventory_id": chosen if chosen and not workflow["inventory_id"] else None}
     template = store.fetch(ctx.conn, "templates", params["template_id"], "template")
-    if params["inventory_id"]:
+    if params["inventory_id"] or template["inventory_id"] is None:
         launch_inventory(ctx, template, params["inventory_id"])
     limit = params["limit"]
     return {"template_id": template["id"], "workflow_id": None,

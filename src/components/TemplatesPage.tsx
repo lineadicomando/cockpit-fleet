@@ -103,7 +103,8 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
 
     return (
         <FormModal title={template ? t("Edit job template") : t("New job template")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
-            isDisabled={!name.trim() || !projectId || !playbook.trim() || !inventoryId || survey.some(draft => draftProblem(draft, survey))}>
+            isDisabled={!name.trim() || !projectId || !playbook.trim() || (!inventoryId && !anyInventory && !otherIds.length)
+                || survey.some(draft => draftProblem(draft, survey))}>
             <FormGroup label={t("Name")} isRequired fieldId="tpl-name">
                 <TextInput id="tpl-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
@@ -123,11 +124,16 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                     </FormGroup>
                 </GridItem>
                 <GridItem>
-                    <FormGroup label={t("Inventory")} isRequired fieldId="tpl-inventory">
+                    <FormGroup label={t("Inventory")} fieldId="tpl-inventory">
                         <FormSelect id="tpl-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
-                            <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
+                            <FormSelectOption value="" label={t("None: chosen at each launch")} />
                             {inventories.map(inventory => <FormSelectOption key={inventory.id} value={inventory.id} label={inventory.name} />)}
                         </FormSelect>
+                        {!inventoryId && (
+                            <FormHelperText><HelperText><HelperTextItem variant={anyInventory || otherIds.length ? "default" : "warning"}>
+                                {t("Whoever launches it chooses one of the inventories allowed below: allow some, or any.")}
+                            </HelperTextItem></HelperText></FormHelperText>
+                        )}
                     </FormGroup>
                 </GridItem>
                 <GridItem>
@@ -142,7 +148,9 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
                                 placeholder={t("Search inventories")} toggleLabel={t("Show the inventories")}
                                 emptyText={t("No inventory matches what was typed")} />
                         )}
-                        <FormHelperText><HelperText><HelperTextItem>{t("Whoever launches it may choose one of these instead of the inventory above, which is the default.")}</HelperTextItem></HelperText></FormHelperText>
+                        <FormHelperText><HelperText><HelperTextItem>{inventoryId
+                            ? t("Whoever launches it may choose one of these instead of the inventory above, which is the default.")
+                            : t("Whoever launches it chooses one of these.")}</HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>
                 </GridItem>
                 <GridItem>
@@ -226,7 +234,7 @@ export function LaunchModal({ template, limit: initialLimit = "", inventory: ini
         : Promise.resolve<Inventory[]>([]), [several]);
     const allInventories = listed.data ?? [];
     const allowed = allowedInventories(template, allInventories.map(one => one.id));
-    const [inventoryId, setInventoryId] = useState(initialInventory ?? template.inventory_id);
+    const [inventoryId, setInventoryId] = useState(initialInventory ?? template.inventory_id ?? "");
     const inventoryName = (id: string) => allInventories.find(one => one.id === id)?.name ?? "";
     const [check, setCheck] = useState(false);
     const [serial, setSerial] = useState(true);
@@ -250,10 +258,11 @@ export function LaunchModal({ template, limit: initialLimit = "", inventory: ini
 
     return (
         <FormModal title={t("Launch {{name}}", { name: template.name })} submitLabel={check ? t("Launch dry run") : t("Launch")} onSubmit={submit} onClose={onClose}
-            isDisabled={template.survey.some(field => answerProblem(field, answers[field.name]))}>
+            isDisabled={!inventoryId || template.survey.some(field => answerProblem(field, answers[field.name]))}>
             {several && (
-                <FormGroup label={t("Inventory")} fieldId="launch-inventory">
+                <FormGroup label={t("Inventory")} isRequired={template.inventory_id === null} fieldId="launch-inventory">
                     <FormSelect id="launch-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
+                        {!inventoryId && <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />}
                         {allowed.map(id => <FormSelectOption key={id} value={id}
                             label={id === template.inventory_id ? t("{{name}} (default)", { name: inventoryName(id) }) : inventoryName(id)} />)}
                     </FormSelect>
@@ -450,7 +459,9 @@ export function TemplatesPage() {
                     // where: the inventory of the group it is listed under, if grouped by inventory.
                     const row = (template: Template, open: boolean, where?: string) => {
                         const count = names.schedules(template.id);
-                        const others = allowedInventories(template, names.inventories).length - 1;
+                        const allowed = allowedInventories(template, names.inventories).length;
+                        // Listed under an inventory, or by its default: the others; with no default, all of them.
+                        const others = where || template.inventory_id !== null ? allowed - 1 : 0;
                         return (
                             <Tr key={template.id} isExpanded={grouped ? open : undefined}>
                                 {grouped && <Td />}
@@ -465,7 +476,9 @@ export function TemplatesPage() {
                                 <Td dataLabel={t("Project")}>{names.project(template.project_id)}</Td>
                                 <Td dataLabel={t("Playbook")}><code>{template.playbook}</code></Td>
                                 <Td dataLabel={t("Inventory")}>
-                                    {names.inventory(where ?? template.inventory_id)}
+                                    {where || template.inventory_id !== null
+                                        ? names.inventory(where ?? template.inventory_id!)
+                                        : <span className="pf-v6-u-text-color-subtle">{t("inventories_choice_count", { count: allowed })}</span>}
                                     {others > 0 && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("inventories_others_count", { count: others })}</Label>}
                                 </Td>
                                 <Td dataLabel={t("Last run")}>

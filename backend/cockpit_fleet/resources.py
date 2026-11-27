@@ -1099,7 +1099,8 @@ _TEMPLATE_PARAMS = {
     "name": Str(required=True, max_length=200),
     "project_id": Id(),
     "playbook": Str(required=True, max_length=1024),
-    "inventory_id": Id("The inventory a run takes when its launch names none"),
+    "inventory_id": Id("The inventory a run takes when its launch names none; left out,"
+                       " every launch names one among those it allows", required=False),
     "inventory_ids": Strs("Other inventories whoever launches it may choose instead",
                           max_items=MAX_INVENTORIES),
     "any_inventory": Bool("Whoever launches it may choose any inventory"),
@@ -1130,7 +1131,9 @@ def _template_values(ctx: Context, params: Values) -> dict:
     project_id = params["project_id"]
     inventory_id = params["inventory_id"]
     store.usable(store.fetch(ctx.conn, "projects", project_id, "project"), "project")
-    store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"), "inventory")
+    if inventory_id is not None:
+        store.usable(store.fetch(ctx.conn, "inventories", inventory_id, "inventory"),
+                     "inventory")
     limit = params["limit_hosts"]
     forks = params["forks"]
     if forks is not None and forks > ctx.config.max_forks:
@@ -1198,6 +1201,9 @@ def launch_inventory(ctx: Context, template, inventory_id: str | None):
     template allows it, else its default."""
     if inventory_id is None:
         inventory_id = template["inventory_id"]
+    if inventory_id is None:
+        raise BadRequest(f"the job template {template['name']} has no default inventory:"
+                         " choose one")
     inventory = store.fetch(ctx.conn, "inventories", inventory_id, "inventory")
     if not allows(ctx.conn, template, inventory_id):
         raise Conflict(f"the job template {template['name']} is not launched on the"
@@ -1205,7 +1211,7 @@ def launch_inventory(ctx: Context, template, inventory_id: str | None):
     return store.usable(inventory, "inventory")
 
 
-def _inventory_ids(ctx: Context, params: Values, default: str) -> list[str]:
+def _inventory_ids(ctx: Context, params: Values, default: str | None) -> list[str]:
     ids = []
     for inventory_id in params["inventory_ids"]:
         try:
@@ -1216,7 +1222,21 @@ def _inventory_ids(ctx: Context, params: Values, default: str) -> list[str]:
                      "inventory")
         if inventory_id != default and inventory_id not in ids:
             ids.append(inventory_id)
+    if default is None and not ids and not params["any_inventory"]:
+        raise BadRequest("a job template with no default inventory allows others, or any")
     return ids
+
+
+def _relying(ctx: Context, template_id: str) -> list[str]:
+    """The schedules that launch TEMPLATE_ID on its default inventory, by name:
+    of the template naming none, or of a workflow that has it as a step and
+    neither of them names one."""
+    return [row[0] for row in ctx.conn.execute(
+        "SELECT name FROM schedules WHERE template_id = ?1 AND inventory_id IS NULL"
+        " UNION SELECT s.name FROM schedules s JOIN workflows f ON f.id = s.workflow_id"
+        " JOIN workflow_templates w ON w.workflow_id = f.id WHERE w.template_id = ?1"
+        " AND s.inventory_id IS NULL AND f.inventory_id IS NULL"
+        " ORDER BY 1 COLLATE NOCASE", (template_id,))]
 
 
 def _save_template(ctx: Context, template_id: str, values: dict, vaults: list[str],
@@ -1275,9 +1295,16 @@ def template_create(ctx: Context, params: Values) -> dict:
 def template_update(ctx: Context, params: Values) -> dict:
     """Change a job template."""
     template_id = params["id"]
-    store.fetch(ctx.conn, "templates", template_id, "template")
+    before = store.fetch(ctx.conn, "templates", template_id, "template")
     values = _template_values(ctx, params)
     inventories = _inventory_ids(ctx, params, values["inventory_id"])
+    if values["inventory_id"] is None and before["inventory_id"] is not None:
+        relying = _relying(ctx, template_id)
+        if relying:
+            raise Conflict("schedules launch it on its default inventory: "
+                           + ", ".join(relying[:5]) + (" and others" if len(relying) > 5
+                                                       else "")
+                           + "; give them an inventory first")
     allowed = {values["inventory_id"], *inventories}
     # A workflow that takes its steps from one project or inventory keeps them there.
     for held in ctx.conn.execute(

@@ -39,6 +39,14 @@ groups the templates it offers by inventory and says under each step the
 one it runs on, and `workflow.progress` gives each step's inventory, the
 one its run took or, for a step not started, the one it will take.
 
+A step whose template has no default inventory makes the choice
+necessary (`needs_inventory` of the workflow): `workflow.launch` without
+`inventory_id` answers `bad_request` naming the step, and so does a
+schedule of it without one. `workflow.update` refuses such a step
+(`conflict`) while a schedule launches the workflow on each step's
+default; the form groups those templates under "Chosen at launch", and the
+launch form then offers no "Each step's own".
+
 **Runs.** `workflow.launch` (operator) records a run of kind `workflow`.
 It has no unit and no place in the queue (the lanes of `dispatch` leave it
 out); it holds a copy of the steps and links (and of where they are from), so that changing the workflow
