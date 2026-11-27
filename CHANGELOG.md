@@ -187,6 +187,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   longer lost.
 - Store: a move to where a file had been deleted by hand failed after
   moving the file.
+- Assistant, profile administrator: it no longer tries to write a playbook
+  in a project from git, a directory or an upload, which cannot have
+  drafts, and when a write is refused it is told where that project's
+  files change.
 - The packages install `CHANGELOG.md` with the rest of the documentation,
   and the documents installed link to those of the repository they do not
   hold.

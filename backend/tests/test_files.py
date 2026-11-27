@@ -237,6 +237,10 @@ class ManagedProjectTest(Managed):
                              ("file.move", {"path": "site.yml", "to": "x"}), ("file.history", {})):
             self.assertEqual(self.code(name, {"id": local["id"], **params}), "conflict", name)
         self.assertTrue((self.root / "src" / "site" / "site.yml").is_file())
+        answer = self.call("file.write", {"id": local["id"], "path": "x", "content": "",
+                                          "expected": ""})
+        self.assertIn("project site is of kind local: its files change in its directory",
+                      answer["error"]["message"])
 
     def test_saving_a_playbook_queues_a_check_of_its_syntax(self):
         saved = self.write("site.yml", PLAYBOOK)

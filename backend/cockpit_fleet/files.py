@@ -535,7 +535,12 @@ def _project(ctx: Context, params: Values, managed: bool = False):
     if is_inventory(container_id) and row["kind"] != "managed":
         raise Conflict("the files of this inventory are those of its project")
     if managed and row["kind"] != "managed":
-        raise Conflict("only a project written in the interface can be changed here")
+        # An agent reads this: it says where the files change instead.
+        source = {"git": "its repository", "local": "its directory on the controller",
+                  "archive": "a new upload"}.get(row["kind"], "its source")
+        raise Conflict(f"project {row['name']} is of kind {row['kind']}: its files change in"
+                       f" {source}, not here; only a project written in the interface (kind"
+                       " managed) can be changed here, or have a draft")
     if is_inventory(container_id):
         inventory_tree(ctx, row)  # its repository, from its text the first time
         row = _fetch(ctx, container_id)
