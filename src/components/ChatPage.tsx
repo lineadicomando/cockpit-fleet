@@ -32,7 +32,7 @@ import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useSession } from "../lib/session.tsx";
 import type { ChatAgentInfo, ChatGuide, ChatInfo, ChatSessionRuns } from "../lib/types.ts";
-import { FormModal, SectionHeader, TerminalCommand as Command } from "./common.tsx";
+import { FormModal, SectionHeader, TerminalCommand as Command, openRun } from "./common.tsx";
 import { StatusLabel } from "./StatusLabel.tsx";
 import { PendingDrafts } from "./Drafts.tsx";
 import { ChatApprovals } from "./ApprovalsPage.tsx";
@@ -514,7 +514,7 @@ function Composer({ state }: { state: ChatState }) {
 // autonomous how many runs of those it may, and more allowed when they are
 // spent; in any profile its runs not ended, to be canceled with the answer
 // under way. Asked for again as the conversation goes on, and while runs are.
-function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
+export function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
     const { t } = useTranslation();
     const session = useSession();
     const [runs, setRuns] = useState<ChatSessionRuns | null>(null);
@@ -580,6 +580,11 @@ function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
                         <Label color="blue" icon={<Spinner size="sm" aria-hidden />}>{t("chat_runs_not_ended", { count: open })}</Label>
                     </FlexItem>
                 )}
+                {runs.not_ended.map(run => (
+                    <FlexItem key={run.id}>
+                        <Button variant="link" isInline onClick={() => openRun(run.id)}>{run.title || run.id}</Button>
+                    </FlexItem>
+                ))}
                 {open > 0 && session.commands.includes("chat.cancel_runs") && (
                     <Button variant="danger" size="sm" onClick={() => setStopping(true)}>{t("Stop everything")}</Button>
                 )}

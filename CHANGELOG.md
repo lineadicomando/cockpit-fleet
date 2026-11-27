@@ -10,6 +10,8 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Added
 
+- Assistant: each run it launched that has not ended is a link to its page
+  under the chat, beside "Stop everything".
 - Assistant: skills, what a project, the collections it installs and this
   controller teach it, in the format of Claude's skills
   (`.fleet/skills/NAME/SKILL.md` in a project or a collection,

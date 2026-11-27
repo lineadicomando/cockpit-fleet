@@ -3,10 +3,12 @@ import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { calls, setSpawnHandler, type SpawnCall } from "./mocks/cockpit.ts";
+import cockpit, { calls, setSpawnHandler, type SpawnCall } from "./mocks/cockpit.ts";
 import { ChatApprovals } from "../src/components/ApprovalsPage.tsx";
+import { SessionRuns } from "../src/components/ChatPage.tsx";
+import type { ChatState } from "../src/lib/chat.ts";
 import { SessionContext } from "../src/lib/session.tsx";
-import type { ApprovalEntry, Session } from "../src/lib/types.ts";
+import type { ApprovalEntry, ChatInfo, Session } from "../src/lib/types.ts";
 
 afterEach(cleanup);
 
@@ -62,4 +64,28 @@ test("who may not decide is told so, without buttons", async () => {
     await draw(["r1"], [entry("r1", "cmd", false)], ALL);
     assert.ok(screen.getByText("Another user must approve it"));
     assert.equal(screen.queryByRole("button", { name: "Approve" }), null);
+});
+
+test("a run of the conversation not ended opens on the page of the runs", async () => {
+    setSpawnHandler((call: SpawnCall) => {
+        if (last(call.args) === "chat.session") {
+            return JSON.stringify({ ok: true, data: { launched: 1, allowed: 5, granted: 0, not_ended: [{ id: "r7", title: "maint-optimize", status: "running" }] } });
+        }
+        return JSON.stringify({ ok: true, data: { approvals: [] } });
+    });
+    const gone: unknown[][] = [];
+    const go = cockpit.location.go;
+    cockpit.location.path = ["chat"];
+    cockpit.location.go = (...args: unknown[]) => { gone.push(args); };
+    try {
+        const state = { fleetSession: "s1", profile: "assisted", items: [], busy: false } as unknown as ChatState;
+        await act(async () => {
+            render(<SessionContext.Provider value={session(["chat.cancel_runs"])}><SessionRuns state={state} info={{} as ChatInfo} /></SessionContext.Provider>);
+        });
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "maint-optimize" })));
+        assert.deepEqual(gone, [[["runs", "r7"], { from: "chat" }]]);
+    } finally {
+        cockpit.location.go = go;
+        cockpit.location.path = [];
+    }
 });
