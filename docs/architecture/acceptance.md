@@ -202,3 +202,15 @@ What each closed phase had to show, and how it was shown.
   refusing the template and the schedule from `fleet` (`bad_request`,
   audited). The check found, and fixed, the last run under each
   inventory, which was the last on any.
+- **22, check cycles in view** (27 November): the scenario
+  `checks-cycles` in a container; on `deb13`, the user in a browser with
+  eight checks of the catalog on the two rooms (every 2 minutes, `win11`
+  the PC of `aula-1`, the PC of `aula-2` not there): the cycles of the
+  timer reaching the list by themselves, `aula-1` OK, `aula-2`
+  unreachable and its other checks unknown; the page of a cycle with
+  what each check found on each host and the output of the host that did
+  not answer; "Recent cycles"; "Check now" and its cycle "Running"; the
+  list asked again at once when its tab is shown again. A cycle of one
+  host lasts 3–4 s: one the timer starts is seldom caught "Checking". The
+  check found, and fixed, the list that missed the cycles of the timer
+  (it polled only while a cycle held a check).

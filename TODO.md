@@ -6,7 +6,7 @@ What is left. How each closed phase was shown:
 
 ## Status (27 November 2026)
 
-Phases 0–19 and 21 closed; 20, 22–24 built, each waiting only for its close
+Phases 0–19, 21 and 22 closed; 20, 23 and 24 built, each waiting only for its close
 below.
 21–24 were the last to add features (`decisions.md`, "Freeze of
 features"): then fixes, minor changes and field use, toward 1.0.0. Last
@@ -16,7 +16,7 @@ release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 To resume: `git status`, `git log origin/main..`; `make check` (876
 backend, 246 frontend tests). Each backend module's docstring says what it
 is; `cli.py` the registry of commands, `db.py` the schema (41
-migrations). Under way: the closes of 20, 22–24 on the lab's VMs, then
+migrations). Under way: the closes of 20, 23 and 24 on the lab's VMs, then
 the integration there (`sandbox` run D, SELinux).
 
 ## Minor changes decided
@@ -55,9 +55,6 @@ What each is: the file named. What remains:
 - **20, documents** (`architecture/documents.md`): the user, with Claude
   as the assistant: a report of a run written in a folder, edited by hand,
   the agent's version restored, printed to PDF from the page.
-- **22, check cycles in view** (`checks.md`, "Following the cycles"):
-  scenario `checks-cycles` in a container. Left: the user follows the
-  cycles of the labs' checks on a controller.
 - **23, skills of projects** (`architecture/agents.md`, "Skills"): pushed
   in `ansible-win_edulab` (`win-edulab-operations`, `-inventory`,
   `-reports`) and in `ansible-collection-win_workman` (`win-workman`, tag
