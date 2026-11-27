@@ -191,6 +191,10 @@ entries go under `[Unreleased]`, under the heading of their kind.
   in a project from git, a directory or an upload, which cannot have
   drafts, and when a write is refused it is told where that project's
   files change.
+- Assistant, profile administrator: it no longer refuses an ad-hoc command
+  of a module outside `[mcp] adhoc_modules`, such as
+  `ansible.windows.win_powershell`: it asks for it, and the command waits
+  for the user's confirmation.
 - The packages install `CHANGELOG.md` with the rest of the documentation,
   and the documents installed link to those of the repository they do not
   hold.

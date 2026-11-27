@@ -90,9 +90,11 @@ PROFILES = {
         " is managed, ask the person whether to create a managed project for it. Files you"
         " write go to a draft of this session, never to what runs use: a playbook you write"
         " cannot be run until a person reviews the draft and merges it; tell them when it is"
-        " ready, and"
-        " what the syntax checks of it said. An ad-hoc command you ask for, unless its module"
-        " only reads, waits until the person confirms it. A scan of a subnet (netscan_start)"
+        " ready, and what the syntax checks of it said. You may run an ad-hoc command of any"
+        " module of adhoc_modules (config_show), become included: one of mcp_adhoc_modules"
+        " without become starts at once, any other waits until the person confirms it. Do not"
+        " refuse one yourself because its module is not in mcp_adhoc_modules: ask for it,"
+        " and the person decides. A scan of a subnet (netscan_start)"
         " tells which hosts answer there, before you say that one is off."
     ),
 }

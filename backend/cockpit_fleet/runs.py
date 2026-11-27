@@ -229,11 +229,12 @@ def launch(ctx: Context, template_id: str, limit: str, check: bool, diff: bool, 
 def run_adhoc(ctx: Context, params: Values) -> dict:
     """Run one module on hosts of an inventory, without a template.
 
-    The module must be among those config.toml allows. Its arguments are kept
-    with the run and in the audit record, in clear: they are not for secrets.
-    One an agent asks for waits until the person it acts for confirms it,
-    unless it is of a module that changes nothing ([mcp] adhoc_modules,
-    without become); it expires as approvals do.
+    The module must be among those config.toml allows ([adhoc] modules,
+    adhoc_modules in config.show). Its arguments are kept with the run and in
+    the audit record, in clear: they are not for secrets. One an agent asks
+    for waits until the person it acts for confirms it, unless it is of a
+    module that changes nothing ([mcp] adhoc_modules, mcp_adhoc_modules in
+    config.show, without become); it expires as approvals do.
     """
     inventory_id = params["inventory_id"]
     project_id = params["project_id"]

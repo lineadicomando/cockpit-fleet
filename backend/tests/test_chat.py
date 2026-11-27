@@ -292,6 +292,12 @@ class CommandsTest(Base):
                 found = instructions.layers(profile, surface, self.rules)
                 self.assertIn(f"profile {profile}", found[1]["text"])
 
+    def test_the_administrator_is_told_which_ad_hoc_modules_wait(self):
+        # An agent took mcp_adhoc_modules for all the modules it may ask for.
+        told = instructions.PROFILES["administrator"]
+        self.assertIn("any module of adhoc_modules", told)
+        self.assertIn("Do not refuse one yourself", told)
+
     def test_unknown_agent(self):
         self.assertEqual(self.code("chat.start", {"agent": "nope"}), "not_found")
         self.assertEqual(self.code("chat.start", {}), "bad_request")
