@@ -100,6 +100,18 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
   `runs_template` (schema 19); it does not reconcile runs as
   `run.list` does, so a run whose unit died unseen shows as running until
   a page of runs is opened.
+- Workflows as job templates: grouped by inventory (the default; "Each
+  step's own inventory" for a workflow launched without choosing one),
+  project or last run, filtered by text (name, description, steps, their
+  templates, project, inventory), project, inventory, a feature (an
+  approval at a step or its template, an inventory chosen at launch,
+  scheduled or not) and outcome (`src/lib/workflow.ts`); "Launch" under an
+  inventory opens the launch form on it. The column of steps lays them in
+  the columns of `layers()` (`StepColumns`): an `<ol>`, an arrow between
+  columns as CSS content with empty alternative text, the steps of one
+  column framed (they may start together, or be alternatives), a step
+  reached only on failure or only by "always" marked; the form shows the
+  same as a preview.
 - Checks: [Checks](checks.md), "The interface".
 - A row is highlighted under the pointer and while one of its controls
   has the focus (`app.scss`, the token of PatternFly's clickable rows, as

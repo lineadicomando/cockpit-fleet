@@ -195,6 +195,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
   by inventory, and each step says the inventory it runs on; the steps of
   a workflow run show theirs too (`inventory_id` and `inventory` of each
   step in `workflow.progress`).
+- Workflows: the list is filtered by text, project, inventory, feature
+  (an approval, an inventory chosen at launch, scheduled or not) and the
+  outcome of the last run, grouped by inventory (the default), project or
+  last run, and sorted by name or last run, as the job templates are;
+  under an inventory, a workflow's last run is its last there, and
+  "Launch" offers that inventory. Its steps are shown in columns, those
+  that may start together framed, a step only on failure or run anyway
+  marked, and the same in its form; a column counts its schedules.
+  `workflow.list` gives `last_runs`, the last run on each inventory.
 - A job template is chosen by typing part of its name, its inventory, its
   project or its playbook, in the steps of a workflow, in schedules and in
   the rules of notifications; so are a schedule's workflow and the target

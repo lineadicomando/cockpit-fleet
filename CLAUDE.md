@@ -16,10 +16,6 @@ managed nodes through Ansible alone (agentless).
 | `CHANGELOG.md` | for users: a line under `[Unreleased]`, in the commit that makes the change | the headings of `[Unreleased]` when adding a line; never whole |
 | `docs/install.md`, `security.md`, `checks.md`, `backup.md`, `chat.md` | for the administrator of a controller: keep them in step with roles, `config.toml`, the catalog, `fleet_result`, the files kept, `[chat]` | when that changes |
 
-An architecture document says how things are now; how they came to be
-goes to `docs/history/`, a decision to `decisions.md`, a phase's proof to
-`acceptance.md`.
-
 `CLAUDE.local.md` (and other `*.local.md`), `Makefile.local`, `.env`: not
 tracked, one developer's workstation (VMs, passwords, paths, hosting).
 Nothing of them goes into tracked files, which must make sense to anyone
@@ -112,7 +108,9 @@ needs the user's explicit agreement.
   `Pagination`, `ActionsColumn`…) comes from there, not from PatternFly:
   it carries translated text. Cockpit's policy refuses inline `<style>`
   and `style` attributes (React's `style` prop is fine). What it does for
-  a role and sends the backend: `test/NAME.test.tsx`.
+  a role (`session.commands`, which `useCan` reads) and sends the backend:
+  `test/NAME.test.tsx`, asserting on booleans and strings, never on an
+  element (a failing assertion prints it whole, gigabytes of jsdom).
 - **A string**: English through `t()`, Italian in `po/it.po`, then
   `make pot && make po-compile`. Plurals: a symbolic key (`things_count`)
   whose English forms are edited by hand in `src/locales/en/translation.json`.

@@ -1,69 +1,53 @@
 # cockpit-fleet — plan
 
 What is left. How each closed phase was shown:
-`docs/architecture/acceptance.md`; this workstation and its lab VMs:
+`docs/architecture/acceptance.md`; a developer's workstation and lab VMs:
 `CLAUDE.local.md` (not tracked).
 
-## Status (27 November 2026)
+## Status (28 November 2026)
 
-Phases 0–24 closed, and the assistant without questions.
-21–24 were the last to add features (`decisions.md`, "Freeze of
-features"): then fixes, minor changes and field use, toward 1.0.0. Last
-release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
-`make release` only when asked.
+Phases 0–24 closed, and the assistant without questions. 21–24 were the
+last to add features (`decisions.md`, "Freeze of features"): since then
+fixes, minor changes (refinements of what exists) and field use, toward
+1.0.0. Last release 0.4.0 (18 November); since then `[Unreleased]` of
+`CHANGELOG.md`. `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (880
-backend, 247 frontend tests). Each backend module's docstring says what it
-is; `cli.py` the registry of commands, `db.py` the schema (42
-migrations). Under way: fixes and minor changes; `sandbox` with
-run D on `deb13` (see Integration).
+To resume: `git status`, `git log origin/main..`; `make check` (881
+backend, 257 frontend tests). Under way: the list of workflows (below);
+`sandbox` with run D on `deb13` (Integration).
 
 ## Minor changes decided
 
-- **The list of workflows as the one of templates** (28 November):
-  filters, groups (by inventory by default) and order, the last run on
-  each inventory (`last_runs` of `workflow.list`), the steps in the
-  columns of `layers()` with the steps on failure and those run anyway
-  marked, the same in the form. Done and tested (unit tests); left:
+- **The list of workflows as the one of templates** (28 November; done,
+  unit tests, docs; `decisions.md` "Workflows list"). Left:
   - seen in a browser (`make browser-up`, a throwaway scenario): the
-    toolbar's width, the cell of the steps of a long workflow, the
-    groups, the preview in the form, the tooltip of an approval;
-  - `make ct-test TESTS=workflows` on the three (`workflow.list` changed);
-  - `CHANGELOG.md`, `decisions.md` ("Workflows list"), `interface.md`.
+    toolbar's width, the steps of a long workflow, the groups, the
+    preview in the form, the tooltip of an approval;
+  - `make ct-test TESTS=workflows` on the three (`workflow.list` changed).
 
 ## To study
 
-- **The names of `overview.md` and `dashboard.md`** (`docs/architecture/`).
-  The first is "Overview and security model" (the parts, a run's flow,
-  privilege boundaries, secrets, the sandbox: what `CLAUDE.md`'s rules
-  cite), the second "The Overview", the first tab of the page
-  (`overview.get`): a search for one finds the other. To weigh, before
-  renaming anything:
-  - the names: `security-model.md` for the first (then what of its
-    section on the parts and the flow: there, in `backend.md`, or a short
-    file of its own), `overview-page.md` or as it is for the second,
-    whose command and component are `overview`; `docs/security.md`, the
-    administrator's, must not be taken for it;
-  - what cites them: 7 references to `overview.md` in 5 files
-    (`CLAUDE.md`, the index, `checks.md`, `interface.md`,
-    `docs/security.md`), 5 to `dashboard.md` in 4, `docs/history/dashboard.md`
-    beside it, the sections cited by name ("Secrets");
-  - what breaks outside: links from the installed documents and from
-    released packages and the README on GitHub to the old paths;
-  - whether a line at the top of each ("not the page: see …") is enough.
+- **The names of `overview.md` and `dashboard.md`** (`docs/architecture/`):
+  "Overview and security model" (what `CLAUDE.md`'s rules cite) and "The
+  Overview" page (`overview.get`); a search for one finds the other.
+  Before renaming, weigh: `security-model.md` for the first (and where its
+  parts and flow go), `overview-page.md` or as it is for the second, not
+  to be taken for `docs/security.md`; the references (7 to `overview.md`
+  in 5 files, 5 to `dashboard.md` in 4, `docs/history/dashboard.md`,
+  sections cited by name); links from installed documents, released
+  packages and the README on GitHub; or only a line at the top of each
+  ("not the page: see …").
 
 ## Integration
 
 Last runs, 26 and 27 November. Containers, the three distributions:
 `runs`, `schedules`, `workflows`, `negative`, `checks`, `chat`, `mcp`,
-`cli`, `documents`, `store`, `sandbox` (with run D); `runs` and
-`workflows` again on 27 November; Debian only: `netscan`, `make
-ct-lifecycle` (from 0.3.0). VMs: `netscan` on the three (`win11` up),
-`windows` on `deb13`; on 27 November (`0.4.0+82`), `sandbox` with run D,
-`runs`, `workflows`, `schedules` on `alma10` and the last three on
-`fed44`, SELinux enforcing, no denial. Left: `sandbox` with run D on
-`deb13` (its data of the closes kept until then). Earlier: `files` in
-containers.
+`cli`, `documents`, `store`, `sandbox` (with run D); Debian only:
+`netscan`, `make ct-lifecycle` (from 0.3.0); earlier `files`. VMs:
+`netscan` on the three (`win11` up), `windows` on `deb13`; at `0.4.0+82`
+`sandbox` with run D, `runs`, `workflows`, `schedules` on `alma10`, the
+last three on `fed44` (SELinux enforcing, no denial). Left: `sandbox`
+with run D on `deb13` (its data of the closes kept until then).
 
 ## Future
 
