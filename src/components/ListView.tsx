@@ -60,6 +60,7 @@ export function GroupByChoice<G extends string>({ id, value, options, onChange, 
 }) {
     const { t } = useTranslation();
     const toggleAll = allOpen ? t("Close all groups") : t("Open all groups");
+    const canToggle = value !== "none" && groups > 1;
     return (
         <FlexItem align={{ default: "alignRight" }}>
             <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
@@ -69,12 +70,13 @@ export function GroupByChoice<G extends string>({ id, value, options, onChange, 
                         <ToggleGroupItem key={option} text={label} isSelected={value === option} onChange={() => onChange(option)} />
                     ))}
                 </ToggleGroup>
-                {value !== "none" && groups > 1 && (
-                    <Tooltip content={toggleAll}>
-                        <Button variant="plain" icon={allOpen ? <CompressIcon /> : <ExpandIcon />}
-                            aria-label={toggleAll} onClick={onToggleAll} />
-                    </Tooltip>
-                )}
+                {/* Always there, disabled with fewer than two groups: the choices
+                    beside it do not move under the pointer. Bordered as they are. */}
+                <ToggleGroup aria-label={t("Groups")} isCompact>
+                    <ToggleGroupItem buttonId={`${id}-all`} icon={allOpen && canToggle ? <CompressIcon /> : <ExpandIcon />}
+                        aria-label={toggleAll} isSelected={false} isDisabled={!canToggle} onChange={onToggleAll} />
+                </ToggleGroup>
+                {canToggle && <Tooltip content={toggleAll} triggerRef={() => document.getElementById(`${id}-all`) as HTMLElement} />}
             </Flex>
         </FlexItem>
     );

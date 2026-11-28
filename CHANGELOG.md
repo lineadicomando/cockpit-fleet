@@ -162,8 +162,9 @@ entries go under `[Unreleased]`, under the heading of their kind.
   keeps it `false`). The launches confirmed in the conversation before it
   was turned on count against its runs. Operators may turn it on.
 - Lists grouped by inventory, kind or project: "Open all groups" and
-  "Close all groups" are an icon button beside "Group by", their words in
-  its tooltip.
+  "Close all groups" are an icon button beside "Group by", bordered as its
+  choices, their words in its tooltip; always there, disabled with fewer
+  than two groups, so that the choices do not move under the pointer.
 - Audit log: a call an agent made without questions shows the mode beside
   the profile (`autonomous` or `unattended`).
 - Assistant: while it is being set up or logged in, "Open the terminal"
