@@ -4,7 +4,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Content, EmptyState, EmptyStateFooter, Flex, FlexItem, Label, ToggleGroup, ToggleGroupItem, Tooltip } from "@patternfly/react-core";
-import { CompressIcon, ExpandIcon } from "@patternfly/react-icons";
+import { CompressIcon, ExpandIcon, ListIcon } from "@patternfly/react-icons";
 import { Tbody, Td, Tr } from "@patternfly/react-table";
 import { useStoredState } from "../lib/hooks.ts";
 import type { HostListView } from "../lib/hosts.ts";
@@ -66,10 +66,15 @@ export function GroupByChoice<G extends string>({ id, value, options, onChange, 
             <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
                 <span className="pf-v6-u-font-size-sm" id={id}>{t("Group by")}</span>
                 <ToggleGroup aria-labelledby={id} isCompact>
-                    {options.map(([option, label]) => (
-                        <ToggleGroupItem key={option} text={label} isSelected={value === option} onChange={() => onChange(option)} />
-                    ))}
+                    {options.map(([option, label]) => option === "none"
+                        // No groups is a flat list: an icon, its label in a tooltip.
+                        ? <ToggleGroupItem key={option} buttonId={`${id}-none`} icon={<ListIcon />} aria-label={label}
+                            isSelected={value === option} onChange={() => onChange(option)} />
+                        : <ToggleGroupItem key={option} text={label} isSelected={value === option} onChange={() => onChange(option)} />)}
                 </ToggleGroup>
+                {options.filter(([option]) => option === "none").map(([option, label]) => (
+                    <Tooltip key={option} content={label} triggerRef={() => document.getElementById(`${id}-none`) as HTMLElement} />
+                ))}
                 {/* Always there, disabled with fewer than two groups: the choices
                     beside it do not move under the pointer. Bordered as they are. */}
                 <ToggleGroup aria-label={t("Groups")} isCompact>

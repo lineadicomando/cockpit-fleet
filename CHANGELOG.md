@@ -166,6 +166,7 @@ entries go under `[Unreleased]`, under the heading of their kind.
   "Close all groups" are an icon button beside "Group by", bordered as its
   choices, their words in its tooltip; always there, disabled with fewer
   than two groups, so that the choices do not move under the pointer.
+  "No grouping" is an icon too (a list), its words in its tooltip.
 - Audit log: a call an agent made without questions shows the mode beside
   the profile (`autonomous` or `unattended`).
 - Assistant: while it is being set up or logged in, "Open the terminal"
