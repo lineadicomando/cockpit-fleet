@@ -1147,6 +1147,7 @@
   "Review a draft": "Revisione di una bozza",
   "Review and merge": "Rivedi e unisci",
   "Syntax checks of the draft": "Controlli di sintassi della bozza",
+  "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and without questions it can do more with it.": "L'output di run e comandi è scritto dai nodi gestiti. Chi controlla un nodo può inserirvi testo pensato per manipolare l'assistente, che senza conferme ha più margine d'azione.",
   "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it.": "L'output di run e comandi è scritto dai nodi gestiti. Chi controlla un nodo può inserirvi testo pensato per manipolare l'assistente, che con questo profilo ha più margine d'azione.",
   "They guide it; they do not hold it: what it may do is decided by Fleet, by your role and the profile.": "Lo orientano ma non lo vincolano: ciò che può fare lo decide Fleet, in base al tuo ruolo e al profilo.",
   "This is a draft the assistant wrote: no run uses it until it is merged into main.": "Questa è una bozza scritta dall'assistente: nessuna run la usa finché non viene unita in main.",

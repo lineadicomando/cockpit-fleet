@@ -84,7 +84,7 @@ function useUnattendedRisks(info: ChatInfo, mode: string): string[] {
             info.autonomous_dry_run ? `${held} ${t("Its runs are dry runs only, and it launches no workflow and no schedule.")}` : held,
             t("Nobody confirms its launches: a playbook it launches runs on the nodes as soon as it asks for it."),
             t("Only the limits of Fleet hold it, not your judgement: within them it may launch what you would not have."),
-            t("The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it."),
+            t("The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and without questions it can do more with it."),
         ];
     }
     return [
@@ -203,9 +203,10 @@ function RunsInput({ info, value, onChange }: { info: ChatInfo; value: string; o
     const valid = validRuns(value) !== null;
     return (
         <>
-            <TextInput type="number" min={1} max={1000} value={value} onChange={(_event, text) => onChange(text)}
-                validated={valid ? "default" : "error"} aria-label={t("Runs without asking, in each conversation")}
-                style={{ maxInlineSize: "8rem" }} />
+            <div style={{ maxInlineSize: "8rem" }}>
+                <TextInput type="number" min={1} max={1000} value={value} onChange={(_event, text) => onChange(text)}
+                    validated={valid ? "default" : "error"} aria-label={t("Runs without asking, in each conversation")} />
+            </div>
             <Content component="small" style={{ display: "block", marginBlockStart: "0.25rem" }}>
                 {valid
                     ? t("This controller sets {{runs}}. When they are spent you can allow more, from the conversation.", { runs: info.autonomous_runs })

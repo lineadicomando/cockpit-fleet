@@ -1421,6 +1421,7 @@
   "The other checks": "The other checks",
   "The output of a run is shown to operators and administrators only, because it may contain sensitive data.": "The output of a run is shown to operators and administrators only, because it may contain sensitive data.",
   "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it.": "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it.",
+  "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and without questions it can do more with it.": "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and without questions it can do more with it.",
   "The output of this run was deleted on {{when}}, as runs this old keep only their outcome.": "The output of this run was deleted on {{when}}, as runs this old keep only their outcome.",
   "The profile {{profile}} is suggested for it; you may choose another.": "The profile {{profile}} is suggested for it; you may choose another.",
   "The project and the files fetched for it are deleted. The repository is not touched.": "The project and the files fetched for it are deleted. The repository is not touched.",

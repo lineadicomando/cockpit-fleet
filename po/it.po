@@ -3399,6 +3399,9 @@ msgstr "Rivedi e unisci"
 msgid "Syntax checks of the draft"
 msgstr "Controlli di sintassi della bozza"
 
+msgid "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and without questions it can do more with it."
+msgstr "L'output di run e comandi è scritto dai nodi gestiti. Chi controlla un nodo può inserirvi testo pensato per manipolare l'assistente, che senza conferme ha più margine d'azione."
+
 msgid "The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it."
 msgstr "L'output di run e comandi è scritto dai nodi gestiti. Chi controlla un nodo può inserirvi testo pensato per manipolare l'assistente, che con questo profilo ha più margine d'azione."
 
