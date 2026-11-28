@@ -44,7 +44,7 @@ audit.list admin -            channel.create admin M        channel.delete admin
 channel.list viewer -         channel.test admin M          channel.update admin M
 chat.accept viewer M          chat.agents viewer -          chat.start viewer M
 chat.cancel_runs operator M   chat.grant_runs operator M    chat.limit_runs operator M
-chat.session viewer -         chat.consent admin M          chat.unattended admin M
+chat.session viewer -         chat.consent admin M          chat.unattended operator M
 check.catalog viewer -
 check.create admin M          check.delete admin M          check.list viewer -        check.cycle viewer -
 check.run operator M          check.update admin M          cmdb.get viewer -
@@ -675,14 +675,15 @@ class RoleTest(Fixture):
             tool = spec.tool or name == "mcp.tools"
             kind = profiles.call_class(name, spec.agent, self.valid(name),
                                        enabled.mcp_adhoc_modules)
-            for profile in profiles.PROFILES:
+            for profile in (*profiles.PROFILES, *profiles.ALIASES):
                 # Without a session an autonomous agent launches nothing, and it
                 # never silences a problem nor turns a schedule on (autonomy.py,
                 # tested on its own).
-                held = profile in profiles.AUTONOMOUS and name in (
+                held = profile == profiles.AUTONOMOUS and name in (
                     *autonomy.LAUNCHES, *autonomy.SILENCERS, *autonomy.UNBOUNDED,
                     *autonomy.DOCUMENT_CHANGES)
-                expected = tool and profiles.allows(profile, kind) and not held
+                expected = (tool and profiles.allows(profiles.ALIASES.get(profile, profile), kind)
+                            and not held)
                 self.assertEqual(self.reached(name, "admin", via="mcp:x", config=enabled,
                                               profile=profile), expected, (name, profile))
             # One made up, or not enabled, opens nothing.

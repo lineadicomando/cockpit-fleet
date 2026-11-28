@@ -240,6 +240,8 @@ class Context:
     profile: str = ""
     # The fleet-mcp an agent's call came through, when it says.
     session: str = ""
+    # The mode without questions of that session (profiles.MODES); "" when asked.
+    mode: str = ""
     # The bytes after the parameters, for a command that streams in.
     stdin: BinaryIO | None = field(default=None, repr=False)
     # Where such a command may write lines before its answer (store.put's progress).
@@ -385,7 +387,8 @@ def _record(ctx: Context, name: str, params: dict, outcome: str, detail: str = "
             redact: tuple[str, ...] = (), secrets: tuple[str, ...] = (), conn=None) -> None:
     """One record of the audit trail, with what the call came through."""
     audit.record(conn if conn is not None else ctx.conn_or_none(), ctx.caller, name, params,
-                 outcome, detail, redact, ctx.via, secrets, ctx.profile, ctx.session)
+                 outcome, detail, redact, ctx.via, secrets, ctx.profile, ctx.session,
+                 ctx.mode)
 
 
 def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> None:
@@ -428,6 +431,15 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
     ceiling = config.mcp_max_role
     if ctx.caller.role is not None and ROLES.index(ctx.caller.role) > ROLES.index(ceiling):
         ctx.caller = replace(ctx.caller, role=ceiling)
+    # A profile no longer one, as fleet-mcp started by hand may name it: held
+    # in its mode for the whole session, wherever config.toml allows the mode.
+    alias = profile if isinstance(profile, str) and profile in profiles.ALIASES else ""
+    if alias:
+        profile = profiles.ALIASES[alias]
+        if profiles.mode(autonomy.enabled(config), profile) != alias:
+            raise refuse(f"mode {alias} not enabled", f"an agent acting without asking in the"
+                         f" profile {profile} is not enabled on this controller"
+                         f" ([chat] {alias} in config.toml)")
     if profile is None:
         # Refused below, by its name, when the role may be in none of them.
         profile = profiles.default(config.chat_profiles, config.chat_default_profile,
@@ -440,6 +452,7 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
         raise refuse(f"profile {profile} needs the role {profiles.LEAST_ROLE[profile]}",
                      profiles.needs(profile))
     ctx.profile = profile
+    ctx.mode = alias or autonomy.mode(ctx, ctx.session, profile)
     spec = COMMANDS.get(name)
     if spec is not None and not spec.tool and name != "mcp.tools":
         # fleet-mcp offers no such tool; a call that names one anyway is refused.
@@ -479,7 +492,7 @@ def dispatch(name: str, raw: bytes, ctx: Context) -> dict:
         if not allowed(ctx.caller, spec.role, spec.right):
             _record(ctx, name, params, "denied", f"requires {spec.role}", spec.redact)
             raise _recorded(Forbidden(f"{name} requires the {spec.role} role"))
-        if ctx.profile in profiles.AUTONOMOUS:
+        if ctx.mode == profiles.AUTONOMOUS:
             autonomy.hold(ctx, name, params)
         data = spec.call(ctx, params)
         if spec.mutating:

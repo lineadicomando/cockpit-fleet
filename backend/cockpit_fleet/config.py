@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
 from .errors import Unavailable
-from .profiles import DIAGNOSTIC_MODULES, PROFILES
+from .profiles import ALIASES, AUTONOMOUS, DIAGNOSTIC_MODULES, PROFILES
 from .validators import MODULE_RE
 
 # An archive reaches fleetctl whole, on its input: this bounds its memory.
@@ -90,10 +90,12 @@ class Config:
     chat_max_sessions: int = 2
     # The profiles of the assistant a user may pick, and the one an agent
     # gets when it names none (profiles.py).
-    chat_profiles: tuple[str, ...] = ("observer", "assisted", "diagnostic", "autonomous",
-                                      "administrator")
+    chat_profiles: tuple[str, ...] = ("observer", "assisted", "diagnostic", "administrator")
     chat_default_profile: str = "assisted"
-    # What holds an agent of an autonomous profile: the runs it may launch in
+    # Whether a person may let an agent in the profile assisted act without
+    # being asked, for one conversation: the mode autonomous (autonomy.py).
+    chat_autonomous: bool = True
+    # What holds an agent in the mode autonomous: the runs it may launch in
     # one session, and whether they must all be dry runs (autonomy.py).
     chat_autonomous_runs: int = 30
     chat_autonomous_dry_run: bool = False
@@ -294,15 +296,22 @@ def parse(text: str) -> Config:
 
     chat = _section(data, "chat", {"agents", "max_sessions", "profiles", "default_profile",
                                    "autonomous_runs", "autonomous_dry_run",
-                                   "autonomous_writes", "unattended"})
+                                   "autonomous_writes", "unattended", "autonomous"})
     agents = chat.get("agents", {})
     if not isinstance(agents, dict) or len(agents) > _MAX_AGENTS:
         raise ConfigError(f"chat.agents must be at most {_MAX_AGENTS} tables, one per agent")
     profiles = chat.get("profiles", list(Config.chat_profiles))
     if (not isinstance(profiles, list) or not profiles
-            or any(profile not in PROFILES for profile in profiles)):
+            or any(profile not in PROFILES and profile not in ALIASES for profile in profiles)):
         raise ConfigError(f"chat.profiles must be a list of some of: {', '.join(PROFILES)}")
-    default_profile = chat.get("default_profile", Config.chat_default_profile)
+    # autonomous was a profile: listed, it is assisted with its mode allowed,
+    # and a list without it, written before, keeps that mode from users.
+    autonomous = chat.get("autonomous", "profiles" not in chat or AUTONOMOUS in profiles)
+    if not isinstance(autonomous, bool):
+        raise ConfigError("chat.autonomous must be true or false")
+    profiles = [ALIASES.get(profile, profile) for profile in profiles]
+    default_profile = ALIASES.get(chat.get("default_profile", Config.chat_default_profile),
+                                  chat.get("default_profile", Config.chat_default_profile))
     if "default_profile" not in chat and default_profile not in profiles:
         default_profile = profiles[0]
     if default_profile not in profiles:
@@ -366,6 +375,7 @@ def parse(text: str) -> Config:
                                   1, 1000),
         chat_autonomous_dry_run=dry_run,
         chat_unattended=unattended,
+        chat_autonomous=autonomous,
         chat_autonomous_writes=_int(chat, "chat", "autonomous_writes",
                                     Config.chat_autonomous_writes, 1, 1000),
         notify_url=notify_url.rstrip("/"),

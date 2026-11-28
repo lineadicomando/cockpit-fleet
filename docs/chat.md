@@ -104,10 +104,11 @@ what each does):
 ```toml
 [chat]
 #max_sessions = 2            # open at once, all users: one takes about 360 MB
-#profiles = ["observer", "assisted", "diagnostic", "autonomous", "administrator"]
+#profiles = ["observer", "assisted", "diagnostic", "administrator"]
 #default_profile = "assisted"
-#autonomous_runs = 30        # launches per conversation in autonomous
-#autonomous_dry_run = false  # autonomous: templates in check mode only
+#autonomous = true           # allow "Without questions" in assisted
+#autonomous_runs = 30        # its launches per conversation
+#autonomous_dry_run = false  # its templates in check mode only
 #autonomous_writes = 20      # changes to the documents per conversation
 #unattended = false          # allow "Without questions" in administrator
 #[chat.agents.NAME]          # command, label, login, terminal
@@ -153,7 +154,7 @@ Fleet again from Cockpit's menu and send the message again.
   set it to `operator` for an administrator's assistant to be an
   operator's, since the output of a run is written by the nodes.
 - Within that, the profile of the session, among `[chat] profiles`
-  (all five as installed; list fewer to keep the others from users).
+  (all four as installed; list fewer to keep the others from users).
   The backend refuses what is outside it; `fleet-mcp` started by hand
   gets `default_profile`.
 
@@ -162,48 +163,61 @@ Fleet again from Cockpit's menu and send the message again.
   | `observer` | read | changes to the documents |
   | `assisted` (default) | also launch and cancel what is defined: templates, workflows, checks, schedules on or off | launches and cancels, with "always" for the conversation |
   | `diagnostic` | also ad-hoc commands of `[mcp] adhoc_modules` (change nothing), without become or `{{ }}` in their arguments; scans of a subnet allowed by `[network]` ([security.md](security.md)); only for administrators of Fleet with `max_role = "admin"` | as `assisted`; those ad-hoc commands unasked, each scan every time |
-  | `autonomous` | as `assisted`, held by the backend: at most `autonomous_runs` launches per conversation (or what the user chose at the start, and more allowed from the page), none on an inventory in a maintenance window, no acknowledging, no maintenance window, no schedule turned on, dry runs only with `autonomous_dry_run`; at most `autonomous_writes` changes to the documents | nothing |
   | `administrator` | whatever the role allows: ad-hoc commands, changes to templates, inventories and the rest, files, projects, credentials, deletes; only for administrators of Fleet with `max_role = "admin"` (for anyone else, a name that promises more than the role) | launches as `assisted`; scans, ad-hoc commands, changes, files, deletes every time, never "always" |
 
   A profile is offered only to a role it does more for: `diagnostic` and
-  `administrator` to administrators (under `max_role`), `assisted` and
-  `autonomous` from operators up; a viewer, who launches nothing and
+  `administrator` to administrators (under `max_role`), `assisted` from
+  operators up; a viewer, who launches nothing and
   writes no document, gets one, `observer` (or `assisted` when `observer`
   is not enabled).
   Every profile reads, searches and writes the documents (Resources,
-  Documents); a change to them is asked, with "always", but in
-  `autonomous`; deleting one every time, but in `autonomous`. Questions
+  Documents); a change to them is asked, with "always", deleting one
+  every time, but without questions in `assisted` (below). Questions
   are a convenience: the backend decides again, whatever the answer.
 - The user picks the profile when starting a session and may change it
   within the conversation ("Change the profile"): the agent starts again
   with the same conversation, and "always" answers are asked again.
-  Before the first session in `diagnostic`, `autonomous` or
-  `administrator` the page tells what it may do and its risks (the nodes
+  Before the first session in `diagnostic` or `administrator` the page
+  tells what it may do and its risks (the nodes
   can steer an assistant through what they write), and the user accepts
   them once, in the audit log (`chat.accept`); until then the backend
   refuses such a session. Enabling a profile is the administrator's
   decision; accepting its risks, each user's.
-- "Without questions", in `administrator` only and only where `[chat]
-  unattended = true` (off as installed): the switch in the header of the
-  session turns every question off but those about deleting, as the mode
-  of Claude Code that bypasses permissions, for the conversations of that session until it is
-  turned off, the profile changes or the page is reloaded. Its ad-hoc
+- "Without questions", a switch in the header of the session, turns the
+  questions off for the conversations of that session until it is turned
+  off, the profile changes or the page is reloaded. What it means depends
+  on the profile.
+- In `assisted`, where `[chat] autonomous = true` (on as installed):
+  launches and changes to the documents are asked about no more, and the
+  backend holds the agent instead. At most `autonomous_runs` launches per
+  conversation (or what the user chose when turning it on, and more
+  allowed from the page), none on an inventory in a maintenance window,
+  no acknowledging, no maintenance window, no schedule turned on, dry runs
+  only with `autonomous_dry_run`; at most `autonomous_writes` changes to
+  the documents, deletes included, each restored from their history. The
+  launches made in the conversation before it was turned on count as
+  well. Role operator.
+- In `administrator`, only where `[chat] unattended = true` (off as
+  installed): every question off but those about deleting, as the mode
+  of Claude Code that bypasses permissions. Its ad-hoc
   commands then start without a confirmation, marked "unattended" in the
   run's options; changes are made at once; a delete (of a template, an
   inventory, a credential, a file, a document and the rest) is still
   asked about, every time. Files still go to
   a draft a person merges, a template that needs approval still waits for
-  a person, and "Stop everything" cancels its runs. Each user accepts its
-  risks once (`chat.accept`), and each turning on or off is in the audit
-  log (`chat.unattended`). Not at a terminal.
+  a person, and "Stop everything" cancels its runs.
+- In both, each user accepts its risks once (`chat.accept`), and each
+  turning on or off is in the audit log (`chat.unattended`), as is every
+  call made without questions (the mode beside the profile: `autonomous`
+  or `unattended`). Not at a terminal.
 - Above the message box the page shows the runs the assistant launched
-  in the conversation and not ended, each a link to its page. In
-  `autonomous`, how many of those it may ("Runs launched in this
+  in the conversation and not ended, each a link to its page. Without
+  questions in `assisted`, how many of those it may ("Runs launched in this
   conversation: 30 of 30"); once spent, the agent stops and says so, and
   "Allow 30 more" (`autonomous_runs` more each time; role operator) lets
   it go on. In any profile, "Stop everything" stops the answer and cancels
   those runs, queued, running or waiting for an approval, workflow steps
-  included. These, and the runs chosen at the start, are the user's
+  included. These, and the runs chosen with the switch, are the user's
   decisions, in the audit log (`chat.limit_runs`, `chat.grant_runs`,
   `chat.cancel_runs`); an agent cannot call them.
 - A run that has ended, and a check whose result is not ok (in the checks

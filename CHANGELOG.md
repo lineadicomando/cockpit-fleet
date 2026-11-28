@@ -153,6 +153,16 @@ entries go under `[Unreleased]`, under the heading of their kind.
   with risks to accept. A viewer gets one profile, `observer` (or
   `assisted` when `observer` is not enabled); `fleet-mcp` started by hand
   with a profile not offered to the role is refused.
+- Assistant: the profile `autonomous` is now "Without questions" in
+  `assisted`, the switch `administrator` has: turned on and off within a
+  conversation, without starting the assistant again, with the same limits
+  (the runs of each conversation are chosen when it is turned on) and the
+  same acceptance of its risks. Allowed by the new `[chat] autonomous`
+  (`true` by default; a `[chat] profiles` written without `autonomous`
+  keeps it `false`). The launches confirmed in the conversation before it
+  was turned on count against its runs. Operators may turn it on.
+- Audit log: a call an agent made without questions shows the mode beside
+  the profile (`autonomous` or `unattended`).
 - Assistant: while it is being set up or logged in, "Open the terminal"
   opens Cockpit's terminal in the same tab, not in a new one.
 - Assistant: an ad-hoc command allowed once when the chat page asks about
@@ -188,6 +198,17 @@ entries go under `[Unreleased]`, under the heading of their kind.
 - Store and Documents: a folder, or a search, of more than 50 entries is
   shown a page at a time, 100 entries a page unless another number is
   chosen; selecting all selects the entries of the page.
+
+### Deprecated
+
+- `autonomous` in `[chat] profiles` and `[chat] default_profile`, and for a
+  `fleet-mcp` started by hand: read as `assisted` with "Without questions"
+  allowed (`[chat] autonomous`), or for every call of the session.
+
+### Removed
+
+- Assistant: `fleet assistant --profile autonomous`; at a terminal no
+  profile acts without questions.
 
 ### Fixed
 

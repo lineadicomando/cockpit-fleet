@@ -163,8 +163,9 @@ are off as installed. How they are turned on, and what each profile allows:
 - The output of runs is written by the nodes: an agent that reads it and
   may also change things can be steered by what a node writes, which is
   why the limits are there.
-- The profile `autonomous` launches a bounded number of runs in a session
-  (more only when its person chooses or allows them on the page:
+- "Without questions" in the profile `assisted` (`[chat] autonomous`, on
+  as installed; the mode `autonomous`) launches a bounded number of runs
+  in a session (more only when its person chooses or allows them on the page:
   `chat.limit_runs`, `chat.grant_runs`, which no agent may call), nothing
   on an inventory in maintenance, and cannot silence a problem; a run that
   needs approval still waits for a person.
@@ -184,8 +185,8 @@ are off as installed. How they are turned on, and what each profile allows:
 - Files an agent writes in a project or inventory written in Fleet go to
   a draft of its session, which no run reads, until a person merges it.
   Documents are not drafts: every profile may write them, asked as a
-  launch is (a deletion every time, but in `autonomous`), `autonomous`
-  at most `[chat] autonomous_writes` times a session; each change is in their history
+  launch is (a deletion every time, but without questions in `assisted`,
+  then at most `[chat] autonomous_writes` times a session); each change is in their history
   with the person as author and in the audit log as coming through an
   agent, so a text can be put back.
 - Skills (the `.fleet/skills/` of projects and their collections,

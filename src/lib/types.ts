@@ -43,9 +43,12 @@ export interface ChatInfo {
     profiles: string[];
     default_profile: string;
     to_accept: string[];
-    // The profiles in which the user may let the agent act without asking.
+    // The profiles in which the user may let the agent act without asking,
+    // and the mode of each: autonomous (in assisted, held by Fleet's limits)
+    // or unattended (in administrator).
     unattended: string[];
-    // What holds an agent in the profile autonomous.
+    modes: Record<string, string>;
+    // What holds an agent in the mode autonomous.
     autonomous_runs: number;
     autonomous_dry_run: boolean;
     max_sessions: number;
@@ -53,7 +56,7 @@ export interface ChatInfo {
 }
 
 // What an agent launched in a conversation (chat.session): launches that
-// went through, those allowed in the profile autonomous, and its runs not ended.
+// went through, those allowed without asking in assisted, and its runs not ended.
 export interface ChatSessionRun {
     id: string;
     title: string;
@@ -131,8 +134,10 @@ export interface AuditEntry {
     detail: string;
     // What the call came through when it was not the interface: an agent.
     via: string;
-    // The profile of the assistant an agent's call was held to.
+    // The profile of the assistant an agent's call was held to, and the mode
+    // without questions it was made in ("" when its person was asked).
     profile: string;
+    mode?: string;
 }
 
 export type CredentialKind = "machine" | "vault" | "source";

@@ -147,19 +147,20 @@ for each conversation (`drawSession` in `chat.ts`, when the first message
 opens it or an earlier one is opened again) and adds `--session` to the
 arguments `_fleet/ready` gave. Above the message box `SessionRuns` shows
 `chat.session`: each run not ended as a link to its page, those waiting
-for an approval to decide there (`ChatApprovals`); in `autonomous` the
-launches of those allowed and, once spent, "Allow N more"
-(`chat.grant_runs`, N = `[chat] autonomous_runs`); in any profile, while
-runs have not ended, "Stop everything", which asks first, then sends
-`session/cancel` and calls `chat.cancel_runs`. In `autonomous` the start
-of a session, and the change to it, have a field for the runs of each
-conversation (`autonomous_runs`, or what was chosen last). `Chat` keeps
-it (`runs`, 0 for config.toml's, which needs no call) and, whenever it
-draws a session, calls `chat.limit_runs` (its constructor's third
-argument) before `session/new` or `session/load`; a failure stops the
-sending, with the error in the conversation, rather than let the agent go
-on under another limit. The backend side: [Agents](agents.md), "The person
-beside an autonomous agent".
+for an approval to decide there (`ChatApprovals`); without questions in
+`assisted` (the mode `autonomous`) the launches of those allowed and,
+once spent, "Allow N more" (`chat.grant_runs`, N = `[chat]
+autonomous_runs`); in any profile, while runs have not ended, "Stop
+everything", which asks first, then sends `session/cancel` and calls
+`chat.cancel_runs`. Turning the questions off in `assisted` asks for the
+runs of each conversation (`autonomous_runs` to begin with). `Chat` keeps
+them (`runs`, 0 for config.toml's, which needs no call) and calls
+`chat.limit_runs` (its constructor's third argument) before
+`chat.unattended`: at once for the conversation open, and whenever it
+draws a session, before `session/new` or `session/load`; a failure stops
+the sending, with the error in the conversation, rather than let the
+agent go on under another limit. The backend side: [Agents](agents.md),
+"The person beside an agent acting without asking".
 
 **Telling the agent that runs ended.** An agent works only within a turn:
 nothing wakes it once it has answered, so a run that waited for a
@@ -189,26 +190,31 @@ the page and answered as "once": the agent's own option writes a rule in
 the user's settings. A call naming something `mcp.tools` does not list,
 after asking it again, is asked about every time.
 
-**Without questions** (`consent.py`). In a profile of
-`profiles.UNATTENDED_PROFILES` (`administrator`), where `[chat]
-unattended` allows it, the header has a switch that turns the questions
-off, as Claude Code's mode that bypasses permissions. The first time it
-tells the risks and records their acceptance (`chat.accept` with
-`unattended`, a mode and not a profile, in `profile_acceptances`); then
-`Chat.unattend` calls `chat.unattended` (admin, no tool, audited) for the
+**Without questions** (`consent.py`, `autonomy.py`). In a profile of
+`profiles.MODES` whose mode config.toml allows (`chat.agents` gives them
+in `modes`: `assisted` with `[chat] autonomous`, `administrator` with
+`[chat] unattended`), the header has a switch that turns the questions
+off. The first time it tells the risks of the mode and records their
+acceptance (`chat.accept` with `autonomous` or `unattended`, modes and
+not profiles, in `profile_acceptances`); then `Chat.unattend` calls
+`chat.unattended` (operator, no tool, audited) with the profile, for the
 conversation's session of `fleet-mcp` (or, before the first message, when
-the session is drawn: `limit()`, as for the runs of `autonomous`), and
-asks `mcp.tools` again with `session`: for a session `unattended_sessions`
-(schema 41) holds for the caller, every tool is `none` and the page
-answers alone, but those that delete (`profiles.deletes`: the verbs
-`delete` and `remove`), which stay `every`: nothing puts back what is
-gone. An agent's `run.adhoc` there starts at once, `"unattended":
-true` in its options and no row of approval. While on, the message box
+the session is drawn: `limit()`), and asks `mcp.tools` again with
+`session`: for a session `unattended_sessions` (schema 41, its profile
+schema 42) holds for the caller in that profile, the tools are asked as
+the mode says (`profiles.question`). In `autonomous` launches and
+documents are `none`, held by the backend. In `unattended` every tool is
+`none` and the page answers alone, but those that delete
+(`profiles.deletes`: the verbs `delete` and `remove`), which stay
+`every`: nothing puts back what is gone; an agent's `run.adhoc` there
+starts at once, `"unattended": true` in its options and no row of
+approval. The agent is not started again: its instructions in `assisted`
+already tell it what holds it while the questions are off. While on, the message box
 says so (`fleet-chat-unattended`, a note under it), and `chat.session`
 gives `unattended`. It holds for every conversation of the chat session
 (each draws its session and sets it) until switched off (the page asks
 again at once, then tells the backend), the profile changes (the page
-drops it; the backend holds it only in `administrator`) or the page is
+drops it; the backend holds it only in the profile it was turned on in) or the page is
 reloaded; `config.toml` takes it back at the next call. Not at a
 terminal. What stays: role, ceiling and profile in `_through`, drafts,
 approvals of templates, "Stop everything"; stopping an answer cancels

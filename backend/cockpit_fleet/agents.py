@@ -11,7 +11,7 @@ import json
 import re
 import time
 
-from . import approvals, consent, jobs, profiles, store
+from . import approvals, autonomy, jobs, profiles, store
 from .auth import role_at_least
 from .cli import COMMANDS, Context, Id, Int, Str, Values, command
 from .errors import BadRequest
@@ -145,14 +145,16 @@ def mcp_tools(ctx: Context, params: Values) -> dict:
     profile = ctx.profile or params["profile"] or ""
     if profile and profile not in ctx.config.chat_profiles:
         raise BadRequest(f"{profile} is not a profile enabled on this controller")
-    unattended = consent.unattended_session(ctx, ctx.session or params["session"], profile)
-    return {"tools": tools(ctx, role, profile, unattended), "role": role,
-            "user": ctx.caller.user, "profile": profile, "unattended": unattended}
+    mode = ctx.mode if ctx.profile else autonomy.mode(ctx, params["session"], profile)
+    return {"tools": tools(ctx, role, profile, mode), "role": role,
+            "user": ctx.caller.user, "profile": profile, "mode": mode,
+            "unattended": bool(mode)}
 
 
-def tools(ctx: Context, role: str | None, profile: str, unattended: bool = False) -> list[dict]:
-    """The tools of an agent with ROLE in PROFILE (all, with none); with
-    UNATTENDED, none of them asked about but those that delete."""
+def tools(ctx: Context, role: str | None, profile: str, mode: str = "") -> list[dict]:
+    """The tools of an agent with ROLE in PROFILE (all, with none), and how
+    each is asked about in MODE, the one without questions of the session
+    ("" when the person is asked)."""
     modules = ctx.config.mcp_adhoc_modules
 
     def offered(kind: str) -> bool:
@@ -189,11 +191,8 @@ def tools(ctx: Context, role: str | None, profile: str, unattended: bool = False
             if tool is not None:
                 found.append({**tool, "readOnly": False, "class": COMMANDS["run.start"].agent})
     for tool in found:
-        if unattended:
-            tool["question"] = "every" if profiles.deletes(tool["command"]) else "none"
-        else:
-            tool["question"] = profiles.question(
-                profile, tool["class"], tool["readOnly"], tool["command"])
+        tool["question"] = profiles.question(profile, tool["class"], tool["readOnly"],
+                                             tool["command"], mode)
     return found
 
 

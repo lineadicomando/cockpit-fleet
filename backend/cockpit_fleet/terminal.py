@@ -963,9 +963,6 @@ PROFILE_TEXT = {
                 " are defined, and cancels runs, asking you before each of these.",
     "diagnostic": "As assisted, and it runs ad-hoc commands of modules that only read, without"
                   " become, without asking you.",
-    "autonomous": "It reads and launches what is defined without asking you; Fleet holds it to"
-                  " a few runs in a session, nothing on an inventory in maintenance, and it"
-                  " never silences a problem.",
     "administrator": "Whatever your role allows: ad-hoc commands, changes to templates,"
                      " inventories and the rest, files; it asks you before every change, and"
                      " files it writes go to a draft for you to review (fleet draft).",
@@ -973,9 +970,6 @@ PROFILE_TEXT = {
 RISKS = {
     "diagnostic": ["Ad-hoc commands run on the managed nodes without a question; what they read"
                    " goes to the provider of the model."],
-    "autonomous": ["Nobody confirms its launches: a playbook it launches runs on the nodes as"
-                   " soon as it asks for it.",
-                   "Only the limits of Fleet hold it, not your judgement."],
     "administrator": ["It may change templates, inventories, schedules and the rest, and run"
                       " any ad-hoc command your role allows, once you confirm; a change you"
                       " confirm is made in your name."],

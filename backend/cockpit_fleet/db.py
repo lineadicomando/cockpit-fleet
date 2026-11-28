@@ -1042,6 +1042,15 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # The mode without questions an agent's call was made in
+        # (profiles.MODES): autonomous, unattended, or '' when its person was asked.
+        "ALTER TABLE audit ADD COLUMN mode TEXT NOT NULL DEFAULT ''",
+        # The profile a session was let act without asking in: its mode is that
+        # profile's, and holds only while the session is in it.
+        "ALTER TABLE unattended_sessions ADD COLUMN profile TEXT NOT NULL"
+        " DEFAULT 'administrator'",
+    ],
 ]
 
 

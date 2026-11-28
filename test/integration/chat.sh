@@ -75,7 +75,7 @@ talk() {
 expect_eq "no chat tab by default" "$(get "$(ctl itoperator whoami)" 'a["data"]["chat"]')" False
 out=$(chat itoperator fake "$INIT")
 expect_eq "nothing starts while no agent is named" "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" unavailable
-printf '[chat]\nmax_sessions = 2\nprofiles = ["observer", "assisted", "autonomous"]\n[chat.agents.fake]\ncommand = ["%s"]\nlabel = "Fake"\nlogin = "fake login"\nterminal = ["%s", "--mcp-config", "{mcp_config}", "--tools", "", "--allowedTools", "{allowed_tools}", "--append-system-prompt", "{instructions}"]\n[chat.agents.gone]\ncommand = ["/nowhere/agent"]\n' "$AGENT" "$TERMINAL" >> "$CONFIG"
+printf '[chat]\nmax_sessions = 2\nprofiles = ["observer", "assisted", "diagnostic", "administrator"]\n[chat.agents.fake]\ncommand = ["%s"]\nlabel = "Fake"\nlogin = "fake login"\nterminal = ["%s", "--mcp-config", "{mcp_config}", "--tools", "", "--allowedTools", "{allowed_tools}", "--append-system-prompt", "{instructions}"]\n[chat.agents.gone]\ncommand = ["/nowhere/agent"]\n' "$AGENT" "$TERMINAL" >> "$CONFIG"
 expect_eq "the tab is there once one is" "$(get "$(ctl itviewer whoami)" 'a["data"]["chat"]')" True
 out=$(ctl itviewer chat.agents)
 expect_eq "but the chat needs agents enabled" "$(get "$out" '"[mcp]" in a["data"]["unavailable"]')" True
@@ -133,22 +133,29 @@ expect_eq "it is a session as those of the page" \
 expect_eq "its configuration is gone with it" "$(ls -d /tmp/fleet-assistant-* 2>/dev/null | wc -l)" 0
 expect_eq "an agent with no such program is said" "$(assistant itadmin gone | grep -c 'no agent')" 1
 expect_eq "and nothing for a user with no role" "$(assistant itnobody | grep -c 'servers=')" 0
-out=$(answered itadmin no "--profile autonomous")
+expect_eq "autonomous is a profile no more, at a terminal" \
+    "$(assistant itadmin "--profile autonomous" | grep -c 'not enabled here')" 1
+expect_eq "nor diagnostic for an agent held to operator" \
+    "$(assistant itadmin "--profile diagnostic" | grep -c 'not enabled here')" 1
+# The profiles beyond assisted are an administrator's: the ceiling raised for them.
+sed -i 's/^max_role = "operator"$/max_role = "admin"/' "$CONFIG"
+out=$(answered itadmin no "--profile diagnostic")
 expect_eq "a profile beyond assisted tells its risks first, and stops unless accepted" \
     "$(printf '%s' "$out" | grep -c -e 'steer the assistant' -e 'were not accepted')" 2
 expect_eq "nothing ran" "$(printf '%s' "$out" | grep -c 'servers=')" 0
-out=$(answered itadmin yes "--profile autonomous")
-expect_eq "accepted, it starts in that profile, its launches unasked" \
-    "$(printf '%s' "$out" | grep -o 'reads-unasked=.*launches-unasked=[A-Za-z]*')" \
-    "reads-unasked=True launches-unasked=True"
+out=$(answered itadmin yes "--profile diagnostic")
+expect_eq "accepted, it starts in that profile, its launches asked" \
+    "$(printf '%s' "$out" | grep -o 'role=[a-z]*\|reads-unasked=.*launches-unasked=[A-Za-z]*' | tr '\n' ' ')" \
+    "role=admin reads-unasked=True launches-unasked=False "
 expect_eq "the acceptance is in the audit trail" \
     "$(get "$(admin audit.list)" '[(e["user"], e["outcome"], e["params"]) for e in a["data"]["entries"] if e["command"] == "chat.accept"]')" \
-    "[('itadmin', 'ok', '{\"profile\": \"autonomous\"}')]"
+    "[('itadmin', 'ok', '{\"profile\": \"diagnostic\"}')]"
 expect_eq "and it is not asked again" \
-    "$(assistant itadmin "--profile autonomous" | grep -c -e 'steer the assistant' -e 'launches-unasked=True')" 1
-out=$(printf '%s\n' "$INIT" | sudo -u itoperator "$CHAT" --profile autonomous fake 2>&1)
+    "$(assistant itadmin "--profile diagnostic" | grep -c -e 'steer the assistant' -e 'servers=')" 1
+out=$(printf '%s\n' "$INIT" | sudo -u itadmin "$CHAT" --profile administrator fake 2>&1)
 expect_eq "for the page too, a profile whose risks were not accepted does not start" \
     "$(line "$out" 'm.get("method") == "_fleet/error"' 'm["params"]["code"]')" not_accepted
+sed -i 's/^max_role = "admin"$/max_role = "operator"/' "$CONFIG"
 out=$(printf '%s\n' "$INIT" | sudo -u itoperator "$CHAT" --profile observer fake 2>&1)
 expect_eq "one that needs no acceptance starts, fleet-mcp in it" \
     "$(line "$out" 'm.get("method") == "_fleet/ready"' '(m["params"]["profile"], m["params"]["mcp"]["args"])')" \

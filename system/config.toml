@@ -150,30 +150,36 @@
 #   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules,
 #                  and scans of a subnet (asked every time); only for
 #                  administrators of Fleet, with max_role = "admin"
-#   autonomous     as assisted, without being asked, within the limits below
 #   administrator  everything the role allows: ad-hoc commands, changes to
 #                  templates and the rest, files, projects, credentials;
 #                  only for administrators of Fleet, with max_role = "admin"
 # A viewer, who launches nothing, gets one profile: observer, or else assisted.
-# Each user accepts the risks of diagnostic, autonomous and administrator
-# once, on the chat page or in fleet assistant, before a session in them;
-# the acceptance is in the audit log.
+# Each user accepts the risks of diagnostic and administrator once, on the
+# chat page or in fleet assistant, before a session in them; the acceptance
+# is in the audit log.
 # A profile only restricts, under the user's role and [mcp] max_role. It
 # holds for fleet-mcp started by hand too: an agent that names none gets
 # default_profile (by default assisted, or the first of profiles when assisted
 # is not among them). Giving agents ad-hoc commands or changes takes a profile that
 # allows them, max_role = "admin", and a user who is an administrator.
-#profiles = ["observer", "assisted", "diagnostic", "autonomous", "administrator"]
+# "autonomous", a profile before 0.5, is still read here as assisted with
+# autonomous = true below; a list written without it keeps that false.
+#profiles = ["observer", "assisted", "diagnostic", "administrator"]
 #default_profile = "assisted"
-# An agent in the profile autonomous launches at most this many runs (of
-# templates, workflows, schedules, checks) in one session of fleet-mcp (a
-# conversation of the chat page, where the user may choose another number
-# when starting it, and allow more, again and again, when they are spent),
-# nothing on an inventory with a maintenance window open, and never
-# acknowledges a problem or opens or closes a maintenance window. A
-# template that needs approval still waits for a person. With
+# Whether a user may turn the questions off ("Without questions") for one
+# conversation of an assistant in the profile assisted: it then launches
+# what is defined and changes the documents without asking anyone, held by
+# the limits below instead. Each user accepts its risks once, recorded in
+# the audit log, and turns it on for each conversation, on the chat page
+# only. It launches at most autonomous_runs runs (of templates, workflows,
+# schedules, checks) in one conversation (the user may choose another
+# number when turning it on, and allow more, again and again, when they are
+# spent), nothing on an inventory with a maintenance window open, and never
+# acknowledges a problem, opens or closes a maintenance window or turns a
+# schedule on. A template that needs approval still waits for a person. With
 # autonomous_dry_run, its runs of templates are all dry runs (check mode),
 # and it launches no workflow and no schedule.
+#autonomous = true
 #autonomous_runs = 30
 #autonomous_dry_run = false
 # And it makes at most this many changes to the documents in one session

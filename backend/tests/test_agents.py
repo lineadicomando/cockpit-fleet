@@ -448,8 +448,14 @@ class ProfileTest(Base):
         self.assertEqual((assisted["run_list"], assisted["run_start"]), ("none", "ask"))
         self.assertEqual({assisted[name] for name in assisted if name.startswith("launch_")},
                          {"ask"})
-        autonomous = questions("autonomous")
-        self.assertEqual({autonomous["run_start"], autonomous["run_cancel"]}, {"none"})
+        # With the questions off (the mode autonomous) in the session the page names.
+        session = "0123456789abcdef"
+        self.ok("chat.accept", {"profile": "autonomous"})
+        self.ok("chat.unattended", {"session": session, "on": True, "profile": "assisted"})
+        autonomous = {tool["name"]: tool["question"] for tool in self.ok(
+            "mcp.tools", {"profile": "assisted", "session": session})["tools"]}
+        self.assertEqual({autonomous["run_start"], autonomous["run_cancel"],
+                          autonomous["doc_delete"]}, {"none"})
         self.assertEqual(questions("diagnostic")["run_adhoc"], "none")
         administrator = questions("administrator")
         self.assertEqual((administrator["run_adhoc"], administrator["file_write"],
@@ -462,8 +468,12 @@ class ProfileTest(Base):
             ("assisted", "run", False, "ask"),
             ("diagnostic", profiles.DIAGNOSTIC, False, "none"),
             ("diagnostic", "run", False, "ask"),
-            ("autonomous", "run", False, "none"),
-            ("autonomous", "adhoc", False, "every"),
+            # Without questions: in assisted launches and documents, held by autonomy.py.
+            ("assisted", "run", False, "none", "autonomous"),
+            ("assisted", "doc", False, "none", "autonomous"),
+            ("assisted", "adhoc", False, "every", "autonomous"),
+            # In administrator everything but deletes.
+            ("administrator", "adhoc", False, "none", "unattended"),
             # A scan is asked about every time, in the profiles that allow it.
             ("diagnostic", "scan", False, "every"),
             ("administrator", "scan", False, "every"),
@@ -475,19 +485,23 @@ class ProfileTest(Base):
             # A command that changes nothing never asks, whatever its class.
             ("assisted", "run", True, "none"),
         ]
-        for profile, kind, read_only, expected in table:
-            self.assertEqual(profiles.question(profile, kind, read_only), expected,
-                             (profile, kind, read_only))
+        for profile, kind, read_only, expected, *mode in table:
+            self.assertEqual(profiles.question(profile, kind, read_only, "", *mode), expected,
+                             (profile, kind, read_only, mode))
+        self.assertEqual(profiles.question("administrator", "config", False, "template.delete",
+                                           "unattended"), "every")
 
     def test_documents_are_asked_about_but_a_deletion_every_time(self):
         for profile in profiles.PROFILES:
             self.assertTrue(profiles.allows(profile, "doc"), profile)
-            autonomous = profile in profiles.AUTONOMOUS
-            self.assertEqual(profiles.question(profile, "doc", False, "doc.write"),
-                             "none" if autonomous else "ask", profile)
-            self.assertEqual(profiles.question(profile, "doc", False, "doc.delete"),
-                             "none" if autonomous else "every", profile)
+            self.assertEqual(profiles.question(profile, "doc", False, "doc.write"), "ask", profile)
+            self.assertEqual(profiles.question(profile, "doc", False, "doc.delete"), "every",
+                             profile)
             self.assertEqual(profiles.question(profile, "read", True, "doc.read"), "none")
+        # Unasked in the mode autonomous, which counts them (autonomy.py).
+        for name in ("doc.write", "doc.delete"):
+            self.assertEqual(profiles.question("assisted", "doc", False, name, "autonomous"),
+                             "none")
         observer = {tool["command"]: tool for tool in
                     self.ok("mcp.tools", {"profile": "observer"})["tools"]}
         self.assertEqual((observer["doc.search"]["question"], observer["doc.write"]["question"],
@@ -514,13 +528,15 @@ class AutonomyTest(Base):
         super().setUp()
         cli.load_commands()
         self.config = replace(self.config, mcp_enabled=True, mcp_max_role="admin",
-                              chat_profiles=("assisted", "autonomous"),
-                              chat_default_profile="autonomous", chat_autonomous_runs=2)
+                              chat_profiles=("assisted",), chat_default_profile="assisted",
+                              chat_autonomous_runs=2)
         analyze = mock.patch.object(schedules, "analyze", lambda calendar, timezone="", count=1:
                                     (calendar, [time.time() + 3600]))
         analyze.start()
         self.addCleanup(analyze.stop)
 
+    # By default as fleet-mcp started by hand names it: autonomous, no longer a
+    # profile, is assisted in the mode autonomous for every call of the session.
     def via(self, name, params=None, session=SESSION, profile="autonomous", role="admin"):
         extra = {"session": session} if session else {}
         return self.call(name, {**(params or {}), "via": "mcp:test", "profile": profile,
@@ -545,14 +561,50 @@ class AutonomyTest(Base):
         self.assertTrue(self.via("run.start", launch)["ok"])
         self.refused(self.via("run.start", launch), "as many runs as")
         row = self.ctx().conn.execute("SELECT * FROM audit ORDER BY id DESC").fetchone()
-        self.assertEqual((row["outcome"], row["session"], row["profile"]),
-                         ("denied", self.SESSION, "autonomous"))
+        self.assertEqual((row["outcome"], row["session"], row["profile"], row["mode"]),
+                         ("denied", self.SESSION, "assisted", "autonomous"))
         self.assertEqual(self.ok("audit.list")["entries"][0]["session"], self.SESSION)
         # Another session counts on its own; a person and a profile that asks are not held.
         self.assertTrue(self.via("run.start", launch, session="fedcba9876543210")["ok"])
         self.assertTrue(self.via("run.start", launch, profile="assisted")["ok"])
         self.ok("run.start", launch)
         self.assertTrue(self.via("run.list")["ok"])
+
+    def test_a_person_turns_the_questions_off_in_assisted(self):
+        launch = {"template_id": self.template()["id"]}
+        session = {"session": self.SESSION, "profile": "assisted"}
+        # Asked, so not held, until the person turns the questions off.
+        for _ in range(3):
+            self.assertTrue(self.via("run.start", launch, profile="assisted")["ok"])
+        self.assertEqual(self.code("chat.unattended", {**session, "on": True}), "not_accepted")
+        self.ok("chat.accept", {"profile": "autonomous"})
+        self.ok("chat.unattended", {**session, "on": True})
+        self.refused(self.via("run.start", launch, profile="assisted"), "as many runs as")
+        row = self.ctx().conn.execute("SELECT * FROM audit WHERE command = 'run.start'"
+                                      " ORDER BY id DESC").fetchone()
+        self.assertEqual((row["profile"], row["mode"]), ("assisted", "autonomous"))
+        tools = self.via("mcp.tools", {}, profile="assisted")["data"]
+        self.assertEqual((tools["mode"], {tool["question"] for tool in tools["tools"]}),
+                         ("autonomous", {"none"}))
+        # The page sees it too, for that session and that profile only.
+        self.assertEqual(self.ok("mcp.tools", session)["mode"], "autonomous")
+        self.config = replace(self.config, chat_profiles=("assisted", "administrator"),
+                              chat_unattended=True)
+        self.assertEqual(self.ok("mcp.tools", {**session, "profile": "administrator"})["mode"],
+                         "")
+        # Not in another profile than the one it was turned on in, nor by an agent.
+        self.assertEqual(self.via("mcp.tools", {}, profile="administrator")["data"]["mode"], "")
+        self.refused(self.via("chat.unattended", {**session, "on": False}), "not for agents")
+        # Asked again: not held.
+        self.ok("chat.unattended", {**session, "on": False})
+        self.assertTrue(self.via("run.start", launch, profile="assisted")["ok"])
+        # Not where config.toml keeps it from users, nor for a viewer.
+        self.config = replace(self.config, chat_autonomous=False)
+        self.assertEqual(self.code("chat.unattended", {**session, "on": True}), "conflict")
+        self.refused(self.via("run.start", launch), "not enabled")
+        self.config = replace(self.config, chat_autonomous=True)
+        self.assertEqual(self.code("chat.unattended", {**session, "on": True}, "viewer"),
+                         "forbidden")
 
     def test_changes_to_the_documents_are_counted_by_session(self):
         self.config = replace(self.config, chat_autonomous_writes=2)
@@ -577,7 +629,7 @@ class AutonomyTest(Base):
             self.assertTrue(self.via("run.start", launch)["ok"])
         self.refused(self.via("run.start", launch), "allow more from the chat page")
         self.assertEqual(self.ok("chat.session", session),
-                         {"unattended": False, "launched": 2, "allowed": 2, "granted": 0,
+                         {"unattended": False, "mode": "", "launched": 2, "allowed": 2, "granted": 0,
                           "not_ended": self.ok("chat.session", session)["not_ended"],
                           "ended": []})
         # Never by the agent, nor by a viewer, nor for a session made up.

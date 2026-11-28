@@ -1,5 +1,7 @@
-"""What holds an agent that acts without asking: the limits of a profile of
-the assistant that is autonomous (profiles.AUTONOMOUS).
+"""What holds an agent that acts without asking: the limits of the mode
+autonomous (profiles.AUTONOMOUS), the profile assisted with the questions
+turned off by its person for a conversation (chat.unattended), or named so by
+a fleet-mcp started by hand.
 
 Nobody confirms its calls, so the backend is the only control left, and an
 agent that reads what the nodes wrote can be steered by it. Within one
@@ -24,7 +26,7 @@ user's: naming another user's session gains nothing.
 
 import re
 
-from . import store
+from . import profiles, store
 from .errors import Forbidden
 
 SESSION_RE = re.compile(r"[0-9a-f]{16}")
@@ -38,6 +40,24 @@ UNBOUNDED = ("schedule.enable",)
 # What changes the documents (the class doc): counted apart from launches.
 DOCUMENT_CHANGES = ("doc.write", "doc.mkdir", "doc.move", "doc.copy", "doc.delete",
                     "doc.restore", "doc.put")
+
+
+def enabled(config) -> dict[str, bool]:
+    """The modes without questions config.toml allows (profiles.mode)."""
+    return {profiles.AUTONOMOUS: config.chat_autonomous,
+            profiles.UNATTENDED: config.chat_unattended}
+
+
+def mode(ctx, session: str | None, profile: str) -> str:
+    """The mode without questions the caller turned on for an agent of theirs
+    in PROFILE in SESSION (chat.unattended), while config.toml still allows
+    it; "" when the person is asked."""
+    found = profiles.mode(enabled(ctx.config), profile)
+    if not (found and session):
+        return ""
+    row = ctx.conn.execute("SELECT 1 FROM unattended_sessions WHERE session = ? AND user = ?"
+                           " AND profile = ?", (session, ctx.caller.user, profile)).fetchone()
+    return found if row else ""
 
 
 def _text(value: object) -> str:

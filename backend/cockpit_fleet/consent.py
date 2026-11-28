@@ -14,8 +14,10 @@ that records it is no tool: an agent cannot consent for its person.
 Or the person consents to everything, for one conversation: in the profile
 administrator, when [chat] unattended allows it, they turn the questions off
 for a session of fleet-mcp (chat.unattended, no tool either), as Claude
-Code's mode that bypasses permissions. The page then asks about nothing
-(profiles.question gives "none" in mcp.tools of that session) and the
+Code's mode that bypasses permissions: the mode unattended (in assisted,
+the same switch is the mode autonomous, which autonomy.py holds). The page
+then asks about nothing but deletes (profiles.question in mcp.tools of that
+session) and the
 agent's ad-hoc commands start at once, marked "unattended" in their
 options. Everything else holds it as before: role, ceiling, profile, drafts
 for files, approvals of templates, which an agent never gives; and "Stop
@@ -67,24 +69,17 @@ def take(conn, session: str | None, user: str, command: str, value: str) -> bool
         (now, session, user, command, value, now - CONSENT_SECONDS)).rowcount == 1
 
 
-def unattended_session(ctx: Context, session: str | None, profile: str) -> bool:
-    """Whether the caller let an agent of theirs in PROFILE act without asking
-    in SESSION, and config.toml still allows it."""
-    if not (session and ctx.config.chat_unattended and profile in profiles.UNATTENDED_PROFILES):
-        return False
-    return ctx.conn.execute("SELECT 1 FROM unattended_sessions WHERE session = ? AND user = ?",
-                            (session, ctx.caller.user)).fetchone() is not None
-
-
 def unattended(ctx: Context) -> bool:
-    """Whether the call of an agent being made is one nobody is asked about."""
-    return unattended_session(ctx, ctx.session, ctx.profile or "")
+    """Whether the call of an agent being made is one nobody is asked about,
+    in the mode unattended."""
+    return ctx.mode == profiles.UNATTENDED
 
 
-def set_unattended(conn, session: str, user: str, on: bool) -> None:
+def set_unattended(conn, session: str, user: str, on: bool, profile: str) -> None:
     if on:
-        conn.execute("INSERT OR IGNORE INTO unattended_sessions (session, user, set_at)"
-                     " VALUES (?, ?, ?)", (session, user, store.now()))
+        conn.execute("INSERT INTO unattended_sessions (session, user, set_at, profile)"
+                     " VALUES (?, ?, ?, ?) ON CONFLICT (session, user) DO UPDATE"
+                     " SET profile = excluded.profile", (session, user, store.now(), profile))
     else:
         conn.execute("DELETE FROM unattended_sessions WHERE session = ? AND user = ?",
                      (session, user))

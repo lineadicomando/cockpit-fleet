@@ -1224,6 +1224,9 @@ msgstr "Valore"
 msgid "Done by an agent, through {{via}}"
 msgstr "Eseguito da un agente, tramite {{via}}"
 
+msgid "Made without questions"
+msgstr "Fatta senza conferme"
+
 msgid "Profile of the assistant"
 msgstr "Profilo dell'assistente"
 
@@ -3266,9 +3269,6 @@ msgstr "Come Assistito; in più esegue, senza chiedere conferma, comandi ad-hoc 
 msgid "Assisted"
 msgstr "Assistito"
 
-msgid "Autonomous"
-msgstr "Autonomo"
-
 msgid "Back to main"
 msgstr "Torna a main"
 
@@ -3336,8 +3336,8 @@ msgstr "Istruzioni date all'assistente"
 msgid "It may change templates, inventories, schedules and the rest, and run any ad-hoc command your role allows, once you confirm. A change you confirm is made in your name: read each question."
 msgstr "Può cambiare template, inventari, pianificazioni e il resto, ed eseguire qualunque comando ad-hoc il tuo ruolo consenta, dopo la tua conferma. Una modifica che confermi è fatta a tuo nome: leggi ogni domanda."
 
-msgid "It reads and launches what is defined without asking you. Fleet holds it instead: at most the runs you choose for each conversation ({{runs}} unless you change them) and those you allow later, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem."
-msgstr "Legge e lancia ciò che è definito senza chiedere conferma. A limitarlo è Fleet: al massimo le run che scegli per ogni conversazione ({{runs}} se non cambi il numero) e quelle che concedi in seguito, nulla su un inventario in manutenzione, nessuna pianificazione attivata, e non mette mai a tacere un problema."
+msgid "It launches what is defined and changes the documents without asking you. Fleet holds it instead: at most the runs you choose for each conversation ({{runs}} unless you change them) and those you allow later, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem."
+msgstr "Lancia ciò che è definito e modifica i documenti senza chiederti conferma. A limitarlo è Fleet: al massimo le run che scegli per ogni conversazione ({{runs}} se non cambi il numero) e quelle che concedi in seguito, nulla su un inventario in manutenzione, nessuna pianificazione attivata, e non mette mai a tacere un problema."
 
 msgid "It reads what you may read, and launches and changes nothing: it asks you nothing."
 msgstr "Legge ciò che puoi leggere tu, non lancia né modifica nulla e quindi non chiede conferme."
@@ -4994,6 +4994,9 @@ msgid "Without questions"
 msgstr "Senza conferme"
 
 
+
+msgid "Without questions: the assistant launches what is defined and changes the documents without asking you, within the limits of Fleet."
+msgstr "Senza conferme: l'assistente lancia ciò che è definito e modifica i documenti senza chiederti nulla, entro i limiti di Fleet."
 
 msgid "Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting."
 msgstr "Senza conferme: l'assistente esegue comandi e modifiche senza chiederti nulla; chiede solo prima di eliminare."

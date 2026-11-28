@@ -32,14 +32,26 @@ class ConfigTest(unittest.TestCase):
     def test_profiles_of_the_assistant(self):
         config = parse("")
         self.assertEqual((config.chat_profiles, config.chat_default_profile),
-                         (("observer", "assisted", "diagnostic", "autonomous", "administrator"),
+                         (("observer", "assisted", "diagnostic", "administrator"),
                           "assisted"))
+        self.assertTrue(config.chat_autonomous)
+        self.assertFalse(parse("[chat]\nautonomous = false").chat_autonomous)
+        # autonomous was a profile: listed, it is assisted with the questions
+        # allowed off; left out of a list written before, they are not.
+        config = parse('[chat]\nprofiles = ["observer", "autonomous"]\n'
+                       'default_profile = "autonomous"')
+        self.assertEqual((config.chat_profiles, config.chat_default_profile,
+                          config.chat_autonomous), (("observer", "assisted"), "assisted", True))
+        self.assertFalse(parse('[chat]\nprofiles = ["assisted"]').chat_autonomous)
+        self.assertTrue(parse('[chat]\nprofiles = ["assisted"]\nautonomous = true'
+                              ).chat_autonomous)
         config = parse('[chat]\nprofiles = ["diagnostic", "administrator"]')
         self.assertEqual(config.chat_default_profile, "diagnostic")
         config = parse('[chat]\nprofiles = ["observer", "administrator"]\n'
                        'default_profile = "administrator"')
         self.assertEqual(config.chat_default_profile, "administrator")
         for bad in ('profiles = []', 'profiles = ["root"]', 'profiles = "observer"',
+                    'autonomous = "yes"',
                     'profiles = ["observer"]\ndefault_profile = "assisted"',
                     'profiles = ["observer", "assisted"]\ndefault_profile = "administrator"'):
             with self.assertRaises(ConfigError, msg=bad):

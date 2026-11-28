@@ -21,19 +21,25 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "observer": ("read", "doc"),
     "assisted": ("read", "run", "doc"),
     "diagnostic": ("read", "run", "scan", DIAGNOSTIC, "doc"),
-    "autonomous": ("read", "run", "doc"),
     "administrator": ("read", "run", "scan", "adhoc", "config", "code", "doc"),
 }
-# Profiles in which nobody confirms the calls: autonomy.py holds them.
-AUTONOMOUS = ("autonomous",)
 # Profiles beyond assisted, whose risks a user accepts once before a session
 # in them (chat.accept).
-RISKY = ("diagnostic", "autonomous", "administrator")
-# A mode a person turns on for one conversation, in these profiles: the
-# agent is asked about nothing and its ad-hoc commands do not wait for the
-# person (consent.py). Its risks are accepted once, as those of a profile.
+RISKY = ("diagnostic", "administrator")
+# "Without questions": a mode a person turns on for one conversation
+# (chat.unattended), in a profile that has one, where config.toml allows it.
+# Nobody is asked about the agent's calls, and what holds it instead is the
+# mode's. Its risks are accepted once, by its name, as those of a profile.
+# In assisted, autonomous: launches and changes to the documents unasked,
+# within the limits of autonomy.py.
+AUTONOMOUS = "autonomous"
+# In administrator, unattended: everything unasked but deletes, its ad-hoc
+# commands not waiting for the person (consent.py).
 UNATTENDED = "unattended"
-UNATTENDED_PROFILES = ("administrator",)
+MODES = {"assisted": AUTONOMOUS, "administrator": UNATTENDED}
+# What fleet-mcp started by hand may still name: autonomous was a profile,
+# now assisted in the mode autonomous, for every call of the session.
+ALIASES = {AUTONOMOUS: "assisted"}
 # The least role, of the agent (the caller's under [mcp] max_role), for which
 # a profile does more than one below it: below that role it would be another
 # profile's powers under a name that promises more, and risks to accept for
@@ -43,7 +49,6 @@ LEAST_ROLE = {
     "observer": "viewer",
     "assisted": "operator",
     "diagnostic": "admin",
-    "autonomous": "operator",
     "administrator": "admin",
 }
 # What a role below every profile enabled for it gets instead, the first of
@@ -125,11 +130,19 @@ def allows(profile: str, kind: str) -> bool:
 
 
 # Classes whose calls a person is asked about every time, in any profile:
-# never trusted for a conversation, never made without a question.
+# never trusted for a conversation, never made without a question but in
+# the mode unattended.
 ALWAYS_ASKED = ("scan", "adhoc", "config", "code")
-# Commands asked every time whatever their class, but in a profile nobody
-# confirms, where the backend bounds them (autonomy.py).
+# Commands asked every time whatever their class, but in the mode
+# autonomous, where the backend bounds them (autonomy.py).
 ALWAYS_ASKED_COMMANDS = ("doc.delete",)
+
+
+def mode(enabled: dict[str, bool], profile: str) -> str:
+    """The mode without questions of PROFILE, when config.toml allows it
+    (ENABLED, by mode); "" for none."""
+    found = MODES.get(profile, "")
+    return found if enabled.get(found, False) else ""
 
 
 def deletes(name: str) -> bool:
@@ -139,25 +152,22 @@ def deletes(name: str) -> bool:
     return name.rpartition(".")[2] in ("delete", "remove")
 
 
-def question(profile: str, kind: str, read_only: bool, name: str = "") -> str:
+def question(profile: str, kind: str, read_only: bool, name: str = "", mode: str = "") -> str:
     """How the page and the agent at a terminal ask the person about a call of
-    the class KIND (of the command NAME) in PROFILE: "none" (made with no
-    question), "ask" (asked, and "always" may trust the class for the
-    conversation) or "every" (asked every time). A floor, not a control:
-    what the profile does not allow is refused by the backend whatever the
-    person answers."""
+    the class KIND (of the command NAME) in PROFILE, in MODE ("" when the
+    person is asked): "none" (made with no question), "ask" (asked, and
+    "always" may trust the class for the conversation) or "every" (asked
+    every time). A floor, not a control: what the profile does not allow is
+    refused by the backend whatever the person answers."""
     if read_only or kind == "read":
         return "none"
-    if kind in ALWAYS_ASKED:
-        return "every"
+    if mode == UNATTENDED:
+        return "every" if deletes(name) else "none"
     # The backend holds an autonomous agent to its limits instead.
-    if profile in AUTONOMOUS and kind == "doc":
+    if mode == AUTONOMOUS and kind in ("run", "doc"):
         return "none"
-    if name in ALWAYS_ASKED_COMMANDS:
+    if kind in ALWAYS_ASKED or name in ALWAYS_ASKED_COMMANDS:
         return "every"
     if profile == "diagnostic" and kind == DIAGNOSTIC:
-        return "none"
-    # The backend holds an autonomous agent to its limits instead.
-    if profile in AUTONOMOUS and kind == "run":
         return "none"
     return "ask"

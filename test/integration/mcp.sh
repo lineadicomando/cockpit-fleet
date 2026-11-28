@@ -200,7 +200,7 @@ expect_eq "an autonomous agent launches as many runs as a session may" "$(answer
 expect_eq "and no more" "$(answer "$out" 3 '"as many runs as" in a["result"]["content"][0]["text"]')" True
 expect_eq "it does not silence a problem" "$(answer "$out" 4 '"does not silence" in a["result"]["content"][0]["text"]')" True
 expect_eq "the count is by session, in the audit log" \
-    "$(get "$(admin audit.list)" 'len({e["session"] for e in a["data"]["entries"] if e["profile"] == "autonomous" and e["command"] == "run.start"})')" 1
+    "$(get "$(admin audit.list)" 'len({e["session"] for e in a["data"]["entries"] if (e["profile"], e["mode"]) == ("assisted", "autonomous") and e["command"] == "run.start"})')" 1
 # A session the chat page names: it follows it, allows more, and cancels its runs.
 SESSION=0123456789abcdef
 out=$(mcp itoperator "$(call 2 "$tool" '{"answers": {"greeting": "d"}}')" "$(call 3 "$tool" '{"answers": {"greeting": "e"}}')")

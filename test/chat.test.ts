@@ -103,11 +103,12 @@ const TOOLS: Omit<ToolInfo, "question">[] = [
 
 // What mcp.tools says of them in a profile (profiles.question in the backend),
 // and in a session the person let the agent act without asking in.
+// In assisted that is the mode autonomous: launches unasked, held by the backend.
 function toolsOf(profile: string, unattended = false): ToolInfo[] {
     return TOOLS.map(tool => {
-        if (unattended) return { ...tool, question: "none" as const };
+        if (unattended && profile !== "assisted") return { ...tool, question: "none" as const };
         let asked: ToolInfo["question"] = tool.class === "read" ? "none" : tool.class === "adhoc" ? "every" : "ask";
-        if (profile === "autonomous" && tool.class === "run") asked = "none";
+        if (unattended && tool.class === "run") asked = "none";
         return { ...tool, question: asked };
     });
 }
@@ -122,7 +123,7 @@ class Agent {
     // The profiles the tools were asked for, with the session when one was named.
     listed: string[] = [];
     // What chat.unattended was asked, and the sessions it holds for.
-    unattendedCalls: [string, boolean][] = [];
+    unattendedCalls: [string, boolean, string][] = [];
     unattendedSessions = new Set<string>();
     // The runs set for sessions of fleet-mcp, with the methods the agent had been sent by then.
     limits: { session: string; runs: number; before: number }[] = [];
@@ -175,8 +176,8 @@ class Agent {
         } : null, async (session, command, input) => {
             if (this.consentFails) throw new Error(this.consentFails);
             this.consents.push({ session, command, input, before: this.received.length });
-        }, async (session, on) => {
-            this.unattendedCalls.push([session, on]);
+        }, async (session, on, profile) => {
+            this.unattendedCalls.push([session, on, profile]);
             if (on) this.unattendedSessions.add(session); else this.unattendedSessions.delete(session);
         });
     }
@@ -199,8 +200,8 @@ class Agent {
     methods(): (string | undefined)[] { return this.received.map(message => message.method); }
     last(method: string): Message { return this.received.filter(message => message.method === method).slice(-1)[0]; }
 
-    async ready(profile = "assisted", runs = 0): Promise<void> {
-        this.chat.start("claude", profile, runs);
+    async ready(profile = "assisted"): Promise<void> {
+        this.chat.start("claude", profile);
         await this.started(profile);
     }
 
@@ -390,7 +391,7 @@ test("without questions, nothing is asked in any conversation of the session, un
     agent.answers["session/prompt"] = { stopReason: "end_turn" };
     await agent.chat.send("free some space");
     const first = agent.chat.getState().fleetSession;
-    assert.deepEqual(agent.unattendedCalls, [[first, true]]);
+    assert.deepEqual(agent.unattendedCalls, [[first, true, "administrator"]]);
     agent.ask(97, "run_adhoc");
     await tick();
     assert.equal(agent.chat.getState().ask, null);
@@ -401,10 +402,10 @@ test("without questions, nothing is asked in any conversation of the session, un
     await agent.chat.send("again");
     const second = agent.chat.getState().fleetSession;
     assert.notEqual(second, first);
-    assert.deepEqual(agent.unattendedCalls[agent.unattendedCalls.length - 1], [second, true]);
+    assert.deepEqual(agent.unattendedCalls[agent.unattendedCalls.length - 1], [second, true, "administrator"]);
     // Off: asked again at once, and the backend told.
     await agent.chat.unattend(false);
-    assert.deepEqual(agent.unattendedCalls[agent.unattendedCalls.length - 1], [second, false]);
+    assert.deepEqual(agent.unattendedCalls[agent.unattendedCalls.length - 1], [second, false, "administrator"]);
     agent.ask(98, "run_adhoc");
     await tick();
     assert.equal(agent.chat.getState().ask!.tool?.name, "run_adhoc");
@@ -417,9 +418,10 @@ test("without questions, nothing is asked in any conversation of the session, un
     assert.equal(agent.chat.getState().unattended, false);
 });
 
-test("an autonomous agent launches with no question; the backend holds it", async () => {
+test("without questions in assisted it launches with no question; the backend holds it", async () => {
     const agent = new Agent();
-    await agent.ready("autonomous");
+    await agent.ready("assisted");
+    await agent.chat.unattend(true);
     agent.chat.send("launch it");
     await tick();
     agent.ask(95, "run_start");
@@ -488,9 +490,10 @@ test("each conversation has a session of fleet-mcp of its own", async () => {
     assert.equal(agent.last("session/new").params.mcpServers[0].args.at(-1), second);
 });
 
-test("the runs chosen for an autonomous session are set for each conversation before the agent is told", async () => {
+test("the runs chosen when the questions are turned off are set for each conversation before the agent is told", async () => {
     const agent = new Agent();
-    await agent.ready("autonomous", 5);
+    await agent.ready("assisted");
+    await agent.chat.unattend(true, 5);
     agent.answers["session/prompt"] = { stopReason: "end_turn" };
     await agent.chat.send("reboot the lab");
     const first = agent.chat.getState().fleetSession;
@@ -505,20 +508,35 @@ test("the runs chosen for an autonomous session are set for each conversation be
     assert.equal(agent.limits[1].before, agent.received.indexOf(agent.last("session/load")));
 });
 
-test("nothing is set for config.toml's runs, nor in a profile that asks", async () => {
-    for (const [profile, runs] of [["autonomous", 0], ["assisted", 5]] as const) {
+test("nothing is set for config.toml's runs, nor while the questions are on", async () => {
+    for (const unattended of [true, false]) {
         const agent = new Agent();
-        await agent.ready(profile, runs);
+        await agent.ready("assisted");
+        if (unattended) await agent.chat.unattend(true, 0);
         agent.answers["session/prompt"] = { stopReason: "end_turn" };
         await agent.chat.send("hello");
-        assert.deepEqual(agent.limits, [], profile);
+        assert.deepEqual(agent.limits, [], String(unattended));
+        assert.equal(agent.unattendedCalls.length, unattended ? 1 : 0);
     }
+});
+
+test("the runs chosen in a conversation under way are set before the questions are off", async () => {
+    const agent = new Agent();
+    await agent.ready("assisted");
+    agent.answers["session/prompt"] = { stopReason: "end_turn" };
+    await agent.chat.send("hello");
+    const session = agent.chat.getState().fleetSession;
+    await agent.chat.unattend(true, 7);
+    assert.deepEqual(agent.limits.map(limit => [limit.session, limit.runs]), [[session, 7]]);
+    assert.deepEqual(agent.unattendedCalls, [[session, true, "assisted"]]);
+    assert.equal(agent.chat.getState().runs, 7);
 });
 
 test("runs that cannot be set leave the conversation unopened, and say why", async () => {
     const agent = new Agent();
     agent.limitFails = "chat.limit_runs requires the operator role";
-    await agent.ready("autonomous", 5);
+    await agent.ready("assisted");
+    await agent.chat.unattend(true, 5);
     await agent.chat.send("reboot the lab");
     assert.equal(agent.last("session/new"), undefined);
     const state = agent.chat.getState();

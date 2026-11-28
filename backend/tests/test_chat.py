@@ -163,19 +163,21 @@ class CommandsTest(Base):
         self.assertEqual(self.code("chat.start", {"agent": "plain", "terminal": True}), "conflict")
 
     def test_the_tools_a_profile_lets_through_unasked(self):
-        self.config = replace(self.config, chat_profiles=("observer", "assisted", "autonomous"))
         self.ok("chat.accept", {"profile": "autonomous"}, role="operator")
 
         def allowed(profile, role="operator"):
             return set(self.ok("chat.start", {"agent": "claude", "profile": profile,
                                               "terminal": True}, role=role)["allowed_tools"])
 
-        observer, assisted, autonomous = allowed("observer"), allowed("assisted"), \
-            allowed("autonomous")
+        observer, assisted = allowed("observer"), allowed("assisted")
         self.assertIn("run_list", observer)
         self.assertEqual(observer, assisted)
         self.assertNotIn("run_cancel", assisted)
-        self.assertIn("run_cancel", autonomous)
+        # autonomous is a profile no more, at a terminal nor on the page: there
+        # it is assisted with the questions turned off.
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "autonomous",
+                                                  "terminal": True}, role="operator"),
+                         "conflict")
         # Under the ceiling for agents: an administrator gets an operator's.
         self.assertEqual(allowed("assisted", "admin"), assisted)
 
@@ -185,10 +187,12 @@ class CommandsTest(Base):
         data = self.ok("chat.agents", role="viewer")
         self.assertEqual((data["profiles"], data["default_profile"], data["to_accept"]),
                          (["observer"], "observer", []))
-        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "autonomous"},
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "diagnostic"},
                                    role="viewer"), "forbidden")
+        # Nor acting without asking, which in assisted would launch nothing either.
+        self.assertEqual(self.ok("chat.agents", role="viewer")["unattended"], [])
         # Without observer, assisted: for a viewer it launches nothing either.
-        self.config = replace(self.config, chat_profiles=("assisted", "autonomous"))
+        self.config = replace(self.config, chat_profiles=("assisted", "administrator"))
         self.assertEqual(self.ok("chat.agents", role="viewer")["profiles"], ["assisted"])
 
     def test_a_profile_must_be_enabled(self):
@@ -214,7 +218,7 @@ class CommandsTest(Base):
         self.assertEqual((data["profiles"], data["default_profile"]), (everything, "administrator"))
         data = self.ok("chat.agents", role="operator")
         self.assertEqual((data["profiles"], data["default_profile"]),
-                         (["observer", "assisted", "autonomous"], "assisted"))
+                         (["observer", "assisted"], "assisted"))
         self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "diagnostic"},
                                    role="operator"), "forbidden")
         self.assertNotIn("administrator", data["to_accept"])
@@ -235,7 +239,7 @@ class CommandsTest(Base):
         self.assertEqual(self.ok("chat.agents")["profiles"], [])
 
     def test_a_profile_beyond_assisted_is_accepted_once_by_each_user(self):
-        self.config = replace(self.config, chat_profiles=("assisted", "diagnostic", "autonomous"),
+        self.config = replace(self.config, chat_profiles=("assisted", "diagnostic"),
                               mcp_max_role="admin")
         self.assertEqual(self.ok("chat.agents")["to_accept"], ["diagnostic", "autonomous"])
         # Only the risks of a profile offered to the role: an operator's agent runs no
@@ -266,7 +270,7 @@ class CommandsTest(Base):
     def test_acting_without_asking_is_allowed_by_config_toml_accepted_and_set_by_a_person(self):
         session = "0123456789abcdef"
         self.config = replace(self.config, mcp_max_role="admin",
-                              chat_profiles=tuple(profiles.PROFILES))
+                              chat_profiles=tuple(profiles.PROFILES), chat_autonomous=False)
         # Off by default: neither offered nor accepted nor set.
         data = self.ok("chat.agents")
         self.assertEqual(data["unattended"], [])

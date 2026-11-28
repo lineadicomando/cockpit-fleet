@@ -84,8 +84,9 @@ export interface ChatState {
     // it, to follow what the agent launched (chat.session), allow it more
     // runs and cancel them. A conversation opened again gets a new one.
     fleetSession: string;
-    // The runs an agent in the profile autonomous may launch in each
-    // conversation, as chosen when the session started; 0 for config.toml's.
+    // The runs an agent acting without asking in assisted may launch in each
+    // conversation, as chosen when the questions were turned off; 0 for
+    // config.toml's.
     runs: number;
     // The person let the agent act without asking (chat.unattended): set for
     // the session of fleet-mcp of each conversation, until turned off or the
@@ -110,7 +111,7 @@ export type Spawn = (agent: string, profile: string, onData: (text: string) => v
 export type LoadTools = (profile: string, session: string) => Promise<ToolInfo[]>;
 
 // Lets the agent act without asking in a session of fleet-mcp, or asks again.
-export type SetUnattended = (session: string, on: boolean) => Promise<void>;
+export type SetUnattended = (session: string, on: boolean, profile: string) => Promise<void>;
 
 // Sets the runs an agent acting without asking may launch in a session of fleet-mcp.
 export type LimitRuns = (session: string, runs: number) => Promise<void>;
@@ -215,10 +216,10 @@ export class Chat {
         for (const listener of this.listeners) listener();
     }
 
-    start(agent: string, profile: string, runs = 0): void {
+    start(agent: string, profile: string): void {
         if (this.state.phase === "starting" || this.state.phase === "ready") return;
         // A draft waits for the session it was prepared for.
-        this.state = { ...IDLE, draft: this.state.draft, runs };
+        this.state = { ...IDLE, draft: this.state.draft };
         this.change = null;
         this.unwatch();
         this.launch(agent, profile);
@@ -264,13 +265,13 @@ export class Chat {
     // started again by fleet-chat in that profile (chat.start says whether it
     // may be, and tells the agent its instructions), and told to open the
     // conversation again. What was trusted for it is trusted no more.
-    changeProfile(profile: string, runs = this.state.runs): void {
+    changeProfile(profile: string): void {
         const transport = this.transport;
         if (!transport || this.state.phase !== "ready" || this.state.busy || this.state.loading || this.state.ask
             || this.change || !profile || profile === this.state.profile) return;
         this.change = { profile, sessionId: this.state.sessionId, expected: true, full: 0 };
         // Asked again in the next profile, as "always" is.
-        this.set({ changing: profile, runs, unattended: false });
+        this.set({ changing: profile, runs: 0, unattended: false });
         // The next starts once this one has gone, not to be counted with it.
         transport.close();
     }
@@ -405,32 +406,35 @@ export class Chat {
         };
     }
 
-    // The runs chosen for the session, set for the conversation's session of
-    // fleet-mcp before the agent can launch anything in it.
+    // The questions turned off, and the runs chosen then, set for the
+    // conversation's session of fleet-mcp before the agent can launch
+    // anything in it.
     private async limit(): Promise<void> {
-        if (this.state.profile === "autonomous" && this.state.runs > 0) {
-            await this.limitRuns(this.state.fleetSession, this.state.runs);
-        }
         if (this.state.unattended && this.setUnattended) {
-            await this.setUnattended(this.state.fleetSession, true);
+            if (this.state.runs > 0) await this.limitRuns(this.state.fleetSession, this.state.runs);
+            await this.setUnattended(this.state.fleetSession, true, this.state.profile);
             await this.reloadTools();
         }
     }
 
     // Lets the agent act without asking, or asks again, from now on in this
-    // conversation and in the next ones of the session. Off at once in the
-    // page, whatever the backend answers; on only once the backend has it.
-    async unattend(on: boolean): Promise<void> {
+    // conversation and in the next ones of the session; RUNS, those it may
+    // launch in each conversation in assisted (0 for config.toml's), are set
+    // first. Off at once in the page, whatever the backend answers; on only
+    // once the backend has it.
+    async unattend(on: boolean, runs = 0): Promise<void> {
         if (!this.setUnattended || on === this.state.unattended) return;
         const session = this.state.fleetSession;
+        const profile = this.state.profile;
         if (!on) {
             this.set({ unattended: false });
             await this.reloadTools();
-            if (session) await this.setUnattended(session, false);
+            if (session) await this.setUnattended(session, false, profile);
             return;
         }
-        if (session) await this.setUnattended(session, true);
-        this.set({ unattended: true });
+        if (session && runs > 0) await this.limitRuns(session, runs);
+        if (session) await this.setUnattended(session, true, profile);
+        this.set({ unattended: true, runs });
         await this.reloadTools();
     }
 

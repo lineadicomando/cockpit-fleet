@@ -74,7 +74,7 @@ table, so moving a command is a decision.
 | Profile | Classes |
 |---|---|
 | `observer` | read, doc |
-| `assisted`, `autonomous` | read, run, doc |
+| `assisted` | read, run, doc |
 | `diagnostic` | read, run, scan, adhoc-diagnostic, doc |
 | `administrator` | all |
 
@@ -89,7 +89,7 @@ profile is refused and audited; a profile not enabled is refused; no
 profile gets `default_profile`. A profile is offered only to an agent
 whose role (the caller's under the ceiling) it does more for than one
 below it (`profiles.LEAST_ROLE`): `diagnostic` and `administrator` from
-admin, `assisted` and `autonomous` from operator, `observer` from viewer.
+admin, `assisted` from operator, `observer` from viewer.
 A viewer launches nothing and writes no document, so of the profiles
 enabled it gets one, `observer` or else `assisted` (`FALLBACK`); an
 operator runs no ad-hoc command and scans nothing. Below that role a
@@ -99,21 +99,41 @@ to `assisted` (or the first profile the role may have). So a
 profile, like `via`, only restricts. `mcp.tools` lists the tools of the
 profile only, `run_adhoc` in `diagnostic` with an enum of its modules and
 no `become`. Audit column `profile` (schema 22), journal `FLEET_PROFILE`.
+`autonomous`, a profile until 0.5, is an alias (`profiles.ALIASES`) that
+`fleet-mcp` started by hand may still name: `_through` makes it `assisted`
+in the mode `autonomous` for every call, where `[chat] autonomous` allows
+it; `chat.start` refuses it, so page and terminal never start one.
 
-**Questions by profile.** `profiles.question` gives, for a profile and a
-class, how a person is asked: `none` (reading; `run` and `doc` in
-`autonomous`, which autonomy holds; `adhoc-diagnostic` in `diagnostic`),
-`every` (never trusted for a conversation: `scan`, `adhoc`, `config`,
-`code` in any profile, and `doc.delete` but in `autonomous`,
-`ALWAYS_ASKED_COMMANDS`) or `ask` ("always" trusts the class for the
-conversation). `mcp.tools` gives it with each tool, for the page;
+**Questions by profile.** `profiles.question` gives, for a profile, a
+class and the mode of the session, how a person is asked: `none`
+(reading; `run` and `doc` in the mode `autonomous`, which autonomy holds;
+`adhoc-diagnostic` in `diagnostic`; everything but deletes in the mode
+`unattended`), `every` (never trusted for a conversation: `scan`,
+`adhoc`, `config`, `code` in any profile, and `doc.delete`,
+`ALWAYS_ASKED_COMMANDS`, but in a mode) or `ask` ("always" trusts the
+class for the conversation). `mcp.tools` gives it with each tool, for the page;
 `chat.start` gives the `none` tools for the agent's program at a terminal.
 One table, so page and terminal cannot drift; a floor, not a control:
-`_through` decides each call again. `mcp.tools` with `session` gives
-`none` for every tool when the caller let the agent act without asking in
-that session ("Without questions", [The chat](chat.md)).
+`_through` decides each call again. `mcp.tools` with `session` gives the
+questions of the mode the caller turned on in that session ("Without
+questions", [The chat](chat.md)).
 
-**Autonomy.** In a profile nobody confirms (`profiles.AUTONOMOUS`),
+**Modes without questions** (`profiles.MODES`, schema 42). A person turns
+the questions off for a session of `fleet-mcp` with `chat.unattended`
+(operator, no tool), naming its profile: a row of `unattended_sessions`
+with that profile. The mode is the profile's, `autonomous` in `assisted`
+(`[chat] autonomous`) and `unattended` in `administrator` (`[chat]
+unattended`), each accepted once by its name (`chat.accept`).
+`_through` sets `ctx.mode` (`autonomy.mode`) when the session's row names
+the profile of the call and config.toml still allows its mode: so a row
+turned on in one profile is nothing in another, and an agent, which
+cannot call `chat.unattended`, cannot turn one on. The audit records the
+mode beside the profile (column `mode`, journal `FLEET_MODE`). Turning it
+on or off needs no new agent: the page asks `mcp.tools` again, and the
+instructions of `assisted` already say what holds the agent while the
+questions are off.
+
+**Autonomy.** In the mode `autonomous` (`profiles.AUTONOMOUS`),
 `dispatch` hands the call, once the role allows it, to `autonomy.hold`:
 nothing that silences a problem (`state.ack`, `state.unack`,
 `maintenance.*`); no `schedule.enable`, whose runs would outlive the
@@ -131,7 +151,7 @@ reset. Another `fleet-mcp` is another session, which whoever can start one
 could do by hand anyway. A run that needs approval still waits for a
 person: an agent has no rights.
 
-**The person beside an autonomous agent** (schema 35). The chat page draws
+**The person beside an agent acting without asking** (schema 35). The chat page draws
 the session for each conversation and gives it to `fleet-mcp`
 (`--session`), to follow what the agent launched. Naming a session gains
 nothing: `fleetctl` takes any session an agent's call names, and counts
@@ -139,8 +159,9 @@ and grants are by session and user. `chat.session` (viewer) gives the
 launches counted, those allowed and the runs not ended.
 `chat.limit_runs` (operator, schema 36) sets the base of a session and
 user in `session_limits`, in place of `[chat] autonomous_runs`: what the
-user chose for the conversations, lower or higher, set before the agent is
-told anything; no ceiling of the administrator's, since grants have none.
+user chose when turning the questions off, lower or higher, set before
+the mode is (and for each later conversation, before the agent is told
+anything); no ceiling of the administrator's, since grants have none.
 `chat.grant_runs` (operator) adds to it in `session_grants`
 (`autonomy.allowed`). `chat.cancel_runs` (operator) cancels the user's
 runs of the session not ended, by `runs.session`, set when an agent's call

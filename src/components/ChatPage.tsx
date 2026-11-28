@@ -40,34 +40,27 @@ import { ChatApprovals } from "./ApprovalsPage.tsx";
 import { Alert, Button, Modal, Spinner } from "./pf.tsx";
 
 // The profiles beyond assisted, whose risks are told (profiles.RISKY).
-const RISKY = ["diagnostic", "autonomous", "administrator"];
+const RISKY = ["diagnostic", "administrator"];
 
 // What each profile of the assistant is called, and what it may do.
-function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_run">) {
+function useProfiles() {
     const { t } = useTranslation();
     const names: Record<string, string> = {
         observer: t("Observer"),
         assisted: t("Assisted"),
         diagnostic: t("Diagnostic"),
-        autonomous: t("Autonomous"),
         administrator: t("Administrator"),
     };
-    const autonomous = t("It reads and launches what is defined without asking you. Fleet holds it instead: at most the runs you choose for each conversation ({{runs}} unless you change them) and those you allow later, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info?.autonomous_runs ?? 0 });
     const what: Record<string, string> = {
         observer: t("It reads what you may read, and launches and changes nothing: it asks you nothing."),
         assisted: t("It reads, launches the job templates, workflows, schedules and checks that are defined, and cancels runs. It asks you before each of these."),
         diagnostic: t("As assisted, and it runs ad-hoc commands of modules that only read, without become, without asking you. It asks you before launches, and before each scan of a subnet, which only administrators may ask for."),
-        autonomous: info?.autonomous_dry_run ? `${autonomous} ${t("Its runs are dry runs only, and it launches no workflow and no schedule.")}` : autonomous,
         administrator: t("Whatever your role allows: ad-hoc commands, changes to templates, inventories and the rest, files. It asks you before every change; files it writes go to a draft that you review before any run uses them."),
     };
     const risks: Record<string, string[]> = {
         diagnostic: [
             t("Ad-hoc commands run on the managed nodes without a question. They only read, but what they read (facts, services, packages) goes to the provider of the model."),
             t("With your confirmation it scans the subnets Fleet allows: what it finds (addresses, names, MAC addresses, open ports) goes to the provider of the model."),
-        ],
-        autonomous: [
-            t("Nobody confirms its launches: a playbook it launches runs on the nodes as soon as it asks for it."),
-            t("Only the limits of Fleet hold it, not your judgement: within them it may launch what you would not have."),
         ],
         administrator: [
             t("It may change templates, inventories, schedules and the rest, and run any ad-hoc command your role allows, once you confirm. A change you confirm is made in your name: read each question."),
@@ -81,9 +74,19 @@ function useProfiles(info?: Pick<ChatInfo, "autonomous_runs" | "autonomous_dry_r
     };
 }
 
-// The risks of letting the assistant act without asking (chat.unattended).
-function useUnattendedRisks(): string[] {
+// The risks of letting the assistant act without asking (chat.unattended),
+// in the mode of its profile: autonomous in assisted, unattended in administrator.
+function useUnattendedRisks(info: ChatInfo, mode: string): string[] {
     const { t } = useTranslation();
+    if (mode === "autonomous") {
+        const held = t("It launches what is defined and changes the documents without asking you. Fleet holds it instead: at most the runs you choose for each conversation ({{runs}} unless you change them) and those you allow later, nothing on an inventory in maintenance, no schedule turned on, and it never silences a problem.", { runs: info.autonomous_runs });
+        return [
+            info.autonomous_dry_run ? `${held} ${t("Its runs are dry runs only, and it launches no workflow and no schedule.")}` : held,
+            t("Nobody confirms its launches: a playbook it launches runs on the nodes as soon as it asks for it."),
+            t("Only the limits of Fleet hold it, not your judgement: within them it may launch what you would not have."),
+            t("The output of runs and commands is written by the managed nodes. Whoever controls a node can write there text meant to steer the assistant, and in this profile it can do more with it."),
+        ];
+    }
     return [
         t("Nothing it does is asked about, but deleting: it runs ad-hoc commands on the nodes, become included, and changes templates, inventories, schedules and the rest, as soon as it decides to."),
         t("A change it makes is made in your name, and nobody reads it before: what the nodes write in the output of runs can steer it into changes you would have refused."),
@@ -91,23 +94,28 @@ function useUnattendedRisks(): string[] {
     ];
 }
 
-// Turning the questions off, said before the first time, and accepted once.
-function UnattendedModal({ toAccept, onClose, onAccepted }: { toAccept: boolean; onClose: () => void; onAccepted: () => void }) {
+// Turning the questions off, said before the first time, and accepted once;
+// in assisted with the runs it may launch in each conversation.
+function UnattendedModal({ info, mode, onClose, onAccepted }: { info: ChatInfo; mode: string; onClose: () => void; onAccepted: () => void }) {
     const { t } = useTranslation();
-    const risks = useUnattendedRisks();
+    const session = useSession();
+    const risks = useUnattendedRisks(info, mode);
+    const toAccept = info.to_accept.includes(mode);
     const [accepted, setAccepted] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [working, setWorking] = useState(false);
+    const [runs, setRuns] = useState(String(info.autonomous_runs));
+    const choosing = mode === "autonomous" && session.commands.includes("chat.limit_runs");
 
     async function turnOn() {
         setProblem(null);
         setWorking(true);
         try {
             if (toAccept) {
-                await call("chat.accept", { profile: "unattended" });
+                await call("chat.accept", { profile: mode });
                 onAccepted();
             }
-            await chat.unattend(true);
+            await chat.unattend(true, choosing ? chosenRuns(runs, info) : 0);
         } catch (ex) {
             setProblem(ex instanceof Error ? ex.message : String(ex));
             setWorking(false);
@@ -125,13 +133,19 @@ function UnattendedModal({ toAccept, onClose, onAccepted }: { toAccept: boolean;
                 <Content component="ul">
                     {risks.map(risk => <Content component="li" key={risk}>{risk}</Content>)}
                 </Content>
+                {choosing && (
+                    <div style={{ marginBlockEnd: "1rem" }}>
+                        <Content component="p">{t("Runs without asking, in each conversation")}</Content>
+                        <RunsInput info={info} value={runs} onChange={setRuns} />
+                    </div>
+                )}
                 {toAccept && (
                     <Checkbox id="chat-unattended-accept" isChecked={accepted} onChange={(_event, checked) => setAccepted(checked)}
                         label={t("I understand what it may do and these risks. This is asked once, and recorded in the audit trail.")} />
                 )}
             </ModalBody>
             <ModalFooter>
-                <Button variant="danger" isDisabled={(toAccept && !accepted) || working} isLoading={working} onClick={turnOn}>{t("Act without asking")}</Button>
+                <Button variant="danger" isDisabled={(toAccept && !accepted) || working || (choosing && validRuns(runs) === null)} isLoading={working} onClick={turnOn}>{t("Act without asking")}</Button>
                 <Button variant="link" onClick={onClose}>{t("Cancel")}</Button>
             </ModalFooter>
         </Modal>
@@ -164,12 +178,12 @@ function UnattendedSwitch({ state, info, onAccepted }: { state: ChatState; info:
             <Switch id="chat-unattended" label={t("Without questions")} isChecked={state.unattended}
                 onChange={(_event, on) => change(on)} />
             {problem && <Alert variant="danger" isInline isPlain title={problem} />}
-            {asking && <UnattendedModal toAccept={info.to_accept.includes("unattended")} onClose={() => setAsking(false)} onAccepted={onAccepted} />}
+            {asking && <UnattendedModal info={info} mode={info.modes[state.profile] ?? ""} onClose={() => setAsking(false)} onAccepted={onAccepted} />}
         </FlexItem>
     );
 }
 
-// The runs an agent in the profile autonomous may launch in each
+// The runs an agent acting without asking in assisted may launch in each
 // conversation, as typed: a whole number from 1 to 1000, or null.
 function validRuns(text: string): number | null {
     const runs = Number(text);
@@ -183,7 +197,7 @@ function chosenRuns(text: string, info: ChatInfo): number {
     return runs === null || runs === info.autonomous_runs ? 0 : runs;
 }
 
-// The choice of those runs, for a session in the profile autonomous.
+// The choice of those runs, when the questions are turned off in assisted.
 function RunsInput({ info, value, onChange }: { info: ChatInfo; value: string; onChange: (value: string) => void }) {
     const { t } = useTranslation();
     const valid = validRuns(value) !== null;
@@ -340,9 +354,9 @@ function AskModal({ ask, profile }: { ask: Ask; profile: string }) {
 }
 
 // The risks of a profile, before its first session, and the box that accepts them.
-function Risks({ info, profile, accepted, onAccepted }: { info: ChatInfo; profile: string; accepted: boolean; onAccepted: (accepted: boolean) => void }) {
+function Risks({ profile, accepted, onAccepted }: { profile: string; accepted: boolean; onAccepted: (accepted: boolean) => void }) {
     const { t } = useTranslation();
-    const profiles = useProfiles(info);
+    const profiles = useProfiles();
     return (
         <Alert variant="warning" isInline title={t("Before the first session as {{profile}}", { profile: profiles.name(profile) })} style={{ marginBlockEnd: "1rem" }}>
             <Content component="ul">
@@ -357,16 +371,13 @@ function Risks({ info, profile, accepted, onAccepted }: { info: ChatInfo; profil
 // Another profile for the session, the conversation going on in it.
 function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; state: ChatState; onClose: () => void; onAccepted: () => void }) {
     const { t } = useTranslation();
-    const session = useSession();
-    const profiles = useProfiles(info);
+    const profiles = useProfiles();
     const others = info.profiles.filter(one => one !== state.profile);
     const [profile, setProfile] = useState(others[0] ?? "");
     const [accepted, setAccepted] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [changing, setChanging] = useState(false);
-    const [runs, setRuns] = useState(String(state.runs || info.autonomous_runs));
     const toAccept = info.to_accept.includes(profile);
-    const choosing = profile === "autonomous" && session.commands.includes("chat.limit_runs");
 
     async function change() {
         setProblem(null);
@@ -381,7 +392,7 @@ function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; s
             }
             onAccepted();
         }
-        chat.changeProfile(profile, choosing ? chosenRuns(runs, info) : state.runs);
+        chat.changeProfile(profile);
         onClose();
     }
 
@@ -396,20 +407,14 @@ function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; s
                     {others.map(one => <FormSelectOption key={one} value={one} label={profiles.name(one)} />)}
                 </FormSelect>
                 <Content component="p" style={{ marginBlockEnd: "1rem" }}>{profiles.what(profile)}</Content>
-                {choosing && (
-                    <div style={{ marginBlockEnd: "1rem" }}>
-                        <Content component="p">{t("Runs without asking, in each conversation")}</Content>
-                        <RunsInput info={info} value={runs} onChange={setRuns} />
-                    </div>
-                )}
-                {toAccept && <Risks info={info} profile={profile} accepted={accepted} onAccepted={setAccepted} />}
+                {toAccept && <Risks profile={profile} accepted={accepted} onAccepted={setAccepted} />}
                 {RISKY.includes(profile) && (
                     <Alert variant="warning" isInline isPlain title={t("What has been said so far goes on with it: the output of runs and commands read in this conversation, written by the nodes, included.")} />
                 )}
                 <Content component="small">{t("What you allowed always in this conversation is asked again.")}</Content>
             </ModalBody>
             <ModalFooter>
-                <Button variant="primary" isDisabled={!profile || (toAccept && !accepted) || changing || (choosing && validRuns(runs) === null)} isLoading={changing} onClick={change}>{t("Change the profile")}</Button>
+                <Button variant="primary" isDisabled={!profile || (toAccept && !accepted) || changing} isLoading={changing} onClick={change}>{t("Change the profile")}</Button>
                 <Button variant="link" onClick={onClose}>{t("Cancel")}</Button>
             </ModalFooter>
         </Modal>
@@ -419,9 +424,8 @@ function ChangeProfile({ info, state, onClose, onAccepted }: { info: ChatInfo; s
 // What happens when the chat is started, said before it is.
 function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; onAccepted: () => void }) {
     const { t } = useTranslation();
-    const profiles = useProfiles(info);
+    const profiles = useProfiles();
     const [name, setName] = useState(state.agent || info.agents[0].name);
-    const session = useSession();
     // The backend offers a profile only to a role it does more for.
     const suggested = info.profiles.includes(state.suggested) ? state.suggested : "";
     // A profile suggested with a prepared message comes first, then that of the last session.
@@ -430,9 +434,6 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
     const [accepted, setAccepted] = useState(false);
     const [problem, setProblem] = useState<string | null>(null);
     const [starting, setStarting] = useState(false);
-    // Those of the last session, if one was chosen, or config.toml's.
-    const [runs, setRuns] = useState(String(state.runs || info.autonomous_runs));
-    const choosing = profile === "autonomous" && session.commands.includes("chat.limit_runs");
     const full = info.open_sessions >= info.max_sessions;
     const agent = info.agents.find(one => one.name === name) ?? info.agents[0];
     const toAccept = info.to_accept.includes(profile);
@@ -451,7 +452,7 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
             setStarting(false);
             onAccepted();
         }
-        chat.start(agent.name, profile, choosing ? chosenRuns(runs, info) : 0);
+        chat.start(agent.name, profile);
     }
 
     return (
@@ -487,14 +488,8 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
                         <Content component="p" style={{ marginBlockStart: "0.5rem" }}>{profiles.what(profile)}</Content>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
-                {choosing && (
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>{t("Runs without asking, in each conversation")}</DescriptionListTerm>
-                        <DescriptionListDescription><RunsInput info={info} value={runs} onChange={setRuns} /></DescriptionListDescription>
-                    </DescriptionListGroup>
-                )}
             </DescriptionList>
-            {toAccept && <Risks info={info} profile={profile} accepted={accepted} onAccepted={setAccepted} />}
+            {toAccept && <Risks profile={profile} accepted={accepted} onAccepted={setAccepted} />}
             {full && <Alert variant="info" isInline title={t("{{open}} sessions of the assistant are open on this controller, the most it allows.", { open: info.open_sessions })} style={{ marginBlockEnd: "1rem" }} />}
             {!agent.installed && (
                 <Alert variant="warning" isInline title={t("{{agent}} is not installed on this machine", { agent: agent.label })} style={{ marginBlockEnd: "1rem" }}>
@@ -516,7 +511,7 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
                         </FormSelect>
                     </FlexItem>
                 )}
-                <Button variant="primary" isDisabled={!agent.installed || (toAccept && !accepted) || starting || (choosing && validRuns(runs) === null)} isLoading={starting}
+                <Button variant="primary" isDisabled={!agent.installed || (toAccept && !accepted) || starting} isLoading={starting}
                     onClick={start}>{t("Start the assistant")}</Button>
             </Flex>
         </>
@@ -551,7 +546,7 @@ function Instructions({ state }: { state: ChatState }) {
     );
 }
 
-function Composer({ state }: { state: ChatState }) {
+function Composer({ state, info }: { state: ChatState; info?: ChatInfo }) {
     const { t } = useTranslation();
     // What was being written comes back after a visit to another tab.
     const [text, setText] = useState(() => chat.typed);
@@ -599,15 +594,17 @@ function Composer({ state }: { state: ChatState }) {
         </Flex>
         {unattended && (
             <div className="fleet-chat-unattended-note">
-                {t("Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting.")}
+                {info?.modes[state.profile] === "autonomous"
+                    ? t("Without questions: the assistant launches what is defined and changes the documents without asking you, within the limits of Fleet.")
+                    : t("Without questions: the assistant runs commands and makes changes without asking you; it asks only before deleting.")}
             </div>
         )}
         </div>
     );
 }
 
-// What the assistant launched in this conversation: in the profile
-// autonomous how many runs of those it may, and more allowed when they are
+// What the assistant launched in this conversation: acting without asking in
+// assisted, how many runs of those it may, and more allowed when they are
 // spent; in any profile its runs not ended, to be canceled with the answer
 // under way. Asked for again as the conversation goes on, and while runs are.
 export function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo }) {
@@ -622,7 +619,7 @@ export function SessionRuns({ state, info }: { state: ChatState; info: ChatInfo 
     useEffect(() => { setFailed(""); }, [fleetSession]);
 
     if (!fleetSession || !runs) return null;
-    const autonomous = state.profile === "autonomous";
+    const autonomous = state.unattended && info.modes[state.profile] === "autonomous";
     const spent = autonomous && runs.launched >= runs.allowed;
     const open = runs.not_ended.length;
     if (!autonomous && open === 0 && !error) return null;
@@ -789,7 +786,7 @@ export function ChatPage() {
                 {running && !state.changing && (
                     <>
                         <FlexItem>
-                            <Label color={state.profile === "autonomous" || state.profile === "administrator" ? "orange" : "blue"}>
+                            <Label color={state.unattended || state.profile === "administrator" ? "orange" : "blue"}>
                                 {t("Profile {{profile}}", { profile: profiles.name(state.profile) })}
                             </Label>
                         </FlexItem>
@@ -827,7 +824,7 @@ export function ChatPage() {
             )}
             {running && state.needsLogin && <Login agent={agent} />}
             {running && <SessionRuns state={state} info={info.data} />}
-            {shown && <Composer state={state} />}
+            {shown && <Composer state={state} info={info.data} />}
             {(state.phase === "idle" || state.phase === "ended") && <Start info={info.data} state={state} onAccepted={reload} />}
             {state.ask && <AskModal ask={state.ask} profile={state.profile} />}
             {changing && running && <ChangeProfile info={info.data} state={state} onClose={() => setChanging(false)} onAccepted={reload} />}

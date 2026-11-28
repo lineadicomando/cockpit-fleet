@@ -53,5 +53,5 @@ export const chat = new Chat(
     async (session, runs) => { await call("chat.limit_runs", { session, runs }); },
     { load: session => call<ChatSessionRuns>("chat.session", { session }), tell: tellEnded },
     async (session, command, input) => { await call("chat.consent", { session, command, input }); },
-    async (session, on) => { await call("chat.unattended", { session, on }); },
+    async (session, on, profile) => { await call("chat.unattended", { session, on, profile }); },
 );

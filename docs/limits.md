@@ -102,11 +102,15 @@ What is protected and what is not, for an administrator, is in
     after the agent is named (an administrator's guide looks again every 5
     s); the page lists Claude's own `/login` among past conversations.
   - A change of profile starts the agent again (seconds, and the replay of
-    the conversation), restarts the count of an autonomous agent's runs
-    (and what "Stop everything" reaches: runs launched before the change
-    are canceled from the Runs page), starts another draft for an
-    administrator's files, and is not offered by `fleet assistant`
-    (`--profile` and the agent's own resume).
+    the conversation), turns "Without questions" off, restarts the count
+    of the runs launched without asking (and what "Stop everything"
+    reaches: runs launched before the change are canceled from the Runs
+    page), starts another draft for an administrator's files, and is not
+    offered by `fleet assistant` (`--profile` and the agent's own resume).
+  - Without questions in `assisted`, the launches confirmed before it was
+    turned on count against its runs; it is lost on a reload of the page,
+    and the agent learns of it only from its instructions and from what
+    the backend refuses, not from a message when it is turned on or off.
   - The role `chat_agent`: tried on x86_64 only, versions pinned in the
     role, no script runs it, untried behind a proxy; controllers configured
     before `{allowed_tools}` ask about every call until the role is run
@@ -117,9 +121,8 @@ What is protected and what is not, for an administrator, is in
     for the session, and only the tools the profile lets through are known
     when it starts (a template made later is asked about). It has neither
     "Allow more" nor "Stop everything" (its `fleet-mcp` draws a session the
-    terminal does not show: an autonomous agent there stops at `[chat]
-    autonomous_runs`, and its runs are canceled one by one), nor "Without
-    questions" (it keeps `--permission-mode manual`).
+    terminal does not show: its runs are canceled one by one), nor "Without
+    questions", in any profile (it keeps `--permission-mode manual`).
   - A check cycle a launch of `check.run` makes due is not the session's,
     and "Stop everything" leaves it to end. The end of a run is told to the
     agent only while the page is open, not at a terminal, not for runs that
