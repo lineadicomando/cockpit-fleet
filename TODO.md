@@ -12,19 +12,15 @@ features"): then fixes, minor changes and field use, toward 1.0.0. Last
 release 0.4.0 (18 November); since then: `[Unreleased]` of `CHANGELOG.md`.
 `make release` only when asked.
 
-To resume: `git status`, `git log origin/main..`; `make check` (878
-backend, 246 frontend tests). Each backend module's docstring says what it
-is; `cli.py` the registry of commands, `db.py` the schema (41
+To resume: `git status`, `git log origin/main..`; `make check` (880
+backend, 247 frontend tests). Each backend module's docstring says what it
+is; `cli.py` the registry of commands, `db.py` the schema (42
 migrations). Under way: fixes and minor changes; `sandbox` with
 run D on `deb13` (see Integration).
 
 ## Minor changes decided
 
-- **"Close all groups" / "Open all groups" as an icon** (27 November): the
-  link beside "Group by" (`ListView.tsx`, every grouped list) becomes an
-  icon button (folded/unfolded, as Cockpit's lists show it: `AngleDown`/
-  `AngleRight` or `CompressIcon`/`ExpandIcon` of PatternFly, to choose),
-  its text kept as tooltip and `aria-label`.
+None at the moment.
 
 ## To study
 

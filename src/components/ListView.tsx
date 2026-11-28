@@ -3,7 +3,8 @@
 
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Content, EmptyState, EmptyStateFooter, Flex, FlexItem, Label, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
+import { Button, Content, EmptyState, EmptyStateFooter, Flex, FlexItem, Label, ToggleGroup, ToggleGroupItem, Tooltip } from "@patternfly/react-core";
+import { CompressIcon, ExpandIcon } from "@patternfly/react-icons";
 import { Tbody, Td, Tr } from "@patternfly/react-table";
 import { useStoredState } from "../lib/hooks.ts";
 import type { HostListView } from "../lib/hosts.ts";
@@ -44,7 +45,8 @@ export function FilterChips({ chips, onClearAll, shown, total }: {
     );
 }
 
-// How to group the list, and a button that opens or closes every group.
+// How to group the list, and a button that opens or closes every group: an
+// icon, its words in the tooltip and for screen readers.
 export function GroupByChoice<G extends string>({ id, value, options, onChange, groups, allOpen, onToggleAll }: {
     id: string;
     value: G;
@@ -57,6 +59,7 @@ export function GroupByChoice<G extends string>({ id, value, options, onChange, 
     onToggleAll: () => void;
 }) {
     const { t } = useTranslation();
+    const toggleAll = allOpen ? t("Close all groups") : t("Open all groups");
     return (
         <FlexItem align={{ default: "alignRight" }}>
             <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
@@ -67,9 +70,10 @@ export function GroupByChoice<G extends string>({ id, value, options, onChange, 
                     ))}
                 </ToggleGroup>
                 {value !== "none" && groups > 1 && (
-                    <Button variant="link" isInline onClick={onToggleAll}>
-                        {allOpen ? t("Close all groups") : t("Open all groups")}
-                    </Button>
+                    <Tooltip content={toggleAll}>
+                        <Button variant="plain" icon={allOpen ? <CompressIcon /> : <ExpandIcon />}
+                            aria-label={toggleAll} onClick={onToggleAll} />
+                    </Tooltip>
                 )}
             </Flex>
         </FlexItem>
