@@ -43,7 +43,10 @@ offers by inventory ("Chosen at launch" for those with no default, and
 the launch form then offers no "Each step's own") and says under each
 step the one it runs on; `workflow.progress` gives each step's
 inventory, the one its run took or, for a step not started, the one it
-will take.
+will take. `workflow.list` gives each workflow its `last_run` and, in
+`last_runs`, its last on each inventory by id: `options.inventory`, else
+`options.scope.inventory_id`, `""` for a run on each step's own (the run
+keeps `inventory_id` empty, as said above).
 
 **Runs.** `workflow.launch` (operator) records a run of kind `workflow`.
 It has no unit and no place in the queue (the lanes of `dispatch` leave it

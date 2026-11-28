@@ -214,10 +214,21 @@ def _check_edges(nodes: list[dict], edges: list[dict]) -> list[dict]:
     return checked
 
 
+# The last run of a workflow on each inventory: the one chosen at launch or its
+# own, "" for each step's own.
+_LAST_RUNS = ("SELECT r.id, r.status, r.created_at, m.inventory FROM runs r"
+              " JOIN (SELECT MAX(rowid) AS last, coalesce(json_extract(options, '$.inventory'),"
+              " json_extract(options, '$.scope.inventory_id'), '') AS inventory"
+              " FROM runs WHERE workflow_id = ? AND kind = 'workflow' GROUP BY inventory) m"
+              " ON r.rowid = m.last")
+
+
 def _workflow(ctx: Context, row) -> dict:
     last = ctx.conn.execute(
         "SELECT id, status, created_at FROM runs WHERE workflow_id = ? AND kind = 'workflow'"
-        " ORDER BY created_at DESC LIMIT 1", (row["id"],)).fetchone()
+        " ORDER BY created_at DESC, rowid DESC LIMIT 1", (row["id"],)).fetchone()
+    last_runs = {one["inventory"]: {key: one[key] for key in ("id", "status", "created_at")}
+                 for one in ctx.conn.execute(_LAST_RUNS, (row["id"],)).fetchall()}
     return {"id": row["id"], "name": row["name"], "description": row["description"],
             "project_id": row["project_id"], "inventory_id": row["inventory_id"],
             "inventory_ids": _offered(ctx.conn, row),
@@ -225,7 +236,8 @@ def _workflow(ctx: Context, row) -> dict:
                 row["nodes"], [])) is not None,
             "nodes": [node_out(node) for node in store.loads(row["nodes"], [])],
             "edges": store.loads(row["edges"], []), "created_at": row["created_at"],
-            "updated_at": row["updated_at"], "last_run": dict(last) if last else None}
+            "updated_at": row["updated_at"], "last_run": dict(last) if last else None,
+            "last_runs": last_runs}
 
 
 def _offered(conn, row) -> list[str] | None:
@@ -270,7 +282,9 @@ def _values(ctx: Context, params: Values) -> dict:
 
 @command("workflow.list", role="viewer")
 def workflow_list(ctx: Context, params: Values) -> dict:
-    """The workflows: their steps, the links between them, and their last run."""
+    """The workflows: their steps, the links between them, their last run, and in
+    last_runs their last on each inventory, by inventory id ("" for a run on each
+    step's own)."""
     rows = ctx.conn.execute("SELECT * FROM workflows ORDER BY name COLLATE NOCASE").fetchall()
     return {"workflows": [_workflow(ctx, row) for row in rows]}
 

@@ -367,6 +367,30 @@ class WorkflowTest(WorkflowBase):
                                        ("name", "project_id", "playbook", "inventory_id")},
             "inventory_ids": [lab["id"]]}), "conflict")
 
+    def test_the_list_tells_the_last_run_on_each_inventory(self):
+        lab = self.ok("inventory.create", {"name": "lab", "kind": "managed", "content": ""})
+        params = {key: self.first[key] for key in ("name", "project_id", "playbook",
+                                                   "inventory_id")}
+        self.ok("template.update", {"id": self.first["id"], **params, "inventory_ids": [lab["id"]]})
+        nodes = {"nodes": [{"id": "a", "template_id": self.first["id"]}], "edges": []}
+        free = self.ok("workflow.create", {"name": "free", **nodes})
+        fixed = self.ok("workflow.create", {"name": "fixed", "inventory_id": lab["id"], **nodes})
+        listed = lambda: {one["name"]: one for one in  # noqa: E731
+                          self.ok("workflow.list", role="viewer")["workflows"]}
+        self.assertEqual(listed()["free"]["last_runs"], {})
+        on_lab = self.ok("workflow.launch", {"id": free["id"], "inventory_id": lab["id"]})
+        own = self.ok("workflow.launch", {"id": free["id"]})
+        on_fixed = self.ok("workflow.launch", {"id": fixed["id"]})
+        workflows = listed()
+        # Each step's own is "", the one chosen at launch or the workflow's by its id.
+        self.assertEqual({key: run["id"] for key, run in workflows["free"]["last_runs"].items()},
+                         {lab["id"]: on_lab["id"], "": own["id"]})
+        self.assertEqual(workflows["free"]["last_run"]["id"], own["id"])
+        self.assertEqual({key: run["id"] for key, run in workflows["fixed"]["last_runs"].items()},
+                         {lab["id"]: on_fixed["id"]})
+        self.assertEqual(set(workflows["fixed"]["last_runs"][lab["id"]]),
+                         {"id", "status", "created_at"})
+
     def test_a_step_with_no_default_inventory_needs_one_chosen(self):
         lab = self.ok("inventory.create", {"name": "lab", "kind": "managed", "content": ""})
         nodes = {"nodes": [{"id": "a", "template_id": self.first["id"]}], "edges": []}
