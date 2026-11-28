@@ -295,7 +295,8 @@ export function LaunchModal({ template, limit: initialLimit = "", inventory: ini
     );
 }
 
-function useOutcomeNames(): Record<Outcome, string> {
+// The outcomes of a last run, as the filters and the groups of lists name them.
+export function useOutcomeNames(): Record<Outcome, string> {
     const { t } = useTranslation();
     return {
         failed: t("Last run failed"), active: t("Last run under way"), canceled: t("Last run canceled"),

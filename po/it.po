@@ -5012,3 +5012,41 @@ msgstr "Ultima su {{inventory}}:"
 
 msgid "an inventory deleted"
 msgstr "un inventario eliminato"
+
+msgid "Filter workflows"
+msgstr "Filtra i workflow"
+
+msgid "Name, description, step, project, inventory…"
+msgstr "Nome, descrizione, passo, progetto, inventario…"
+
+msgid "No workflow matches the filters"
+msgstr "Nessun workflow corrisponde ai filtri"
+
+msgid "Inventory chosen at launch"
+msgstr "Inventario scelto al lancio"
+
+msgid "Each step's own inventory"
+msgstr "Inventario di ciascun passo"
+
+msgid "the inventory of each step"
+msgstr "l'inventario di ciascun passo"
+
+msgid "Steps in order"
+msgstr "Passi in ordine"
+
+msgid "if it fails"
+msgstr "se fallisce"
+
+msgid "anyway"
+msgstr "comunque"
+
+msgid "Waits for an approval"
+msgstr "Attende un'approvazione"
+
+msgid "waits for an approval"
+msgstr "attende un'approvazione"
+
+msgid "workflows_count"
+msgid_plural "workflows_count_plural"
+msgstr[0] "{{count}} workflow"
+msgstr[1] "{{count}} workflow"

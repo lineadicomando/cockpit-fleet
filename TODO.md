@@ -20,7 +20,16 @@ run D on `deb13` (see Integration).
 
 ## Minor changes decided
 
-None at the moment.
+- **The list of workflows as the one of templates** (28 November):
+  filters, groups (by inventory by default) and order, the last run on
+  each inventory (`last_runs` of `workflow.list`), the steps in the
+  columns of `layers()` with the steps on failure and those run anyway
+  marked, the same in the form. Done and tested (unit tests); left:
+  - seen in a browser (`make browser-up`, a throwaway scenario): the
+    toolbar's width, the cell of the steps of a long workflow, the
+    groups, the preview in the form, the tooltip of an approval;
+  - `make ct-test TESTS=workflows` on the three (`workflow.list` changed);
+  - `CHANGELOG.md`, `decisions.md` ("Workflows list"), `interface.md`.
 
 ## To study
 

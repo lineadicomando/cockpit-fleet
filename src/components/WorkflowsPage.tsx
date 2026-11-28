@@ -19,22 +19,31 @@ import {
     Label,
     TextArea,
     TextInput,
+    Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import { TimesIcon } from "@patternfly/react-icons";
+import { TimesIcon, UserClockIcon } from "@patternfly/react-icons";
+import cockpit from "cockpit";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useLoad, usePolling } from "../lib/hooks.ts";
 import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
-import { inScope, layers, nextStepId, templateGroups, type StepScope } from "../lib/workflow.ts";
-import type { ApprovalMode, Inventory, Project, Run, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
+import { OUTCOMES, type Outcome } from "../lib/templates.ts";
+import {
+    EACH_STEPS_OWN, inScope, isWorkflowGroupOpen, lastWorkflowRun, layers, listWorkflows, nextStepId, readWorkflowsView, stepAsksApproval, stepColumns,
+    stepName, templateGroups, withoutWorkflowFilters, withWorkflowGroupsOpen, workflowInventories, workflowProjects,
+    type StepCell, type StepScope, type WorkflowGroup, type WorkflowNames, type WorkflowSort, type WorkflowsView, type WorkflowTrait,
+} from "../lib/workflow.ts";
+import type { ApprovalMode, Inventory, Project, Run, Schedule, StepCondition, Template, Workflow, WorkflowEdge, WorkflowProgress, StepState } from "../lib/types.ts";
 import { ApprovalModeField, ApprovalModeLabel } from "./ApprovalsPage.tsx";
 import { ConfirmDelete, FormModal, ListState, RunStatusLabel, SectionHeader, message, announceRun, openRun, isActiveRun } from "./common.tsx";
 import { StatusLabel, type Tone } from "./StatusLabel.tsx";
 import { SearchSelect } from "./SearchSelect.tsx";
 import { SurveyAnswers } from "./SurveyEditor.tsx";
-import { ActionsColumn, Alert } from "./pf.tsx";
+import { FilterChips, GroupByChoice, GroupRow, NothingMatches, useStoredView } from "./ListView.tsx";
+import { ActionsColumn, Alert, SearchInput } from "./pf.tsx";
+import { useOutcomeNames } from "./TemplatesPage.tsx";
 
 interface StepDraft {
     id: string;
@@ -61,6 +70,31 @@ const surveyOf = (template: Template | undefined) => (template?.survey ?? []).fi
 function useConditions() {
     const { t } = useTranslation();
     return { success: t("succeeds"), failure: t("fails"), always: t("ends, either way") } as Record<StepCondition, string>;
+}
+
+// The steps of a workflow in columns, one after the other: those of a column may
+// start together, or be alternatives, a step reached only when one before it fails.
+export function StepColumns({ columns }: { columns: StepCell[][] }) {
+    const { t } = useTranslation();
+    const branchText = { failure: t("if it fails"), always: t("anyway") };
+    const step = (cell: StepCell) => {
+        const label = (
+            <Label isCompact variant={cell.branch ? "outline" : "filled"} color={cell.branch === "failure" ? "red" : "grey"}
+                icon={cell.approval ? <UserClockIcon /> : undefined}>
+                {cell.name}
+                {cell.branch && <span className="pf-v6-u-text-color-subtle"> · {branchText[cell.branch]}</span>}
+                {cell.approval && <span className="pf-v6-screen-reader"> ({t("waits for an approval")})</span>}
+            </Label>
+        );
+        return <React.Fragment key={cell.id}>{cell.approval ? <Tooltip content={t("Waits for an approval")}>{label}</Tooltip> : label}</React.Fragment>;
+    };
+    return (
+        <ol className="fleet-step-columns" aria-label={t("Steps in order")}>
+            {columns.map((column, index) => (
+                <li key={index}>{column.length > 1 ? <span className="fleet-step-together">{column.map(step)}</span> : column.map(step)}</li>
+            ))}
+        </ol>
+    );
 }
 
 interface Choices {
@@ -236,6 +270,14 @@ function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Work
                 {t("With a project, only its job templates can be steps; with an inventory, every step runs on it, and only job templates that allow it can be steps. Without an inventory, one may be chosen at launch.")}
             </HelperTextItem></HelperText></FormHelperText>
             <Content component="small">{t("Each step passes on to the steps after it the variables its playbook sets with set_stats (with per_host: false). They are kept in clear with the run: not for secrets.")}</Content>
+            {steps.length > 1 && (
+                <FormGroup label={t("Steps in order")} fieldId="wf-shape" role="group">
+                    <StepColumns columns={stepColumns(steps,
+                        steps.flatMap(step => step.after.filter(link => link.from).map(link => ({ from: link.from, to: step.id, condition: link.condition }))),
+                        step => step.name || templates.find(item => item.id === step.template_id)?.name || step.id,
+                        step => stepAsksApproval(step, id => templates.find(item => item.id === id)))} />
+                </FormGroup>
+            )}
             {steps.map(step => (
                 <StepEditor key={step.id} step={step} steps={steps} templates={templates} scope={scope} inventories={inventories} projects={projects}
                     onChange={changed => setSteps(steps.map(item => item.id === step.id ? changed : item))}
@@ -252,29 +294,116 @@ function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Work
     );
 }
 
+// The filters and the grouping above the list of workflows.
+function WorkflowsToolbar({ view, onChange, projects, inventories, groups, shown, total }: {
+    view: WorkflowsView;
+    onChange: (view: WorkflowsView) => void;
+    // Those that some workflow uses.
+    projects: { id: string; name: string }[];
+    inventories: { id: string; name: string }[];
+    groups: WorkflowGroup[];
+    shown: number;
+    total: number;
+}) {
+    const { t } = useTranslation();
+    const outcomeNames = useOutcomeNames();
+    const set = (change: Partial<WorkflowsView>) => onChange({ ...view, ...change });
+    const traitNames: Record<Exclude<WorkflowTrait, "">, string> = {
+        approval: t("With approval"), choose: t("Inventory chosen at launch"), scheduled: t("Scheduled"), unscheduled: t("Not scheduled"),
+    };
+    const nameIn = (items: { id: string; name: string }[], id: string) => items.find(item => item.id === id)?.name ?? "";
+    const allOpen = groups.every(group => isWorkflowGroupOpen(view, group));
+    const chip = (key: string, text: string, clear: Partial<WorkflowsView>) => ({ key, text, onClear: () => set(clear) });
+    const chips = [
+        ...(view.search.trim() ? [chip("search", t("Text: {{text}}", { text: view.search.trim() }), { search: "" })] : []),
+        ...(view.project ? [chip("project", t("Project: {{value}}", { value: nameIn(projects, view.project) }), { project: "" })] : []),
+        ...(view.inventory ? [chip("inventory", t("Inventory: {{value}}", { value: nameIn(inventories, view.inventory) }), { inventory: "" })] : []),
+        ...(view.trait ? [chip("trait", traitNames[view.trait], { trait: "" })] : []),
+        ...(view.outcome ? [chip("outcome", outcomeNames[view.outcome], { outcome: "" })] : []),
+    ];
+
+    return (
+        <div style={{ marginBlockEnd: "1rem" }}>
+            <Flex gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}>
+                <FlexItem style={{ width: "18rem" }}>
+                    <SearchInput aria-label={t("Filter workflows")} placeholder={t("Name, description, step, project, inventory…")} value={view.search}
+                        onChange={(_e, value) => set({ search: value })} onClear={() => set({ search: "" })} />
+                </FlexItem>
+                {projects.length > 1 && (
+                    <FlexItem style={{ width: "12rem" }}>
+                        <FormSelect aria-label={t("Project")} value={view.project} onChange={(_e, value) => set({ project: value })}>
+                            <FormSelectOption value="" label={t("Every project")} />
+                            {projects.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FlexItem>
+                )}
+                {inventories.length > 1 && (
+                    <FlexItem style={{ width: "12rem" }}>
+                        <FormSelect aria-label={t("Inventory")} value={view.inventory} onChange={(_e, value) => set({ inventory: value })}>
+                            <FormSelectOption value="" label={t("Every inventory")} />
+                            {inventories.map(item => <FormSelectOption key={item.id} value={item.id} label={item.name} />)}
+                        </FormSelect>
+                    </FlexItem>
+                )}
+                <FlexItem style={{ width: "14rem" }}>
+                    <FormSelect aria-label={t("Filter by feature")} value={view.trait} onChange={(_e, value) => set({ trait: value as WorkflowTrait })}>
+                        <FormSelectOption value="" label={t("Any feature")} />
+                        {Object.entries(traitNames).map(([value, label]) => <FormSelectOption key={value} value={value} label={label} />)}
+                    </FormSelect>
+                </FlexItem>
+                <FlexItem style={{ width: "13rem" }}>
+                    <FormSelect aria-label={t("Filter by last run")} value={view.outcome} onChange={(_e, value) => set({ outcome: value as WorkflowsView["outcome"] })}>
+                        <FormSelectOption value="" label={t("Any outcome")} />
+                        {OUTCOMES.map(item => <FormSelectOption key={item} value={item} label={outcomeNames[item]} />)}
+                    </FormSelect>
+                </FlexItem>
+                <GroupByChoice id="wf-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
+                    options={[["inventory", t("Inventory")], ["project", t("Project")], ["outcome", t("Last run")], ["none", t("Nothing")]]}
+                    groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withWorkflowGroupsOpen(view, groups, !allOpen))} />
+            </Flex>
+            <FilterChips chips={chips} onClearAll={() => onChange(withoutWorkflowFilters(view))} shown={shown} total={total} />
+        </div>
+    );
+}
+
 export function WorkflowsPage() {
     const { t, i18n } = useTranslation();
     const can = useCan();
+    const outcomeNames = useOutcomeNames();
+    const [stored, setView] = useStoredView("workflows-view", readWorkflowsView);
     const list = useLoad(() => call<{ workflows: Workflow[] }>("workflow.list"));
     const templates = useLoad(() => call<{ templates: Template[] }>("template.list"));
+    const schedules = useLoad(() => call<{ schedules: Schedule[] }>("schedule.list"));
     const places = useLoad(() => Promise.all([
         call<{ projects: Project[] }>("project.list"),
         call<{ inventories: Inventory[] }>("inventory.list"),
     ]).then(([p, i]) => ({ projects: p.projects, inventories: i.inventories })));
     const [editing, setEditing] = useState<Workflow | "new" | null>(null);
-    const [launching, setLaunching] = useState<Workflow | null>(null);
+    const [launching, setLaunching] = useState<{ workflow: Workflow; inventory?: string } | null>(null);
     const [deleting, setDeleting] = useState<Workflow | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const names = new Map((templates.data?.templates ?? []).map(item => [item.id, item.name]));
+    const templateById = new Map((templates.data?.templates ?? []).map(item => [item.id, item]));
     const projectNames = new Map((places.data?.projects ?? []).map(item => [item.id, item.name]));
     const inventoryNames = new Map((places.data?.inventories ?? []).map(item => [item.id, item.name]));
+    const scheduleCount = new Map<string, number>();
+    for (const { workflow_id: id } of schedules.data?.schedules ?? [])
+        if (id) scheduleCount.set(id, (scheduleCount.get(id) ?? 0) + 1);
     // A starter is used by no run: it is not offered.
     const choices: Choices | null = templates.data && places.data ? {
         templates: templates.data.templates,
         projects: places.data.projects.filter(one => !one.starter),
         inventories: places.data.inventories.filter(one => !one.starter),
     } : null;
-    usePolling(list.reload, 3000, list.data?.workflows.some(item => !!item.last_run && isActiveRun(item.last_run.status)) ?? false);
+    const names: WorkflowNames = {
+        template: id => templateById.get(id),
+        project: id => projectNames.get(id) ?? "",
+        inventory: id => id === EACH_STEPS_OWN ? t("Each step's own inventory") : inventoryNames.get(id) ?? "",
+        schedules: id => scheduleCount.get(id) ?? 0,
+        inventories: (choices?.inventories ?? []).map(one => one.id),
+    };
+    // A last run not over yet, on any inventory, is followed, so that its outcome shows.
+    usePolling(list.reload, 3000, list.data?.workflows.some(item => Object.values(item.last_runs ?? {}).concat(item.last_run ?? [])
+        .some(run => isActiveRun(run.status))) ?? false);
 
     // A workflow on no inventory of its own may be launched on one its steps all allow.
     function inventoryChoices(workflow: Workflow): string[] {
@@ -283,10 +412,10 @@ export function WorkflowsPage() {
         return workflow.inventory_ids === null ? usable : workflow.inventory_ids.filter(id => usable.includes(id));
     }
 
-    async function launch(workflow: Workflow, inventoryId = "") {
+    async function launch(workflow: Workflow) {
         setError(null);
         try {
-            const run = await call<Run>("workflow.launch", { id: workflow.id, ...(inventoryId ? { inventory_id: inventoryId } : {}) });
+            const run = await call<Run>("workflow.launch", { id: workflow.id });
             announceRun(run.id, run.title);
             list.reload();
         } catch (ex) {
@@ -304,55 +433,135 @@ export function WorkflowsPage() {
             <ListState loaded={list} isEmpty={data => data.workflows.length === 0}
                 emptyTitle={t("No workflows yet")}
                 emptyBody={t("A workflow runs job templates one after the other: each step starts by how the steps before it ended.")}>
-                {data => (
-                    <Table variant="compact" aria-label={t("Workflows")}>
-                        <Thead><Tr><Th>{t("Name")}</Th><Th>{t("Steps")}</Th><Th>{t("Last run")}</Th><Th screenReaderText={t("Actions")} /></Tr></Thead>
-                        <Tbody>
-                            {data.workflows.map(workflow => (
-                                <Tr key={workflow.id}>
-                                    <Td dataLabel={t("Name")}>
-                                        {workflow.name}
-                                        {workflow.description && <Content component="small" style={{ display: "block" }}>{workflow.description}</Content>}
-                                        {(workflow.project_id || workflow.inventory_id) && (
-                                            <Flex gap={{ default: "gapSm" }} style={{ marginBlockStart: "0.25rem" }}>
-                                                {workflow.project_id && <Label isCompact color="blue">{t("Project")}: {projectNames.get(workflow.project_id) ?? ""}</Label>}
-                                                {workflow.inventory_id && <Label isCompact color="teal">{t("Inventory")}: {inventoryNames.get(workflow.inventory_id) ?? ""}</Label>}
-                                            </Flex>
-                                        )}
-                                    </Td>
-                                    <Td dataLabel={t("Steps")}>{workflow.nodes.map(node => node.name || names.get(node.template_id) || node.id).join(" → ")}</Td>
-                                    <Td dataLabel={t("Last run")}>
-                                        {workflow.last_run
-                                            ? <Button variant="link" isInline onClick={() => openRun(workflow.last_run!.id)}>
-                                                <RunStatusLabel status={workflow.last_run.status} /> {formatTime(workflow.last_run.created_at, i18n.language)}
-                                            </Button>
-                                            : "—"}
-                                    </Td>
-                                    <Td isActionCell>
-                                        <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "nowrap" }} justifyContent={{ default: "justifyContentFlexEnd" }}>
-                                            {can("workflow.launch") && <Button variant="secondary" size="sm"
-                                                onClick={() => inventoryChoices(workflow).length ? setLaunching(workflow) : launch(workflow)}>{t("Launch")}</Button>}
-                                            {can("workflow.update") && (
-                                                <ActionsColumn items={[
-                                                    { title: t("Edit"), onClick: () => setEditing(workflow), isDisabled: !choices },
-                                                    { title: t("Delete"), onClick: () => setDeleting(workflow) },
-                                                ]} />
-                                            )}
+                {data => {
+                    const used = (ids: string[], name: (id: string) => string) => [...new Set(ids)]
+                        .map(id => ({ id, name: name(id) })).sort((a, b) => a.name.localeCompare(b.name));
+                    const projects = used(data.workflows.flatMap(item => workflowProjects(item, names)), names.project);
+                    const inventories = used(data.workflows.flatMap(item => workflowInventories(item, names.inventories))
+                        .filter(id => id !== EACH_STEPS_OWN), names.inventory);
+                    // A stored project or inventory that no workflow uses any more is not a
+                    // filter, nor is the only one, whose select is not shown.
+                    const view = {
+                        ...stored,
+                        project: projects.length > 1 && projects.some(item => item.id === stored.project) ? stored.project : "",
+                        inventory: inventories.length > 1 && inventories.some(item => item.id === stored.inventory) ? stored.inventory : "",
+                    };
+                    const { groups, shown } = listWorkflows(data.workflows, view, names);
+                    const grouped = view.groupBy !== "none";
+                    const width = grouped ? 6 : 5;
+                    const columns: WorkflowSort[] = ["name", "last_run"];
+                    const sortBy = (column: WorkflowSort) => ({
+                        columnIndex: columns.indexOf(column),
+                        sortBy: { index: columns.indexOf(view.sort), direction: view.descending ? "desc" as const : "asc" as const },
+                        onSort: (_e: unknown, _index: number, direction: "asc" | "desc") => setView({ ...view, sort: column, descending: direction === "desc" }),
+                    });
+                    const title = (group: WorkflowGroup) => view.groupBy === "outcome" ? outcomeNames[group.key as Outcome] : group.name;
+
+                    const runLink = (run: { id: string; status: Run["status"]; created_at: number }) => (
+                        <Button variant="link" isInline onClick={() => openRun(run.id)}>
+                            <RunStatusLabel status={run.status} /> {formatTime(run.created_at, i18n.language)}
+                        </Button>
+                    );
+                    // Under an inventory, the last run there, or the last elsewhere, muted.
+                    const lastRunCell = (workflow: Workflow, where?: string) => {
+                        const run = lastWorkflowRun(workflow, where);
+                        const any = workflow.last_run;
+                        if (where !== undefined && !run && any) {
+                            const on = Object.entries(workflow.last_runs ?? {}).find(([, one]) => one.id === any.id)?.[0];
+                            const inventory = on === undefined ? "" : on === EACH_STEPS_OWN ? t("the inventory of each step") : names.inventory(on);
+                            return (
+                                <>
+                                    {t("Never here")}
+                                    <div className="pf-v6-u-font-size-sm pf-v6-u-text-color-subtle">
+                                        {t("Last on {{inventory}}:", { inventory: inventory || t("an inventory deleted") })} {runLink(any)}
+                                    </div>
+                                </>
+                            );
+                        }
+                        return run ? runLink(run) : t("Never");
+                    };
+
+                    // where: the inventory of the group it is listed under, if grouped by inventory.
+                    const row = (workflow: Workflow, open: boolean, where?: string) => {
+                        const count = names.schedules(workflow.id);
+                        const asks = workflow.nodes.some(node => stepAsksApproval(node, names.template));
+                        return (
+                            <Tr key={workflow.id} isExpanded={grouped ? open : undefined}>
+                                {grouped && <Td />}
+                                <Td dataLabel={t("Name")}>
+                                    {workflow.name}
+                                    {asks && <Label isCompact color="purple" style={{ marginInlineStart: "0.5rem" }}>{t("Approval")}</Label>}
+                                    {workflow.description && <Content component="small" style={{ display: "block" }}>{workflow.description}</Content>}
+                                    {(workflow.project_id || workflow.inventory_id) && (
+                                        <Flex gap={{ default: "gapSm" }} style={{ marginBlockStart: "0.25rem" }}>
+                                            {workflow.project_id && <Label isCompact color="blue">{t("Project")}: {names.project(workflow.project_id)}</Label>}
+                                            {workflow.inventory_id && <Label isCompact color="teal">{t("Inventory")}: {names.inventory(workflow.inventory_id)}</Label>}
                                         </Flex>
-                                    </Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
+                                    )}
+                                </Td>
+                                <Td dataLabel={t("Steps")}>
+                                    <StepColumns columns={stepColumns(workflow.nodes, workflow.edges, node => stepName(node, names),
+                                        node => stepAsksApproval(node, names.template))} />
+                                </Td>
+                                <Td dataLabel={t("Last run")}>{lastRunCell(workflow, where)}</Td>
+                                <Td dataLabel={t("Schedules")}>
+                                    {count > 0 && <Button variant="link" isInline onClick={() => cockpit.location.go(["schedules"])}>{count}</Button>}
+                                </Td>
+                                <Td isActionCell>
+                                    <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "nowrap" }} justifyContent={{ default: "justifyContentFlexEnd" }}>
+                                        {can("workflow.launch") && <Button variant="secondary" size="sm"
+                                            onClick={() => inventoryChoices(workflow).length ? setLaunching({ workflow, inventory: where }) : launch(workflow)}>{t("Launch")}</Button>}
+                                        {can("workflow.update") && (
+                                            <ActionsColumn items={[
+                                                { title: t("Edit"), onClick: () => setEditing(workflow), isDisabled: !choices },
+                                                { title: t("Delete"), onClick: () => setDeleting(workflow) },
+                                            ]} />
+                                        )}
+                                    </Flex>
+                                </Td>
+                            </Tr>
+                        );
+                    };
+
+                    return (
+                        <>
+                            <WorkflowsToolbar view={view} onChange={setView} projects={projects} inventories={inventories} groups={groups}
+                                shown={shown} total={data.workflows.length} />
+                            {shown === 0 ? (
+                                <NothingMatches title={t("No workflow matches the filters")} onClearAll={() => setView(withoutWorkflowFilters(view))} />
+                            ) : (
+                                <Table variant="compact" aria-label={t("Workflows")}>
+                                    <Thead>
+                                        <Tr>
+                                            {grouped && <Th screenReaderText={t("Group")} />}
+                                            <Th sort={sortBy("name")}>{t("Name")}</Th><Th>{t("Steps")}</Th>
+                                            <Th sort={sortBy("last_run")}>{t("Last run")}</Th><Th>{t("Schedules")}</Th>
+                                            <Th screenReaderText={t("Actions")} />
+                                        </Tr>
+                                    </Thead>
+                                    {grouped ? groups.map(group => {
+                                        const open = isWorkflowGroupOpen(view, group);
+                                        return (
+                                            <Tbody key={group.key} isExpanded={open}>
+                                                <GroupRow title={title(group)} count={t("workflows_count", { count: group.items.length })} open={open} width={width}
+                                                    onToggle={() => setView(withWorkflowGroupsOpen(view, [group], !open))} />
+                                                {group.items.map(workflow => row(workflow, open, view.groupBy === "inventory" ? group.key : undefined))}
+                                            </Tbody>
+                                        );
+                                    }) : <Tbody>{groups[0].items.map(workflow => row(workflow, true))}</Tbody>}
+                                </Table>
+                            )}
+                        </>
+                    );
+                }}
             </ListState>
             {editing && choices && (
                 <WorkflowModal workflow={editing === "new" ? undefined : editing} choices={choices}
                     onClose={() => setEditing(null)} onDone={list.reload} />
             )}
             {launching && (
-                <LaunchWorkflowModal workflow={launching} inventories={inventoryChoices(launching)} names={inventoryNames}
-                    onClose={() => setLaunching(null)} onLaunched={list.reload} />
+                <LaunchWorkflowModal workflow={launching.workflow} inventories={inventoryChoices(launching.workflow)} names={inventoryNames}
+                    initial={launching.inventory} onClose={() => setLaunching(null)} onLaunched={list.reload} />
             )}
             {deleting && (
                 <ConfirmDelete what={t("Its past runs stay.")} name={deleting.name}
@@ -364,11 +573,12 @@ export function WorkflowsPage() {
 }
 
 // The inventory every step of a run is to be on, or each step's own.
-function LaunchWorkflowModal({ workflow, inventories, names, onClose, onLaunched }: {
-    workflow: Workflow; inventories: string[]; names: Map<string, string>; onClose: () => void; onLaunched: () => void;
+// initial: the inventory of the group it was launched from ("" each step's own).
+function LaunchWorkflowModal({ workflow, inventories, names, initial, onClose, onLaunched }: {
+    workflow: Workflow; inventories: string[]; names: Map<string, string>; initial?: string; onClose: () => void; onLaunched: () => void;
 }) {
     const { t } = useTranslation();
-    const [inventoryId, setInventoryId] = useState("");
+    const [inventoryId, setInventoryId] = useState(initial && inventories.includes(initial) ? initial : "");
     const needed = workflow.needs_inventory;
 
     async function submit() {
