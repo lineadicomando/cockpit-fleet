@@ -53,22 +53,24 @@ controller that accepts password logins over SSH.
 | `load.sh` | real check cycles (podman) on many aliases and a few SSH nodes, the interface timed (`IT_LOAD_*`, IT_KEEP; `load-sample.py`) | yes |
 | `multihost.sh` | IT_NODES container nodes (podman; 5): vaults, passphrase key, key changes | yes |
 | `windows.sh` | Windows node over SSH, a run and the checks (IT_WIN_HOST, IT_WIN_USER, IT_WIN_KEY, IT_KEEP) | yes |
-| `nodes.sh` | the container nodes themselves (podman): `up N KEYS`, `recreate I KEYS`, `down` |  |
+| `nodes.sh` | the container nodes themselves (podman): `up N KEYS`, `recreate I KEYS`, `down`, `address I` |  |
 | `lifecycle.sh` | upgrade, removal, purge (IT_PKG_OLD, IT_PKG_NEW; no package installed), through `make ct-lifecycle` |  |
 
 ## Running them
 
 - **Containers**: `make ct-test DISTRO=debian|fedora|alma [TESTS="a b"]`
-  builds the package of `DISTRO` and runs each script as root in a fresh
-  container of it, `CT_JOBS` at a time (2), with `IT_WIPE=yes` and an
-  account for `IT_SSH_USER`; other `IT_*` variables of the caller are
-  passed on; logs in `it-results/DISTRO/`. `windows.sh`,
-  `measure-events.sh` and `load.sh` run only when named; `lifecycle.sh`
-  only through `make ct-lifecycle`, which builds an older package too, as
-  version 0.0.0 (`CT_OLD_VERSION=0.3.0` gives it another, for what an
-  upgrade does only from some versions; `CT_KEEP_PACKAGES=DIR` keeps both,
-  to run it on a VM). It needs
-  rootless podman on cgroup v2, nothing else of the host.
+  (`scripts/ct-test.sh`, `test/containers/`) builds the package of
+  `DISTRO` and an image of it with systemd as PID 1 and podman for the
+  nodes, and runs each script as root in a fresh container, `CT_JOBS` at a
+  time (2), with `IT_WIPE=yes` and an account for `IT_SSH_USER`; other
+  `IT_*` variables of the caller are passed on; logs in
+  `it-results/DISTRO/`. `windows.sh`, `measure-events.sh` and `load.sh` run
+  only when named; `lifecycle.sh` only through `make ct-lifecycle`, which
+  builds an older package too, as version 0.0.0 (`CT_OLD_VERSION=0.3.0`
+  gives it another, for what an upgrade does only from some versions;
+  `CT_KEEP_PACKAGES=DIR` keeps both, to run it on a VM). It needs rootless
+  podman on cgroup v2, nothing else of the host. Run the `ct-test` of two
+  distributions one after the other, not together.
 - **The lab**: `test/vm/lab.sh deploy TARGET` installs the package of the
   work tree, `test/vm/lab.sh it TARGET SCRIPT...` runs scripts the same way,
   logs in `it-results/vm-TARGET/` (skill `vm-lab`).
@@ -101,45 +103,36 @@ deploy a Cockpit tab runs the old bundle until reloaded, and a copy in
 `~/.local/share/cockpit` (left by `make devel-install`) shadows the
 package's.
 
-## Where they run
+### Containers and machines
 
-The controller is a container or a machine. `make ct-test`
-(`scripts/ct-test.sh`, `test/containers/`) builds an image of Debian 13,
-Fedora 44 or AlmaLinux 10 with systemd as PID 1, what the package needs and
-podman for the nodes, installs the package in it, and runs each script in a
-fresh container, so that scripts that wipe the database run side by side.
-Two things make a container behave as a machine here. It is privileged,
-within the user's namespace: unprivileged, the run unit fails at `NAMESPACE`,
+Two things make a container behave as a machine. It is privileged, within
+the user's namespace: unprivileged, the run unit fails at `NAMESPACE`,
 since systemd may neither make the namespaces nor mount a new `/proc` for
 `PrivatePIDs`, and it ignores `PrivateIPC` with only a warning. And `/` is
-made a shared mount at boot: systemd mounts the credentials of a unit in a
-namespace of its own and moves them into `/run/credentials`, which reaches
-the unit only through shared propagation; on podman's private `/` a run got
-no secret, with no error.
+made a shared mount at boot (`make-rshared.service`): systemd mounts the
+credentials of a unit in a namespace of its own and moves them into
+`/run/credentials`, which reaches the unit only through shared
+propagation; on podman's private `/` a run gets no secret, with no error.
 
-What a container leaves to machines: SELinux, which belongs to the host's
-kernel (a container reports it disabled); the kernel itself, which is the
-host's; the interface in a browser; Windows nodes. Its nodes, containers in
-the container, read the host's `/proc/meminfo` and `/proc/stat`, which is
-why `checks.sh` gives the memory and processor checks no thresholds: the
-state it expects says that the module answered, whatever the load of the
-host.
-
-Known failures, as of 27 November: `cmdb.sh` fails on Fedora in a
-container (netavark: "invalid namespace path"); on AlmaLinux in a
-container on a Fedora 44 host, podman often cannot build the image of the
-nodes ("mounting an overlay over build context directory ... invalid
-argument"), and every script with nodes fails (`cmdb`, `multihost`,
-`checks`, `store`): show those on the VM `alma10`. Both pass on machines
-and on the other distributions. Run the `ct-test` of two distributions
-one after the other, not together.
+What a container leaves to machines: SELinux and the kernel, which are the
+host's (a container reports SELinux disabled); the interface in a browser;
+Windows nodes. Its nodes, containers in the container, read the host's
+`/proc/meminfo` and `/proc/stat`, which is why `checks.sh` gives the memory
+and processor checks no thresholds.
 
 The machines are the lab's VMs, built from scratch by `test/vm/`
-(`lab.sh`, skill `vm-lab`, which says how): a controller of each
-distribution, in Europe/Rome so that containers (UTC) and machines cover
-both cases, and a Windows 11 node. A test starts from their snapshot
-`baseline`, without the package, and installs that of the commit under
-test (`lab.sh deploy`).
+(`lab.sh`, skill `vm-lab`): a controller of each distribution, in
+Europe/Rome so that containers (UTC) and machines cover both cases, and a
+Windows 11 node. A test starts from their snapshot `baseline`, without the
+package, and installs that of the commit under test (`lab.sh deploy`).
+
+Known failures (27 November; both pass on machines and on the other
+distributions): `cmdb.sh` on Fedora in a container (netavark: "invalid
+namespace path"); on AlmaLinux in a container on a Fedora 44 host, podman
+often cannot build the image of the nodes ("mounting an overlay over build
+context directory ... invalid argument"), and every script with nodes
+fails (`cmdb`, `multihost`, `checks`, `store`): show those on the VM
+`alma10`.
 
 ## Negative tests
 
@@ -166,39 +159,43 @@ waiting answers, a run's `creds/`), every command is called by each role
 allowed to, and none answers with one, nor does the journal or any file of
 the database hold it. `fleet-unit` and `fleet-secret` are loaded from
 `backend/libexec` and given every form of their arguments (what they
-found: [history/tests.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/tests.md)). `negative.sh` gives every
+found:
+[history/tests.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/tests.md)).
+`negative.sh` gives every
 command, through sudo as each role, an empty object, one hostile value per
 parameter and input that is not an object, and checks what the caller's
 environment and working directory cannot bring into fleetctl.
 
 ## CI
 
-CI runs on Gitea (`.gitea/workflows/ci.yml`): type check, build, both unit test
-suites, the catalogs of the translations regenerated and compared with those
-committed, ruff, and a native package build with lintian, which fails on errors
-and warnings, on a Debian 13 runner (label `cockpit-fleet`); and the `.rpm`
-built natively and checked with rpmlint on two more runners, Fedora 44 and
-AlmaLinux 10 (`cockpit-fleet-fedora`, `cockpit-fleet-alma`), one job each.
-The runners are arm64 containers where jobs run directly, as a user that
-is not root; tools with a version (Node.js, ruff) are pinned in the
-workflow and installed once per runner by `scripts/ci-tool.sh`.
-Actions are pinned by the commit of their release, its version in a
-comment (`actions/checkout@<sha> # v7.0.1`): a tag can be moved by whoever
-holds the action's repository, and `release` may publish. They are raised
-by hand, both workflows together, to the commit of a newer release.
-`.github/workflows/ci.yml` runs the same steps on GitHub, each job in a
-container of its distribution (`debian:trixie`, `fedora:44`,
-`almalinux:10`) on `ubuntu-latest`, where the job is root and nothing
-persists, so the build tools and the pinned ones are installed at each
-run; the packages are kept as artifacts of the run. At a tag `vX.Y.Z`
-(pushed to GitHub by Gitea's mirror) one more job, `release`, after the
-others pass, checks the tag (`release.mjs verify`) and that the three
-packages have its version, and publishes them with `SHA256SUMS` as the
-GitHub release of the tag, notes from `release.mjs notes`; run again, it
-replaces the assets. A tag made before the job existed is published by
-running the workflow by hand with the input `tag` (`gh workflow run ci.yml
--f tag=vX.Y.Z`): the packages are built at the tag, the notes come from
-main's `CHANGELOG.md`. The Gitea workflow has no such job. The
-integration scripts are not part of CI: they need podman able to start
-privileged containers, which the runner, itself a container where jobs run
-as a non-root user, was not set up for.
+Both workflows run the same steps, and are kept in step: type check,
+build, the frontend and backend unit tests, the catalogs of the
+translations regenerated and compared with those committed, ruff, and a
+native `.deb` build with lintian failing on errors and warnings, on Debian
+13; the `.rpm` built natively and checked with rpmlint on Fedora 44 and
+AlmaLinux 10, one job each. Tools with a version (Node.js, ruff) are
+pinned in the workflow (`NODE_VERSION`, `RUFF_VERSION`). Actions are pinned
+by the commit of their release, its version in a comment
+(`actions/checkout@<sha> # v7.0.1`): a tag can be moved by whoever holds
+the action's repository, and `release` may publish. They are raised by
+hand, both workflows together.
+
+- **Gitea** (`.gitea/workflows/ci.yml`): runners labelled `cockpit-fleet`,
+  `cockpit-fleet-fedora`, `cockpit-fleet-alma`, arm64 containers where jobs
+  run directly as a user that is not root; the pinned tools are installed
+  once per runner by `scripts/ci-tool.sh`. No `release` job.
+- **GitHub** (`.github/workflows/ci.yml`): each job in a container of its
+  distribution (`debian:trixie`, `fedora:44`, `almalinux:10`) on
+  `ubuntu-latest`, as root, nothing kept between runs; the packages are
+  artifacts of the run. At a tag `vX.Y.Z` (pushed by Gitea's mirror) one
+  more job, `release`, after the others pass, checks the tag
+  (`release.mjs verify`) and that the three packages have its version, and
+  publishes them with `SHA256SUMS` as the GitHub release of the tag, notes
+  from `release.mjs notes`; run again, it replaces the assets. A tag made
+  before the job existed is published with `gh workflow run ci.yml -f
+  tag=vX.Y.Z`: the packages are built at the tag, the notes come from
+  main's `CHANGELOG.md`.
+
+The integration scripts are not part of CI: they need podman able to start
+privileged containers, which the runners, containers where jobs run as a
+non-root user, were not set up for.

@@ -13,8 +13,9 @@ fixes, minor changes (refinements of what exists) and field use, toward
 `CHANGELOG.md`. `make release` only when asked.
 
 To resume: `git status`, `git log origin/main..`; `make check` (881
-backend, 257 frontend tests). Under way: the list of workflows (below);
-`sandbox` with run D on `deb13` (Integration).
+backend, 263 frontend tests). Under way: the list of workflows and the
+review of the interface (below), both to be seen in a browser; `sandbox`
+with run D on `deb13` (Integration).
 
 ## Minor changes decided
 

@@ -625,7 +625,7 @@ def check_plan(plan: object) -> dict[str, list[dict]]:
 
 def check_playbook(timeout: int) -> str:
     """The playbook of a "check" job: every check of a host in one task, which
-    Ansible answers with checks.py or, for a PowerShell shell, checks.ps1."""
+    Ansible answers with checks.py or, for a PowerShell shell, win_checks.ps1."""
     task = {"name": "Checks", CHECKS_MODULE: {"checks": "{{ fleet_plan[inventory_hostname] }}"},
             "timeout": timeout}
     return json.dumps([{"name": "Checks", "hosts": "all", "gather_facts": False,

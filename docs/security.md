@@ -158,8 +158,9 @@ are off as installed. How they are turned on, and what each profile allows:
   max_role` (admin by default: operator keeps agents from ad-hoc commands
   and changes), nor more than its profile (`[chat] profiles`). The
   profile is held by `fleetctl`, not by the agent or the page: one that
-  names another, or none, gets no more than the default one. It approves
-  nothing, and no tool reads or writes a secret.
+  names none gets the default one, one that names another gets nothing
+  its user could not do by hand. It approves nothing, and no tool reads
+  or writes a secret.
 - The output of runs is written by the nodes: an agent that reads it and
   may also change things can be steered by what a node writes, which is
   why the limits are there.
@@ -198,8 +199,8 @@ are off as installed. How they are turned on, and what each profile allows:
   of the index and of `skill_read` until an operator or an administrator
   approves it, which no agent can do.
 - The agent of an administrator may scan a subnet in the profiles
-  `diagnostic` and `administrator`, asked every time, within the subnets
-  below.
+  `diagnostic` and `administrator`, asked every time (but without
+  questions in `administrator`), within the subnets below.
 
 ## Scans of the network
 
@@ -216,8 +217,8 @@ the provider of the model when the assistant reads it. An intrusion
 detection system on the network may take a scan for an attack: tell
 whoever watches it.
 
-An operator, and the assistant in any profile, may
-probe the hosts of an inventory the same way (Inventories, "Probe the
+An operator, and an operator's assistant in any profile, may probe the
+hosts of an inventory the same way (Inventories, "Probe the
 hosts"): only the hosts an administrator put there, at most 256 at a
 time, recorded in the journal. The module `lineadicomando.fleet.net_probe`
 does the same from a node, as an ad-hoc command: on the subnets that may

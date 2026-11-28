@@ -98,7 +98,7 @@ project needs nothing to use it.
 |---|---|
 | `state` | `ok` (the default), `warning`, `critical` or `unknown`, or 0 to 3 |
 | `summary` | one line for a person, at most 500 characters |
-| `metrics` | a list of measures, each with `name` (lowercase letters, digits and `_`, at most 64), `value` (a number; a template's text is read as one), and optionally `unit`, `instance` (which disk, which service), `min` and `max` |
+| `metrics` | a list of measures, each with `name` (lowercase letters, digits and `_`, beginning with a letter, at most 64), `value` (a number; a template's text is read as one), and optionally `unit`, `instance` (which disk, which service), `min` and `max` |
 | `details` | a mapping, anything else worth keeping with the result (at most 16 KB as JSON) |
 
 It runs on the controller and sends nothing to the node, so it is the same

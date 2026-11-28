@@ -61,8 +61,8 @@ anyway.
 **Ways out apart from actions.** A detail page (a run, a host, the files
 of a project or an inventory) has its ways out as links above the title
 (`PageNav` in `common.tsx`), the first with an arrow, and only actions in
-the header on the right. With the two in one row of buttons alike, "Back"
-sat beside "Cancel run", which acted at once. Actions that cannot be
+the header on the right, so that "Back" never sits beside "Cancel run",
+which acts at once. Actions that cannot be
 taken back ask first (canceling a run, a download or a copy, ending the
 trust of a host key, with "Keep running" rather than "Cancel" to close
 the dialog), and a button that only leaves does not sit among the actions
@@ -73,9 +73,9 @@ any form is brought into sight. A list whose refresh fails stays, under
 a warning with "Try again" (`ListState`); only a list never loaded gives
 way to the error.
 
-**Long lists.** Checks, job templates, host keys and the hosts of Hosts
-and Assets are filtered and grouped (checks and templates also sorted) in
-the browser, from what their `list` command returns: none is paged, and at
+**Long lists.** Checks, job templates, workflows, host keys and the hosts
+of Hosts and Assets are filtered and grouped (checks, templates and
+workflows also sorted) in the browser, from what their `list` command returns: none is paged, and at
 the sizes measured (hundreds of each) there is no reason to ask the
 backend again for each change of a filter. The pieces they share are in
 `src/lib/listview.ts` (groups, the stored view read back defensively) and
@@ -112,8 +112,8 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
   a page of runs is opened.
 - Workflows as job templates: grouped by inventory (the default; "Each
   step's own inventory" for a workflow launched without choosing one),
-  project or last run, filtered by text (name, description, steps, their
-  templates, project, inventory), project, inventory, a feature (an
+  project, last run or not at all, filtered by text (name, description,
+  steps, their templates, project, inventory), project, inventory, a feature (an
   approval at a step or its template, an inventory chosen at launch,
   scheduled or not) and outcome (`src/lib/workflow.ts`); "Launch" under an
   inventory opens the launch form on it. The column of steps lays them in
@@ -136,14 +136,15 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
 changed: it asks again with `usePolling` (`src/lib/hooks.ts`), which waits
 for one answer before the next and asks nothing while the browser's tab is
 hidden (`visibilitychange`), and once as soon as it is shown again.
-Hosts every 15 s, the Overview, System and Checks every 30 s, pending
-approvals (in Runs and the Assistant) every 5 s, always; Checks every 5 s
-while a cycle holds a check, so that a cycle the scheduler's tick queues
-(each minute) shows at most 30 s late; Runs, Templates, Workflows,
-Schedules, Notifications, Network, and Projects and Inventories after a
-change, only while something they show is not over (every 1.5–5 s). The
-Store asks every few seconds whether it changed, with a short answer when
-it did not. systemd's signals on D-Bus (at once and free while idle) were
+Hosts and a host every 15 s, the Overview, System and Checks every 30 s,
+pending approvals above Runs every 5 s, always (in the Assistant, while its
+conversation has runs); Checks every 5 s while a cycle holds a check, so
+that a cycle the scheduler's tick queues (each minute) shows at most 30 s
+late; Runs, a run, Templates, Workflows, Schedules, Notifications, Network,
+a syntax check in Files, and Projects and Inventories after a change, only
+while something they show is not over (every 1–3 s). The Store asks every
+10 s whether it changed (`store.list` with `since`), with a short answer
+when it did not. systemd's signals on D-Bus (at once and free while idle) were
 weighed and left: a second channel beside `fleetctl` (`decisions.md`).
 
 **Choosing one of many.** Where a form chooses a job template (a

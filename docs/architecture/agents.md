@@ -57,11 +57,13 @@ its value.
 (`agent=` in `@command`, `cli.AGENT_CLASSES`), from the least to the most:
 `read`; `run` (start, stop and follow what is defined: launches, cancels,
 checks, schedules on or off, acknowledgements, maintenance windows, a
-syntax check); `scan` (`netscan.start`, [The network](network.md));
-`adhoc` (`run.adhoc`); `config` (create and change templates, inventories,
-schedules, rules, channels, checks, sets of variables, workflows); `code`
-(files of projects, projects, credentials, host keys, `config.import`, and
-every delete but `maintenance.delete`, of `run`, and `doc.delete`); and
+syntax check, an inventory read again, a notification retried); `scan`
+(`netscan.start`, [The network](network.md)); `adhoc` (`run.adhoc`);
+`config` (create and change templates, inventories, schedules, rules,
+channels, checks, sets of variables, workflows, what a scan adds to an
+inventory); `code` (files of projects, projects, credentials, host keys,
+the store's writes, `config.import`, and every delete but
+`maintenance.delete`, of `run`, and `doc.delete`); and
 apart, `doc`: changes to the documents ([Documents](documents.md)),
 allowed in every profile, since a text is not run and has its history.
 Undeclared, a command that changes nothing is `read`, one that changes
@@ -89,14 +91,14 @@ profile is refused and audited; a profile not enabled is refused; no
 profile gets `default_profile`. A profile is offered only to an agent
 whose role (the caller's under the ceiling) it does more for than one
 below it (`profiles.LEAST_ROLE`): `diagnostic` and `administrator` from
-admin, `assisted` from operator, `observer` from viewer.
-A viewer launches nothing and writes no document, so of the profiles
-enabled it gets one, `observer` or else `assisted` (`FALLBACK`); an
-operator runs no ad-hoc command and scans nothing. Below that role a
-profile is refused there, left out of `chat.agents` (and of its risks to
-accept), refused by `chat.accept` and `chat.start`, and the default falls
-to `assisted` (or the first profile the role may have). So a
-profile, like `via`, only restricts. `mcp.tools` lists the tools of the
+admin, `assisted` from operator, `observer` from viewer. A viewer
+launches nothing and writes no document, so of the profiles enabled it
+gets one, `observer` or else `assisted` (`FALLBACK`); an operator runs no
+ad-hoc command and scans nothing. Below that role a profile is refused
+there, left out of `chat.agents` (and of its risks to accept), refused by
+`chat.accept` and `chat.start`, and the default falls to `assisted` (or
+the first profile the role may have). So a profile, like `via`, only
+restricts. `mcp.tools` lists the tools of the
 profile only, `run_adhoc` in `diagnostic` with an enum of its modules and
 no `become`. Audit column `profile` (schema 22), journal `FLEET_PROFILE`.
 `autonomous`, a profile until 0.5, is an alias (`profiles.ALIASES`) that
@@ -111,27 +113,31 @@ class and the mode of the session, how a person is asked: `none`
 `unattended`), `every` (never trusted for a conversation: `scan`,
 `adhoc`, `config`, `code` in any profile, and `doc.delete`,
 `ALWAYS_ASKED_COMMANDS`, but in a mode) or `ask` ("always" trusts the
-class for the conversation). `mcp.tools` gives it with each tool, for the page;
-`chat.start` gives the `none` tools for the agent's program at a terminal.
+class for the conversation). `mcp.tools` gives it with each tool, for the
+page; `chat.start` gives the `none` tools for the agent's program at a terminal.
 One table, so page and terminal cannot drift; a floor, not a control:
 `_through` decides each call again. `mcp.tools` with `session` gives the
-questions of the mode the caller turned on in that session ("Without
-questions", [The chat](chat.md)).
+questions of the mode the caller turned on in that session.
 
-**Modes without questions** (`profiles.MODES`, schema 42). A person turns
-the questions off for a session of `fleet-mcp` with `chat.unattended`
-(operator, no tool), naming its profile: a row of `unattended_sessions`
-with that profile. The mode is the profile's, `autonomous` in `assisted`
-(`[chat] autonomous`) and `unattended` in `administrator` (`[chat]
-unattended`), each accepted once by its name (`chat.accept`).
-`_through` sets `ctx.mode` (`autonomy.mode`) when the session's row names
-the profile of the call and config.toml still allows its mode: so a row
-turned on in one profile is nothing in another, and an agent, which
-cannot call `chat.unattended`, cannot turn one on. The audit records the
-mode beside the profile (column `mode`, journal `FLEET_MODE`). Turning it
-on or off needs no new agent: the page asks `mcp.tools` again, and the
-instructions of `assisted` already say what holds the agent while the
-questions are off.
+**Modes without questions** (`profiles.MODES`). A person turns the
+questions off for a session of `fleet-mcp` with `chat.unattended`
+(operator, no tool, audited), naming its profile: a row of
+`unattended_sessions` (schema 41) with that profile (schema 42). The mode
+is the profile's, `autonomous` in `assisted` (`[chat] autonomous`) and
+`unattended` in `administrator` (`[chat] unattended`), each accepted once
+by its name (`chat.accept`, in `profile_acceptances`). `_through` sets
+`ctx.mode` (`autonomy.mode`) when the session's row names the profile of
+the call and config.toml still allows its mode: so a row turned on in one
+profile is nothing in another, and an agent, which cannot call
+`chat.unattended`, cannot turn one on. In `autonomous` launches and
+documents are asked about no more, held by autonomy (below); in
+`unattended` nothing is asked but what deletes (`profiles.deletes`: the
+verbs `delete` and `remove`), every time, since nothing puts back what is
+gone, and an agent's ad-hoc command does not wait for its person
+(`consent.py`). The audit records the mode beside the profile (column
+`mode`, schema 42; journal `FLEET_MODE`). Turning it on or off needs no
+new agent: the page asks `mcp.tools` again ("Without questions",
+[The chat](chat.md)).
 
 **Autonomy.** In the mode `autonomous` (`profiles.AUTONOMOUS`),
 `dispatch` hands the call, once the role allows it, to `autonomy.hold`:
@@ -141,7 +147,7 @@ session and its count; launches (`autonomy.LAUNCHES`: templates, ad-hoc,
 workflows and their resume, schedules, checks) only with a session, at
 most `[chat] autonomous_runs`, none on an inventory with a maintenance
 window open, and with `autonomous_dry_run` templates in check mode and no
-workflow or schedule (they have no dry run); changes to the documents
+ad-hoc command, workflow or schedule (they have no dry run); changes to the documents
 (`autonomy.DOCUMENT_CHANGES`) only with a session, at most `[chat]
 autonomous_writes`, with no grant (a person writes beside the agent
 instead). The session (16 hex digits) is drawn by `fleet-mcp` and added to
@@ -174,7 +180,7 @@ plans every check due). The three are no tools: allowing more is a
 person's decision. When its runs are spent the refusal, and the profile's
 instructions, tell the agent to say so and wait; the page offers "Allow N
 more", N being `[chat] autonomous_runs`. Why a limit and not a stop
-button alone: `decisions.md`, "Assistant profiles".
+button alone: [decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md), "Assistant profiles".
 
 **Drafts.** An agent never writes to `main` of a managed project or
 inventory: its `file.write`, `file.change`, `file.delete`, `file.move`,
@@ -261,10 +267,10 @@ after 50 s at most, so an agent follows a run one call at a time. Built
 from the events, not the output. The output is `run_log`, whose
 description says to read `run_result` first, then search, and read it all
 only when asked. For an agent it answers 16 KiB at a time, cut at a line,
-without colour codes, with `size`: the page's 256 KiB chunk overflowed
-what Claude Code takes from a tool, which then put it in a file the agent
-had no tool to read (giving it `Read` was ruled out: it reads any file of
-the user's). With `match` (any caller): the lines that hold a text, any
+without colour codes, with `size`: the page's 256 KiB chunk overflows what
+Claude Code takes from a tool (giving the agent `Read` for the file it
+then writes is ruled out: it reads any file of the user's). With `match`
+(any caller): the lines that hold a text, any
 case, from `offset`, `context` lines around each (2, at most 10), groups
 split by `--`, at most 100 matches of 500 characters; `more` and `offset`
 say where to go on.

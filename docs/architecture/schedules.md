@@ -1,8 +1,10 @@
 # Schedules
 
 A schedule launches a job template or a workflow at the times of an
-OnCalendar expression; a template with a limit, a dry run and answers to
-the survey stored with it. There is
+OnCalendar expression; a template with what a launch may give stored with
+it (a limit, a dry run, diff, answers to the survey, tags, skipped tags,
+forks and verbosity in place of the template's, `runs.OVERRIDES`), and a
+priority, an overlap, a catch-up and a random delay of up to 6 h. There is
 one static timer, `cockpit-fleet-scheduler.timer`, every minute on the minute,
 and its service runs `fleetctl scheduler.tick` as the service account, like
 `cockpit-fleet-finish@`: the caller is `system`, with the admin role. A unit
@@ -26,8 +28,9 @@ matches and OnCalendar wants both.
 
 **The tick.** Under a lock (`scheduler.lock` in the state directory, taken
 without waiting: a second tick does nothing), it first calls `reconcile`, so
-a run lost by a reboot is recorded and a queued run left by it is started.
-Then, for each schedule that is due, highest priority first, it moves
+a run lost by a reboot is recorded and a queued run left by it is started,
+then expires the approvals nobody gave in time and wakes the delivery of
+notifications due again. Then, for each schedule that is due, highest priority first, it moves
 `next_at` on with a conditional update (a schedule changed meanwhile by an
 administrator is left to the change, and a launch that fails in a way nobody
 foresaw is not retried every minute) and then:
@@ -43,16 +46,21 @@ foresaw is not retried every minute) and then:
   `workflow.launch`. The run's `created_by` is `schedule:NAME` and it
   carries `schedule_id` and the priority.
 
-What happened is kept with the schedule (`last_outcome`, `last_error`,
-`last_run_id`) and sent to the journal (`FLEET_SCHEDULE`, `FLEET_OUTCOME`).
+After the schedules it plans the check cycles (`checks.cycle`,
+[Checks](checks.md)) and does the maintenance (`maintenance.tidy`,
+[Maintenance](maintenance.md)).
+
+What happened is kept with the schedule (`last_outcome`: `launched`,
+`skipped`, `missed` or `error`; `last_error`, `last_run_id`) and sent to the journal (`FLEET_SCHEDULE`, `FLEET_OUTCOME`).
 The tick is not a mutating command: the audit trail has who created,
 changed, turned on or off and ran a schedule, not one record per minute.
 
 **Roles.** As for templates: an administrator creates, changes and deletes;
 an operator turns a schedule on or off (only an administrator turns on one
-of a template that asks for an approval) and runs it now (`schedule.run`, as
-the operator, with the stored answers, without moving its times); a viewer
-sees the list. A template that a schedule uses cannot be deleted.
+of a template that asks for an approval, [Approvals](approvals.md)) and runs
+it now (`schedule.run`, as the operator, with the stored answers, without
+moving its times; the page asks first, [the interface](interface.md)); a
+viewer sees the list. A template that a schedule uses cannot be deleted.
 
 **Workflows.** A schedule names a template or a workflow (`template_id` or
 `workflow_id`, one of the two, a `CHECK` of the table since schema 33).

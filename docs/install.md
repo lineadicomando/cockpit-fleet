@@ -51,11 +51,13 @@ It installs:
   runs Ansible, and four groups: `cockpit-fleet-viewer`,
   `cockpit-fleet-operator`, `cockpit-fleet-admin` and
   `cockpit-fleet-approver`;
-- `/var/lib/cockpit-fleet` (the database, projects, runs), `/etc/cockpit-fleet`
-  (`config.toml`, and `secrets/`, the encrypted secrets);
-- the template of the unit each run is, a timer that wakes the scheduler
-  every minute, and a path unit that starts the delivery of notifications
-  when there is something to send. Nothing else is running between runs.
+- `/var/lib/cockpit-fleet` (the database, projects, inventories, runs, the
+  store, the documents), `/etc/cockpit-fleet` (`config.toml`, and
+  `secrets/`, the encrypted secrets);
+- the template of the unit each run is and of the one that records its
+  outcome, a timer that wakes the scheduler every minute, and a path unit
+  that starts the delivery of notifications when there is something to
+  send. Nothing else is running between runs.
 - sudoers rules: the role groups reach the backend as the service account,
   administrators store secrets, operators hand over the secret answers of a
   survey, and the service account starts its run units, each through one
@@ -69,8 +71,8 @@ domain), and what they may do in Fleet comes from the group of that account:
 | Group | May |
 |---|---|
 | `cockpit-fleet-viewer` | see projects, inventories, templates, schedules, the outcome of runs, hosts and the states of their checks, the documents; not the output of runs |
-| `cockpit-fleet-operator` | also launch templates (narrowing the hosts, a dry run, answering the survey, other tags, forks or output detail for that run), read the output of runs, cancel them, acknowledge problems, open maintenance windows, run a check or a schedule now, switch schedules on and off, write and arrange the documents |
-| `cockpit-fleet-admin` | everything: projects, inventories, credentials and their secrets, sets of variables and their secret variables, host keys, templates, schedules, checks, notifications, ad-hoc commands, the audit log, export and import |
+| `cockpit-fleet-operator` | also launch templates (narrowing the hosts, a dry run, answering the survey, other tags, forks or output detail for that run), read the output of runs, cancel them, acknowledge problems, open maintenance windows, run a check or a schedule now, switch schedules on and off, put files in the store, write and arrange the documents |
+| `cockpit-fleet-admin` | everything: projects, inventories, credentials and their secrets, sets of variables and their secret variables, host keys, templates, schedules, checks, notifications, ad-hoc commands, scans of the network, the assistant's drafts, the audit log, export and import |
 | `cockpit-fleet-approver` | approve or reject the runs of templates that ask for it, whatever their role, or alone |
 
 The highest of the three roles wins; the approver group adds to it. A
@@ -94,7 +96,8 @@ instead.
 `/etc/cockpit-fleet/config.toml` holds the limits an administrator of the
 machine sets; the file installed shows every key with its default,
 commented out, and says what each does; an unknown key is an error, which
-the System tab and `fleet selfcheck` show. The parts most often changed:
+the System tab and `fleet selfcheck` show. The backend reads the file at
+each call: nothing needs restarting. The parts most often changed:
 
 - `[runs] max_concurrent`: runs at the same time; the rest wait in a queue.
 - `[projects] local_roots`: directories of the machine that may be a project
@@ -161,7 +164,7 @@ Match Group store-sftp
     ForceCommand /usr/bin/fleet store sftp
 ```
 
-The backend reads the file at each call: nothing needs restarting.
+(`store-sftp` a group of your own, for those accounts; then reload sshd.)
 
 ## First steps
 

@@ -15,9 +15,14 @@ and the role groups) and `tmpfiles.d` (the state and secret directories)
 files. Of the units only `cockpit-fleet-scheduler.timer` and
 `cockpit-fleet-notify.path` are enabled and started.
 
+Both depend on `cockpit-bridge` ≥ 337, `ansible-core` ≥ 2.16, Python ≥
+3.12, systemd ≥ 257 (`PrivatePIDs`), sudo, git and the OpenSSH client;
+they recommend `ansible` and `sshpass`, and suggest `ansible-lint`
+(`debian/control`, the spec).
+
 The documentation installed is `README.md`, `SECURITY.md`, `CHANGELOG.md`
-and `docs/`, less the screenshots and `decisions.md`, which are for the
-repository: the documents link to it, and to `TODO.md`, by their address
+and `docs/`, less the screenshots, `decisions.md` and `history/`, which are
+for the repository: the documents link to it, and to `TODO.md`, by their address
 on GitHub. On Debian `CHANGELOG.md` is copied after `dh_installchangelogs`,
 which would otherwise install it as the changelog of a native package, in
 place of `debian/changelog` (lintian refuses that).
@@ -61,7 +66,8 @@ removes the directories it owns that are empty, and saves a changed
 `config.toml` as `config.toml.rpmsave`. On AlmaLinux 10 the removed units
 stay loaded until the next reload, so `%postun` reloads systemd. `purge` of
 the `.deb` also deletes `/var/lib/cockpit-fleet`, `/etc/cockpit-fleet` (the
-secrets with it) and `/run/cockpit-fleet`; rpm has no purge, and
+secrets with it) and `/run/cockpit-fleet` (a disk mounted on one is emptied
+and stays, with a warning); rpm has no purge, and
 `docs/install.md` says what to delete. The account and its groups stay on
 both: files elsewhere, a directory of local projects, may belong to them.
 
@@ -71,8 +77,9 @@ never installed: a package built from an older commit (or the latest tag),
 its version set below the current one, installed and used (a project, an
 inventory, a secret, templates, a schedule, a run); the current package
 installed over it with a run going; then removal with a run going,
-installing again, and purge. In the Debian container the script removes the
-`policy-rc.d` of Debian's images, which forbids packages to start services.
+installing again, and purge. In the Debian container `lifecycle.sh` removes
+the `policy-rc.d` of Debian's images, which forbids packages to start
+services. `CT_OLD_VERSION` and `CT_KEEP_PACKAGES`: [tests.md](tests.md).
 
 ## Releases
 
@@ -107,8 +114,8 @@ systemd starts from `/usr/libexec` runs unconfined, and
 `LoadCredentialEncrypted`, the tmpfs over the state and `PrivatePIDs`
 behave as on Debian. ansible-core 2.16 passes everything 2.19 passes, so it
 is the minimum of both packages and of `selfcheck` (`_MIN_ANSIBLE` in
-`system.py`); it is no longer supported upstream, so the integration
-scripts run on AlmaLinux at every phase.
+`system.py`, with `_MIN_SYSTEMD` 257); it is no longer supported upstream,
+so the integration scripts run on AlmaLinux at every phase.
 
 - `module.list` decides when to list the modules again from the package
   database: `/var/lib/dpkg/status` or the directory of rpm's SQLite database,

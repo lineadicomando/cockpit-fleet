@@ -1,9 +1,9 @@
 # Maintenance
 
-Every retention is applied in one place, `maintenance.tidy`, at each tick
-after the checks (with the digests of the store and the checks of its
-sources); only the outbox of notifications is pruned by the service
-that delivers it (90 days). One step that fails is written to the journal
+Every retention is applied in one place, `maintenance.tidy`, at each
+`scheduler.tick` after the checks (with the digests of the store and the
+checks of its sources); only the outbox of notifications is pruned by the
+service that delivers it (90 days). One step that fails is written to the journal
 and does not keep the others from running.
 
 | What | Kept | How |
@@ -30,8 +30,8 @@ created with `auto_vacuum = INCREMENTAL`; the tick then gives back up to
 32 MB of free pages at a time, and only when they are a quarter of the file
 or more, so that it does not shrink a file that will grow again at once. A
 database made before is rewritten once by `VACUUM` to work that way, if it
-is below 64 MB; a larger one is left as it is. The scheduler's unit has a private `/tmp`, where `VACUUM` writes its
-copy.
+is below 64 MB; a larger one is left as it is. The scheduler's unit has a
+private `/tmp`, where `VACUUM` writes its copy.
 
 Not to be confused with maintenance windows (`maintenance.*`, table
 `maintenances`), which belong to [Checks](checks.md).

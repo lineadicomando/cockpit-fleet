@@ -14,14 +14,15 @@ store_files (database)                   path, size, mtime_ns, inode, sha256, or
 ```
 
 One store for the controller, read by every run, not for secrets
-([decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md),
-"Store"). Viewers list and download; operators and administrators also
+([decisions.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/decisions.md), "Store"). Viewers list and download; operators and administrators also
 upload, move, copy, delete and download from URLs (`store.uploads`,
 `store.downloads` and `store.discard` are an operator's). The tree is on
 disk; the database keeps what the disk cannot say: the digest, where a file
 came from (`upload`, `run`, `found` when put there by hand) and who put it
 there. `sync()` brings the rows up to date with the tree at each listing
-(no digest there: a listing must answer at once); a file whose inode, size
+(no digest there: a listing must answer at once), which holds at most
+20 000 entries and twelve levels (`complete` false beyond, which the page
+says); a file whose inode, size
 or mtime changed, or that appeared, gets its digest from the tick of the
 scheduler, 40 s of it at most per tick, a file begun being finished.
 
@@ -57,11 +58,8 @@ on one file system (a volume is mounted on `/var/lib/cockpit-fleet` whole):
 across two, the run gets no store and its output says so. They are only
 made to the account's own files (`fs.protected_hardlinks`): a file of root
 put there by hand is left out of runs, said at the head of the output, and
-marked on the page. With ansible-core 2.16 and 2.19: `get_url` of a file
-present with the right checksum changes nothing; a stale or absent one
-gives a new inode; `copy` of a directory of links copies the files under
-the names of the links; `fetch` into the farm works; a write in place
-reaches the store.
+marked on the page. How `get_url`, `copy` and `fetch` behave on the farm:
+[history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/store.md).
 
 **Uploads.** A file of any size cannot be a parameter (that is how archives
 travel, held whole in memory, 50 MB at most). The page opens a channel of
@@ -72,8 +70,7 @@ ahead of what `fleetctl` says it has written: with `progress`, `store.put`
 writes a line `{"received": N}` before its answer for each MiB it writes.
 Not Cockpit's acknowledgements (`send-acks: bytes`): the bridge sends them
 as it receives the bytes, before the pipe to `fleetctl` takes them, so a
-fast network fills the bridge's memory (1.4 GB for a file of 7 GB, then
-under 1 MB/s; with the lines of `fleetctl`, 97 MB and 36 MB/s). No message
+fast network fills the bridge's memory. No message
 of the page is larger than 64 KiB (`FRAME`, `frames()` in `fleet.ts` for
 input on stdin): cockpit-ws 370 closes the whole session on a message from
 the browser over 128 KiB. `fleetctl` writes to a `.part` in
@@ -83,8 +80,6 @@ the lock of the store. An upload that stops keeps its `.part`, named after
 the user and the path: `store.uploads` lists them, `store.discard` drops
 one, and the page resumes one by itself when the same file is uploaded to
 the same path (`offset`). The tick drops those not resumed for a week.
-Measured on Debian 13 through Cockpit: 1 GiB in 12 s (85 MB/s), the memory
-of the page flat.
 
 **Downloads.** The page asks `store.get` (role, existence, size), then has
 the browser open a link to an external channel of Cockpit,
@@ -93,8 +88,8 @@ the browser open a link to an external channel of Cockpit,
 `content-disposition` the page put in the options: the browser saves it as
 it comes, with nothing in the page's memory. Such a channel has no input,
 hence the path in argv. A command that fails there still answers 200 with
-no bytes, which is why the page asks first. Measured: 2 GiB in 7 s. A
-wrong CSRF token is refused (404).
+no bytes, which is why the page asks first. A wrong CSRF token is refused
+(404).
 
 At a terminal, `fleet store put --file FILE --path PATH [--resume]` and
 `fleet store read --path PATH [--output FILE|-]` do the same through
@@ -216,7 +211,8 @@ dropped from the desktop (`webkitGetAsEntry`, empty folders made with
 `store.mkdir`) or chosen, names already there asked about once for all
 (replaced, uploads only; kept beside as `name (1).ext`; skipped), a menu
 per entry and at the pointer, a panel of details (digest, origin,
-`{{ fleet_store }}/path` to copy into a playbook). A move is shown before
+`{{ fleet_store }}/path` to copy into a playbook). Reloading the page while
+uploads go on asks first. A move is shown before
 the backend answers and can be undone from the notice. Every action that a
 drag does has a key or a menu too (WCAG 2.2, 2.5.7). Chrome on Linux gives
 a drag's `dragover` and `drop` no modifier, so the page keeps whether Ctrl

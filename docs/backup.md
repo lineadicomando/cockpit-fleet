@@ -124,8 +124,9 @@ templates, workflows, schedules, checks, channels and rules, each named by
 its name. "Import" on another controller creates what it does not have yet
 and leaves alone what has the same name; it reports each item. It carries
 no files of a project (written in the interface, an uploaded archive; those
-of an inventory written in the interface are in it), no run,
-no state of a check, no audit log, and no secret: set them afterwards. At a
+of an inventory written in the interface are in it), no store, no
+document, no run, no state of a check, no audit log, and no secret: set
+them afterwards. At a
 terminal: `fleet config export --json > fleet.json` (without `--json` it
 prints the document for reading), and `fleet config import --document
 @fleet.json`.

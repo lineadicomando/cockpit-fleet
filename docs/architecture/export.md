@@ -1,10 +1,10 @@
 # Export and import
 
 `config.export` returns the configuration as one JSON document: credentials,
-projects, inventories, trusted host keys, sets of variables, job templates
-(with the names of their sets), workflows, schedules, checks,
-notification channels and rules. Things refer to
-each other by name, since identifiers differ between two installations. It
+projects, inventories and job templates (each with the names of its sets of
+variables), trusted host keys, sets of variables, workflows, schedules,
+checks, notification channels and rules. Things refer to each other by
+name, since identifiers differ between two installations. It
 holds no secret: a credential is its name, its kind, its user name and its
 vault identifier, and its secrets are entered again where it is imported;
 a set of variables carries the names of its secret variables, whose values
@@ -18,8 +18,8 @@ an import made before inventories were trees) and the variables of a
 template are in it as they are. Not in it: maintenance windows, the store,
 documents, runs, the audit trail, the profiles of the assistant.
 
-`config.import` creates what the document lists and is not there yet, by
-name; what exists is left as it is, so importing twice changes nothing. Each
+`config.import` (8 MB, 2000 entries a section at most) creates what the
+document lists and is not there yet, by name; what exists is left as it is, so importing twice changes nothing. Each
 thing goes through the command that creates it from the interface: the same
 checks apply (a local project outside the allowed roots is refused, a host key
 that differs from the trusted one is not replaced) and the same audit record

@@ -76,8 +76,7 @@ host or its `ansible_host`), whatever their case. With `wait`, as
 
 **An inventory from a scan.** `netscan.inventory` makes an inventory
 written here (managed, YAML) of the hosts of an ended scan that the caller
-chose by address (the page, when none is chosen, offers those in no
-inventory yet and not the controller itself; the MAC addresses take all), through `inventory.create` itself, so that an agent's
+chose by address, through `inventory.create` itself, so that an agent's
 waits in a draft as any inventory an agent creates; one made in main is
 read at once. Each host is named as asked: `short` (the NetBIOS name in
 lower case, or the first label of the DNS name), `dns` (the whole name) or
@@ -190,11 +189,13 @@ field to narrow one, and says how many addresses it may have and which
 ports are tried; the hosts a scan found, with their names, MAC address
 (and whether the host gave it over NetBIOS), open ports, how each was seen
 and the hosts of inventories it may be, filtered by any of these. Hosts
-are chosen with a box on each row, all of them when none is, for two
-actions: "Create an inventory" (its name, how hosts are named, a group;
-the page then opens its files) and "Write the MAC addresses into an
-inventory" (one written here that holds some of them, by name too if
-asked, with what would be done shown before). The page of the run links
+are chosen with a box on each row, for two actions: "Create an
+inventory" (its name, how hosts are named, a group; the page then opens
+its files), which with none chosen takes the hosts in no inventory yet
+and not the controller (the button counts them, and is off when there is
+none), and "Write the MAC addresses into an inventory" (one written here
+that holds some of them, by name too if asked, with what would be done
+shown before), which with none chosen takes them all. The page of the run links
 to it.
 
 **Tests.** `netscan.sh` scans a dummy interface with 192.0.2.0/24 by

@@ -8,7 +8,8 @@ syntax checks in [files.md](files.md); how a run uses them in
 
 **Git projects.** `project.sync` (admin) queues a sync job, which makes a fresh shallow fetch of one reference into
 its own directory and drops `.git`; the result replaces the project's tree
-only if the fetch succeeded. Hooks are disabled, submodules are not followed,
+only if the fetch succeeded, and only if it is a directory, not a link.
+Hooks are disabled, submodules are not followed,
 and `GIT_ALLOW_PROTOCOL` leaves only https and ssh. A token is handed to git by
 an askpass helper that reads it from the credentials directory, so it is in
 neither argv nor the environment. The git commands are quiet, so the job
@@ -18,8 +19,12 @@ the subject of the commit): the output of a sync that succeeded is not empty.
 **Local projects.** A directory of the controller, under one of `[projects]
 local_roots` (none by default) and not under a directory the units cannot
 see (`/home`, `/root`, `/tmp`, `/var/tmp`, `/run/user`:
-`jobs.HIDDEN_FROM_UNITS`), copied for each run (see [Jobs](jobs.md)). It is
-not ours to write, and nobody tells the backend when it changes.
+`jobs.HIDDEN_FROM_UNITS`; the scheduler and `cockpit-fleet-finish@` have
+`ProtectHome` and `PrivateTmp`, so such a project would fail whenever a
+timer started it), refused when created and at every use, a link leading
+there too. It is copied for each run (see [Jobs](jobs.md)); it is not ours
+to write, and nobody tells the backend when it changes. How administrators
+keep such roots: [terminal.md](terminal.md), "Projects at a terminal".
 `project.files` (admin) lists the YAML and INI files and the directories of
 a project of any kind, to choose a playbook or an inventory from.
 
@@ -29,8 +34,8 @@ administrators. They are the work tree of a git repository, and every
 change is one commit whose author is the caller and whose committer is the
 service account: one file written (`file.write`), a file or a directory
 renamed or deleted, or a list of changes (`file.change`: write, move, copy,
-delete, of files and directories) made all together or not at all. A run
-records the commit it ran.
+delete, of files and directories, 200 at most) made all together or not at
+all. A run records the commit it ran.
 
 ```
 /var/lib/cockpit-fleet/projects/<id>/tree/       the files, what a run copies
@@ -38,39 +43,35 @@ records the commit it ran.
 /var/lib/cockpit-fleet/projects/<id>/lock        one change at a time (flock); a copy for a run shares it
 ```
 
-The repository is not inside the tree, so nothing in the tree is git's own and
-no path can reach its configuration or hooks; a path with a component called
-`.git`, in any case, is refused anyway, as is one that goes through a symbolic
-link. Here git runs in `fleetctl`, outside the sandbox, which a fetched project
-never gets. What makes the difference: the repository is created by the
-backend and holds only what administrators wrote through it, git reads no
-configuration but the repository's own, hooks are off, and paths are literal,
-never patterns.
+The repository is not inside the tree, so no path can reach git's
+configuration or hooks; a path with a component called `.git`, in any
+case, is refused anyway, as is one that goes through a symbolic link. Here
+git runs in `fleetctl`, outside the sandbox, which a fetched project never
+gets. What makes the difference: the repository is created by the backend
+and holds only what administrators wrote through it, git reads no
+configuration but the repository's own, hooks are off, and paths are
+literal, never patterns.
 
 A write quotes the SHA-256 of the content it started from, empty for a new
 file: one that someone else changed meanwhile is refused instead of
 overwritten. A list of changes may also quote the revision it was made on,
 and is refused if the project moved on since. The content is not copied
 into the audit record, the paths are (`operations[].content` and
-`operations[].data` are redacted inside the list). What else the page of
-the files does (restore, download, import, the limits of a file) is in
-[files.md](files.md).
+`operations[].data` are redacted inside the list).
 
 The changes of a list are made one after the other in the tree; each is
 checked before it touches anything, and when one fails after others were
 made, `git reset --hard` and `git clean` put the tree back as the last
 commit has it. A directory is moved or copied only if every path it would
 then hold is one the editor takes (twelve levels at most), and a copy only
-if the project then holds at most 5000 files. Git keeps no empty
-directory, so before each commit the backend puts an empty `.gitkeep` in
-every directory left empty, or made empty with `mkdir`, and takes it out
-of one that holds something else: a folder stays as long as no one
-deletes it, in a clone and in an export too, which an empty project or
-inventory to start from needs. `file.list` does not show an empty
-`.gitkeep` (one with content is a file like any other); Ansible ignores
-it, as it ignores every name that starts with a dot in an inventory
-directory and among variables. An archive imported keeps its empty
-directories the same way.
+if the project then holds at most 5000 files (`files.MAX_LISTED`). Git
+keeps no empty directory, so before each commit the backend puts an empty
+`.gitkeep` in every directory left empty, or made empty with `mkdir`, and
+takes it out of one that holds something else: a folder stays as long as
+no one deletes it, in a clone, an export and an imported archive too.
+`file.list` does not show an empty `.gitkeep` (one with content is a file
+like any other); Ansible ignores it, as it ignores every name that starts
+with a dot in an inventory directory and among variables.
 
 An inventory that is a file of a project is read again when a change in
 the interface or a push touches what it reads: its own file or directory,
@@ -94,7 +95,7 @@ reconcile        checkout/ replaces projects/<id>/tree; revision = SHA-256 of th
 The archive travels like every other parameter, so there is still one way
 into the backend. The browser sends the JSON in pieces of at most 64 KiB (`frames()`
 of `fleet.ts`) on the same standard input, and `fleetctl` holds it in memory whole: that is what bounds
-the size, 20 MB by default (`projects.max_upload_mb`, at most 50). `fleetctl`
+the size, 20 MB by default (`[projects] max_upload_mb`, at most 50). `fleetctl`
 does nothing with the archive but count and digest its bytes; the format is
 read from the content, in the sandbox, never from the name.
 
@@ -116,16 +117,14 @@ it had, and shows the reason. A single directory that holds everything else,
 as `project-1.0/` in most archives, is not kept: its content is the project.
 The revision is the digest `fleetctl` took of what it received, not something
 the job reports; and what the job leaves is taken as the tree only if it is a
-directory, not a link, as for a git fetch. An archive of 19 MB is answered
-in 1.7 s and unpacked in under a second; 600 MB of zeros in a gzip of 600
-kB are refused at the limit.
+directory, not a link.
 
 **Collections from Galaxy.** A project of any kind may list the collections
 it needs in a requirements file: the first one found among
 `collections/requirements.yml`, `collections/requirements.yaml`,
-`requirements.yml` and `requirements.yaml`. A `galaxy` job runs
-`ansible-galaxy collection install` on it, and what it installs is kept beside
-the project's tree, never inside it:
+`requirements.yml` and `requirements.yaml` (`jobs.REQUIREMENTS`, 256 KiB at
+most). A `galaxy` job runs `ansible-galaxy collection install` on it, and
+what it installs is kept beside the project's tree, never inside it:
 
 ```
 /var/lib/cockpit-fleet/projects/<id>/collections/<sha256 of the requirements file>/ansible_collections/…
@@ -162,19 +161,15 @@ through the environment (`GIT_CONFIG_COUNT`), next to the same
 credential is offered to any source, and the servers a project's `ansible.cfg`
 lists are not used (the allowlist drops them): public sources only, for now.
 Downloads and clones go to the run's directory on disk, not to its runtime
-directory, which is memory.
-
-ansible-galaxy skips what the controller or the project already has, so with Debian's
-`ansible` package a requirement for `ansible.windows` installs nothing, and an
-installation that installs nothing is still one. A collection of 1000 files
-from a public git repository is installed in 7 to 17 s and takes 5.7 MB.
+directory, which is memory. ansible-galaxy skips what the controller or the
+project already has, and an installation that installs nothing is still one.
 
 **A project's `ansible.cfg`** is not used as it is: a run gets a generated one
-with only the allowlisted keys of the project's file (`roles_path` and
-`collections_path` when they stay inside the project, `gathering`,
-`pipelining`, `become` settings and a few more). Anything that would load
-plugins from elsewhere, point to a vault password file or relax host key
-checking is dropped. The integration test ships a project that tries.
+with only the allowlisted keys of the project's file (`runner._CONFIG_ALLOWED`:
+`roles_path` and `collections_path` when they stay inside the project,
+`gathering`, `pipelining`, `become` settings and a few more). Anything that
+would load plugins from elsewhere, point to a vault password file or relax
+host key checking is dropped. The integration test ships a project that tries.
 
 **Starters.** A new managed project, a new managed inventory and a new
 file of a managed project may begin with ready-made content, a *starter*
@@ -236,7 +231,7 @@ connection variables of Windows over SSH (`ansible_connection`,
 `ansible_shell_type`) are in the Windows inventory and in the Windows
 project's `group_vars/windows.yaml`, the project's winning;
 `ansible_remote_tmp: C:\Windows\Temp\ansible` is there commented out,
-since set it breaks `become` (see [Windows nodes](windows.md)).
+since setting it breaks `become` (see [Windows nodes](windows.md)).
 
 **Duplicates.** `project.duplicate` and `inventory.duplicate` (admin) make
 a new managed project or inventory from the files of another as `main` has

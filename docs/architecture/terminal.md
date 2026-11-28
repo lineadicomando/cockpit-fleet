@@ -36,10 +36,12 @@ no role. `project upload --archive PATH` reads the archive from a file, or
 from stdin with `-`, and sends it as the base64 the backend takes.
 
 **From the page to the terminal.** The launch of a template, the page of a
-run and the upload of an archive show, under "At a terminal", the `fleet`
+run, the upload of an archive and the uploads of the Store and of Documents
+show, under "At a terminal" (`AtTerminal` in `common.tsx`), the `fleet`
 command that does the same (`fleet launch` with the answers typed so far,
 never the secret ones, which `fleet` asks for; `fleet log -f` or `fleet
-result`; `fleet project upload --archive`), quoted for a POSIX shell, with a
+result`; `fleet project upload --archive`; `fleet store put`, `fleet doc
+put`), quoted for a POSIX shell, with a
 button to copy it and one that opens Cockpit's terminal in a new tab:
 Cockpit's terminal cannot be handed a command, so it is pasted. Five
 commands meant for other programs (`run.reconcile`, `mcp.tools`,
@@ -87,13 +89,11 @@ files are theirs in the interface too:
   what is created there). Administrators write with their own editor and
   git, the service reads, no other account sees the files. Writable by
   another group is a warning (what is there is what operators launch),
-  readable by everyone a warning, writable by everyone a failure. Not under
-  `/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`
-  (`jobs.HIDDEN_FROM_UNITS`): the scheduler and `cockpit-fleet-finish@` have
-  `ProtectHome` and `PrivateTmp`, so such a project would fail whenever a
-  timer started it. It is refused when created and at every use, a link leading
-  there too, and `selfcheck` fails on such a root. A project that has to
-  stay in a home is bind-mounted under a root (fleet(1)). The ACL
+  readable by everyone a warning, writable by everyone a failure. Not
+  under a directory hidden from the units (`/home`, `/tmp`…:
+  [projects.md](projects.md), "Local projects"), and `selfcheck` fails on
+  such a root; a project that has to stay in a home is bind-mounted under
+  a root (fleet(1)). The ACL
   mask follows the group bits of a new file: who writes there keeps a umask
   that leaves the group read (022 or 002). The manual, fleet(1), has the
   three commands.
@@ -118,4 +118,4 @@ files are theirs in the interface too:
   `fleet.project`, so a clone of one is never pushed as the other. A push
   reads the inventory again.
 
-Trials: [docs/history/terminal.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/terminal.md).
+Trials: [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/terminal.md).

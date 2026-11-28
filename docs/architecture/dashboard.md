@@ -38,22 +38,22 @@ the browser is, from `tz_offset`):
   waiting.
 
 **Why the hosts that fail most come from failed runs alone.** A run keeps
-its outcome per host as JSON in `runs.stats`; reading it for every run of
-30 days took 0.7 s at 500 hosts. A run that succeeded has no host that
-failed, so only the runs that failed or erred are read: the figure is how
-many runs a host failed in, not out of how many.
+its outcome per host as JSON in `runs.stats`, too slow to read for every
+run of 30 days; a run that succeeded has no host that failed, so only the
+runs that failed or erred are read: the figure is how many runs a host
+failed in, not out of how many.
 
 **Cost.** At 500 hosts with 10 checks each, 200 000 changes of state over
-60 days and 8 640 runs in 30 days, the whole answer takes about 135 ms
-for 14 days and 245 ms for 30, mostly the changes of state (read as
-tuples, not `sqlite3.Row`: a third of the time). The breakdown:
-[history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/dashboard.md).
+60 days and 8 640 runs in 30 days, the answer takes about 135 ms for 14
+days and 245 ms for 30, mostly the changes of state (read as tuples, not
+`sqlite3.Row`). The breakdown: [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/dashboard.md).
 
-**The page** (`OverviewPage.tsx`): a row of figures (hosts, open problems,
-successful runs, the queue, security updates), each leading to its
-section (the open problems, with how many are not acknowledged, to the
-problems of Hosts, `#/hosts?show=problems`, whatever view Hosts kept); then cards: the checks by state as a ring with the open problems
-under it, the runs by day as stacked bars with the durations and latest
+**The page** (`OverviewPage.tsx`; the window chosen kept in the browser):
+a row of figures, each leading to its section: hosts (to Hosts), open
+problems with how many are not acknowledged (to the problems of Hosts,
+`#/hosts?show=problems`, whatever view Hosts kept), successful runs and
+the queue (to Runs), security updates (to Assets); then cards: the checks
+by state as a ring with the open problems under it, the runs by day as stacked bars with the durations and latest
 failures, problems and recoveries by day side by side with the time to
 recover, what fails most, what is coming up, what the hosts are; at the
 bottom one card with the user's access, the version, the checks of the

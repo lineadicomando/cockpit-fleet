@@ -26,9 +26,9 @@ workflow's Launch asks first, with or without an inventory to choose.
 
 ## The controller
 
-`test/browser/browser.sh` does the work. In a container: the image of
-`ct-test` with Cockpit's shell (`cockpit-system`), up until `down`, on
-`127.0.0.1:9093` (`BROWSER_PORT`); plain HTTP allowed there (through
+`test/browser/browser.sh` does the work. In a container (`DISTRO`, Debian
+by default): the image of `ct-test` with Cockpit's shell (`cockpit-system`),
+up until `down`, on `127.0.0.1:9093` (`BROWSER_PORT`); plain HTTP allowed there (through
 podman's port a connection comes from no local address, which Cockpit
 sends to HTTPS); the units a container cannot start masked, so that
 Cockpit shows no failed service; a throwaway administrator `tester`. On a

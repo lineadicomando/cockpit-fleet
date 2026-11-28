@@ -90,8 +90,9 @@ in clear, like extra variables: not for secrets, which only the known ones
 are masked in.
 
 **Scheduled.** A schedule may launch a workflow none of whose steps waits
-for an approval: see `schedules.md`. Its run carries `schedule_id`, and a
-step that would wait fails instead (`unattended`).
+for an approval ([Schedules](schedules.md), "Workflows"). Its run carries
+`schedule_id`, and a step that would wait fails instead
+(`workflows.unattended`).
 
 **Cancel and resume.** Canceling a workflow run (`run.cancel`) asks for it,
 cancels its steps under way and starts nothing more; it ends `canceled` once
@@ -107,3 +108,8 @@ cannot be deleted (table `workflow_templates`). Workflows are in the
 exported document, their steps naming templates by name, and the project
 and the inventory they take them from too. Schema 17; the project and the
 inventory, schema 31.
+
+**The interface.** The list, its filters and groups and the steps laid in
+columns: "Long lists" in [the interface](interface.md); Launch always opens
+the launch dialog, with the steps in sight ("Runs started and opened",
+there).

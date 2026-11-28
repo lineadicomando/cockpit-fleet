@@ -16,22 +16,17 @@ scripts = true` in `config.toml` puts it back, for the whole installation;
 the script runs in the sandbox like the rest of the project. And
 `ANSIBLE_INVENTORY_UNPARSED_FAILED` is set: an inventory that nothing can
 read fails the job, instead of a playbook going on with no host and ending
-as a successful run of nothing. Tried with ansible-core 2.19.11
-(`inventories.sh`): `ansible.builtin.generator`, a directory with a static
-file and `ansible.builtin.constructed`, a script with the setting off and
-on.
+as a successful run of nothing.
 
 The reading is `ansible-inventory --list --export`, whose listing holds
 every variable of the inventory, and those of a file encrypted with
-Ansible Vault in clear (inline `!vault` values stay encrypted; checked
-with ansible-core 2.16). So it is written in the run's runtime directory,
+Ansible Vault in clear (inline `!vault` values stay encrypted). So it is written in the run's runtime directory,
 gone with the unit, and `fleet-run` writes to the run's directory only
 the hosts, the groups and the three variables that say how a host is
 reached (`runner.listing_hosts`), which fleetctl deletes once it has taken
-them. Versions before 0.3.0 kept the whole listing until the run was
-deleted: the packages remove those on such an upgrade (`postinst`, `%pre`
-where rpm still has the old one installed), and leave alone the listings
-of later versions, which a run not yet collected needs.
+them. The whole listings that versions before 0.3.0 kept are removed by
+the packages on such an upgrade (`debian/cockpit-fleet.postinst`, `%pre` of the spec),
+not those of later versions, which a run not yet collected needs.
 
 A file inventory serves templates, ad-hoc commands and checks of any
 project, not only its own: playbooks from a public git repository, say,
@@ -89,9 +84,9 @@ inventory chosen until one is, and the list shows such a template, when
 not grouped by inventory, as "chosen at launch (N allowed)".
 
 **Inventories written in the interface** are a tree of files, like a managed
-project, with a git repository beside it (a hidden managed project behind
-each was left: every list, export and check of projects would have had to
-leave it out):
+project, with a git repository beside it (not a hidden managed project
+behind each, which every list, export and check of projects would have had
+to leave out):
 
 ```
 /var/lib/cockpit-fleet/inventories/<id>/tree/       the files, what a run copies
@@ -116,11 +111,10 @@ its main file, `hosts.yaml` (or `hosts` for INI), written as a commit;
 `inventory.create` also takes `files`, every file of the tree, which is how
 an export brings an inventory back. An inventory written before it was a
 tree had its text in the database (`content`): the first time its tree is
-needed, the text is made `hosts.yaml` (or `hosts`) of a new repository, in a
-commit of the service account, and dropped from the database. That needs no
-step of the upgrade and no migration of files, and a controller that never
-opens an inventory keeps its text where it was. The revision of the tree is
-in the database (schema 20) and in what `inventory.get` answers.
+needed, the text becomes `hosts.yaml` (or `hosts`) of a new repository, in
+a commit of the service account, and leaves the database, with no step of
+the upgrade. The revision of the tree is in the database (schema 20) and in
+what `inventory.get` answers.
 
 The YAML files the backend names itself end in `.yaml` (`decisions.md`,
 "YAML extension"). An inventory made before 0.3.0 keeps its `hosts.yml`:

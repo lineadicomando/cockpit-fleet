@@ -16,10 +16,13 @@ managed nodes through Ansible alone (agentless).
 | `CHANGELOG.md` | for users: a line under `[Unreleased]`, in the commit that makes the change | the headings of `[Unreleased]` when adding a line; never whole |
 | `docs/install.md`, `security.md`, `checks.md`, `backup.md`, `chat.md` | for the administrator of a controller: keep them in step with roles, `config.toml`, the catalog, `fleet_result`, the files kept, `[chat]` | when that changes |
 
+The packages install `docs/` but not `decisions.md` nor `history/`: an
+installed document links to those, and to `TODO.md`, by their GitHub URL.
+Archive into `docs/history/AREA.md` what a design file no longer needs.
+
 `CLAUDE.local.md` (and other `*.local.md`), `Makefile.local`, `.env`: not
-tracked, one developer's workstation (VMs, passwords, paths, hosting).
-Nothing of them goes into tracked files, which must make sense to anyone
-who clones the repository.
+tracked, one developer's workstation (VMs, passwords, paths, hosting);
+nothing of them in tracked files, which must make sense to anyone.
 
 Layout: `src/` frontend; `backend/cockpit_fleet/` the Python package (each
 module's docstring says what it is; `cli.py` the registry of commands,
@@ -110,7 +113,7 @@ needs the user's explicit agreement.
   and `style` attributes (React's `style` prop is fine). What it does for
   a role (`session.commands`, which `useCan` reads) and sends the backend:
   `test/NAME.test.tsx`, asserting on booleans and strings, never on an
-  element (a failing assertion prints it whole, gigabytes of jsdom).
+  element (a failing assertion prints it whole: gigabytes of happy-dom).
 - **A string**: English through `t()`, Italian in `po/it.po`, then
   `make pot && make po-compile`. Plurals: a symbolic key (`things_count`)
   whose English forms are edited by hand in `src/locales/en/translation.json`.
@@ -146,10 +149,9 @@ the package installed; what each shows, its variables, whether it wipes:
   without asking; never another VM without the user's agreement.
   `lab.sh resources` before starting VMs; shut down what you started.
 - The interface in a browser: a scenario of `test/browser/`
-  (`docs/architecture/browser-tests.md`), in a container or on a VM; a
-  throwaway one that saves screenshots and `ariaSnapshot()` explores a
-  page (a click may launch a real run: the "Launch" of a launch dialog
-  starts it at once). The browser tools: skill `vm-lab`.
+  (`browser-tests.md`), in a container or on a VM; a throwaway one with
+  screenshots and `ariaSnapshot()` explores a page (confirming a launch
+  dialog starts a real run). The browser tools: skill `vm-lab`.
 - Never `pkill -f` or `pgrep -f` with a pattern that is also in your own
   command line: it matches the shell that runs it.
 

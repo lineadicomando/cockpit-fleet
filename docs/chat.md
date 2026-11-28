@@ -48,11 +48,7 @@ steps are these:
    ```
 
 2. Each user logs in to the model, once, as their own user and without
-   `sudo` (see below):
-
-   ```sh
-   /opt/cockpit-fleet-agent/bin/claude /login
-   ```
+   `sudo` ("The login of each user", below).
 
 Once an agent is named in `config.toml`, the tab appears for every role,
 after a reload. The agent runs as the user who opens the page.
@@ -64,8 +60,9 @@ It is part of the package (the collection `lineadicomando.fleet`, role
 `/opt/cockpit-fleet-agent`, about 510 MB. The package itself downloads
 nothing: this does, when an administrator runs it.
 
-- **Node.js 22**, which the adapter needs and Debian 13 does not have, from
-  `nodejs.org`, checked against the checksum published with the release.
+- **Node.js 22**, which the adapter needs and Debian 13 and AlmaLinux 10
+  do not have, from `nodejs.org`, checked against the checksum published
+  with the release (x86_64 and aarch64).
 - **The adapter**, `@agentclientprotocol/claude-agent-acp` 0.89.1, from
   `registry.npmjs.org` with `npm ci`: a lockfile in the package names each of
   its 114 packages with its hash, so nothing else can be installed, and no
@@ -98,8 +95,8 @@ everything it wrote, add `-e chat_agent_state=absent`. Behind a proxy, add
 A named agent that is not installed shows in the page with this command,
 ready to be copied, and a button that opens the terminal.
 
-The keys of `[chat]`, with their defaults (the rest of this page says
-what each does):
+The keys of `[chat]`, with their defaults (the rest of this page, and the
+comments of `config.toml`, say what each does):
 
 ```toml
 [chat]
@@ -144,9 +141,10 @@ open in a browser and takes the code shown there. The login is made when it
 says "Login successful"; press Enter there, or the first `fleet
 assistant` asks its questions of first use again; what it shows
 afterwards is for its own use at a terminal: Ctrl+C leaves it. The login
-is kept in the user's home (`~/.claude`). Until it is made the page says so, with this command and a
-button that opens the terminal in the same tab: once logged in, open
-Fleet again from Cockpit's menu and send the message again.
+is kept in the user's home (`~/.claude`). Until it is made the page says
+so, with this command and a button that opens the terminal in the same
+tab: once logged in, open Fleet again from Cockpit's menu and send the
+message again.
 
 ## What a user gets
 
@@ -156,7 +154,8 @@ Fleet again from Cockpit's menu and send the message again.
 - Within that, the profile of the session, among `[chat] profiles`
   (all four as installed; list fewer to keep the others from users).
   The backend refuses what is outside it; `fleet-mcp` started by hand
-  gets `default_profile`.
+  gets `default_profile` (or, if the role may not have it, `assisted` or
+  the first it may).
 
   | Profile | May | Asked |
   |---|---|---|
@@ -167,9 +166,8 @@ Fleet again from Cockpit's menu and send the message again.
 
   A profile is offered only to a role it does more for: `diagnostic` and
   `administrator` to administrators (under `max_role`), `assisted` from
-  operators up; a viewer, who launches nothing and
-  writes no document, gets one, `observer` (or `assisted` when `observer`
-  is not enabled).
+  operators up; a viewer, who launches nothing and writes no document,
+  gets one, `observer` (or `assisted` when `observer` is not enabled).
   Every profile reads, searches and writes the documents (Resources,
   Documents); a change to them is asked, with "always", deleting one
   every time, but without questions in `assisted` (below). Questions
@@ -199,12 +197,11 @@ Fleet again from Cockpit's menu and send the message again.
   well. Role operator.
 - In `administrator`, only where `[chat] unattended = true` (off as
   installed): every question off but those about deleting, as the mode
-  of Claude Code that bypasses permissions. Its ad-hoc
-  commands then start without a confirmation, marked "unattended" in the
-  run's options; changes are made at once; a delete (of a template, an
-  inventory, a credential, a file, a document and the rest) is still
-  asked about, every time. Files still go to
-  a draft a person merges, a template that needs approval still waits for
+  of Claude Code that bypasses permissions. Its ad-hoc commands then
+  start without a confirmation, marked "unattended" in the run's options;
+  changes are made at once; a delete (of a template, an inventory, a
+  credential, a file, a document and the rest) is still asked about,
+  every time. Files still go to a draft a person merges, a template that needs approval still waits for
   a person, and "Stop everything" cancels its runs.
 - In both, each user accepts its risks once (`chat.accept`), and each
   turning on or off is in the audit log (`chat.unattended`), as is every
@@ -227,8 +224,7 @@ Fleet again from Cockpit's menu and send the message again.
   is enabled.
 - An ad-hoc command the assistant asks for, other than one of `[mcp]
   adhoc_modules` without become and with no template (`{{ }}`) in its
-  arguments, does not start until the user confirms
-  it (unless "Without questions" is on): "Allow once" when the page asks,
+  arguments, does not start until the user confirms it (unless "Without questions" is on): "Allow once" when the page asks,
   or later above the message box, in the runs waiting for approval, or
   `fleet approval approve`. The assistant cannot confirm it, an answer
   written in the chat confirms nothing, and it expires as approvals do.
@@ -301,8 +297,8 @@ description: Maintaining a lab: wake the PCs, update them, shut them down,
 - The name is the directory's: lower case letters, digits and hyphens, 64
   at most; a frontmatter that says another name, or no description, leaves
   the directory out. The description is what the assistant chooses by:
-  say *when* to use the skill, in a sentence or two (1024 characters at
-  most).
+  say *when* to use the skill, in a sentence or two (past 1024 characters
+  it is cut).
 - Each session is told the index, names and descriptions, after the
   controller's instructions; it reads a skill's text, and the `.md` or
   `.txt` files beside it that the text points to, with `skill_read` when

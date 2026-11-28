@@ -24,9 +24,9 @@ hour and of its day (UTC) by an upsert, so no pass reads the values back to
 sum them and the current hour is already in the charts; an average is the
 sum over the count. Retention is then deletion only: `[metrics] raw_days`
 (14), `hourly_days` (90), `daily_days` (730), checked not to decrease. The
-tick deletes past each, one series after another through the key (`series_id
-IN (…) AND ts < ?`); a series that stopped reporting goes a day after its
-daily values. Deleting a host or a check takes its series with it.
+tick deletes past each (`metrics.prune`, from `maintenance.tidy`), one
+series after another through the key (`series_id IN (…) AND ts < ?`); a
+series that stopped reporting goes a day after its daily values. Deleting a host or a check takes its series with it.
 
 **Reading.** `metric.query`, for viewers like the states it comes from,
 returns the series of a host, narrowed by check, metric and instance, over a
@@ -55,6 +55,5 @@ named by their hash and the package copies the whole directory. A page
 loaded before an upgrade that asks for a chunk no longer there says to
 reload the page instead of failing.
 
-A cycle's 5000 values (500 hosts, 10 metrics) are written in 0.12 s; the
-tick's deletion takes 12 ms when nothing is due. What the database grows
-by at scale is in [Checks](checks.md), "At scale".
+What the database grows by at scale: [Checks](checks.md), "At scale";
+timings: [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/time-series.md).

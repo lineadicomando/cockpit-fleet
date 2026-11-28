@@ -73,7 +73,7 @@ cut between characters, with the offset of the next part; a person gets
 the whole text (1 MiB at most, also the bound of a write). `doc.search`
 looks for every word of a query in the name and text of each text, the
 most hits first, with a few of the lines that have one. Commands
-that change the documents are in the class `doc` (`agents.md`); those that
+that change the documents are in the class `doc` ([agents.md](agents.md)); those that
 read them in `read`.
 
 **One renderer, on the backend** (`docrender.py`, standard library only).
@@ -130,7 +130,8 @@ navigates.
 
 Editing (`?mode=edit`) is CodeMirror with Markdown beside a preview,
 rendered by the backend 400 ms after the last keystroke; a save quotes the
-digest read, with an optional line for the history. History, diff and
+digest read, with an optional line for the history. With changes not
+saved, Cancel, the links of its folders and a reload ask first. History, diff and
 restore are a dialog as for projects. Exports: "Print or save as PDF"
 prints the frame (print rules: page margins, no breaks inside code and
 rows); "Download the text" is `doc.get`; "Download as a web page" saves
@@ -141,7 +142,7 @@ a saved page follows `prefers-color-scheme`; paper is always light. In
 the chat, an agent's write that went through (`doc_write`, `doc_restore`,
 a copy or a move to a text) has "Open the document".
 
-**Files of any size** come in and go out as the store's do (`store.md`):
+**Files of any size** come in and go out as the store's do ([store.md](store.md)):
 `doc.put` takes the parameters on one line and the bytes after them (no
 resume: attachments are small next to the store's files), `doc.get`
 writes them out for a channel opened by a link. At a terminal: `fleet doc
@@ -153,4 +154,4 @@ included; like the store, a file that would leave less than 1 GB free on
 the disk is refused. Links in the tree are neither listed nor followed:
 every directory is opened from the one above with `O_NOFOLLOW`.
 
-Trials: [docs/history/documents.md](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/documents.md).
+Trials: [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/documents.md).

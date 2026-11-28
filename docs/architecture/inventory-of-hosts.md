@@ -38,14 +38,14 @@ as changes only: a package that came, went or changed version, a service
 that came, went or changed whether it starts at boot (not whether it runs,
 which is a matter for the checks), a change of hardware, a change of the
 addresses of an interface. The first snapshot records none. Changes are kept
-365 days, then deleted by the tick (see [Maintenance](maintenance.md)). What a node
+365 days, then deleted by the tick ([Maintenance](maintenance.md)). What a node
 sends is read as untrusted: cut to size (20 000 packages, 5 000 services and
-updates, 64 disks and interfaces), malformed entries left out. Memory that
+updates, 64 disks and interfaces, 32 addresses an interface), malformed entries left out. Memory that
 moves by less than 5% is the kernel keeping more or less for itself, not a
 change.
 
-**Hardware.** A change of hardware (vendor, model, serial, processor, their
-number, memory, disks, the MAC address of an interface) makes the `cmdb`
+**Hardware.** A change of hardware (vendor, model, serial, BIOS, processor,
+their number, memory, the size of a disk, the MAC address of an interface) makes the `cmdb`
 check warning for that cycle, hard at once whatever its attempts, so that
 the rules tell about it once, and a recovery follows at the next cycle.
 

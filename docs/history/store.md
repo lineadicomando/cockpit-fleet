@@ -20,7 +20,9 @@ needed to work on it.
   (36 MB/s), its digest right. cockpit-ws 337 took a message of a
   megabyte from the browser; 370 closes the session over 128 KiB. A file of
   1.5 GiB dropped on the Store page arrived at about 85 MB/s, its digest
-  right.
+  right; 1 GiB through Cockpit on Debian 13 in 12 s, the memory of the
+  page flat.
+- **Downloads through an external channel**: 2 GiB in 7 s.
 - **SFTP.** SFTP and FTP were ruled out on 11 November because OpenSSH's own
   `sftp-server` on the store would need a chroot owned by root, leave files
   owned by whoever connected, give runs files half written and record

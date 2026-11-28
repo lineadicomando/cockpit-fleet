@@ -21,7 +21,9 @@ input and output.
   account, so it is always reached through sudo, which sets `SUDO_UID` and does
   not let the caller override it. Only plain decimal digits are read as an
   account: whatever else `int()` would take (spaces, a sign, other scripts'
-  digits) gives no role.
+  digits) gives no role. Without `SUDO_UID` the caller is the account
+  itself (the units of the scheduler, of a run's end, of notifications):
+  `system`, an administrator.
 - **Roles.** `cockpit-fleet-viewer`, `-operator`, `-admin`; the highest group
   wins. Root is an administrator. Every command declares the least role that
   may call it, and the check happens in one place, before the handler runs.
@@ -58,9 +60,8 @@ An administrator of the machine who is in no role group is refused by sudo.
 With Cockpit's administrative access turned on, the frontend retries as root
 and gets the admin role; the audit trail then shows `root`, not the person.
 
-Commands are added as CLAUDE.md says ("Adding things"), in a module that
-`cli.load_commands` imports. The declared parameters check the input before
-the handler runs (an unknown parameter is refused) and describe the command
-as JSON Schema to an agent. A command with several forms, a project of one
+Commands are added as CLAUDE.md says ("Adding things"). The declared
+parameters check the input before the handler runs (an unknown parameter
+is refused) and describe the command as JSON Schema to an agent. A command with several forms, a project of one
 kind or another, declares the parameters of all of them and refuses those
 that mean nothing in the form asked for.

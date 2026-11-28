@@ -74,7 +74,7 @@ test("the workflows are listed under each inventory they may run on, with their 
     assert.ok(within(rows[0]).getByText("Last on aula-2:"));
     assert.ok(within(rows[1]).getByText("Failed"));
     // A viewer launches nothing; the schedule that launches it is counted.
-    // Booleans, never elements: a failing assertion prints what it compares, and an element of jsdom is endless.
+    // Booleans, never elements: a failing assertion prints what it compares, and an element of happy-dom is endless.
     assert.equal(within(rows[1]).queryByRole("button", { name: "Launch" }) !== null, false);
     assert.ok(within(rows[1]).getByRole("button", { name: "1" }));
 });

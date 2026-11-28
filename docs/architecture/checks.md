@@ -6,11 +6,11 @@ and `updates`, see [The inventory of hosts](inventory-of-hosts.md)), a
 playbook of the user, or a playbook run for compliance, applied to a group
 of an inventory, with an interval, the attempts before a problem is
 confirmed and the interval meanwhile, parameters, thresholds and a machine
-credential. The interval is 300 s unless given; the form proposes the
-catalog's (`interval` of `check.catalog`: 6 h for `cmdb` and `updates`,
-300 s for the others). Each host of the group has a state for it. Nothing
-is installed on the hosts: Ansible reaches them as for a run. What an
-administrator needs to set one up, the catalog and `fleet_result`:
+credential. The interval is 300 s unless given (60 s to 7 days); the form
+proposes the catalog's (`interval` of `check.catalog`: 6 h for `cmdb` and
+`updates`, 300 s for the others). Each host of the group has a state for
+it. Nothing is installed on the hosts: Ansible reaches them as for a run.
+What an administrator needs to set one up, the catalog and `fleet_result`:
 [docs/checks.md](../checks.md).
 
 ```
@@ -31,9 +31,9 @@ notify.check_event → the outbox, as for runs
 a row per host of that inventory (the identity is the inventory and the
 name), with its address and groups, and loses those that are gone, with
 their states. A check on an inventory never read queues the job, and the
-tick reads again, every hour, the inventories that checks use. What a host
-is (platform, system, kernel) is what the first cycle reports; no fact
-gathering is spent on it.
+tick reads again, every hour (`checks.REFRESH`), the inventories that
+checks use. What a host is (platform, system, kernel) is what the first
+cycle reports; no fact gathering is spent on it.
 
 **One task per host.** The catalog is one module in two files: `checks.py`
 for Linux and `win_checks.ps1` for Windows, with the same parameters and the
@@ -43,27 +43,27 @@ without a PowerShell shell it looks a module up with no suffix, and took the
 `lineadicomando.fleet.checks`, which runs on the controller and calls one
 module or the other according to the shell plugin of the connection. Every
 check of a host runs in that one task, which matters on Windows, where a
-task costs 4 to 5 s: eight checks take 5.4 s there (`windows.sh`). The
-Windows module needs nothing but ansible-core (`Ansible.Basic` is part of
-it), so AlmaLinux, which has no `ansible.windows`, checks Windows too, and
-it sets the invariant culture, so that a summary says `32.2%` whatever the
-language of the node. The Linux module runs on Python 3.6 and later, what
-ansible-core 2.16 supports on a node, with the standard library only;
-certificates are read with a reader of DER of its own.
+task costs seconds ([Windows nodes](windows.md)). The Windows module needs
+nothing but ansible-core (`Ansible.Basic` is part of it), so AlmaLinux,
+which has no `ansible.windows`, checks Windows too, and it sets the
+invariant culture, so that a summary says `32.2%` whatever the language of
+the node. The Linux module runs on Python 3.6 and later, what ansible-core
+2.16 supports on a node, with the standard library only; certificates are
+read with a reader of DER of its own.
 
 **The plan** is data. `fleet-run` writes it into the runtime directory as a
 variables file whose strings are all tagged `!unsafe`, the hosts into a file
-given to `--limit @…`, and the playbook (one play, `strategy: free`, the
-task with a `timeout`) beside them; nothing of it is in the command line. A
-service named `{{ lookup('pipe', 'id') }}` reaches the node as those
-characters.
+given to `--limit @…`, and the playbook (`runner.check_playbook`: one play,
+`strategy: free`, `gather_facts: false`, the task with a `timeout`) beside
+them; nothing of it is in the command line. A service named
+`{{ lookup('pipe', 'id') }}` reaches the node as those characters.
 
 **Results are untrusted.** They are written by the nodes. A result is taken
 only for a check planned for that host in that cycle, and the host is the
 one Ansible names in the event, never one a result names. States, metrics
-(name, value, unit, instance, bounds), summaries and details are checked and
-cut to size; a node cannot report for another host, nor for a check it was
-not asked for.
+(name, value, unit, instance, bounds), summaries and details (16 KB) are
+checked and cut to size; a node cannot report for another host, nor for a
+check it was not asked for.
 
 **Thresholds** are applied on the controller, at ingest, so that changing
 one needs no new collection and a node does not decide whether it is in
@@ -81,12 +81,11 @@ critical when they are compared. A problem is soft until it has been seen
 `max_attempts` times in a row, checked again at `retry_interval` meanwhile;
 then it is hard. A change between two problems is hard at once, and so is a
 recovery. The next time is counted from when the cycle was planned, on the
-tick, with 10 s of slack: counted from when the result arrived, it slipped
-to the following tick every time (177 s instead of two intervals of 60).
-Every change of the last state or of the hard one is kept in
-`state_changes`, with the hard state after it. A check that changed in at
-least half of its last 20 results, with 10 at least, flaps, and stops
-flapping under a quarter.
+tick, with 10 s of slack (`SLACK`), not from when the result arrived, which
+would slip to the following tick every time. Every change of the last state
+or of the hard one is kept in `state_changes`, with the hard state after
+it. A check that changed in at least half of its last 20 results, with 10
+at least, flaps, and stops flapping under a quarter.
 
 **Unreachable hosts.** A host Ansible cannot reach has its `reachability`
 check critical and its other checks unknown and suppressed: they keep their
@@ -105,24 +104,26 @@ by a cycle is not planned again until it ends: when it is due again
 meanwhile, that due time is skipped (below). ansible-playbook says 2 when a
 host failed and 4 when one could not be reached: for a cycle these are
 outcomes of hosts, which their states record, so the cycle is successful
-and its unit is not left failed; with a host down, a failed unit a minute
-would pile up. The output of a cycle is the default callback without the
-hosts that went well, so the journal gets a line per failure, not the
-results. The slow kinds (`cmdb`, `updates`, `compliance`) go in cycles of
-their own kind only, with `[checks] slow_timeout` (900 s) as the time
-limit and a lane of the dispatch of their own, as many as `[checks]
-max_concurrent`: a Windows Update search of some minutes does not hold back
-a disk check. The lane is the `slow` mark in the options of the run, and
-`check_ids` the checks it holds. Cycles are not in the list of runs unless
-asked for (`run.list` with `kind: check`, or `check_id` for those that held
-one check), and are deleted with their directory after `[checks]
-keep_days` (7), by the tick: their results are in the states. What a cycle
-found, host by host and check by check, as judged when it was taken in,
-`ingest` writes beside it (`outcome.json`, read by `check.cycle`): the run
-wrote its own directory, so a file of that name there is unlinked and the
-new one created with `O_EXCL | O_NOFOLLOW`, never followed. `check.list`
-says whether a cycle holds a check (`checking`, from the states held by a
-run queued or running) and its last cycle.
+and its unit is not left failed (a failed unit a minute would pile up). The
+output of a cycle is the default callback without the hosts that went well,
+so the journal gets a line per failure, not the results.
+
+The slow kinds (`cmdb`, `updates`, `compliance`) go in cycles of their own
+kind only, with `[checks] slow_timeout` (900 s) as the time limit and a lane
+of the dispatch of their own, as many as `[checks] max_concurrent`: a
+Windows Update search of some minutes does not hold back a disk check. The
+lane is the `slow` mark in the options of the run, and `check_ids` the
+checks it holds; a check of the user goes in cycles of its own too
+(`checks.group_of`). Cycles are not in the list of runs unless asked for
+(`run.list` with `kind: check`, or `check_id` for those that held one
+check), and are deleted with their directory after `[checks] keep_days`
+(7), by the tick: their results are in the states. What a cycle found,
+host by host and check by check, as judged when it was taken in, `ingest`
+writes beside it (`outcome.json`, read by `check.cycle`): the run wrote its
+own directory, so a file of that name there is unlinked and the new one
+created with `O_EXCL | O_NOFOLLOW`, never followed. `check.list` says
+whether a cycle holds a check (`checking`, from the states held by a run
+queued or running) and its last cycle.
 
 **Connections.** Within a run, SSH keeps one connection per host
 (`ControlMaster=auto`, `ControlPersist=60s`), its socket in the run's
@@ -136,9 +137,8 @@ Connections are not kept from one cycle to the next: kept by the account,
 any run of any project could use the open connections of another
 inventory, `become` included (rule 8 of `CLAUDE.md`); kept by a unit per
 group, they would need a unit that stays up and sessions that outlive a
-revoked credential or host key. Weighed again only if opening connections
-is what keeps a controller from its target. Nor are facts cached: the
-checks gather none (`gather_facts: false`).
+revoked credential or host key. Nor are facts cached: the checks gather
+none.
 
 **Sizing.** Every cycle leaves a row in `cycles`: its group (the
 inventory, and the kind or the check of the user when it goes in cycles of
@@ -146,12 +146,11 @@ its own), its hosts, checks and forks, when it started and ended, the peak of
 its memory and its processor time. `fleet-run` reads the last two from its
 own cgroup (`memory.peak`, `cpu.stat`) once Ansible has ended, and writes
 them in `result.json`: it is the main process of the unit, and systemd
-forgets both once the unit has stopped (`MemoryPeak` of a stopped unit is
-not set). They are written in the run's directory, so believed only as far
-as their shape: a playbook of the user could skew the sizing of its own
-cycles, nothing else. The rows stay 30 days, after the cycles themselves are
-gone. The planner sizes the next cycle of a group on its last 20 successful
-ones:
+forgets both once the unit has stopped. They are written in the run's
+directory, so believed only as far as their shape: a playbook of the user
+could skew the sizing of its own cycles, nothing else. The rows stay 30
+days, after the cycles themselves are gone. The planner (`checks.size`)
+sizes the next cycle of a group on its last 20 successful ones:
 
 - forks: as many as fit in the memory one cycle may take, `[checks]
   memory_mb` (by default half the controller's) shared by every cycle that
@@ -167,26 +166,21 @@ With nothing measured, the configured values hold. They stay the most there
 may be: sizing only takes away, since more forks than configured is more
 memory than the administrator agreed to, and a larger shard only saves the
 start of a playbook. What a cycle is too slow for, sizing cannot fix: it
-ends late, and the next is not planned until it does.
+ends late, and the next is not planned until it does. How a controller
+keeps up is shown by [System health](health.md).
 
-**At scale** (`test/integration/load.sh`: aliases of the controller with
-the local connection and a few container nodes over SSH, ten checks each,
-every 10 minutes, on a Debian 13 machine of 2 vCPUs and 4 GB). A cycle of
-50 hosts and 20 forks takes ~9 s for the catalog and ~6 s for a playbook
-of the user, ~680 MB at its peak, 0.27 s of processor per host; its
-results are taken in within 0.3 s. With `max_concurrent = 1` the cycles of
-an interval run one after the other: 500 hosts make 20, done in ~3
-minutes; 1000 hosts make 40 and the last waits 266 s, near half the
-interval, which is where `max_concurrent = 2` would be needed. For 24
-hours at 500 hosts: no cycle skipped, the oldest result 1.05 intervals
-old, every call of the interface under 0.4 s at p95 (`state.list` of
-every state 0.38 s; it answers 10 000 states in 0.44 s median). What gives
-first is the interface: runs need their slice's `CPUWeight=20`
-([Overview](overview.md)), and the page of hosts asks for every state only
-in its grid. The database grows by ~60 MB a day at that size (raw metrics
-are kept 14 days); the run directories of check cycles by ~400 MB a day,
-kept `keep_days`: lower it for a large fleet checked often. The runs and
-measures: [history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/checks.md).
+**At scale** (`test/integration/load.sh`, 2 vCPUs and 4 GB, ten checks a
+host every 10 minutes): a cycle of 50 hosts and 20 forks takes ~9 s and
+~680 MB at its peak; 500 hosts held for 24 hours with no cycle skipped and
+every call of the interface under 0.4 s at p95, once runs had their
+slice's `CPUWeight=20` ([Overview](overview.md)) and the page of hosts asked
+for every state only in its grid. With `max_concurrent = 1` the cycles of
+an interval run one after the other: at 1000 hosts the last waits near half
+the interval, where `max_concurrent = 2` is needed. At 500 hosts the
+database grows by ~60 MB a day (raw metrics kept 14 days), the run
+directories of cycles by ~400 MB a day, kept `keep_days`: lower it for a
+large fleet checked often. The runs and measures:
+[history](https://github.com/lineadicomando/cockpit-fleet/blob/main/docs/history/checks.md).
 
 **Skipped, and falling behind.** A cycle answers the due time it was queued
 for; when one interval later it has not ended (still queued counts too),
@@ -226,21 +220,22 @@ the controller and sends nothing to the node, so it is the same on Linux
 and Windows. Ingest takes the last one of each host and keeps the worse of
 the state it gives and what the thresholds make of its metrics; a task that
 failed (not ignored) makes the state unknown. Every task has `[checks]
-timeout` (`ANSIBLE_TASK_TIMEOUT`). Its options: [docs/checks.md](../checks.md).
+timeout` (60 s, `ANSIBLE_TASK_TIMEOUT`). Its options:
+[docs/checks.md](../checks.md).
 
 **Notifications.** After each ingest and at each tick, a hard state that
 differs from the last one told about is told: `problem`, or `recovery` from
 a problem told about. A problem nobody acknowledged is told again after
 `[checks] reminder_hours` (24; 0 never) as `reminder`. Each row is claimed
 before it is told (an update on the state and time read), so two callers
-that read it together tell it once. Nothing is told for a
-check that flaps or whose host is unreachable, nor for a host in a
-maintenance window: what is still a problem when the window ends is told at
-the next tick. Rules have three more scopes: an inventory (its runs and its
-checks), a group of an inventory, one check; the scopes of a project,
-template or schedule have runs only, those of a group or a check have checks
-only, and a rule that mixes them is refused. The message links to the host,
-`/fleet#/hosts/ID`.
+that read it together tell it once. Nothing is told for a check that flaps
+or whose host is unreachable, nor for a host in a maintenance window: what
+is still a problem when the window ends is told at the next tick. Rules
+have three more scopes than for runs ([Notifications](notifications.md)):
+an inventory (its runs and its checks), a group of an inventory, one check;
+the scopes of a project, template or schedule have runs only, those of a
+group or a check have checks only, and a rule that mixes them is refused.
+The message links to the host, `/fleet#/hosts/ID`.
 
 **Roles.** A viewer sees hosts, states and their history; an operator also
 acknowledges a problem until it is ok again (`state.ack`, `state.unack`),
@@ -254,11 +249,12 @@ checks. Checks are in the exported document, maintenance windows are not.
 done about each, the hosts, and a grid of hosts and checks; the page of a
 host (`#/hosts/ID`) has what it is, its checks with their metrics and
 their `details` (a scalar or a list on a line, anything deeper as JSON),
-and its last changes. The three lists of "Hosts" are filtered by text and grouped
-by inventory in the browser, as "Assets" is (see "Long lists" in
-[the interface](interface.md)); the counters are what `state.list` counts
-for the inventory chosen, not for the text, since the problems alone are
-loaded outside the grid. "Checks" has the checks and the maintenance windows.
+their charts ([Time series](time-series.md)) and its last changes. The
+three lists of "Hosts" are filtered by text and grouped by inventory in
+the browser, as "Assets" is ("Long lists" in [the interface](interface.md));
+the counters are what `state.list` counts for the inventory chosen, not for
+the text, since the problems alone are loaded outside the grid. "Checks"
+has the checks and the maintenance windows.
 
 The list of checks is filtered, grouped and sorted in the browser, from
 what `check.list` already returns: a text searched in the name, the kind,
@@ -268,9 +264,10 @@ families (resources: disk, cpu, memory; services and system:
 reachability, services, uptime, certificates, clock; inventory and
 compliance: cmdb, updates, compliance; playbooks of the user); enabled or
 not. It is grouped by inventory (the default), family, worst state or not
-at all; a group with a problem starts open, one all OK closed, and every
-group is open while a filter is on. Ended maintenance windows are hidden
-unless asked for. The logic is in `src/lib/checks.ts`.
+at all, and sorted by name, interval or state; a group with a problem
+starts open, and so does every group when there is one or a filter is on,
+the others closed. Ended maintenance windows are hidden unless asked for.
+The logic is in `src/lib/checks.ts`.
 
 Tests: `checks.sh` (four Linux containers and an address with no host:
 every kind, a playbook of the user, an unreachable host told about once, a

@@ -40,30 +40,24 @@ Two programs run as root. Both validate the name or id they take against
 
 ### Why not a polkit rule
 
-The first design let the service account manage its units through a polkit rule
-matching unit names like `cockpit-fleet-run@*.service`. Testing it showed that
-`StartTransientUnit` carries the same `unit` and `verb` details as a normal
-start, so the rule also allowed
-
-```
-systemd-run --unit=cockpit-fleet-prepare@x.service /usr/bin/id   →  uid=0(root)
-```
-
-for any matching name that had no unit file yet. A name that does have a
-template is refused by systemd, but that protection depends on a file being
-installed, not on the rule. A helper that builds the unit name itself has no
-such gap, and it is also out of reach from inside a run, where `NoNewPrivileges`
-disables sudo.
+A polkit rule matching unit names (`cockpit-fleet-run@*.service`) also
+authorises `StartTransientUnit` of that name, which carries the same
+details as a start: arbitrary code as root for any matching name with no
+unit file. `fleet-unit` builds the unit name itself, and is out of reach
+from inside a run, where `NoNewPrivileges` disables sudo.
 
 ## Secrets
 
 - `fleet-secret set` encrypts the value with the host key (and the TPM2, when
-  the machine has a usable one). There is no command to read a value back.
+  the machine has a usable one), without an embedded name, since one secret
+  is loaded under a different credential name depending on its purpose.
+  There is no command to read a value back.
 - The ciphertext is readable by the service account and useless to it: only
   PID 1 can decrypt.
 - When a run is queued, the ciphertext files it needs are copied into its
   `creds/` directory, named after their purpose: `private_key`,
-  `connection_password`, `become_password`, `vault_password`.
+  `key_passphrase`, `connection_password`, `become_password`,
+  `vault_password_N`, and `survey_N`, `secret_var_N` ([Jobs](jobs.md)).
 - The unit has `LoadCredentialEncrypted=fleet:/run/cockpit-fleet/creds/%i`.
   `fleet-unit`, as root, fills that directory from the run's `creds/` just
   before `systemctl start`, and empties it once the start has returned
@@ -71,26 +65,22 @@ disables sudo.
   runs through it (`cockpit-fleet-finish@`, the scheduler) have that
   directory among their `ReadWritePaths`: `fleet-unit` runs in their mount
   namespace, where `ProtectSystem=strict` leaves `/run` read-only. systemd
-  decrypts every
-  file there into `/run/credentials/<unit>/fleet_<purpose>`, a directory
-  mounted for that unit only and removed when it stops.
-- Why the copy: PID 1 reads those paths as root and, with systemd 257
-  (Debian 13), follows symbolic links, so a `creds/` or a run directory that
-  the account turned into a link would have it decrypt root's own
-  credentials of other services (`/etc/credstore.encrypted`, say) into a run
-  (seen on 24 October; Fedora 44's 259 and AlmaLinux 10 refused). The copy
-  reaches each part of the path without following a link, and takes only
-  regular files of the account with one link, 256 KiB at most
-  (`credstage.py`). The run directory itself is still bound into the unit
-  by path: an account that swapped it for a link between the check and the
-  start could bind another directory, whose files the run reads only as far
-  as their own permissions let the account.
-- `fleet-run` passes those files to Ansible with `--private-key`,
-  `--connection-password-file`, `--become-password-file` and
-  `--vault-password-file`. A secret never appears in argv or in the environment.
-
-Secrets are encrypted without an embedded name, because the same secret is
-loaded under a different credential name depending on its purpose.
+  decrypts every file there into `/run/credentials/<unit>/fleet_<purpose>`,
+  a directory mounted for that unit only and removed when it stops.
+- Why the copy: PID 1 reads those paths as root and (systemd 257, Debian 13)
+  follows symbolic links, so a `creds/` that the account turned into a link
+  would have it decrypt root's own credentials of other services
+  (`/etc/credstore.encrypted`) into a run. The copy (`credstage.py`) reaches
+  each part of the path without following a link, and takes only regular
+  files of the account with one link, 256 KiB and 128 files at most. The
+  run directory itself is still bound into the unit by path: an account
+  that swapped it for a link between the check and the start could bind
+  another directory, whose files the run reads only as far as their own
+  permissions let the account.
+- `fleet-run` passes those files to Ansible with `--private-key` (or loads
+  it into an `ssh-agent` when it has a passphrase),
+  `--connection-password-file`, `--become-password-file` and `--vault-id
+  ID@FILE`. A secret never appears in argv or in the environment.
 
 What this guarantees, and what it does not (the service account decides
 which ciphertext goes into which run): [security.md](../security.md),
@@ -101,11 +91,10 @@ which ciphertext goes into which run): [security.md](../security.md),
 `system/cockpit-fleet-run@.service`. `systemd-analyze security` rates it 1.5.
 
 Every run executes as the same account, so the sandbox also separates runs
-from each other. A first version did not: one run could read the decrypted
-secrets of a concurrent one through `/proc/PID/root` of its processes. Each run
-now has its own PID namespace (`PrivatePIDs=yes`, systemd 257) and IPC
-namespace, and sees no process but its own. `test/integration/sandbox.sh`
-tries exactly that path.
+from each other: each has its own PID namespace (`PrivatePIDs=yes`, systemd
+257) and IPC namespace, and sees no process but its own, so no run reaches
+another's decrypted secrets through `/proc/PID/root`
+(`test/integration/sandbox.sh` tries that path).
 
 | A playbook can | A playbook cannot |
 |---|---|
@@ -121,8 +110,8 @@ Three settings are less strict than they could be, each for a measured reason:
   Ansible creates its temporary directory under the account's home. That
   directory, `~/.ansible`, is the run's `scratch/remote_tmp` on disk, bound
   there: a module run on the controller keeps its temporary files in it,
-  and `get_url` the whole download, which in the tmpfs failed with ENOSPC
-  beyond about half the memory (a 3 GB file on a VM of 2 GB, 9 November).
+  and `get_url` the whole download, which in the tmpfs would be bounded by
+  memory.
 - **`SystemCallErrorNumber=EPERM`**, without a deny list on top of
   `@system-service`: modules executed on the controller call `chown()` even when
   nothing changes, and a seccomp kill made `copy` fail with "Bad system call".
@@ -138,10 +127,10 @@ puts them behind the interface and the units that record results when the
 processor is contended, and leaves them all of it otherwise. Without a
 weight systemd keeps the cpu controller off in `system.slice`, and the
 forks of one check cycle made each `fleetctl` call ten times slower
-([Checks](checks.md), "At scale"). The weight changes no isolation: the slice holds only
-runs, each still in its own unit and namespaces.
+([Checks](checks.md), "At scale"). The weight changes no isolation: the
+slice holds only runs, each still in its own unit and namespaces.
 
 SSH uses `StrictHostKeyChecking=yes` with a known-hosts file in the run
 directory and no global file. A host with an unknown key is refused, including
-when a password is used. `ControlPersist` works inside the sandbox: several
+when a password is used. `ControlPersist` (60 s) works inside the sandbox: several
 tasks produce one login.

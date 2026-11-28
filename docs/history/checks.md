@@ -10,11 +10,22 @@ about in 117 to 119 s with an interval of 60 s and two attempts, and its
 recovery; on Windows 11 over SSH (`windows.sh`), the catalog with the same
 metrics as on Linux, `C:` for a mount point.
 
+**The next time counted from the result.** Counted from when a result
+arrived rather than from when the cycle was planned, the next time slipped
+to the following tick every time: 177 s instead of two intervals of 60.
+Hence the count from the tick, with 10 s of slack.
+
+**One task per host on Windows.** A task costs 4 to 5 s there
+([Windows nodes](../architecture/windows.md)); the eight checks of the
+catalog in one task took 5.4 s (`windows.sh`).
+
 **Connections kept between cycles, weighed and left.** Kept by a unit per
 group, mounted into its cycles only, they would need a unit that stays up,
 `fleet-unit` adding mounts per run, and sessions that outlive a credential
 revoked, a host key no longer trusted, or options (forwards, a
-`ProxyCommand`) that the first cycle's inventory gave them.
+`ProxyCommand`) that the first cycle's inventory gave them. To be weighed
+again only if opening connections is what keeps a controller from its
+target.
 
 **The load test** (`load.sh`), on a Debian 13 machine with 2 vCPUs and
 4 GB, every 10 minutes: aliases of the controller with the local
