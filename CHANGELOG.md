@@ -147,6 +147,12 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Assistant: a profile is offered only to a role it does more for.
+  `diagnostic` is for administrators of Fleet (under `[mcp] max_role`), as
+  `administrator` is: for an operator it was `assisted` under another name,
+  with risks to accept. A viewer gets one profile, `observer` (or
+  `assisted` when `observer` is not enabled); `fleet-mcp` started by hand
+  with a profile not offered to the role is refused.
 - Assistant: while it is being set up or logged in, "Open the terminal"
   opens Cockpit's terminal in the same tab, not in a new one.
 - Assistant: an ad-hoc command allowed once when the chat page asks about

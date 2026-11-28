@@ -161,10 +161,15 @@ Fleet again from Cockpit's menu and send the message again.
   |---|---|---|
   | `observer` | read | changes to the documents |
   | `assisted` (default) | also launch and cancel what is defined: templates, workflows, checks, schedules on or off | launches and cancels, with "always" for the conversation |
-  | `diagnostic` | also ad-hoc commands of `[mcp] adhoc_modules` (change nothing), without become or `{{ }}` in their arguments; scans of a subnet allowed by `[network]` ([security.md](security.md)), for administrators of Fleet | as `assisted`; those ad-hoc commands unasked, each scan every time |
+  | `diagnostic` | also ad-hoc commands of `[mcp] adhoc_modules` (change nothing), without become or `{{ }}` in their arguments; scans of a subnet allowed by `[network]` ([security.md](security.md)); only for administrators of Fleet with `max_role = "admin"` | as `assisted`; those ad-hoc commands unasked, each scan every time |
   | `autonomous` | as `assisted`, held by the backend: at most `autonomous_runs` launches per conversation (or what the user chose at the start, and more allowed from the page), none on an inventory in a maintenance window, no acknowledging, no maintenance window, no schedule turned on, dry runs only with `autonomous_dry_run`; at most `autonomous_writes` changes to the documents | nothing |
   | `administrator` | whatever the role allows: ad-hoc commands, changes to templates, inventories and the rest, files, projects, credentials, deletes; only for administrators of Fleet with `max_role = "admin"` (for anyone else, a name that promises more than the role) | launches as `assisted`; scans, ad-hoc commands, changes, files, deletes every time, never "always" |
 
+  A profile is offered only to a role it does more for: `diagnostic` and
+  `administrator` to administrators (under `max_role`), `assisted` and
+  `autonomous` from operators up; a viewer, who launches nothing and
+  writes no document, gets one, `observer` (or `assisted` when `observer`
+  is not enabled).
   Every profile reads, searches and writes the documents (Resources,
   Documents); a change to them is asked, with "always", but in
   `autonomous`; deleting one every time, but in `autonomous`. Questions

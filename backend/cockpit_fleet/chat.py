@@ -114,8 +114,7 @@ def _check_offered(ctx: Context, profile: str) -> None:
         raise Conflict(f"the profile {profile} is not enabled on this controller"
                        " ([chat] profiles in config.toml)")
     if profile not in _offered(ctx):
-        raise Forbidden(f"the profile {profile} of the assistant is for administrators of"
-                        " Fleet, and agents act as one only with [mcp] max_role = \"admin\"")
+        raise Forbidden(profiles.needs(profile))
 
 
 def _unattended_offered(ctx: Context) -> bool:

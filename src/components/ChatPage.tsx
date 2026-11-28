@@ -422,11 +422,8 @@ function Start({ info, state, onAccepted }: { info: ChatInfo; state: ChatState; 
     const profiles = useProfiles(info);
     const [name, setName] = useState(state.agent || info.agents[0].name);
     const session = useSession();
-    // Diagnostic adds ad-hoc commands, which only an administrator under a
-    // ceiling of admin has: below that it would be assisted under another name.
-    const suggested = info.profiles.includes(state.suggested)
-        && (state.suggested !== "diagnostic" || session.role === "admin" && info.max_role === "admin")
-        ? state.suggested : "";
+    // The backend offers a profile only to a role it does more for.
+    const suggested = info.profiles.includes(state.suggested) ? state.suggested : "";
     // A profile suggested with a prepared message comes first, then that of the last session.
     const [profile, setProfile] = useState(suggested
         || (info.profiles.includes(state.profile) ? state.profile : info.default_profile));

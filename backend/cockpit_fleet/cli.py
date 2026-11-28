@@ -437,9 +437,8 @@ def _through(ctx: Context, params: dict, name: str, redact: tuple[str, ...]) -> 
         raise refuse(f"profile {asked!r} not enabled", "this profile of the assistant is not"
                      " enabled on this controller ([chat] profiles in config.toml)")
     if profile not in profiles.offered(config.chat_profiles, ctx.caller.role):
-        raise refuse(f"profile {profile} needs the role admin",
-                     f"the profile {profile} of the assistant is for administrators of Fleet,"
-                     " and agents act as one only with [mcp] max_role = \"admin\"")
+        raise refuse(f"profile {profile} needs the role {profiles.LEAST_ROLE[profile]}",
+                     profiles.needs(profile))
     ctx.profile = profile
     spec = COMMANDS.get(name)
     if spec is not None and not spec.tool and name != "mcp.tools":

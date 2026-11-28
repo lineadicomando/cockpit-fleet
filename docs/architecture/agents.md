@@ -86,11 +86,16 @@ lookup runs a command on the controller, in the run). `fleet-chat
 profiles`) and starts `fleet-mcp --profile`, which adds it to every call
 beside `via`. In `_through`, after the ceiling, a call outside the
 profile is refused and audited; a profile not enabled is refused; no
-profile gets `default_profile`. `administrator` is only for an agent
-acting as admin (the caller's role under the ceiling,
-`profiles.ADMIN_ONLY`): for anyone else it is refused there, left out of
-`chat.agents`, refused by `chat.accept` and `chat.start`, and the default
-falls to `assisted` (or the first profile the role may have). So a
+profile gets `default_profile`. A profile is offered only to an agent
+whose role (the caller's under the ceiling) it does more for than one
+below it (`profiles.LEAST_ROLE`): `diagnostic` and `administrator` from
+admin, `assisted` and `autonomous` from operator, `observer` from viewer.
+A viewer launches nothing and writes no document, so of the profiles
+enabled it gets one, `observer` or else `assisted` (`FALLBACK`); an
+operator runs no ad-hoc command and scans nothing. Below that role a
+profile is refused there, left out of `chat.agents` (and of its risks to
+accept), refused by `chat.accept` and `chat.start`, and the default falls
+to `assisted` (or the first profile the role may have). So a
 profile, like `via`, only restricts. `mcp.tools` lists the tools of the
 profile only, `run_adhoc` in `diagnostic` with an enum of its modules and
 no `become`. Audit column `profile` (schema 22), journal `FLEET_PROFILE`.

@@ -148,11 +148,13 @@
 #   observer       reads
 #   assisted       reads, launches and cancels what is defined
 #   diagnostic     as assisted, and ad-hoc commands of [mcp] adhoc_modules,
-#                  and scans of a subnet (asked every time, administrators)
+#                  and scans of a subnet (asked every time); only for
+#                  administrators of Fleet, with max_role = "admin"
 #   autonomous     as assisted, without being asked, within the limits below
 #   administrator  everything the role allows: ad-hoc commands, changes to
 #                  templates and the rest, files, projects, credentials;
 #                  only for administrators of Fleet, with max_role = "admin"
+# A viewer, who launches nothing, gets one profile: observer, or else assisted.
 # Each user accepts the risks of diagnostic, autonomous and administrator
 # once, on the chat page or in fleet assistant, before a session in them;
 # the acceptance is in the audit log.

@@ -144,7 +144,7 @@ class CommandsTest(Base):
         self.assertEqual(self.code("chat.start", {"agent": "claude"}), "unavailable")
 
     def test_start_gives_the_command_line_and_leaves_a_record(self):
-        data = self.ok("chat.start", {"agent": "claude"}, role="viewer")
+        data = self.ok("chat.start", {"agent": "claude"}, role="operator")
         told = data.pop("instructions")
         self.assertEqual([layer["layer"] for layer in data.pop("layers")], ["base", "profile"])
         self.assertIn("run_list", data.pop("allowed_tools"))
@@ -179,6 +179,18 @@ class CommandsTest(Base):
         # Under the ceiling for agents: an administrator gets an operator's.
         self.assertEqual(allowed("assisted", "admin"), assisted)
 
+    def test_a_viewer_is_offered_one_profile_that_only_reads(self):
+        self.config = replace(self.config, chat_profiles=tuple(profiles.PROFILES),
+                              mcp_max_role="admin")
+        data = self.ok("chat.agents", role="viewer")
+        self.assertEqual((data["profiles"], data["default_profile"], data["to_accept"]),
+                         (["observer"], "observer", []))
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "autonomous"},
+                                   role="viewer"), "forbidden")
+        # Without observer, assisted: for a viewer it launches nothing either.
+        self.config = replace(self.config, chat_profiles=("assisted", "autonomous"))
+        self.assertEqual(self.ok("chat.agents", role="viewer")["profiles"], ["assisted"])
+
     def test_a_profile_must_be_enabled(self):
         self.assertEqual(self.ok("chat.start", {"agent": "claude", "profile": "observer"},
                                  role="viewer")["profile"], "observer")
@@ -202,7 +214,9 @@ class CommandsTest(Base):
         self.assertEqual((data["profiles"], data["default_profile"]), (everything, "administrator"))
         data = self.ok("chat.agents", role="operator")
         self.assertEqual((data["profiles"], data["default_profile"]),
-                         (everything[:-1], "assisted"))
+                         (["observer", "assisted", "autonomous"], "assisted"))
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "diagnostic"},
+                                   role="operator"), "forbidden")
         self.assertNotIn("administrator", data["to_accept"])
         self.assertEqual(self.code("chat.accept", {"profile": "administrator"}, role="operator"),
                          "forbidden")
@@ -221,17 +235,20 @@ class CommandsTest(Base):
         self.assertEqual(self.ok("chat.agents")["profiles"], [])
 
     def test_a_profile_beyond_assisted_is_accepted_once_by_each_user(self):
-        self.config = replace(self.config, chat_profiles=("assisted", "diagnostic", "autonomous"))
-        self.assertEqual(self.ok("chat.agents", role="viewer")["to_accept"],
-                         ["diagnostic", "autonomous"])
-        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "diagnostic"},
-                                   role="viewer"), "not_accepted")
-        first = self.ok("chat.accept", {"profile": "diagnostic"}, role="viewer")
+        self.config = replace(self.config, chat_profiles=("assisted", "diagnostic", "autonomous"),
+                              mcp_max_role="admin")
+        self.assertEqual(self.ok("chat.agents")["to_accept"], ["diagnostic", "autonomous"])
+        # Only the risks of a profile offered to the role: an operator's agent runs no
+        # ad-hoc command, so diagnostic would be assisted for it.
+        self.assertEqual(self.ok("chat.agents", role="operator")["to_accept"], ["autonomous"])
+        self.assertEqual(self.code("chat.start", {"agent": "claude", "profile": "diagnostic"}),
+                         "not_accepted")
+        first = self.ok("chat.accept", {"profile": "diagnostic"})
         self.assertEqual(first["profile"], "diagnostic")
         # Again changes nothing: it was accepted then.
-        self.assertEqual(self.ok("chat.accept", {"profile": "diagnostic"}, role="viewer"), first)
-        self.assertEqual(self.ok("chat.agents", role="viewer")["to_accept"], ["autonomous"])
-        self.ok("chat.start", {"agent": "claude", "profile": "diagnostic"}, role="viewer")
+        self.assertEqual(self.ok("chat.accept", {"profile": "diagnostic"}), first)
+        self.assertEqual(self.ok("chat.agents")["to_accept"], ["autonomous"])
+        self.ok("chat.start", {"agent": "claude", "profile": "diagnostic"})
         rows = self.ctx().conn.execute(
             "SELECT command, outcome, user, params FROM audit WHERE command = 'chat.accept'"
         ).fetchall()
@@ -239,7 +256,7 @@ class CommandsTest(Base):
         self.assertIn("diagnostic", rows[0]["params"])
         # Another user has not accepted it.
         answer = cli.dispatch("chat.start", b'{"agent": "claude", "profile": "diagnostic"}',
-                              self.ctx("viewer", "bruno"))
+                              self.ctx("admin", "bruno"))
         self.assertEqual(answer["error"]["code"], "not_accepted")
         # Those up to assisted are not asked about, nor one that is not enabled.
         for profile in ("assisted", "observer"):

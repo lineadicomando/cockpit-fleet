@@ -13,6 +13,8 @@ with no template in its arguments. It is not a class of a command but of a
 call, decided by its parameters.
 """
 
+from .auth import role_at_least
+
 DIAGNOSTIC = "adhoc-diagnostic"
 
 PROFILES: dict[str, tuple[str, ...]] = {
@@ -32,15 +34,33 @@ RISKY = ("diagnostic", "autonomous", "administrator")
 # person (consent.py). Its risks are accepted once, as those of a profile.
 UNATTENDED = "unattended"
 UNATTENDED_PROFILES = ("administrator",)
-# Profiles only for an agent that acts with the role admin, the caller's
-# under [mcp] max_role: for anyone else administrator would be the role's
-# powers under a name that promises more.
-ADMIN_ONLY = ("administrator",)
+# The least role, of the agent (the caller's under [mcp] max_role), for which
+# a profile does more than one below it: below that role it would be another
+# profile's powers under a name that promises more, and risks to accept for
+# nothing. A viewer launches nothing and writes no document, an operator runs
+# no ad-hoc command and scans nothing.
+LEAST_ROLE = {
+    "observer": "viewer",
+    "assisted": "operator",
+    "diagnostic": "admin",
+    "autonomous": "operator",
+    "administrator": "admin",
+}
+# What a role below every profile enabled for it gets instead, the first of
+# them enabled: profiles that, for it, only read.
+FALLBACK = ("observer", "assisted")
 
 
 def offered(enabled: tuple[str, ...], role: str | None) -> tuple[str, ...]:
     """The profiles enabled that an agent acting with ROLE may be in."""
-    return tuple(one for one in enabled if one not in ADMIN_ONLY or role == "admin")
+    fit = tuple(one for one in enabled if role_at_least(role, LEAST_ROLE[one]))
+    return fit or tuple(one for one in enabled if one in FALLBACK)[:1]
+
+
+def needs(profile: str) -> str:
+    """Why an agent is not offered PROFILE, for a refusal."""
+    return (f"the profile {profile} of the assistant is for an agent acting as"
+            f" {LEAST_ROLE[profile]} or above: the caller's role, under [mcp] max_role")
 
 
 def default(enabled: tuple[str, ...], configured: str, role: str | None) -> str:

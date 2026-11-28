@@ -401,6 +401,13 @@ class ProfileTest(Base):
         self.config = replace(self.config, chat_default_profile="administrator")
         self.assertEqual(self.via("mcp.tools", {}, role="operator")["data"]["profile"],
                          "assisted")
+        # Below the role a profile does more for, it is refused: an operator's agent
+        # runs no ad-hoc command, so diagnostic would be assisted under another name.
+        answer = self.via("mcp.tools", {}, "diagnostic", role="operator")
+        self.assertEqual(answer["error"]["code"], "forbidden")
+        self.assertEqual(self.audit()[-1][3], "profile diagnostic needs the role admin")
+        # A viewer's launches nothing: it gets the profile that only reads.
+        self.assertEqual(self.via("mcp.tools", {}, role="viewer")["data"]["profile"], "observer")
 
     def test_tools_are_those_of_the_profile(self):
         self.template()
