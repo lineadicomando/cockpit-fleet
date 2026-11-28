@@ -5036,11 +5036,17 @@ msgstr "se fallisce"
 msgid "anyway"
 msgstr "comunque"
 
-msgid "Waits for an approval"
-msgstr "Attende un'approvazione"
+msgid "Waits for a confirmation"
+msgstr "Attende una conferma"
 
-msgid "waits for an approval"
-msgstr "attende un'approvazione"
+msgid "Waits for another person's approval"
+msgstr "Attende l'approvazione di un'altra persona"
+
+msgid "waits for a confirmation"
+msgstr "attende una conferma"
+
+msgid "waits for another person's approval"
+msgstr "attende l'approvazione di un'altra persona"
 
 msgid "workflows_count"
 msgid_plural "workflows_count_plural"

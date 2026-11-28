@@ -253,11 +253,18 @@ export function withGroupsOpen(view: ChecksView, groups: CheckGroup[], open: boo
     return { ...view, open: withOpen(view.open, view.groupBy, groups.map(group => group.key), open) };
 }
 
+// The details of a kind of the catalog that are sizes in bytes, as checks.py
+// and win_checks.ps1 of the collection write them.
+const DETAIL_BYTES: Partial<Record<CheckKind, string[]>> = { memory: ["total", "swap_total"] };
+
 // What a check found beyond its summary (its `details`), as lines to show:
-// a scalar or a list of scalars on one line, anything deeper as JSON.
-export function detailLines(details: Record<string, unknown> | null | undefined): { key: string; text: string; block: boolean }[] {
+// a scalar or a list of scalars on one line, anything deeper as JSON; a size
+// in bytes as the metrics show one.
+export function detailLines(details: Record<string, unknown> | null | undefined, kind?: CheckKind): { key: string; text: string; block: boolean }[] {
     const scalar = (value: unknown) => value === null || ["string", "number", "boolean"].includes(typeof value);
+    const bytes = (kind && DETAIL_BYTES[kind]) ?? [];
     return Object.entries(details ?? {}).map(([key, value]) => {
+        if (typeof value === "number" && bytes.includes(key)) return { key, text: formatBytes(value), block: false };
         if (scalar(value)) return { key, text: String(value), block: false };
         if (Array.isArray(value) && value.every(scalar)) return { key, text: value.map(String).join(", "), block: false };
         return { key, text: JSON.stringify(value, null, 2), block: true };

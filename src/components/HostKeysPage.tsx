@@ -414,7 +414,7 @@ export function HostKeysPage() {
                                             </Td>
                                         </Tr>
                                         {group.items.map((host, index) => (
-                                            <Tr key={host.host} isExpanded={open}>
+                                            <Tr key={host.host} isHidden={!open}>
                                                 <Td />
                                                 {select(host, `hk-select-${groupIndex}-${index}`)}
                                                 {hostCells(host)}

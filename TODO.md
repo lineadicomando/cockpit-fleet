@@ -13,32 +13,22 @@ fixes, minor changes (refinements of what exists) and field use, toward
 `CHANGELOG.md`. `make release` only when asked.
 
 To resume: `git status`, `git log origin/main..`; `make check` (881
-backend, 263 frontend tests). Under way: the list of workflows and the
-review of the interface (below), both to be seen in a browser; `sandbox`
-with run D on `deb13` (Integration).
+backend, 266 frontend tests). Under way: the review of the interface
+(below).
 
 ## Minor changes decided
-
-- **The list of workflows as the one of templates** (28 November; done,
-  unit tests, docs; `decisions.md` "Workflows list"). Left:
-  - seen in a browser (`make browser-up`, a throwaway scenario): the
-    toolbar's width, the steps of a long workflow, the groups, the
-    preview in the form, the tooltip of an approval;
-  - `make ct-test TESTS=workflows` on the three (`workflow.list` changed).
 
 - **A review of the interface** (28 November, the frontend only): a first
   block done (nothing typed lost without asking, launches and the end of
   a key's trust asked first, notices and lists that tell the truth, the
   Overview's problems, a run's template and inventory, a check's details,
-  the chat that stays where it is read, wording); unit tests, docs. Left:
-  - seen in a browser (`make browser-up`, a throwaway scenario, on
-    `inspiron27`): the dialogs of Launch and "Run now", a form closed
-    after typing, a list whose refresh fails, the details of a check;
-  - the rest of the review, by impact: drilling down from a check to its
-    hosts, its cycles and its changes; relative times and stale results;
-    the recap of a run below its output; the problems of an unreachable
-    host folded; the approval dialog of the chat with names; clearing a
-    credential's secret; the audit's objects and filters (backend).
+  the chat that stays where it is read, wording; seen in a browser on
+  `deb13`, with lists on a narrow screen fixed); unit tests, docs. Left,
+  by impact: drilling down from a check to its hosts, its cycles and its
+  changes; relative times and stale results; the recap of a run below its
+  output; the problems of an unreachable host folded; the approval dialog
+  of the chat with names; clearing a credential's secret; the audit's
+  objects and filters (backend).
 
 ## To study
 
@@ -61,8 +51,9 @@ Last runs, 26 and 27 November. Containers, the three distributions:
 `netscan`, `make ct-lifecycle` (from 0.3.0); earlier `files`. VMs:
 `netscan` on the three (`win11` up), `windows` on `deb13`; at `0.4.0+82`
 `sandbox` with run D, `runs`, `workflows`, `schedules` on `alma10`, the
-last three on `fed44` (SELinux enforcing, no denial). Left: `sandbox`
-with run D on `deb13` (its data of the closes kept until then).
+last three on `fed44` (SELinux enforcing, no denial); 28 November at
+`0.4.0+96` `workflows` in containers on the three, `sandbox` with run D
+on `deb13`.
 
 ## Future
 

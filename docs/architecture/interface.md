@@ -120,8 +120,15 @@ labels ("Show Filters", "Close …") are English that cannot be translated.
   the columns of `layers()` (`StepColumns`): an `<ol>`, an arrow between
   columns as CSS content with empty alternative text, the steps of one
   column framed (they may start together, or be alternatives), a step
-  reached only on failure or only by "always" marked; the form shows the
-  same as a preview.
+  reached only on failure or only by "always" marked, one that waits for a
+  person with the kind of approval in its tooltip; the form shows the
+  same as a preview, and the launch form its inventories by name.
+- The rows of a group in a table are hidden while it is closed (`Tr
+  isHidden`), not expandable rows: on a narrow screen PatternFly stacks a
+  row's cells, each beside its label, which an expandable row would lose
+  (its content scrolls in a box of its own). A stacked cell is a grid, so
+  a cell of several parts (a name and its labels) wraps them in one block,
+  and a row's buttons share one action cell.
 - Checks: [Checks](checks.md), "The interface".
 - A row is highlighted under the pointer and while one of its controls
   has the focus (`app.scss`, the token of PatternFly's clickable rows, as

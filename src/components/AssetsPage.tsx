@@ -193,11 +193,13 @@ export function AssetsPage() {
                                             onToggle={group => setView(withHostGroupsOpen(view, [group], !isHostGroupOpen(view, group)))}
                                             title={group => group.name || group.key} count={group => t("hosts_count", { count: group.items.length })}
                                             row={(host, open) => (
-                                                <Tr key={host.id} isExpanded={grouped ? open : undefined}>
+                                                <Tr key={host.id} isHidden={grouped && !open}>
                                                     {grouped && <Td />}
                                                     <Td dataLabel={t("Host")}>
-                                                        <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
-                                                        {many && !grouped && <Content component="small"> ({host.inventory})</Content>}
+                                                        <div>
+                                                            <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
+                                                            {many && !grouped && <Content component="small"> ({host.inventory})</Content>}
+                                                        </div>
                                                     </Td>
                                                     <Td dataLabel={t("System")}>{host.os || <Content component="small">{t("Not known yet")}</Content>}</Td>
                                                     <Td dataLabel={t("Hardware")}><Hardware host={host} /></Td>

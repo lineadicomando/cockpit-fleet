@@ -147,3 +147,8 @@ test("the details of a result are lines, anything deeper as JSON", () => {
     ]);
     assert.deepEqual(detailLines(undefined), []);
 });
+
+test("the sizes among the details of memory are in bytes, as its metrics", () => {
+    assert.deepEqual(detailLines({ total: 4224102400, swap_total: 0 }, "memory").map(line => line.text), ["3.9 GiB", "0 B"]);
+    assert.deepEqual(detailLines({ total: 4 }, "cpu").map(line => line.text), ["4"]);
+});

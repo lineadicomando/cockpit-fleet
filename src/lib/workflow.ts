@@ -79,13 +79,14 @@ export interface StepCell {
     name: string;
     // failure: only when a step before it fails; always: whatever they did; "" otherwise.
     branch: "" | "failure" | "always";
-    approval: boolean;
+    // How it waits for a person before it starts, "none" if it does not.
+    approval: ApprovalMode;
 }
 
 // The steps in the columns of layers(), each marked by the links that reach it:
 // steps of a column may start together, or be alternatives, one on failure.
 export function stepColumns<N extends { id: string }>(nodes: N[], edges: WorkflowEdge[], name: (node: N) => string,
-    approval: (node: N) => boolean): StepCell[][] {
+    approval: (node: N) => ApprovalMode): StepCell[][] {
     const byId = new Map(nodes.map(node => [node.id, node]));
     const branchOf = (id: string): StepCell["branch"] => {
         const conditions = new Set<StepCondition>(edges.filter(edge => edge.to === id && byId.has(edge.from)).map(edge => edge.condition));
@@ -99,9 +100,16 @@ export function stepColumns<N extends { id: string }>(nodes: N[], edges: Workflo
     }));
 }
 
-// Whether a step waits for a person: by its own mode or its template's.
+// How a step waits for a person: by its own mode or its template's, whichever asks more.
+export function stepApproval(node: { approval: ApprovalMode; template_id: string }, template: (id: string) => Template | undefined): ApprovalMode {
+    const modes: ApprovalMode[] = ["none", "confirm", "other"];
+    const theirs = template(node.template_id)?.approval ?? "none";
+    return modes.indexOf(theirs) > modes.indexOf(node.approval) ? theirs : node.approval;
+}
+
+// Whether a step waits for a person.
 export function stepAsksApproval(node: { approval: ApprovalMode; template_id: string }, template: (id: string) => Template | undefined): boolean {
-    return node.approval !== "none" || (template(node.template_id)?.approval ?? "none") !== "none";
+    return stepApproval(node, template) !== "none";
 }
 
 // --- the list of workflows ---------------------------------------------------

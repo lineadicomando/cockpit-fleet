@@ -31,7 +31,7 @@ import { useCan } from "../lib/session.tsx";
 import { answerProblem, collectAnswers, storedAnswers, type Answers } from "../lib/survey.ts";
 import { OUTCOMES, type Outcome } from "../lib/templates.ts";
 import {
-    EACH_STEPS_OWN, inScope, isWorkflowGroupOpen, lastWorkflowRun, layers, listWorkflows, nextStepId, readWorkflowsView, stepAsksApproval, stepColumns,
+    EACH_STEPS_OWN, inScope, isWorkflowGroupOpen, lastWorkflowRun, layers, listWorkflows, nextStepId, readWorkflowsView, stepApproval, stepAsksApproval, stepColumns,
     stepName, templateGroups, withoutWorkflowFilters, withWorkflowGroupsOpen, workflowInventories, workflowProjects,
     type StepCell, type StepScope, type WorkflowGroup, type WorkflowNames, type WorkflowSort, type WorkflowsView, type WorkflowTrait,
 } from "../lib/workflow.ts";
@@ -77,16 +77,18 @@ function useConditions() {
 export function StepColumns({ columns }: { columns: StepCell[][] }) {
     const { t } = useTranslation();
     const branchText = { failure: t("if it fails"), always: t("anyway") };
+    const waits = { confirm: t("Waits for a confirmation"), other: t("Waits for another person's approval") };
+    const waitsAside = { confirm: t("waits for a confirmation"), other: t("waits for another person's approval") };
     const step = (cell: StepCell) => {
         const label = (
             <Label isCompact variant={cell.branch ? "outline" : "filled"} color={cell.branch === "failure" ? "red" : "grey"}
-                icon={cell.approval ? <UserClockIcon /> : undefined}>
+                icon={cell.approval !== "none" ? <UserClockIcon /> : undefined}>
                 {cell.name}
                 {cell.branch && <span className="pf-v6-u-text-color-subtle"> · {branchText[cell.branch]}</span>}
-                {cell.approval && <span className="pf-v6-screen-reader"> ({t("waits for an approval")})</span>}
+                {cell.approval !== "none" && <span className="pf-v6-screen-reader"> ({waitsAside[cell.approval]})</span>}
             </Label>
         );
-        return <React.Fragment key={cell.id}>{cell.approval ? <Tooltip content={t("Waits for an approval")}>{label}</Tooltip> : label}</React.Fragment>;
+        return <React.Fragment key={cell.id}>{cell.approval !== "none" ? <Tooltip content={waits[cell.approval]}>{label}</Tooltip> : label}</React.Fragment>;
     };
     return (
         <ol className="fleet-step-columns" aria-label={t("Steps in order")}>
@@ -277,7 +279,7 @@ function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Work
                     <StepColumns columns={stepColumns(steps,
                         steps.flatMap(step => step.after.filter(link => link.from).map(link => ({ from: link.from, to: step.id, condition: link.condition }))),
                         step => step.name || templates.find(item => item.id === step.template_id)?.name || step.id,
-                        step => stepAsksApproval(step, id => templates.find(item => item.id === id)))} />
+                        step => stepApproval(step, id => templates.find(item => item.id === id)))} />
                 </FormGroup>
             )}
             {steps.map(step => (
@@ -406,11 +408,13 @@ export function WorkflowsPage() {
     usePolling(list.reload, 3000, list.data?.workflows.some(item => Object.values(item.last_runs ?? {}).concat(item.last_run ?? [])
         .some(run => isActiveRun(run.status))) ?? false);
 
-    // A workflow on no inventory of its own may be launched on one its steps all allow.
+    // A workflow on no inventory of its own may be launched on one its steps all allow, by name.
     function inventoryChoices(workflow: Workflow): string[] {
         if (workflow.inventory_id) return [];
         const usable = (choices?.inventories ?? []).map(one => one.id);
-        return workflow.inventory_ids === null ? usable : workflow.inventory_ids.filter(id => usable.includes(id));
+        const offered = workflow.inventory_ids === null ? usable : workflow.inventory_ids.filter(id => usable.includes(id));
+        const name = (id: string) => inventoryNames.get(id) ?? id;
+        return [...offered].sort((a, b) => name(a).localeCompare(name(b), undefined, { numeric: true }));
     }
 
     return (
@@ -448,7 +452,7 @@ export function WorkflowsPage() {
 
                     const runLink = (run: { id: string; status: Run["status"]; created_at: number }) => (
                         <Button variant="link" isInline onClick={() => openRun(run.id)}>
-                            <RunStatusLabel status={run.status} /> {formatTime(run.created_at, i18n.language)}
+                            <span className="pf-v6-u-text-nowrap"><RunStatusLabel status={run.status} /> {formatTime(run.created_at, i18n.language)}</span>
                         </Button>
                     );
                     // Under an inventory, the last run there, or the last elsewhere, muted.
@@ -459,12 +463,12 @@ export function WorkflowsPage() {
                             const on = Object.entries(workflow.last_runs ?? {}).find(([, one]) => one.id === any.id)?.[0];
                             const inventory = on === undefined ? "" : on === EACH_STEPS_OWN ? t("the inventory of each step") : names.inventory(on);
                             return (
-                                <>
+                                <div>
                                     {t("Never here")}
                                     <div className="pf-v6-u-font-size-sm pf-v6-u-text-color-subtle">
                                         {t("Last on {{inventory}}:", { inventory: inventory || t("an inventory deleted") })} {runLink(any)}
                                     </div>
-                                </>
+                                </div>
                             );
                         }
                         return run ? runLink(run) : t("Never");
@@ -475,22 +479,25 @@ export function WorkflowsPage() {
                         const count = names.schedules(workflow.id);
                         const asks = workflow.nodes.some(node => stepAsksApproval(node, names.template));
                         return (
-                            <Tr key={workflow.id} isExpanded={grouped ? open : undefined}>
+                            <Tr key={workflow.id} isHidden={grouped && !open}>
                                 {grouped && <Td />}
                                 <Td dataLabel={t("Name")}>
-                                    {workflow.name}
-                                    {asks && <Label isCompact color="purple" style={{ marginInlineStart: "0.5rem" }}>{t("Approval")}</Label>}
-                                    {workflow.description && <Content component="small" style={{ display: "block" }}>{workflow.description}</Content>}
-                                    {(workflow.project_id || workflow.inventory_id) && (
-                                        <Flex gap={{ default: "gapSm" }} style={{ marginBlockStart: "0.25rem" }}>
-                                            {workflow.project_id && <Label isCompact color="blue">{t("Project")}: {names.project(workflow.project_id)}</Label>}
-                                            {workflow.inventory_id && <Label isCompact color="teal">{t("Inventory")}: {names.inventory(workflow.inventory_id)}</Label>}
-                                        </Flex>
-                                    )}
+                                    {/* One block: on a narrow screen the cell is a grid, which would stretch each label. */}
+                                    <div>
+                                        {workflow.name}
+                                        {asks && <Label isCompact color="purple" style={{ marginInlineStart: "0.5rem" }}>{t("Approval")}</Label>}
+                                        {workflow.description && <Content component="small" style={{ display: "block" }}>{workflow.description}</Content>}
+                                        {(workflow.project_id || workflow.inventory_id) && (
+                                            <Flex gap={{ default: "gapSm" }} style={{ marginBlockStart: "0.25rem" }}>
+                                                {workflow.project_id && <Label isCompact color="blue">{t("Project")}: {names.project(workflow.project_id)}</Label>}
+                                                {workflow.inventory_id && <Label isCompact color="teal">{t("Inventory")}: {names.inventory(workflow.inventory_id)}</Label>}
+                                            </Flex>
+                                        )}
+                                    </div>
                                 </Td>
                                 <Td dataLabel={t("Steps")}>
                                     <StepColumns columns={stepColumns(workflow.nodes, workflow.edges, node => stepName(node, names),
-                                        node => stepAsksApproval(node, names.template))} />
+                                        node => stepApproval(node, names.template))} />
                                 </Td>
                                 <Td dataLabel={t("Last run")}>{lastRunCell(workflow, where)}</Td>
                                 <Td dataLabel={t("Schedules")}>
@@ -524,7 +531,7 @@ export function WorkflowsPage() {
                                         <Tr>
                                             {grouped && <Th screenReaderText={t("Group")} />}
                                             <Th sort={sortBy("name")}>{t("Name")}</Th><Th>{t("Steps")}</Th>
-                                            <Th sort={sortBy("last_run")}>{t("Last run")}</Th><Th>{t("Schedules")}</Th>
+                                            <Th sort={sortBy("last_run")}>{t("Last run")}</Th><Th modifier="fitContent">{t("Schedules")}</Th>
                                             <Th screenReaderText={t("Actions")} />
                                         </Tr>
                                     </Thead>
@@ -552,7 +559,7 @@ export function WorkflowsPage() {
                 <LaunchWorkflowModal workflow={launching.workflow} inventories={inventoryChoices(launching.workflow)} names={inventoryNames}
                     initial={launching.inventory} onClose={() => setLaunching(null)} onLaunched={list.reload}
                     steps={<StepColumns columns={stepColumns(launching.workflow.nodes, launching.workflow.edges, node => stepName(node, names),
-                        node => stepAsksApproval(node, names.template))} />} />
+                        node => stepApproval(node, names.template))} />} />
             )}
             {deleting && (
                 <ConfirmDelete what={t("Its past runs stay.")} name={deleting.name}

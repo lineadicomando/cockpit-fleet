@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    DEFAULT_WORKFLOWS_VIEW, inScope, isWorkflowGroupOpen, layers, listWorkflows, nextStepId, readWorkflowsView, stepColumns, templateGroups,
+    DEFAULT_WORKFLOWS_VIEW, inScope, isWorkflowGroupOpen, layers, listWorkflows, nextStepId, readWorkflowsView, stepApproval, stepColumns, templateGroups,
     withoutWorkflowFilters, withWorkflowGroupsOpen, workflowInventories, type WorkflowNames, type WorkflowsView,
 } from "../src/lib/workflow.ts";
 import type { RunStatus, Template, Workflow, WorkflowNode } from "../src/lib/types.ts";
@@ -71,13 +71,22 @@ test("each step is marked by the links that reach it", () => {
         { from: "b", to: "e", condition: "success" as const },
         { from: "c", to: "e", condition: "always" as const },
     ];
-    const columns = stepColumns(nodes, edges, item => item.name || item.id, item => item.approval !== "none");
+    const columns = stepColumns(nodes, edges, item => item.name || item.id, item => item.approval);
     assert.deepEqual(columns, [
-        [{ id: "a", name: "backup", branch: "", approval: false }],
-        [{ id: "b", name: "b", branch: "", approval: false }, { id: "c", name: "restore", branch: "failure", approval: false }],
+        [{ id: "a", name: "backup", branch: "", approval: "none" }],
+        [{ id: "b", name: "b", branch: "", approval: "none" }, { id: "c", name: "restore", branch: "failure", approval: "none" }],
         // Reached always by all its links; by links of two kinds, unmarked.
-        [{ id: "d", name: "d", branch: "always", approval: true }, { id: "e", name: "e", branch: "", approval: false }],
+        [{ id: "d", name: "d", branch: "always", approval: "confirm" }, { id: "e", name: "e", branch: "", approval: "none" }],
     ]);
+});
+
+test("a step waits as its template does, or more", () => {
+    const template = (id: string) => ({ t1: { approval: "none" }, t2: { approval: "other" }, t3: { approval: "confirm" } } as unknown as Record<string, Template>)[id];
+    assert.equal(stepApproval({ approval: "none", template_id: "t1" }, template), "none");
+    assert.equal(stepApproval({ approval: "confirm", template_id: "t1" }, template), "confirm");
+    assert.equal(stepApproval({ approval: "confirm", template_id: "t2" }, template), "other");
+    assert.equal(stepApproval({ approval: "other", template_id: "t3" }, template), "other");
+    assert.equal(stepApproval({ approval: "none", template_id: "gone" }, template), "none");
 });
 
 const run = (id: string, status: RunStatus, created_at: number) => ({ id, status, created_at });

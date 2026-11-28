@@ -386,7 +386,7 @@ function TemplatesToolbar({ view, onChange, projects, inventories, groups, shown
                     </FormSelect>
                 </FlexItem>
                 <GroupByChoice id="tpl-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
-                    options={[["project", t("Project")], ["inventory", t("Inventory")], ["outcome", t("Last run")], ["none", t("No grouping")]]}
+                    options={[["inventory", t("Inventory")], ["project", t("Project")], ["outcome", t("Last run")], ["none", t("No grouping")]]}
                     groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withTemplateGroupsOpen(view, groups, !allOpen))} />
             </Flex>
             <FilterChips chips={chips} onClearAll={() => onChange(withoutTemplateFilters(view))} shown={shown} total={total} />
@@ -448,7 +448,7 @@ export function TemplatesPage() {
                     };
                     const { groups, shown } = listTemplates(data.templates, view, names);
                     const grouped = view.groupBy !== "none";
-                    const width = grouped ? 9 : 8;
+                    const width = grouped ? 8 : 7;
                     const columns: TemplateSort[] = ["name", "project", "inventory", "last_run"];
                     const sortBy = (column: TemplateSort) => ({
                         columnIndex: columns.indexOf(column),
@@ -459,7 +459,7 @@ export function TemplatesPage() {
 
                     const runLink = (run: TemplateRun) => (
                         <Button variant="link" isInline onClick={() => openRun(run.id)}>
-                            <RunStatusLabel status={run.status} /> {formatTime(run.created_at, i18n.language)}
+                            <span className="pf-v6-u-text-nowrap"><RunStatusLabel status={run.status} /> {formatTime(run.created_at, i18n.language)}</span>
                         </Button>
                     );
                     // Under an inventory, the last run there, or the last elsewhere, muted;
@@ -470,22 +470,22 @@ export function TemplatesPage() {
                         if (where !== undefined && !run && any) {
                             const deleted = t("an inventory deleted");
                             return (
-                                <>
+                                <div>
                                     {t("Never here")}
                                     <div className="pf-v6-u-font-size-sm pf-v6-u-text-color-subtle">
                                         {t("Last on {{inventory}}:", { inventory: names.inventory(any.inventory_id ?? "") || deleted })} {runLink(any)}
                                     </div>
-                                </>
+                                </div>
                             );
                         }
                         if (!run) return t("Never");
                         const elsewhere = where === undefined && run.inventory_id !== null && run.inventory_id !== template.inventory_id
                             && names.inventory(run.inventory_id);
                         return (
-                            <>
+                            <div>
                                 {runLink(run)}
                                 {elsewhere && <span className="pf-v6-u-text-color-subtle"> · {elsewhere}</span>}
-                            </>
+                            </div>
                         );
                     };
 
@@ -496,38 +496,43 @@ export function TemplatesPage() {
                         // Listed under an inventory, or by its default: the others; with no default, all of them.
                         const others = where || template.inventory_id !== null ? allowed - 1 : 0;
                         return (
-                            <Tr key={template.id} isExpanded={grouped ? open : undefined}>
+                            <Tr key={template.id} isHidden={grouped && !open}>
                                 {grouped && <Td />}
                                 <Td dataLabel={t("Name")}>
-                                    {template.name}
-                                    <Flex gap={{ default: "gapXs" }} style={{ display: "inline-flex", marginInlineStart: "0.5rem" }}>
-                                        <ApprovalModeLabel mode={template.approval} />
-                                        {template.survey.length > 0 && <Label isCompact color="blue">{t("Questions")}</Label>}
-                                        {template.become && <Label isCompact color="grey">{t("become")}</Label>}
-                                    </Flex>
+                                    {/* One block: on a narrow screen the cell is a grid, which would stretch each label. */}
+                                    <div>
+                                        {template.name}
+                                        <Flex gap={{ default: "gapXs" }} style={{ display: "inline-flex", marginInlineStart: "0.5rem" }}>
+                                            <ApprovalModeLabel mode={template.approval} />
+                                            {template.survey.length > 0 && <Label isCompact color="blue">{t("Questions")}</Label>}
+                                            {template.become && <Label isCompact color="grey">{t("become")}</Label>}
+                                        </Flex>
+                                    </div>
                                 </Td>
                                 <Td dataLabel={t("Project")}>{names.project(template.project_id)}</Td>
                                 <Td dataLabel={t("Playbook")}><code>{template.playbook}</code></Td>
                                 <Td dataLabel={t("Inventory")}>
-                                    {where || template.inventory_id !== null
-                                        ? names.inventory(where ?? template.inventory_id!)
-                                        : <span className="pf-v6-u-text-color-subtle">{t("inventories_choice_count", { count: allowed })}</span>}
-                                    {others > 0 && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("inventories_others_count", { count: others })}</Label>}
+                                    <div>
+                                        {where || template.inventory_id !== null
+                                            ? names.inventory(where ?? template.inventory_id!)
+                                            : <span className="pf-v6-u-text-color-subtle">{t("inventories_choice_count", { count: allowed })}</span>}
+                                        {others > 0 && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("inventories_others_count", { count: others })}</Label>}
+                                    </div>
                                 </Td>
                                 <Td dataLabel={t("Last run")}>{lastRunCell(template, where)}</Td>
                                 <Td dataLabel={t("Schedules")}>
                                     {count > 0 && <Button variant="link" isInline onClick={() => cockpit.location.go(["schedules"])}>{count}</Button>}
                                 </Td>
-                                <Td isActionCell style={{ whiteSpace: "nowrap" }}>
-                                    {can("run.start") && <Button variant="secondary" size="sm" onClick={() => setLaunching({ template, inventory: where })}>{t("Launch")}</Button>}
-                                </Td>
                                 <Td isActionCell>
-                                    {can("template.update") && (
-                                        <ActionsColumn items={[
-                                            { title: t("Edit"), onClick: () => setEditing(template), isDisabled: !choices.data },
-                                            { title: t("Delete"), onClick: () => setDeleting(template) },
-                                        ]} />
-                                    )}
+                                    <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "nowrap" }} justifyContent={{ default: "justifyContentFlexEnd" }}>
+                                        {can("run.start") && <Button variant="secondary" size="sm" onClick={() => setLaunching({ template, inventory: where })}>{t("Launch")}</Button>}
+                                        {can("template.update") && (
+                                            <ActionsColumn items={[
+                                                { title: t("Edit"), onClick: () => setEditing(template), isDisabled: !choices.data },
+                                                { title: t("Delete"), onClick: () => setDeleting(template) },
+                                            ]} />
+                                        )}
+                                    </Flex>
                                 </Td>
                             </Tr>
                         );
@@ -545,8 +550,8 @@ export function TemplatesPage() {
                                         <Tr>
                                             {grouped && <Th screenReaderText={t("Group")} />}
                                             <Th sort={sortBy("name")}>{t("Name")}</Th><Th sort={sortBy("project")}>{t("Project")}</Th><Th>{t("Playbook")}</Th>
-                                            <Th sort={sortBy("inventory")}>{t("Inventory")}</Th><Th sort={sortBy("last_run")}>{t("Last run")}</Th><Th>{t("Schedules")}</Th>
-                                            <Th screenReaderText={t("Launch")} /><Th screenReaderText={t("Actions")} />
+                                            <Th sort={sortBy("inventory")}>{t("Inventory")}</Th><Th sort={sortBy("last_run")}>{t("Last run")}</Th><Th modifier="fitContent">{t("Schedules")}</Th>
+                                            <Th screenReaderText={t("Actions")} />
                                         </Tr>
                                     </Thead>
                                     {grouped ? groups.map(group => {

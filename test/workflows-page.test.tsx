@@ -84,7 +84,7 @@ test("the steps are in columns, alternatives and steps run anyway marked", async
     const row = screen.getAllByRole("row").find(item => within(item).queryByText("maintain"))!;
     const columns = within(row).getByRole("list", { name: "Steps in order" });
     const items = within(columns).getAllByRole("listitem").map(item => item.textContent);
-    assert.deepEqual(items, ["backup", "updaterestore · if it fails", "reboot · anyway (waits for an approval)"]);
+    assert.deepEqual(items, ["backup", "updaterestore · if it fails", "reboot · anyway (waits for a confirmation)"]);
 });
 
 test("a workflow is launched from a group on that group's inventory", async () => {
@@ -96,6 +96,20 @@ test("a workflow is launched from a group on that group's inventory", async () =
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Launch" })));
     const launch = calls.find(call => last(call.args) === "workflow.launch");
     assert.deepEqual(JSON.parse(launch?.input ?? ""), { id: "w1", inventory_id: "i2" });
+});
+
+test("Launch offers the inventories by name, whatever order the backend gives", async () => {
+    const original = MAINTAIN.inventory_ids;
+    MAINTAIN.inventory_ids = ["i2", "i1"];
+    try {
+        await page("operator");
+        const row = screen.getAllByRole("row").find(item => within(item).queryByText("maintain"))!;
+        await act(async () => fireEvent.click(within(row).getByRole("button", { name: "Launch" })));
+        const select = within(screen.getByRole("dialog")).getByLabelText(/^Inventory/) as HTMLSelectElement;
+        assert.deepEqual([...select.options].map(option => option.textContent).filter(text => text?.startsWith("aula")), ["aula-1", "aula-2"]);
+    } finally {
+        MAINTAIN.inventory_ids = original;
+    }
 });
 
 // With nothing to choose, Launch still asks first, the steps in sight.

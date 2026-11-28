@@ -212,9 +212,9 @@ function Problems({ groups, grouping, onChanged, onError }: {
             <GroupedRows groups={groups} width={grouped ? 7 : 6} {...groupProps<CheckState>(grouping)}
                 count={group => t("checks_failed_count", { count: group.items.length })}
                 row={(state, open) => (
-                    <Tr key={`${state.host_id}-${state.check_id}`} isExpanded={grouped ? open : undefined}>
+                    <Tr key={`${state.host_id}-${state.check_id}`} isHidden={grouped && !open}>
                         {grouped && <Td />}
-                        <Td dataLabel={t("State")}><StateLabel state={state.state} /><Flags state={state} /></Td>
+                        <Td dataLabel={t("State")}><div><StateLabel state={state.state} /><Flags state={state} /></div></Td>
                         <Td dataLabel={t("Host")}>
                             <Button variant="link" isInline onClick={() => openHost(state.host_id)}>{state.host}</Button>
                         </Td>
@@ -250,11 +250,13 @@ function HostList({ groups, grouping, many }: { groups: Group<FleetHost>[]; grou
             <GroupedRows groups={groups} width={grouped ? 5 : 4 + (inventory ? 1 : 0)} {...groupProps<FleetHost>(grouping)}
                 count={group => t("hosts_count", { count: group.items.length })}
                 row={(host, open) => (
-                    <Tr key={host.id} isExpanded={grouped ? open : undefined}>
+                    <Tr key={host.id} isHidden={grouped && !open}>
                         {grouped && <Td />}
                         <Td dataLabel={t("Host")}>
-                            <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
-                            {host.reachable === false && <Label isCompact color="red" style={{ marginInlineStart: "0.5rem" }}>{t("Not reachable")}</Label>}
+                            <div>
+                                <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
+                                {host.reachable === false && <Label isCompact color="red" style={{ marginInlineStart: "0.5rem" }}>{t("Not reachable")}</Label>}
+                            </div>
                         </Td>
                         {inventory && <Td dataLabel={t("Inventory")}>{host.inventory}</Td>}
                         <Td dataLabel={t("Groups")}>{host.groups.join(", ")}</Td>
@@ -284,7 +286,7 @@ function Grid({ groups, grouping, states }: { groups: Group<FleetHost>[]; groupi
                 <GroupedRows groups={groups} width={checks.length + (grouped ? 2 : 1)} {...groupProps<FleetHost>(grouping)}
                     count={group => t("hosts_count", { count: group.items.length })}
                     row={(host, open) => (
-                        <Tr key={host.id} isExpanded={grouped ? open : undefined}>
+                        <Tr key={host.id} isHidden={grouped && !open}>
                             {grouped && <Td />}
                             <Td dataLabel={t("Host")}>
                                 <Button variant="link" isInline onClick={() => openHost(host.id)}>{host.name}</Button>
@@ -425,7 +427,7 @@ function Metrics({ state }: { state: CheckState }) {
 // The details of a result: the certificates and their dates, the services and their states, and so on.
 function Details({ state }: { state: CheckState }) {
     const { t } = useTranslation();
-    const lines = detailLines(state.details);
+    const lines = detailLines(state.details, state.kind);
     if (lines.length === 0) return null;
     return (
         <DescriptionList isHorizontal isCompact aria-label={t("Details")} style={{ marginBlock: "0.5rem" }}>

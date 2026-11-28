@@ -520,7 +520,7 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
     const stateNames = useStateNames();
     const grouped = view.groupBy !== "none";
     const columns: SortColumn[] = ["name", "interval", "states"];
-    const width = grouped ? 9 : 8;
+    const width = grouped ? 8 : 7;
 
     function sortBy(column: SortColumn, index: number) {
         return {
@@ -540,16 +540,19 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
     }
 
     const row = (check: CheckDef, open: boolean) => (
-        <Tr key={check.id} isExpanded={grouped ? open : undefined}>
+        <Tr key={check.id} isHidden={grouped && !open}>
             {grouped && <Td />}
             <Td dataLabel={t("Name")}>
-                {check.name}
-                {!check.enabled && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Not enabled")}</Label>}
-                {check.checking && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Checking")}</Label>}
+                {/* One block: on a narrow screen the cell is a grid, which would stretch each label. */}
+                <div>
+                    {check.name}
+                    {!check.enabled && <Label isCompact color="grey" style={{ marginInlineStart: "0.5rem" }}>{t("Not enabled")}</Label>}
+                    {check.checking && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Checking")}</Label>}
+                </div>
             </Td>
             <Td dataLabel={t("What")}>{kindNames[check.kind] ?? check.kind}</Td>
             <Td dataLabel={t("Hosts")}>
-                {check.inventory}{check.group !== "all" && <Content component="small"> / {check.group}</Content>}
+                <div>{check.inventory}{check.group !== "all" && <Content component="small"> / {check.group}</Content>}</div>
             </Td>
             <Td dataLabel={t("Every")}>{formatInterval(check.interval)}</Td>
             <Td dataLabel={t("States")}><StateCountLabels counts={check.states} /></Td>
@@ -560,17 +563,17 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
                     </Button>
                 )}
             </Td>
-            <Td isActionCell style={{ whiteSpace: "nowrap" }}>
-                {canRun && check.enabled && <Button variant="secondary" size="sm" onClick={() => onRun(check)}>{t("Check now")}</Button>}
-            </Td>
             <Td isActionCell>
-                <ActionsColumn items={[
-                    { title: t("Recent cycles"), onClick: () => onCycles(check) },
-                    ...(canEdit ? [
-                        { title: t("Edit"), onClick: () => onEdit(check), isDisabled: !canEditNow },
-                        { title: t("Delete"), onClick: () => onDelete(check) },
-                    ] : []),
-                ]} />
+                <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "nowrap" }} justifyContent={{ default: "justifyContentFlexEnd" }}>
+                    {canRun && check.enabled && <Button variant="secondary" size="sm" onClick={() => onRun(check)}>{t("Check now")}</Button>}
+                    <ActionsColumn items={[
+                        { title: t("Recent cycles"), onClick: () => onCycles(check) },
+                        ...(canEdit ? [
+                            { title: t("Edit"), onClick: () => onEdit(check), isDisabled: !canEditNow },
+                            { title: t("Delete"), onClick: () => onDelete(check) },
+                        ] : []),
+                    ]} />
+                </Flex>
             </Td>
         </Tr>
     );
@@ -582,7 +585,7 @@ function ChecksTable({ groups, view, onChange, canRun, canEdit, canEditNow, onRu
                     {grouped && <Th screenReaderText={t("Group")} />}
                     <Th sort={sortBy("name", 0)}>{t("Name")}</Th><Th>{t("What")}</Th><Th>{t("Hosts")}</Th>
                     <Th sort={sortBy("interval", 1)}>{t("Every")}</Th><Th sort={sortBy("states", 2)}>{t("States")}</Th><Th>{t("Last cycle")}</Th>
-                    <Th screenReaderText={t("Check now")} /><Th screenReaderText={t("Actions")} />
+                    <Th screenReaderText={t("Actions")} />
                 </Tr>
             </Thead>
             {grouped ? groups.map(group => {

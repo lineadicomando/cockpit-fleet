@@ -244,6 +244,15 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- Lists of templates, workflows, checks, hosts, assets and host keys on a
+  narrow screen: each value beside its label, no scroll bar inside a row,
+  the buttons of a row no longer one over the other. A last run's date
+  stays on one line, the column of schedules is no longer cut, and
+  "Group by" offers the inventory first on templates as on workflows.
+- Workflows: a step that waits for a person says whether for a
+  confirmation or for another person's approval; Launch lists the
+  inventories by name.
+- A memory check's details show its sizes in GiB, not in bytes.
 - Documents: a text being edited asks before a reload of the page and
   before its folders' links, not only before Cancel.
 - Projects and inventories: restoring a version no longer overwrites an
