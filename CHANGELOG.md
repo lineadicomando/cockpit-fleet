@@ -147,6 +147,7 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Changed
 
+- Administration: System is the first tab, before Notifications.
 - Assistant: a profile is offered only to a role it does more for.
   `diagnostic` is for administrators of Fleet (under `[mcp] max_role`), as
   `administrator` is: for an operator it was `assisted` under another name,

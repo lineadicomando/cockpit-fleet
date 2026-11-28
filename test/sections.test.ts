@@ -23,7 +23,7 @@ test("every section is drawn by the page", () => {
 
 test("sections a user may not see leave their group, and an empty group goes", () => {
     const groups = visibleGroups(section => section !== "audit" && section !== "chat");
-    assert.deepEqual(groups.find(group => group.key === "administration")?.sections, ["notifications", "system"]);
+    assert.deepEqual(groups.find(group => group.key === "administration")?.sections, ["system", "notifications"]);
     assert.equal(groups.find(group => group.key === "chat"), undefined);
 });
 

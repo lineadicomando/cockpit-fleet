@@ -7,7 +7,7 @@ export const GROUPS: { key: string; sections: string[] }[] = [
     { key: "nodes", sections: ["assets", "checks", "hosts", "hostkeys", "network"] },
     { key: "automation", sections: ["templates", "workflows", "schedules", "runs"] },
     { key: "resources", sections: ["projects", "inventories", "store", "documents", "variables", "credentials"] },
-    { key: "administration", sections: ["notifications", "system", "audit"] },
+    { key: "administration", sections: ["system", "notifications", "audit"] },
     { key: "chat", sections: ["chat"] },
 ];
 
