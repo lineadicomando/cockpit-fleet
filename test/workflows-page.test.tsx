@@ -98,6 +98,28 @@ test("a workflow is launched from a group on that group's inventory", async () =
     assert.deepEqual(JSON.parse(launch?.input ?? ""), { id: "w1", inventory_id: "i2" });
 });
 
+// With nothing to choose, Launch still asks first, the steps in sight.
+test("a workflow on its own inventory is launched only once confirmed", async () => {
+    const own = { ...MAINTAIN, inventory_id: "i1", inventory_ids: null };
+    const original = MAINTAIN;
+    Object.assign(MAINTAIN, own);
+    try {
+        await page("operator");
+        const row = screen.getAllByRole("row").find(item => within(item).queryByText("maintain"))!;
+        await act(async () => fireEvent.click(within(row).getByRole("button", { name: "Launch" })));
+        assert.equal(calls.some(call => last(call.args) === "workflow.launch"), false);
+        const dialog = screen.getByRole("dialog");
+        assert.ok(within(dialog).getByText("Every step runs on aula-1."));
+        assert.ok(within(dialog).getByRole("list", { name: "Steps in order" }));
+        await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Launch" })));
+        const launches = calls.filter(call => last(call.args) === "workflow.launch");
+        const launch = launches[launches.length - 1];
+        assert.deepEqual(JSON.parse(launch?.input ?? ""), { id: "w1" });
+    } finally {
+        Object.assign(original, { inventory_id: null, inventory_ids: ["i1", "i2"] });
+    }
+});
+
 test("a filter that leaves nothing says so, and clears", async () => {
     await page("viewer");
     fireEvent.change(screen.getByLabelText("Filter by feature"), { target: { value: "unscheduled" } });

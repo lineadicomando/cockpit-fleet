@@ -332,8 +332,11 @@ function ScanResults({ id }: { id: string }) {
     const options = data.run.options;
     const hosts = filterScanHosts(data.hosts, search);
     const chosen = data.hosts.filter(host => selected.has(host.address));
-    // What the actions take: the hosts chosen, or every one when none is.
+    // What the actions take: the hosts chosen, or, when none is, every one for
+    // the MAC addresses, and those new to the fleet for an inventory (not this
+    // controller, nor a host some inventory has already).
     const taken = chosen.length > 0 ? chosen : data.hosts;
+    const forInventory = chosen.length > 0 ? chosen : data.hosts.filter(host => !host.self && host.known.length === 0);
     const allShown = hosts.length > 0 && hosts.every(host => selected.has(host.address));
     const select = (addresses: string[], on: boolean) => setSelected(current => {
         const next = new Set(current);
@@ -365,7 +368,7 @@ function ScanResults({ id }: { id: string }) {
                 <Alert variant="info" isInline title={t("This subnet is beyond a router: MAC addresses come only from NetBIOS, from the hosts that give it.")} style={{ marginBottom: "1rem" }} />
             )}
             {done && <Alert variant="success" isInline title={done} style={{ marginBottom: "1rem" }} />}
-            {dialog === "inventory" && <InventoryModal id={id} hosts={taken} onClose={() => setDialog("")} />}
+            {dialog === "inventory" && <InventoryModal id={id} hosts={forInventory} onClose={() => setDialog("")} />}
             {dialog === "macs" && <MacsModal id={id} hosts={taken} onClose={() => setDialog("")} onDone={setDone} />}
             {data.done && data.hosts.length > 0 && (
                 <>
@@ -375,10 +378,12 @@ function ScanResults({ id }: { id: string }) {
                                 onChange={(_e, value) => setSearch(value)} onClear={() => setSearch("")} style={{ maxWidth: "30rem" }} />
                         </FlexItem>
                         <FlexItem>
-                            {chosen.length > 0 ? t("chosen_hosts_count", { count: chosen.length }) : t("No host chosen: the actions take them all.")}
+                            {chosen.length > 0 ? t("chosen_hosts_count", { count: chosen.length }) : t("No host chosen: an inventory takes those in none yet, the MAC addresses all of them.")}
                         </FlexItem>
                         {can("netscan.inventory") && (
-                            <Button variant="secondary" onClick={() => { setDone(""); setDialog("inventory"); }}>{t("Create an inventory")}</Button>
+                            <Button variant="secondary" isDisabled={forInventory.length === 0} onClick={() => { setDone(""); setDialog("inventory"); }}>
+                                {t("create_inventory_hosts_count", { count: forInventory.length })}
+                            </Button>
                         )}
                         {can("netscan.macs") && (
                             <Button variant="secondary" onClick={() => { setDone(""); setDialog("macs"); }}>{t("Write the MAC addresses into an inventory")}</Button>

@@ -210,7 +210,7 @@ function Transfer() {
     const outcomes = { created: t("Created"), exists: t("Already there"), failed: t("Not created") };
     const sections: Record<string, string> = {
         credentials: t("Credential"), projects: t("Project"), inventories: t("Inventory"), host_keys: t("Host key"), templates: t("Job template"),
-        schedules: t("Schedule"), checks: t("Which check"), channels: t("Channel"), rules: t("Rule"),
+        variable_sets: t("Set of variables"), workflows: t("Workflow"), schedules: t("Schedule"), checks: t("Check"), channels: t("Channel"), rules: t("Rule"),
     };
 
     return (
@@ -226,7 +226,7 @@ function Transfer() {
                         onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) load(file); }} />
                 </Flex>
             </Flex>
-            <Content component="p">{t("Credentials, projects, inventories, trusted host keys, job templates, schedules, notification channels and their rules, as one file. It holds no secret: after an import, enter the secrets of the credentials and of the channels again. The files of a project written here or uploaded are not in it.")}</Content>
+            <Content component="p">{t("Credentials, projects, inventories, trusted host keys, sets of variables, job templates, workflows, schedules, checks, notification channels and their rules, as one file. It holds no secret: after an import, enter again the secrets of the credentials, of the channels and the secret variables of the sets. The files of a project written here or uploaded are not in it.")}</Content>
             {error && <Alert variant="danger" isInline title={error} />}
             {report && (
                 <>

@@ -47,7 +47,11 @@ among the English ones.
 **Runs started and opened.** Launching a template, a workflow, a schedule,
 an ad-hoc command, a sync or an upload does not open the run: the page
 stays where it is, and a notice in a corner (`StartedRuns` in
-`common.tsx`) links to it for a few seconds. A link to a run (`openRun`)
+`common.tsx`) links to it for a few seconds; one waiting for an approval
+is said to wait, not to have started. A workflow's Launch, and a
+schedule's "Run now", always ask first, the workflow's dialog with its
+steps in sight even when there is no inventory to choose: either starts a
+chain of runs. A link to a run (`openRun`)
 or to a host (`openHost`) carries the page it was followed from in the URL
 (`#/runs/ID?from=templates`), and the page offers "Back" to it;
 `originPath` takes only a known section, since the URL can be typed. The
@@ -59,9 +63,15 @@ of a project or an inventory) has its ways out as links above the title
 (`PageNav` in `common.tsx`), the first with an arrow, and only actions in
 the header on the right. With the two in one row of buttons alike, "Back"
 sat beside "Cancel run", which acted at once. Actions that cannot be
-taken back ask first (canceling a run, a download or a copy, with
-"Keep running" rather than "Cancel" to close the dialog), and a button
-that only leaves does not sit among the actions of a dialog either.
+taken back ask first (canceling a run, a download or a copy, ending the
+trust of a host key, with "Keep running" rather than "Cancel" to close
+the dialog), and a button that only leaves does not sit among the actions
+of a dialog either. The long forms (a template, a workflow, a schedule, a
+check, a rule, a channel, a credential, a set of variables) ask before
+closing once typed into (`guardClose` of `FormModal`), and the error of
+any form is brought into sight. A list whose refresh fails stays, under
+a warning with "Try again" (`ListState`); only a list never loaded gives
+way to the error.
 
 **Long lists.** Checks, job templates, host keys and the hosts of Hosts
 and Assets are filtered and grouped (checks and templates also sorted) in

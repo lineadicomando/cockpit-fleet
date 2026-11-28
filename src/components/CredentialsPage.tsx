@@ -103,7 +103,7 @@ function CredentialModal({ credential, onClose, onDone }: { credential?: Credent
 
     return (
         <FormModal title={credential ? t("Edit credential") : t("New credential")} submitLabel={credential ? t("Save") : t("Create")}
-            onSubmit={submit} onClose={onClose} isDisabled={!name.trim()}>
+            onSubmit={submit} onClose={onClose} guardClose isDisabled={!name.trim()}>
             <FormGroup label={t("Name")} isRequired fieldId="cred-name">
                 <TextInput id="cred-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>

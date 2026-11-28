@@ -186,7 +186,7 @@ function ChannelModal({ channel, onClose, onDone }: { channel?: Channel; onClose
 
     return (
         <FormModal title={channel ? t("Edit channel") : t("New channel")} submitLabel={channel ? t("Save") : t("Create")}
-            onSubmit={submit} onClose={onClose} isDisabled={!name.trim()}>
+            onSubmit={submit} onClose={onClose} guardClose isDisabled={!name.trim()}>
             <FormGroup label={t("Name")} isRequired fieldId="ch-name">
                 <TextInput id="ch-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
@@ -292,7 +292,7 @@ function RuleModal({ rule, channels, onClose, onDone }: { rule?: NotifyRule; cha
     }
 
     return (
-        <FormModal title={rule ? t("Edit rule") : t("New rule")} submitLabel={rule ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose}
+        <FormModal title={rule ? t("Edit rule") : t("New rule")} submitLabel={rule ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose} guardClose
             isDisabled={!name.trim() || !channelId || events.length === 0 || (scope !== "all" && !scopeId) || (scope === "group" && !group)}>
             <FormGroup label={t("Name")} isRequired fieldId="rule-name">
                 <TextInput id="rule-name" value={name} onChange={(_e, value) => setName(value)} isRequired />

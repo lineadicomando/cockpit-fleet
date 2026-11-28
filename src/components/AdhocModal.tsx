@@ -56,7 +56,7 @@ export function AdhocModal({ onClose }: { onClose: () => void }) {
             module: chosenModule, free_form: freeForm.trim(),
             machine_credential_id: machineId, vault_credential_ids: vaultIds, become, check, serial,
         });
-        announceRun(run.id, run.title);
+        announceRun(run.id, run.title, run.status);
         onClose();
     }
 

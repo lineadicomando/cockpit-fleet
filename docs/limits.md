@@ -63,6 +63,10 @@ What is protected and what is not, for an administrator, is in
   GitHub's, not CommonMark to the letter (`documents.md`); no HTML, no
   images from outside the documents, 4 MB each and 16 MB a document at
   most. A text is at most 1 MiB; an upload of an attachment is not resumed.
+  A text being edited asks before a reload and before its own links and
+  Cancel, but not before the tabs of Fleet, which lose it (the editor of
+  a project keeps its tabs instead); uploads in progress stop when the
+  section is left (said under them).
   The search reads every text at each call (no index), the listing stops at
   20 000 entries. A PDF only through the browser's printing, never on the
   controller. Two people editing one text: the second save is refused, and
@@ -189,7 +193,11 @@ What is protected and what is not, for an administrator, is in
   the states on the page of hosts are headings; pages not seen as a viewer
   or an operator, nor the chat, in this audit; the header "Which check" of
   the tables of states cut short at 1440 px beside Cockpit's menu; with a
-  few hours of values a chart of a day is mostly empty.
+  few hours of values a chart of a day is mostly empty. A long form
+  (`guardClose` of `FormModal`) knows it was typed into, not that it
+  changed: a choice in a menu drawn outside it, or text typed and erased,
+  does not count. A notice of a run says "waiting for an approval", not
+  that it waits in series: every run starts queued.
 - CMDB: zypper never had an update to find; dnf without `become` refetches
   metadata into the account's cache; a security-update notification end to
   end not seen.

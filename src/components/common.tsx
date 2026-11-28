@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import cockpit from "cockpit";
 import {
@@ -71,7 +71,8 @@ export function PageNav({ links }: { links: (NavLink | null | false | undefined)
 
 // A run that was just started is announced, not opened: the page stays where
 // it is, and the notice links to the run.
-interface StartedRun { key: number; id: string; title: string }
+// One waiting for an approval is said to wait: it has not started.
+interface StartedRun { key: number; id: string; title: string; waiting: boolean }
 let started: StartedRun[] = [];
 let nextKey = 0;
 const listeners = new Set<(runs: StartedRun[]) => void>();
@@ -81,8 +82,8 @@ function setStarted(runs: StartedRun[]) {
     for (const listener of listeners) listener(runs);
 }
 
-export function announceRun(id: string, title = "") {
-    setStarted([...started, { key: nextKey++, id, title }]);
+export function announceRun(id: string, title = "", status?: RunStatus) {
+    setStarted([...started, { key: nextKey++, id, title, waiting: status === "pending_approval" }]);
 }
 
 export function StartedRuns() {
@@ -98,7 +99,9 @@ export function StartedRuns() {
         <AlertGroup isToast isLiveRegion>
             {runs.map(run => (
                 <Alert key={run.key} variant="info" timeout={8000} onTimeout={() => dismiss(run.key)}
-                    title={run.title ? t("Started: {{title}}", { title: run.title }) : t("The run was started")}
+                    title={run.waiting
+                        ? (run.title ? t("Waiting for an approval: {{title}}", { title: run.title }) : t("The run waits for an approval"))
+                        : (run.title ? t("Started: {{title}}", { title: run.title }) : t("The run was started"))}
                     actionClose={<AlertActionCloseButton onClose={() => dismiss(run.key)} />}
                     actionLinks={<AlertActionLink onClick={() => { dismiss(run.key); openRun(run.id); }}>{t("Open the run")}</AlertActionLink>} />
             ))}
@@ -126,16 +129,27 @@ export function ListState<T>({ loaded, isEmpty, emptyTitle, emptyBody, children 
     children: (data: T) => React.ReactNode;
 }) {
     const { t } = useTranslation();
-    if (loaded.error) return <Alert variant="danger" isInline title={loaded.error.message} />;
+    const retry = <AlertActionLink onClick={loaded.reload}>{t("Try again")}</AlertActionLink>;
+    if (loaded.error && !loaded.data) return <Alert variant="danger" isInline title={loaded.error.message} actionLinks={retry} />;
     if (!loaded.data) return <Spinner aria-label={t("Loading")} />;
+    // A refresh that failed leaves what was loaded in sight, said to be maybe out of date.
+    const stale = loaded.error && (
+        <Alert variant="warning" isInline title={t("Could not refresh: what is shown may be out of date.")} actionLinks={retry}
+            style={{ marginBottom: "1rem" }}>
+            {loaded.error.message}
+        </Alert>
+    );
     if (isEmpty(loaded.data)) {
         return (
-            <EmptyState titleText={emptyTitle} headingLevel="h3">
-                <EmptyStateBody>{emptyBody}</EmptyStateBody>
-            </EmptyState>
+            <>
+                {stale}
+                <EmptyState titleText={emptyTitle} headingLevel="h3">
+                    <EmptyStateBody>{emptyBody}</EmptyStateBody>
+                </EmptyState>
+            </>
         );
     }
-    return <>{children(loaded.data)}</>;
+    return <>{stale}{children(loaded.data)}</>;
 }
 
 interface FormModalProps {
@@ -149,14 +163,26 @@ interface FormModalProps {
     variant?: ModalVariant;
     // In place of "Cancel", when the action itself is a cancellation.
     cancelLabel?: string;
+    // A long form: once something was typed in it, closing it without
+    // saving asks first (Escape, the close button, Cancel).
+    guardClose?: boolean;
 }
 
 // A dialog that runs one action: keeps the button busy, shows the error and
 // stays open when the action fails.
-export function FormModal({ title, submitLabel, onSubmit, onClose, children, isDanger, isDisabled, variant, cancelLabel }: FormModalProps) {
+export function FormModal({ title, submitLabel, onSubmit, onClose, children, isDanger, isDisabled, variant, cancelLabel, guardClose }: FormModalProps) {
     const { t } = useTranslation();
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    // Typed into: an input event reaches the form from any field in it,
+    // the code editor's included (menus drawn outside it change nothing typed).
+    const [touched, setTouched] = useState(false);
+    const [closing, setClosing] = useState(false);
+    const errorRef = useRef<HTMLDivElement>(null);
+    const close = () => (guardClose && touched && !submitting ? setClosing(true) : onClose());
+
+    // The error is shown at the top: a form scrolled down to its end is brought back to it.
+    useEffect(() => { if (error) errorRef.current?.scrollIntoView?.({ block: "nearest" }); }, [error]);
 
     async function submit() {
         setSubmitting(true);
@@ -170,11 +196,12 @@ export function FormModal({ title, submitLabel, onSubmit, onClose, children, isD
     }
 
     return (
-        <Modal variant={variant ?? ModalVariant.medium} isOpen onClose={onClose}>
+        <Modal variant={variant ?? ModalVariant.medium} isOpen onClose={close}>
             <ModalHeader title={title} />
             <ModalBody>
-                {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
-                <Form onSubmit={event => { event.preventDefault(); if (!isDisabled && !submitting) submit(); }}>
+                {error && <div ref={errorRef} role="alert"><Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} /></div>}
+                <Form onSubmit={event => { event.preventDefault(); if (!isDisabled && !submitting) submit(); }}
+                    onInput={guardClose ? () => setTouched(true) : undefined}>
                     {children}
                 </Form>
             </ModalBody>
@@ -187,8 +214,18 @@ export function FormModal({ title, submitLabel, onSubmit, onClose, children, isD
                 >
                     {submitLabel}
                 </Button>
-                <Button variant="link" onClick={onClose}>{cancelLabel ?? t("Cancel")}</Button>
+                <Button variant="link" onClick={close}>{cancelLabel ?? t("Cancel")}</Button>
             </ModalFooter>
+            {closing && (
+                <Modal variant={ModalVariant.small} isOpen onClose={() => setClosing(false)}>
+                    <ModalHeader title={t("Discard the changes?")} />
+                    <ModalBody>{t("What was written in this form is lost.")}</ModalBody>
+                    <ModalFooter>
+                        <Button variant="danger" onClick={() => { setClosing(false); onClose(); }}>{t("Discard")}</Button>
+                        <Button variant="link" onClick={() => setClosing(false)}>{t("Keep editing")}</Button>
+                    </ModalFooter>
+                </Modal>
+            )}
         </Modal>
     );
 }

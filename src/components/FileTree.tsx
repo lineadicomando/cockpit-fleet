@@ -96,8 +96,8 @@ export function FileTree({
         }
     }
 
-    // Where a drag may end: a directory, or the top for "". Only nodes of
-    // this tree, or files from outside it.
+    // Where a drag may end: a directory (a file stands for its own), or the
+    // top for "". Only nodes of this tree, or files from outside it.
     function dropProps(into: string) {
         if (!editable) return {};
         return {
@@ -160,7 +160,7 @@ export function FileTree({
                     <div className={classes.join(" ")} style={{ paddingInlineStart: `${(level - 1) * 1.25 + 0.25}rem` }}
                         draggable={editable}
                         onDragStart={event => dragStart(event, node)}
-                        {...(isDirectory ? dropProps(node.path) : {})}
+                        {...dropProps(isDirectory ? node.path : dirname(node.path))}
                         onClick={event => {
                             setFocused(node.path);
                             if (editable && (event.ctrlKey || event.metaKey)) toggleSelected(node.path);

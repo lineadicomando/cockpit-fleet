@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Checkbox, Content, Flex, FlexItem, FormGroup, FormSelect, FormSelectOption, Label, Radio, Split, SplitItem, TextInput, Tooltip,
+    Checkbox, Content, Flex, FlexItem, FormGroup, FormSelect, FormSelectOption, Label, ModalVariant, Radio, Split, SplitItem, TextInput, Tooltip,
 } from "@patternfly/react-core";
 import { ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { call } from "../lib/fleet.ts";
@@ -256,7 +256,7 @@ function HostKeysToolbar({ view, onChange, inventories, groups, shown, total }: 
                     </FormSelect>
                 </FlexItem>
                 <GroupByChoice id="hk-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
-                    options={[["host", t("Host")], ["inventory", t("Inventory")], ["none", t("Nothing")]]}
+                    options={[["host", t("Host")], ["inventory", t("Inventory")], ["none", t("No grouping")]]}
                     groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withHostKeyGroupsOpen(view, groups, !allOpen))} />
             </Flex>
             <FilterChips chips={chips} onClearAll={() => onChange(withoutHostKeyFilters(view))} shown={shown} total={total} />
@@ -273,17 +273,9 @@ export function HostKeysPage() {
     const [adding, setAdding] = useState(false);
     const [checking, setChecking] = useState<string[] | null>(null);
     const [removing, setRemoving] = useState<KeyHost[] | null>(null);
+    const [removingKey, setRemovingKey] = useState<{ key: HostKey; host: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    async function removeKey(key: HostKey) {
-        setError(null);
-        try {
-            await call("hostkey.remove", { id: key.id });
-            list.reload();
-        } catch (ex) {
-            setError(message(ex));
-        }
-    }
 
     async function exportKeys(hosts: KeyHost[]) {
         setError(null);
@@ -366,7 +358,7 @@ export function HostKeysPage() {
                                         <Td dataLabel={t("Trusted by")}>{key.added_by}</Td>
                                         <Td dataLabel={t("When")}>{formatTime(key.added_at, i18n.language)}</Td>
                                         <Td isActionCell>
-                                            {can("hostkey.remove") && <ActionsColumn items={[{ title: t("Stop trusting this key"), onClick: () => removeKey(key) }]} />}
+                                            {can("hostkey.remove") && <ActionsColumn items={[{ title: t("Stop trusting this key"), onClick: () => setRemovingKey({ key, host: host.host }) }]} />}
                                         </Td>
                                     </Tr>
                                 ))}
@@ -485,6 +477,15 @@ export function HostKeysPage() {
             </ListState>
             {adding && <TrustModal onClose={() => setAdding(false)} onDone={list.reload} />}
             {checking && <TrustModal hosts={checking} onClose={() => setChecking(null)} onDone={list.reload} />}
+            {removingKey && (
+                <FormModal title={t("Stop trusting this key of {{host}}?", { host: removingKey.host })} submitLabel={t("Stop trusting")} isDanger
+                    variant={ModalVariant.small} onClose={() => setRemovingKey(null)}
+                    onSubmit={async () => { await call("hostkey.remove", { id: removingKey.key.id }); setRemovingKey(null); list.reload(); }}>
+                    <Content component="p">
+                        {t("Runs and checks refuse to connect with this key ({{fingerprint}}) until it is trusted again.", { fingerprint: removingKey.key.fingerprint })}
+                    </Content>
+                </FormModal>
+            )}
             {removing && (
                 <RemoveHostsModal hosts={removing} onClose={() => setRemoving(null)}
                     onDone={() => { choose(removing, false); list.reload(); }} />

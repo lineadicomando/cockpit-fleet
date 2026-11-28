@@ -76,7 +76,8 @@ host or its `ansible_host`), whatever their case. With `wait`, as
 
 **An inventory from a scan.** `netscan.inventory` makes an inventory
 written here (managed, YAML) of the hosts of an ended scan that the caller
-chose by address, through `inventory.create` itself, so that an agent's
+chose by address (the page, when none is chosen, offers those in no
+inventory yet and not the controller itself; the MAC addresses take all), through `inventory.create` itself, so that an agent's
 waits in a draft as any inventory an agent creates; one made in main is
 read at once. Each host is named as asked: `short` (the NetBIOS name in
 lower case, or the first label of the DNS name), `dns` (the whole name) or

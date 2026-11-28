@@ -252,3 +252,14 @@ export function isGroupOpen(view: ChecksView, group: CheckGroup, groups: number)
 export function withGroupsOpen(view: ChecksView, groups: CheckGroup[], open: boolean): ChecksView {
     return { ...view, open: withOpen(view.open, view.groupBy, groups.map(group => group.key), open) };
 }
+
+// What a check found beyond its summary (its `details`), as lines to show:
+// a scalar or a list of scalars on one line, anything deeper as JSON.
+export function detailLines(details: Record<string, unknown> | null | undefined): { key: string; text: string; block: boolean }[] {
+    const scalar = (value: unknown) => value === null || ["string", "number", "boolean"].includes(typeof value);
+    return Object.entries(details ?? {}).map(([key, value]) => {
+        if (scalar(value)) return { key, text: String(value), block: false };
+        if (Array.isArray(value) && value.every(scalar)) return { key, text: value.map(String).join(", "), block: false };
+        return { key, text: JSON.stringify(value, null, 2), block: true };
+    });
+}

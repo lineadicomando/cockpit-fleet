@@ -204,7 +204,7 @@ function CheckModal({ check, catalog, inventories, credentials, hosts, projects,
     };
 
     return (
-        <FormModal title={check ? t("Edit check") : t("New check")} submitLabel={check ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose}
+        <FormModal title={check ? t("Edit check") : t("New check")} submitLabel={check ? t("Save") : t("Create")} onSubmit={submit} onClose={onClose} guardClose
             isDisabled={!name.trim() || !inventoryId || missing || !thresholdsValid(fields) || !(Number(interval) >= 1) || (own && (!projectId || !playbook.trim()))}>
             <Grid hasGutter md={6}>
                 <GridItem>
@@ -493,7 +493,7 @@ function ChecksToolbar({ view, onChange, inventories, groups, shown, total }: {
                     </FormSelect>
                 </FlexItem>
                 <GroupByChoice id="chk-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
-                    options={[["inventory", t("Inventory")], ["kind", t("Kind")], ["state", t("Worst state")], ["none", t("Nothing")]]}
+                    options={[["inventory", t("Inventory")], ["kind", t("Kind")], ["state", t("Worst state")], ["none", t("No grouping")]]}
                     groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withGroupsOpen(view, groups, !allOpen))} />
             </Flex>
             <FilterChips chips={chips} onClearAll={() => onChange(withoutFilters(view))} shown={shown} total={total} />

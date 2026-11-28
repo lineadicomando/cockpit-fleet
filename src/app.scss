@@ -176,6 +176,7 @@
 }
 .fleet-chat-value { white-space: pre-wrap; word-break: break-word; }
 .fleet-chat-instructions { white-space: pre-wrap; word-break: break-word; font-size: var(--pf-t--global--font--size--sm); margin: 0; }
+.fleet-details { white-space: pre-wrap; word-break: break-word; font-size: var(--pf-t--global--font--size--sm); margin: 0; max-height: 20rem; overflow: auto; }
 /* Open, the instructions must leave room for the conversation below them. */
 .fleet-chat-layers { margin-block-start: var(--pf-t--global--spacer--sm); max-block-size: 30vh; overflow-y: auto; }
 

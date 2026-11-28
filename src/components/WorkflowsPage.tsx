@@ -165,7 +165,9 @@ function StepEditor({ step, steps, templates, scope, inventories, projects, onCh
                     <TextInput id={`wf-${step.id}-limit`} value={step.limit} placeholder={template?.limit_hosts || "web01,web02"} onChange={(_e, value) => onChange({ ...step, limit: value })} />
                     {template && (
                         <FormHelperText><HelperText><HelperTextItem>
-                            {t("Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them.", { inventory })}
+                            {inventory
+                                ? t("Hosts or groups of {{inventory}}, to narrow the job template's; empty for all of them.", { inventory })
+                                : t("Hosts or groups of the inventory chosen at launch, to narrow the job template's; empty for all of them.")}
                         </HelperTextItem></HelperText></FormHelperText>
                     )}
                 </FormGroup>
@@ -241,7 +243,7 @@ function WorkflowModal({ workflow, choices, onClose, onDone }: { workflow?: Work
     }
 
     return (
-        <FormModal title={workflow ? t("Edit workflow") : t("New workflow")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose} isDisabled={invalid}>
+        <FormModal title={workflow ? t("Edit workflow") : t("New workflow")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose} guardClose isDisabled={invalid}>
             <FormGroup label={t("Name")} isRequired fieldId="wf-name">
                 <TextInput id="wf-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>
@@ -358,7 +360,7 @@ function WorkflowsToolbar({ view, onChange, projects, inventories, groups, shown
                     </FormSelect>
                 </FlexItem>
                 <GroupByChoice id="wf-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
-                    options={[["inventory", t("Inventory")], ["project", t("Project")], ["outcome", t("Last run")], ["none", t("Nothing")]]}
+                    options={[["inventory", t("Inventory")], ["project", t("Project")], ["outcome", t("Last run")], ["none", t("No grouping")]]}
                     groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withWorkflowGroupsOpen(view, groups, !allOpen))} />
             </Flex>
             <FilterChips chips={chips} onClearAll={() => onChange(withoutWorkflowFilters(view))} shown={shown} total={total} />
@@ -381,7 +383,6 @@ export function WorkflowsPage() {
     const [editing, setEditing] = useState<Workflow | "new" | null>(null);
     const [launching, setLaunching] = useState<{ workflow: Workflow; inventory?: string } | null>(null);
     const [deleting, setDeleting] = useState<Workflow | null>(null);
-    const [error, setError] = useState<string | null>(null);
     const templateById = new Map((templates.data?.templates ?? []).map(item => [item.id, item]));
     const projectNames = new Map((places.data?.projects ?? []).map(item => [item.id, item.name]));
     const inventoryNames = new Map((places.data?.inventories ?? []).map(item => [item.id, item.name]));
@@ -412,24 +413,12 @@ export function WorkflowsPage() {
         return workflow.inventory_ids === null ? usable : workflow.inventory_ids.filter(id => usable.includes(id));
     }
 
-    async function launch(workflow: Workflow) {
-        setError(null);
-        try {
-            const run = await call<Run>("workflow.launch", { id: workflow.id });
-            announceRun(run.id, run.title);
-            list.reload();
-        } catch (ex) {
-            setError(message(ex));
-        }
-    }
-
     return (
         <>
             <SectionHeader title={t("Workflows")}>
                 <Button variant="secondary" onClick={list.reload}>{t("Refresh")}</Button>
                 {can("workflow.create") && <Button variant="primary" onClick={() => setEditing("new")} isDisabled={!choices}>{t("New workflow")}</Button>}
             </SectionHeader>
-            {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "1rem" }} />}
             <ListState loaded={list} isEmpty={data => data.workflows.length === 0}
                 emptyTitle={t("No workflows yet")}
                 emptyBody={t("A workflow runs job templates one after the other: each step starts by how the steps before it ended.")}>
@@ -510,7 +499,7 @@ export function WorkflowsPage() {
                                 <Td isActionCell>
                                     <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "nowrap" }} justifyContent={{ default: "justifyContentFlexEnd" }}>
                                         {can("workflow.launch") && <Button variant="secondary" size="sm"
-                                            onClick={() => inventoryChoices(workflow).length ? setLaunching({ workflow, inventory: where }) : launch(workflow)}>{t("Launch")}</Button>}
+                                            onClick={() => setLaunching({ workflow, inventory: where })}>{t("Launch")}</Button>}
                                         {can("workflow.update") && (
                                             <ActionsColumn items={[
                                                 { title: t("Edit"), onClick: () => setEditing(workflow), isDisabled: !choices },
@@ -561,7 +550,9 @@ export function WorkflowsPage() {
             )}
             {launching && (
                 <LaunchWorkflowModal workflow={launching.workflow} inventories={inventoryChoices(launching.workflow)} names={inventoryNames}
-                    initial={launching.inventory} onClose={() => setLaunching(null)} onLaunched={list.reload} />
+                    initial={launching.inventory} onClose={() => setLaunching(null)} onLaunched={list.reload}
+                    steps={<StepColumns columns={stepColumns(launching.workflow.nodes, launching.workflow.edges, node => stepName(node, names),
+                        node => stepAsksApproval(node, names.template))} />} />
             )}
             {deleting && (
                 <ConfirmDelete what={t("Its past runs stay.")} name={deleting.name}
@@ -574,8 +565,11 @@ export function WorkflowsPage() {
 
 // The inventory every step of a run is to be on, or each step's own.
 // initial: the inventory of the group it was launched from ("" each step's own).
-function LaunchWorkflowModal({ workflow, inventories, names, initial, onClose, onLaunched }: {
-    workflow: Workflow; inventories: string[]; names: Map<string, string>; initial?: string; onClose: () => void; onLaunched: () => void;
+// With no inventory to choose it is still asked, with the steps in sight:
+// a launch from the list never starts a chain of runs at one click.
+function LaunchWorkflowModal({ workflow, inventories, names, initial, steps, onClose, onLaunched }: {
+    workflow: Workflow; inventories: string[]; names: Map<string, string>; initial?: string; steps: React.ReactNode;
+    onClose: () => void; onLaunched: () => void;
 }) {
     const { t } = useTranslation();
     const [inventoryId, setInventoryId] = useState(initial && inventories.includes(initial) ? initial : "");
@@ -583,7 +577,7 @@ function LaunchWorkflowModal({ workflow, inventories, names, initial, onClose, o
 
     async function submit() {
         const run = await call<Run>("workflow.launch", { id: workflow.id, ...(inventoryId ? { inventory_id: inventoryId } : {}) });
-        announceRun(run.id, run.title);
+        announceRun(run.id, run.title, run.status);
         onLaunched();
         onClose();
     }
@@ -591,15 +585,26 @@ function LaunchWorkflowModal({ workflow, inventories, names, initial, onClose, o
     return (
         <FormModal title={t("Launch {{name}}", { name: workflow.name })} submitLabel={t("Launch")} onSubmit={submit} onClose={onClose}
             isDisabled={needed && !inventoryId}>
-            <FormGroup label={t("Inventory")} isRequired={needed} fieldId="wfl-inventory">
-                <FormSelect id="wfl-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
-                    {needed
-                        ? !inventoryId && <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
-                        : <FormSelectOption value="" label={t("Each step's own")} />}
-                    {inventories.map(id => <FormSelectOption key={id} value={id} label={names.get(id) ?? id} />)}
-                </FormSelect>
-                <FormHelperText><HelperText><HelperTextItem>{t("Every step runs on the inventory chosen; the list has those all of its job templates allow.")}</HelperTextItem></HelperText></FormHelperText>
-            </FormGroup>
+            {inventories.length > 0
+                ? (
+                    <FormGroup label={t("Inventory")} isRequired={needed} fieldId="wfl-inventory">
+                        <FormSelect id="wfl-inventory" value={inventoryId} onChange={(_e, value) => setInventoryId(value)}>
+                            {needed
+                                ? !inventoryId && <FormSelectOption value="" label={t("Choose an inventory")} isPlaceholder />
+                                : <FormSelectOption value="" label={t("Each step's own")} />}
+                            {inventories.map(id => <FormSelectOption key={id} value={id} label={names.get(id) ?? id} />)}
+                        </FormSelect>
+                        <FormHelperText><HelperText><HelperTextItem>{t("Every step runs on the inventory chosen; the list has those all of its job templates allow.")}</HelperTextItem></HelperText></FormHelperText>
+                    </FormGroup>
+                )
+                : (
+                    <Content component="p">
+                        {workflow.inventory_id
+                            ? t("Every step runs on {{inventory}}.", { inventory: names.get(workflow.inventory_id) ?? workflow.inventory_id })
+                            : t("Each step runs on the inventory of its job template.")}
+                    </Content>
+                )}
+            <FormGroup label={t("Steps in order")} fieldId="wfl-steps" role="group">{steps}</FormGroup>
         </FormModal>
     );
 }
@@ -641,7 +646,7 @@ export function WorkflowSteps({ id }: { id: string }) {
         setError(null);
         try {
             const run = await call<Run>("workflow.resume", { id });
-            announceRun(run.id, run.title);
+            announceRun(run.id, run.title, run.status);
         } catch (ex) {
             setError(message(ex));
         }

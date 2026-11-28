@@ -260,6 +260,14 @@ export function FileManager<F extends Listed>(props: Props<F>) {
     uploadsLeft.current = uploads.filter(item => item.state === "waiting").length;
     const sending = uploads.some(item => item.state === "sending");
     const next = uploads.find(item => item.state === "waiting");
+    // Reloading or closing the browser's tab while uploads go on asks first.
+    const uploading = sending || !!next;
+    useEffect(() => {
+        if (!uploading) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [uploading]);
     useEffect(() => {
         if (sending || !next) return;
         const item = next;
@@ -829,6 +837,7 @@ export function FileManager<F extends Listed>(props: Props<F>) {
             )}
             {props.list.data && !props.list.data.complete && <Alert variant="warning" isInline title={words.incomplete} style={{ marginBottom: "1rem" }} />}
 
+            {uploading && <Content component="small">{t("Leaving this page stops the uploads not finished.")}</Content>}
             {uploads.length > 0 && (
                 <Table variant="compact" aria-label={t("Uploads")} style={{ marginBottom: "1rem" }}>
                     <Thead>

@@ -112,7 +112,7 @@ function VariableSetModal({ set, onClose, onDone }: { set?: VariableSet; onClose
 
     return (
         <FormModal title={set ? t("Edit set of variables") : t("New set of variables")} submitLabel={set ? t("Save") : t("Create")}
-            onSubmit={submit} onClose={onClose} isDisabled={!name.trim()}>
+            onSubmit={submit} onClose={onClose} guardClose isDisabled={!name.trim()}>
             <FormGroup label={t("Name")} isRequired fieldId="varset-name">
                 <TextInput id="varset-name" value={name} onChange={(_e, value) => setName(value)} isRequired />
             </FormGroup>

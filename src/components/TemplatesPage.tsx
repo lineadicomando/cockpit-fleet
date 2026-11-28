@@ -102,7 +102,7 @@ function TemplateModal({ template, choices, onClose, onDone }: { template?: Temp
     const ofKind = (kind: string) => choices.credentials.filter(credential => credential.kind === kind);
 
     return (
-        <FormModal title={template ? t("Edit job template") : t("New job template")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
+        <FormModal title={template ? t("Edit job template") : t("New job template")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose} guardClose
             isDisabled={!name.trim() || !projectId || !playbook.trim() || (!inventoryId && !anyInventory && !otherIds.length)
                 || survey.some(draft => draftProblem(draft, survey))}>
             <FormGroup label={t("Name")} isRequired fieldId="tpl-name">
@@ -251,7 +251,7 @@ export function LaunchModal({ template, limit: initialLimit = "", inventory: ini
             template_id: template.id, limit: limit.trim(), check, answers: given, serial, ...overrides,
             ...(inventoryId !== template.inventory_id ? { inventory_id: inventoryId } : {}),
         });
-        announceRun(run.id, run.title);
+        announceRun(run.id, run.title, run.status);
         onLaunched?.();
         onClose();
     }
@@ -386,7 +386,7 @@ function TemplatesToolbar({ view, onChange, projects, inventories, groups, shown
                     </FormSelect>
                 </FlexItem>
                 <GroupByChoice id="tpl-group-by" value={view.groupBy} onChange={groupBy => set({ groupBy })}
-                    options={[["project", t("Project")], ["inventory", t("Inventory")], ["outcome", t("Last run")], ["none", t("Nothing")]]}
+                    options={[["project", t("Project")], ["inventory", t("Inventory")], ["outcome", t("Last run")], ["none", t("No grouping")]]}
                     groups={groups.length} allOpen={allOpen} onToggleAll={() => onChange(withTemplateGroupsOpen(view, groups, !allOpen))} />
             </Flex>
             <FilterChips chips={chips} onClearAll={() => onChange(withoutTemplateFilters(view))} shown={shown} total={total} />

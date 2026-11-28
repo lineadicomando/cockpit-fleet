@@ -289,11 +289,32 @@ function Replaced({ overrides }: { overrides: Overrides }) {
     );
 }
 
+// What a run names by id: a link to its list, or that it is gone (nothing while the names load).
+function Named({ names, id, section }: { names?: Map<string, string>; id: string; section: string }) {
+    const { t } = useTranslation();
+    if (!names) return null;
+    const name = names.get(id);
+    return name
+        ? <Button variant="link" isInline onClick={() => cockpit.location.go([section])}>{name}</Button>
+        : <>{t("Deleted since")}</>;
+}
+
 export function RunDetailPage({ id }: { id: string }) {
     const { t, i18n } = useTranslation();
     const can = useCan();
     const kinds = useKinds();
     const run = useLoad(() => call<Run>("run.get", { id }));
+    // The names of what the run was launched from and on: one template serves
+    // several inventories, and its title alone does not say where it ran.
+    const names = useLoad(async () => {
+        const list = <T,>(command: string, key: string) => call<Record<string, T[]>>(command).then(data => data[key] ?? [], () => [] as T[]);
+        const [inventories, templates] = await Promise.all([
+            list<{ id: string; name: string }>("inventory.list", "inventories"),
+            list<{ id: string; name: string }>("template.list", "templates"),
+        ]);
+        const byId = (items: { id: string; name: string }[]) => new Map(items.map(item => [item.id, item.name]));
+        return { inventory: byId(inventories), template: byId(templates) };
+    });
     const [log, setLog] = useState("");
     const [tasks, setTasks] = useState<TaskView[]>([]);
     const [tab, setTab] = useState("output");
@@ -429,6 +450,22 @@ export function RunDetailPage({ id }: { id: string }) {
                                 {data.options.check && <Label isCompact color="blue" style={{ marginInlineStart: "0.5rem" }}>{t("Dry run")}</Label>}
                             </DescriptionListDescription>
                         </DescriptionListGroup>
+                        {data.template_id && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Job template")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    <Named names={names.data?.template} id={data.template_id} section="templates" />
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
+                        {data.inventory_id && (
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>{t("Inventory")}</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    <Named names={names.data?.inventory} id={data.inventory_id} section="inventories" />
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        )}
                         <DescriptionListGroup>
                             <DescriptionListTerm>{t("Launched by")}</DescriptionListTerm>
                             <DescriptionListDescription>{data.created_by}</DescriptionListDescription>

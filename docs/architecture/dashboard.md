@@ -51,7 +51,8 @@ tuples, not `sqlite3.Row`: a third of the time). The breakdown:
 
 **The page** (`OverviewPage.tsx`): a row of figures (hosts, open problems,
 successful runs, the queue, security updates), each leading to its
-section; then cards: the checks by state as a ring with the open problems
+section (the open problems, with how many are not acknowledged, to the
+problems of Hosts, `#/hosts?show=problems`, whatever view Hosts kept); then cards: the checks by state as a ring with the open problems
 under it, the runs by day as stacked bars with the durations and latest
 failures, problems and recoveries by day side by side with the time to
 recover, what fails most, what is coming up, what the hosts are; at the

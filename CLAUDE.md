@@ -148,8 +148,8 @@ the package installed; what each shows, its variables, whether it wipes:
 - The interface in a browser: a scenario of `test/browser/`
   (`docs/architecture/browser-tests.md`), in a container or on a VM; a
   throwaway one that saves screenshots and `ariaSnapshot()` explores a
-  page (a click may launch a real run: a workflow's "Launch" starts at
-  once). The browser tools: skill `vm-lab`.
+  page (a click may launch a real run: the "Launch" of a launch dialog
+  starts it at once). The browser tools: skill `vm-lab`.
 - Never `pkill -f` or `pgrep -f` with a pattern that is also in your own
   command line: it matches the shell that runs it.
 

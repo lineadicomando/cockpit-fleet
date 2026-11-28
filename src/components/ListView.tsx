@@ -132,7 +132,7 @@ export function HostListToolbar<V extends HostListView>({ view, onChange, placeh
                 </FlexItem>
                 {canGroup && (
                     <GroupByChoice id="host-list-group-by" value={view.groupBy} onChange={groupBy => onChange({ ...view, groupBy })}
-                        options={[["inventory", t("Inventory")], ["none", t("Nothing")]]}
+                        options={[["inventory", t("Inventory")], ["none", t("No grouping")]]}
                         groups={groups.length} allOpen={allOpen} onToggleAll={onToggleAll} />
                 )}
             </Flex>

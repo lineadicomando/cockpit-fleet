@@ -15,6 +15,7 @@ import {
     HelperTextItem,
     InputGroup,
     InputGroupItem,
+    ModalVariant,
     Radio,
     Switch,
     TextInput,
@@ -261,7 +262,7 @@ function ScheduleModal({ schedule, templates, workflows, onClose, onDone }: {
     }
 
     return (
-        <FormModal title={schedule ? t("Edit schedule") : t("New schedule")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose}
+        <FormModal title={schedule ? t("Edit schedule") : t("New schedule")} submitLabel={t("Save")} onSubmit={submit} onClose={onClose} guardClose
             isDisabled={!name.trim() || !calendar.trim() || (noDefault && !inventoryId) || (launches === "workflow"
                 ? !workflow || waiting !== null
                 : !template || needsSecret || survey.some(field => answerProblem(field, answers[field.name])))}>
@@ -399,6 +400,7 @@ export function SchedulesPage() {
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<Schedule | null>(null);
     const [deleting, setDeleting] = useState<Schedule | null>(null);
+    const [running, setRunning] = useState<Schedule | null>(null);
     const [error, setError] = useState<string | null>(null);
     usePolling(list.reload, 3000, list.data?.schedules.some(item => isActiveRun(item.last_status)) ?? false);
 
@@ -413,13 +415,9 @@ export function SchedulesPage() {
     }
 
     async function runNow(schedule: Schedule) {
-        setError(null);
-        try {
-            const run = await call<Run>("schedule.run", { id: schedule.id });
-            announceRun(run.id, run.title);
-        } catch (ex) {
-            setError(message(ex));
-        }
+        const run = await call<Run>("schedule.run", { id: schedule.id });
+        announceRun(run.id, run.title, run.status);
+        setRunning(null);
         list.reload();
     }
 
@@ -466,7 +464,7 @@ export function SchedulesPage() {
                                             onChange={(_e, on) => act(() => call(on ? "schedule.enable" : "schedule.disable", { id: schedule.id }))} />
                                     </Td>
                                     <Td isActionCell style={{ whiteSpace: "nowrap" }}>
-                                        {can("schedule.run") && <Button variant="secondary" size="sm" onClick={() => runNow(schedule)}>{t("Run now")}</Button>}
+                                        {can("schedule.run") && <Button variant="secondary" size="sm" onClick={() => setRunning(schedule)}>{t("Run now")}</Button>}
                                     </Td>
                                     <Td isActionCell>
                                         {can("schedule.update") && (
@@ -484,6 +482,12 @@ export function SchedulesPage() {
             </ListState>
             {creating && templates.data && workflows.data && <ScheduleModal templates={templates.data.templates} workflows={workflows.data.workflows} onClose={() => setCreating(false)} onDone={list.reload} />}
             {editing && templates.data && workflows.data && <ScheduleModal schedule={editing} templates={templates.data.templates} workflows={workflows.data.workflows} onClose={() => setEditing(null)} onDone={list.reload} />}
+            {running && (
+                <FormModal title={t("Run {{name}} now?", { name: running.name })} submitLabel={t("Run now")} variant={ModalVariant.small}
+                    onSubmit={() => runNow(running)} onClose={() => setRunning(null)}>
+                    <Content component="p">{t("It launches at once what it launches at its times, with its answers; its next time stays as it is.")}</Content>
+                </FormModal>
+            )}
             {deleting && (
                 <ConfirmDelete name={deleting.name} what={t("The schedule is deleted. The runs it launched stay in the history.")}
                     onDelete={async () => { await call("schedule.delete", { id: deleting.id }); setDeleting(null); list.reload(); }}

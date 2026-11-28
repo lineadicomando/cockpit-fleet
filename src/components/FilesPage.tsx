@@ -237,10 +237,11 @@ function PathModal({ title, submitLabel, initial, help, onSubmit, onClose }: {
     );
 }
 
-// A new file of a project: empty, or the text of a playbook starter.
-function NewFileModal({ initial, offerStarters, onSubmit, onClose }: {
+// A new file of a project or an inventory: empty, or the text of a playbook starter.
+function NewFileModal({ initial, offerStarters, ofInventory, onSubmit, onClose }: {
     initial: string;
     offerStarters: boolean;
+    ofInventory: boolean;
     onSubmit: (path: string, content: string) => Promise<void>;
     onClose: () => void;
 }) {
@@ -258,7 +259,9 @@ function NewFileModal({ initial, offerStarters, onSubmit, onClose }: {
             {offerStarters && <StarterSelect kind="playbook" fieldId="file-starter" value={starter} onChange={choose} />}
             <FormGroup label={t("Path")} isRequired fieldId="file-path">
                 <TextInput id="file-path" value={value} onChange={(_e, next) => setValue(next)} spellCheck={false} autoFocus />
-                <FormHelperText><HelperText><HelperTextItem>{t("Inside the project, for example roles/web/tasks/main.yaml. Folders are created as needed.")}</HelperTextItem></HelperText></FormHelperText>
+                <FormHelperText><HelperText><HelperTextItem>{ofInventory
+                    ? t("Inside the inventory, for example group_vars/web.yaml. Folders are created as needed.")
+                    : t("Inside the project, for example roles/web/tasks/main.yaml. Folders are created as needed.")}</HelperTextItem></HelperText></FormHelperText>
             </FormGroup>
         </FormModal>
     );
@@ -588,11 +591,11 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
             {problem && <Alert variant="danger" isInline title={problem} style={{ marginBottom: "1rem" }} />}
             {importId && <div style={{ marginBottom: "1rem" }}><ImportResult key={importId} id={importId} onDone={list.reload} /></div>}
             <ListState loaded={list} isEmpty={data => data.files.length === 0 && data.directories.length === 0 && !editable}
-                emptyTitle={t("No files")} emptyBody={t("This project has no files.")}>
+                emptyTitle={t("No files")} emptyBody={ofInventory ? t("This inventory has no files.") : t("This project has no files.")}>
                 {data => (
                     <div className="fleet-files">
                         <div className="fleet-files-tree">
-                            {data.truncated && <Alert variant="warning" isInline isPlain title={t("Only the first files of this project are listed.")} />}
+                            {data.truncated && <Alert variant="warning" isInline isPlain title={ofInventory ? t("Only the first files of this inventory are listed.") : t("Only the first files of this project are listed.")} />}
                             <div className="fleet-files-filter">
                                 <SearchInput aria-label={t("Filter files")} placeholder={t("Filter files")} value={query}
                                     onChange={(_e, value) => setQuery(value)} onClear={() => setQuery("")} />
@@ -679,7 +682,7 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
                 )}
             </ListState>
             {dialog?.kind === "new-file" && (
-                <NewFileModal initial={dialog.in ? `${dialog.in}/` : ""} offerStarters={!ofInventory && can("starter.list")}
+                <NewFileModal initial={dialog.in ? `${dialog.in}/` : ""} offerStarters={!ofInventory && can("starter.list")} ofInventory={ofInventory}
                     onSubmit={async (next, content) => {
                         await call("file.write", { id, path: next, content, expected: "", ...inDraft });
                         list.reload();
@@ -691,7 +694,9 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
             {dialog?.kind === "new-folder" && (
                 <PathModal title={t("New folder")} submitLabel={t("Create")}
                     initial={dialog.in ? `${dialog.in}/` : ""}
-                    help={t("Inside the project, for example roles/web/templates. Folders are created as needed.")}
+                    help={ofInventory
+                        ? t("Inside the inventory, for example host_vars. Folders are created as needed.")
+                        : t("Inside the project, for example roles/web/templates. Folders are created as needed.")}
                     onSubmit={async next => {
                         await apply([{ op: "mkdir", path: next }]);
                         setOpen(previous => new Set([...(previous ?? []), ...ancestors(next), next]));
@@ -701,7 +706,9 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
             )}
             {dialog?.kind === "rename" && (
                 <PathModal title={t("Rename {{path}}", { path: dialog.path })} submitLabel={t("Rename")} initial={dialog.path}
-                    help={t("The new path inside the project: a folder is renamed with everything in it.")}
+                    help={ofInventory
+                        ? t("The new path inside the inventory: a folder is renamed with everything in it.")
+                        : t("The new path inside the project: a folder is renamed with everything in it.")}
                     onSubmit={async next => {
                         await apply([{ op: "move", path: dialog.path, to: next }]);
                         followMoves([{ path: dialog.path, to: next }]);
@@ -716,7 +723,9 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
             )}
             {dialog?.kind === "delete" && (
                 <ConfirmDelete name={dialog.paths.length === 1 ? dialog.paths[0] : t("files_count", { count: dialog.paths.length })}
-                    what={t("What is deleted goes from the project, folders with everything in them, as one change; it stays in the record of changes. Open files among them are closed.")}
+                    what={ofInventory
+                        ? t("What is deleted goes from the inventory, folders with everything in them, as one change; it stays in the record of changes. Open files among them are closed.")
+                        : t("What is deleted goes from the project, folders with everything in them, as one change; it stays in the record of changes. Open files among them are closed.")}
                     onDelete={async () => { await remove(dialog.paths); setDialog(null); }}
                     onClose={() => setDialog(null)} />
             )}
@@ -736,7 +745,8 @@ export function FilesPage({ id, draft = "" }: { id: string; draft?: string }) {
                     onRestored={() => {
                         list.reload();
                         const restored = dialog.path;
-                        tabs.filter(candidate => restored && isInside(candidate.path, restored)).forEach(candidate => read(candidate.path));
+                        // As after an upload: a tab with changes not saved keeps them (its save then meets the version restored).
+                        tabs.filter(candidate => restored && isInside(candidate.path, restored) && !isDirty(candidate)).forEach(candidate => read(candidate.path));
                     }} />
             )}
             {reviewing && (

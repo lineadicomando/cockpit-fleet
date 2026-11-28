@@ -25,6 +25,20 @@ backend, 257 frontend tests). Under way: the list of workflows (below);
     preview in the form, the tooltip of an approval;
   - `make ct-test TESTS=workflows` on the three (`workflow.list` changed).
 
+- **A review of the interface** (28 November, the frontend only): a first
+  block done (nothing typed lost without asking, launches and the end of
+  a key's trust asked first, notices and lists that tell the truth, the
+  Overview's problems, a run's template and inventory, a check's details,
+  the chat that stays where it is read, wording); unit tests, docs. Left:
+  - seen in a browser (`make browser-up`, a throwaway scenario, on
+    `inspiron27`): the dialogs of Launch and "Run now", a form closed
+    after typing, a list whose refresh fails, the details of a check;
+  - the rest of the review, by impact: drilling down from a check to its
+    hosts, its cycles and its changes; relative times and stale results;
+    the recap of a run below its output; the problems of an unreachable
+    host folded; the approval dialog of the chat with names; clearing a
+    credential's secret; the audit's objects and filters (backend).
+
 ## To study
 
 - **The names of `overview.md` and `dashboard.md`** (`docs/architecture/`):

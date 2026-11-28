@@ -271,11 +271,17 @@ function Conversation({ items, busy, children }: { items: Item[]; busy: boolean;
     const { t } = useTranslation();
     const log = useRef<HTMLDivElement>(null);
     // The box scrolls, not the page: the message box below must stay in sight.
-    useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [items, busy]);
+    // It follows what comes while it is at its end; scrolled up to read, it stays there.
+    const atEnd = useRef(true);
+    useEffect(() => { if (log.current && atEnd.current) log.current.scrollTop = log.current.scrollHeight; }, [items, busy]);
+    const scrolled = () => {
+        const box = log.current;
+        if (box) atEnd.current = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    };
     const profiles = useProfiles();
     const who: Record<string, string> = { user: t("You"), notice: "Fleet", agent: t("Assistant"), thought: t("Assistant, thinking") };
     return (
-        <div ref={log} className="fleet-chat-log" role="log" aria-label={t("Conversation")}>
+        <div ref={log} className="fleet-chat-log" role="log" aria-label={t("Conversation")} onScroll={scrolled}>
             {items.length === 0 && children}
             {items.map((item, index) => {
                 if (item.kind === "tool") return <ToolCall key={`tool-${item.id}`} item={item} />;

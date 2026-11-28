@@ -167,20 +167,21 @@ function NewDocumentModal({ directory, taken, onClose }: { directory: string; ta
 }
 
 // The trail from the top of the documents to a text.
-function DocumentCrumbs({ path }: { path: string }) {
+// GO leaves for another folder; an editor passes one that asks first.
+function DocumentCrumbs({ path, go = target => cockpit.location.go(target) }: { path: string; go?: (target: string[]) => void }) {
     const { t } = useTranslation();
     const parts = path.split("/");
     return (
         <Breadcrumb aria-label={t("Folders")} style={{ marginBottom: "0.5rem" }}>
             <BreadcrumbItem>
-                <Button variant="link" isInline onClick={() => cockpit.location.go(documentLocation(""))}>{t("Documents")}</Button>
+                <Button variant="link" isInline onClick={() => go(documentLocation(""))}>{t("Documents")}</Button>
             </BreadcrumbItem>
             {parts.map((part, at) => {
                 const here = parts.slice(0, at + 1).join("/");
                 const last = at === parts.length - 1;
                 return (
                     <BreadcrumbItem key={here} isActive={last}>
-                        {last ? part : <Button variant="link" isInline onClick={() => cockpit.location.go(documentLocation(here))}>{part}</Button>}
+                        {last ? part : <Button variant="link" isInline onClick={() => go(documentLocation(here))}>{part}</Button>}
                     </BreadcrumbItem>
                 );
             })}
@@ -281,11 +282,8 @@ function DocumentView({ path }: { path: string }) {
 
     if (editing) {
         return (
-            <>
-                <DocumentCrumbs path={path} />
-                <DocumentEditor path={path} fresh={fresh} onDone={() => edit(false)}
-                    onCancel={() => (fresh ? cockpit.location.go(documentLocation(folder)) : edit(false))} />
-            </>
+            <DocumentEditor path={path} fresh={fresh} onDone={() => edit(false)}
+                onCancel={() => (fresh ? cockpit.location.go(documentLocation(folder)) : edit(false))} />
         );
     }
 
@@ -431,10 +429,20 @@ function DocumentEditor({ path, fresh, onDone, onCancel }: { path: string; fresh
     const [preview, setPreview] = useState<Rendered | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
-    const [leaving, setLeaving] = useState(false);
+    // Where to go once the changes are given up.
+    const [leaving, setLeaving] = useState<(() => void) | null>(null);
     const base = loaded.data;
     const current = text ?? base?.content ?? "";
     const dirty = !!base && current !== base.content;
+    const leave = (then: () => void) => (dirty ? setLeaving(() => then) : then());
+
+    // Reloading or closing the browser's tab with changes not saved asks first.
+    useEffect(() => {
+        if (!dirty) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+        window.addEventListener("beforeunload", warn);
+        return () => window.removeEventListener("beforeunload", warn);
+    }, [dirty]);
 
     useEffect(() => {
         if (!base) return;
@@ -457,14 +465,16 @@ function DocumentEditor({ path, fresh, onDone, onCancel }: { path: string; fresh
         }
     }
 
-    if (loaded.error) return <Alert variant="danger" isInline title={loaded.error.message} />;
-    if (!base) return <Spinner aria-label={t("Loading")} />;
+    const crumbs = <DocumentCrumbs path={path} go={target => leave(() => cockpit.location.go(target))} />;
+    if (loaded.error) return <>{crumbs}<Alert variant="danger" isInline title={loaded.error.message} /></>;
+    if (!base) return <>{crumbs}<Spinner aria-label={t("Loading")} /></>;
     return (
         <>
+            {crumbs}
             <Toolbar inset={{ default: "insetNone" }}>
                 <ToolbarContent>
                     <ToolbarItem><Button variant="primary" isDisabled={saving || (!dirty && !fresh)} isLoading={saving} onClick={store}>{t("Save")}</Button></ToolbarItem>
-                    <ToolbarItem><Button variant="link" onClick={() => (dirty ? setLeaving(true) : onCancel())}>{t("Cancel")}</Button></ToolbarItem>
+                    <ToolbarItem><Button variant="link" onClick={() => leave(onCancel)}>{t("Cancel")}</Button></ToolbarItem>
                     <ToolbarItem style={{ flex: "1 1 20rem" }}>
                         <TextInput aria-label={t("What changed")} placeholder={t("What changed (optional, for the history)")} value={summary}
                             onChange={(_e, value) => setSummary(value)} maxLength={80} />
@@ -481,8 +491,8 @@ function DocumentEditor({ path, fresh, onDone, onCancel }: { path: string; fresh
             </div>
             <Content component="small">{t("Ctrl+S saves. Raw HTML is shown as text; images come from the documents only.")}</Content>
             {leaving && (
-                <FormModal title={t("Give up the changes?")} submitLabel={t("Give them up")} isDanger variant={ModalVariant.small}
-                    onClose={() => setLeaving(false)} onSubmit={async () => onCancel()}>
+                <FormModal title={t("Discard the changes?")} submitLabel={t("Discard")} isDanger variant={ModalVariant.small}
+                    onClose={() => setLeaving(null)} onSubmit={async () => { setLeaving(null); leaving(); }}>
                     <Content component="p">{t("What was written since the last save is lost.")}</Content>
                 </FormModal>
             )}

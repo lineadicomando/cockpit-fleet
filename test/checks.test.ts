@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    activeFilters, bySeverity, isGroupOpen, withGroupsOpen, DEFAULT_VIEW, filterChecks, formatBytes, groupChecks, kindCategory, readView, sortChecks, standingOf, sumCounts, formatInterval, formatMetric, fromLocalInput, linesOf, ownThresholds,
+    activeFilters, bySeverity, detailLines, isGroupOpen, withGroupsOpen, DEFAULT_VIEW, filterChecks, formatBytes, groupChecks, kindCategory, readView, sortChecks, standingOf, sumCounts, formatInterval, formatMetric, fromLocalInput, linesOf, ownThresholds,
     thresholdFields, thresholdsValid, toLocalInput, worstState,
 } from "../src/lib/checks.ts";
 import type { CheckDef, CheckKind, StateCounts } from "../src/lib/types.ts";
@@ -137,4 +137,13 @@ test("groups with a problem start open, and can all be opened or closed", () => 
     // Grouping another way keeps its own choices.
     const byKind = groupChecks(CHECKS, "kind");
     assert.equal(isGroupOpen({ ...closed, groupBy: "kind" }, byKind[0], byKind.length), true);
+});
+
+test("the details of a result are lines, anything deeper as JSON", () => {
+    assert.deepEqual(detailLines({ unit: "nginx.service", ports: [80, 443], certs: [{ path: "/etc/a.pem", days: 3 }] }), [
+        { key: "unit", text: "nginx.service", block: false },
+        { key: "ports", text: "80, 443", block: false },
+        { key: "certs", text: JSON.stringify([{ path: "/etc/a.pem", days: 3 }], null, 2), block: true },
+    ]);
+    assert.deepEqual(detailLines(undefined), []);
 });

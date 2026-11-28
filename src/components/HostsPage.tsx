@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     Button,
@@ -21,7 +21,7 @@ import {
 } from "@patternfly/react-core";
 import { ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import cockpit from "cockpit";
-import { bySeverity, formatMetric, worstState } from "../lib/checks.ts";
+import { bySeverity, detailLines, formatMetric, worstState } from "../lib/checks.ts";
 import { call } from "../lib/fleet.ts";
 import { formatTime } from "../lib/format.ts";
 import { useCockpitLocation, useLoad, usePolling } from "../lib/hooks.ts";
@@ -311,6 +311,12 @@ function Grid({ groups, grouping, states }: { groups: Group<FleetHost>[]; groupi
 export function HostsPage() {
     const { t } = useTranslation();
     const [view, setView] = useStoredView("hosts-view", readHostsView);
+    // A link that names what to show (#/hosts?show=problems, from the
+    // Overview) shows it, whatever view was kept, and with no text filter.
+    const asked = useCockpitLocation().options.show;
+    useEffect(() => {
+        if (asked === "problems" || asked === "hosts" || asked === "grid") setView({ ...view, show: asked, search: "" });
+    }, [asked]); // eslint-disable-line react-hooks/exhaustive-deps
     const [inventoryId, setInventoryId] = useState("");
     const [error, setError] = useState<string | null>(null);
     const inventories = useLoad(() => call<{ inventories: Inventory[] }>("inventory.list"));
@@ -416,6 +422,25 @@ function Metrics({ state }: { state: CheckState }) {
     );
 }
 
+// The details of a result: the certificates and their dates, the services and their states, and so on.
+function Details({ state }: { state: CheckState }) {
+    const { t } = useTranslation();
+    const lines = detailLines(state.details);
+    if (lines.length === 0) return null;
+    return (
+        <DescriptionList isHorizontal isCompact aria-label={t("Details")} style={{ marginBlock: "0.5rem" }}>
+            {lines.map(line => (
+                <DescriptionListGroup key={line.key}>
+                    <DescriptionListTerm><code>{line.key}</code></DescriptionListTerm>
+                    <DescriptionListDescription>
+                        {line.block ? <pre className="fleet-details">{line.text}</pre> : line.text}
+                    </DescriptionListDescription>
+                </DescriptionListGroup>
+            ))}
+        </DescriptionList>
+    );
+}
+
 export function HostDetailPage({ id }: { id: string }) {
     const { t, i18n } = useTranslation();
     const can = useCan();
@@ -517,6 +542,7 @@ export function HostDetailPage({ id }: { id: string }) {
                                             <Td colSpan={7}>
                                                 <ExpandableRowContent>
                                                     <Metrics state={state} />
+                                                    <Details state={state} />
                                                     {state.hard_state !== (state.state ?? "ok") && (
                                                         <Content component="small">{t("Confirmed state: {{state}}", { state: names[state.hard_state] })}</Content>
                                                     )}

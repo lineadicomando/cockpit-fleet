@@ -21,9 +21,8 @@ BROWSER_LAB=deb13 test/browser/browser.sh setup|test NAME   # on a VM of the lab
 `labs-launch` runs Windows Update on `win11` for real (about 1 h 15 min):
 take a snapshot of it first and go back to it before running it again. Its
 setup takes the project ansible-win_edulab from GitHub and needs the
-secret `it-win-key` on the controller, as `windows.sh` does. A workflow
-that names an inventory starts at once when launched from its list: the
-setup's has none, so the page asks.
+secret `it-win-key` on the controller, as `windows.sh` does. A
+workflow's Launch asks first, with or without an inventory to choose.
 
 ## The controller
 

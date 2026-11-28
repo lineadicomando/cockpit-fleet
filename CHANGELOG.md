@@ -213,6 +213,23 @@ entries go under `[Unreleased]`, under the heading of their kind.
   shown a page at a time, 100 entries a page unless another number is
   chosen; selecting all selects the entries of the page.
 
+- Interface: a workflow's Launch, and a schedule's "Run now", always ask
+  first, the workflow with its steps in sight; ending the trust of a host
+  key asks first; the long forms (templates, workflows, schedules, checks,
+  rules, channels, credentials, sets of variables) ask before closing once
+  typed into, and the error of a form is brought into sight.
+- Interface: a list whose refresh fails stays in sight under a warning,
+  with "Try again"; a run waiting for an approval is announced as waiting,
+  not as started.
+- Overview: "Open problems" counts the open ones, says how many are not
+  acknowledged, and leads to the problems in Hosts rather than to Checks.
+- Runs: the page of a run names its job template and its inventory.
+- Hosts: the page of a host shows the details of each check's result (the
+  certificates and their dates, the services and their states, …).
+- Network: an inventory made from a scan with no host chosen takes the
+  hosts in no inventory yet, not the controller itself, and the button
+  says how many.
+
 ### Deprecated
 
 - `autonomous` in `[chat] profiles` and `[chat] default_profile`, and for a
@@ -226,6 +243,19 @@ entries go under `[Unreleased]`, under the heading of their kind.
 
 ### Fixed
 
+- Documents: a text being edited asks before a reload of the page and
+  before its folders' links, not only before Cancel.
+- Projects and inventories: restoring a version no longer overwrites an
+  open file's changes not saved; dropping onto a file in the tree moves
+  into its folder, not to the top; the files of an inventory are no longer
+  called a project's.
+- Store and Documents: a reload while uploads go on asks first.
+- Assistant: the conversation no longer jumps to its end while being read
+  higher up.
+- System: the result of an import names sets of variables and workflows,
+  and the text says what an export holds.
+- Wording: "No grouping" for lists not grouped; a step of a workflow on the
+  inventory chosen at launch; where approvals are decided.
 - `net_probe` on a Windows node always failed ("[System.Object[]] does not
   contain a method named 'op_Addition'").
 - Documents: "Download as a web page" did nothing in Firefox.

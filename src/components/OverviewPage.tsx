@@ -57,8 +57,8 @@ function go(...path: string[]) {
 
 // A figure at the top of the page: a number, what it counts, a line about
 // it, and the section it leads to.
-function Figure({ title, value, children, section, tone }: {
-    title: string; value: string; children?: React.ReactNode; section: string; tone?: "good" | "warning" | "bad";
+function Figure({ title, value, children, section, options, tone }: {
+    title: string; value: string; children?: React.ReactNode; section: string; options?: Record<string, string>; tone?: "good" | "warning" | "bad";
 }) {
     const color = tone === "bad"
         ? "var(--pf-t--global--text--color--status--danger--default)"
@@ -66,7 +66,7 @@ function Figure({ title, value, children, section, tone }: {
     return (
         <Card isCompact isFullHeight>
             <CardTitle component="h2">
-                <Button variant="link" isInline onClick={() => go(section)}>{title}</Button>
+                <Button variant="link" isInline onClick={() => cockpit.location.go([section], options)}>{title}</Button>
             </CardTitle>
             <CardBody>
                 <div style={{ fontSize: "var(--pf-t--global--font--size--heading--h1)", fontWeight: "var(--pf-t--global--font--weight--heading--default)", color }}>
@@ -509,9 +509,9 @@ export function OverviewPage({ session }: { session: Session }) {
                                     data.hosts.in_maintenance > 0 ? t("in_maintenance_count", { count: data.hosts.in_maintenance }) : "",
                                 ].filter(Boolean).join(" · ")}
                         </Figure>
-                        <Figure title={t("Open problems")} value={String(data.problems.unacknowledged)} section="checks"
+                        <Figure title={t("Open problems")} value={String(data.problems.open)} section="hosts" options={{ show: "problems" }}
                             tone={data.problems.unacknowledged > 0 ? "bad" : data.problems.open > 0 ? "warning" : undefined}>
-                            {data.problems.open === 0 ? t("none") : t("not_acknowledged_of", { count: data.problems.open })}
+                            {data.problems.open === 0 ? t("none") : t("not_acknowledged_count", { count: data.problems.unacknowledged })}
                         </Figure>
                         <Figure title={t("Successful runs")} value={formatRate(data.runs.success_rate, i18n.language)} section="runs"
                             tone={data.runs.failed > 0 ? "warning" : undefined}>

@@ -207,7 +207,7 @@ export function PendingApprovals({ standalone = false }: { standalone?: boolean 
 
 // The runs the assistant launched in a conversation that wait for a
 // decision, on the page of the chat: an answer in the chat confirms nothing,
-// so the person decides here, as on the page of approvals.
+// so the person decides here, as above the list of runs.
 export function ChatApprovals({ runIds }: { runIds: string[] }) {
     const { t } = useTranslation();
     const can = useCan();
@@ -230,7 +230,7 @@ export function ChatApprovals({ runIds }: { runIds: string[] }) {
         <>
             <Alert variant="warning" isInline title={t("chat_runs_waiting", { count: entries.length })}
                 style={{ marginBlockEnd: "0.5rem" }}>
-                <Content component="p">{t("Writing in the chat confirms nothing: decide here, or on the page of approvals.")}</Content>
+                <Content component="p">{t("Writing in the chat confirms nothing: decide here, or in Runs, above the list.")}</Content>
                 {entries.map(entry => (
                     <Flex key={entry.id} gap={{ default: "gapSm" }} alignItems={{ default: "alignItemsCenter" }}
                         style={{ marginBlockStart: "0.5rem" }}>
