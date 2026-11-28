@@ -400,7 +400,15 @@ export interface Workflow {
     edges: WorkflowEdge[];
     created_at: number;
     updated_at: number;
-    last_run: { id: string; status: RunStatus; created_at: number } | null;
+    last_run: WorkflowRun | null;
+    // Its last run on each inventory, by id: the one chosen at launch or its own; "" on each step's own.
+    last_runs: Record<string, WorkflowRun>;
+}
+
+export interface WorkflowRun {
+    id: string;
+    status: RunStatus;
+    created_at: number;
 }
 
 // active, success and failure: the step has a run (or could not start: failure);

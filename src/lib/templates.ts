@@ -20,9 +20,13 @@ export function lastRunOf(template: Template, where?: string): TemplateRun | nul
     return where === undefined ? template.last_run : template.last_runs?.[where] ?? null;
 }
 
-export function outcomeOf(template: Template, where?: string): Outcome {
-    const run = lastRunOf(template, where);
+// How a last run went, for templates and workflows alike.
+export function outcomeOfRun(run: { status: RunStatus } | null | undefined): Outcome {
     return run ? OUTCOME_OF[run.status] ?? "failed" : "never";
+}
+
+export function outcomeOf(template: Template, where?: string): Outcome {
+    return outcomeOfRun(lastRunOf(template, where));
 }
 
 export type Trait = "" | "approval" | "survey" | "scheduled" | "unscheduled";
